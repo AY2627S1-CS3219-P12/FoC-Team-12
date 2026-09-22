@@ -96,6 +96,22 @@ docker compose exec supplier-db psql -U supplier_user -d supplier_db \
   -c 'SELECT current_database(), current_user;'
 ```
 
+Flyway applies the versioned SQL files in `src/main/resources/db/migration` when the
+application starts. The current migrations create the `suppliers` table and load the 21
+baseline supplier records. The seed migration is derived from
+`data/csv/supplier-seed-data-cleaned.csv`; the original template CSV remains unchanged for
+reference. All baseline records start with `ACTIVE` status and version `0`.
+
+Inspect the seeded records with:
+
+```sh
+docker compose exec supplier-db psql -U supplier_user -d supplier_db \
+  -c 'SELECT id, name, type, building, status FROM suppliers ORDER BY name;'
+```
+
+Once a migration has been applied to a shared database, do not edit it. Add a new migration
+such as `V3__describe_the_change.sql` instead.
+
 For DBeaver, create a PostgreSQL connection with:
 
 ```text
