@@ -3,5 +3,33 @@ services:
     build:
       context: ./supplier-service
       dockerfile: Dockerfile
+    environment:
+      DB_HOST: supplier-db
+      DB_PORT: 5432
+      DB_NAME: ${SUPPLIER_DB_NAME:?SUPPLIER_DB_NAME must be set}
+      DB_USER: ${SUPPLIER_DB_USER:?SUPPLIER_DB_USER must be set}
+      DB_PASSWORD: ${SUPPLIER_DB_PASSWORD:?SUPPLIER_DB_PASSWORD must be set}
+    depends_on:
+      supplier-db:
+        condition: service_healthy
     ports:
       - "8080:8080"
+
+  supplier-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${SUPPLIER_DB_NAME:?SUPPLIER_DB_NAME must be set}
+      POSTGRES_USER: ${SUPPLIER_DB_USER:?SUPPLIER_DB_USER must be set}
+      POSTGRES_PASSWORD: ${SUPPLIER_DB_PASSWORD:?SUPPLIER_DB_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SUPPLIER_DB_USER} -d ${SUPPLIER_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - supplier-db-data:/var/lib/postgresql/data
+
+volumes:
+  supplier-db-data:
