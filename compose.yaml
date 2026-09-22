@@ -1,0 +1,7 @@
+services:
+  supplier-service:
+    build:
+      context: ./supplier-service
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
