@@ -2,6 +2,7 @@
 dist/
 build/
 out/
+target/
 
 # Environment / secrets
 .env
