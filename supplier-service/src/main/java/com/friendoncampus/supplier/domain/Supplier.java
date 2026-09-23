@@ -122,6 +122,14 @@ public class Supplier {
         this.imageUrl = imageUrl;
     }
 
+    public boolean changeStatus(SupplierStatus status) {
+        if (this.status == status) {
+            return false;
+        }
+        this.status = status;
+        return true;
+    }
+
     @PrePersist
     void prepareForCreate() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);

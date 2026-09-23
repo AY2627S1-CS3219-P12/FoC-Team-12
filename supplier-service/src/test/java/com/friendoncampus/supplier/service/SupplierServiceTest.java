@@ -238,6 +238,93 @@ class SupplierServiceTest {
                 .containsExactly(id, 3L, null);
     }
 
+    @Test
+    void changesSupplierStatusAndFlushesManagedEntity() {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.INACTIVE, 3L);
+        when(supplier.getVersion()).thenReturn(3L);
+        when(supplier.changeStatus(SupplierStatus.INACTIVE)).thenReturn(true);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+
+        Supplier result = supplierService.changeSupplierStatus(id, command);
+
+        assertThat(result).isSameAs(supplier);
+        verify(supplier).changeStatus(SupplierStatus.INACTIVE);
+        verify(supplierRepository).flush();
+    }
+
+    @Test
+    void skipsFlushWhenSupplierAlreadyHasRequestedStatus() {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.ACTIVE, 2L);
+        when(supplier.getVersion()).thenReturn(2L);
+        when(supplier.changeStatus(SupplierStatus.ACTIVE)).thenReturn(false);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+
+        Supplier result = supplierService.changeSupplierStatus(id, command);
+
+        assertThat(result).isSameAs(supplier);
+        verify(supplier).changeStatus(SupplierStatus.ACTIVE);
+        verify(supplierRepository, never()).flush();
+    }
+
+    @Test
+    void rejectsUnknownSupplierDuringStatusChange() {
+        UUID id = UUID.randomUUID();
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.INACTIVE, 0L);
+        when(supplierRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> supplierService.changeSupplierStatus(id, command))
+                .isInstanceOf(SupplierNotFoundException.class)
+                .extracting("supplierId")
+                .isEqualTo(id);
+
+        verify(supplierRepository, never()).flush();
+    }
+
+    @Test
+    void checksVersionBeforeStatusNoOp() {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.ACTIVE, 2L);
+        when(supplier.getVersion()).thenReturn(3L);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+
+        assertThatThrownBy(() -> supplierService.changeSupplierStatus(id, command))
+                .isInstanceOf(SupplierUpdateConflictException.class)
+                .extracting("supplierId", "requestedVersion", "currentVersion")
+                .containsExactly(id, 2L, 3L);
+
+        verify(supplier, never()).changeStatus(SupplierStatus.ACTIVE);
+        verify(supplierRepository, never()).flush();
+    }
+
+    @Test
+    void translatesStatusFlushRaceIntoVersionConflict() {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.INACTIVE, 3L);
+        when(supplier.getVersion()).thenReturn(3L);
+        when(supplier.changeStatus(SupplierStatus.INACTIVE)).thenReturn(true);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+        OptimisticLockingFailureException race =
+                new OptimisticLockingFailureException("concurrent status change");
+        org.mockito.Mockito.doThrow(race).when(supplierRepository).flush();
+
+        assertThatThrownBy(() -> supplierService.changeSupplierStatus(id, command))
+                .isInstanceOf(SupplierUpdateConflictException.class)
+                .hasCause(race)
+                .extracting("supplierId", "requestedVersion", "currentVersion")
+                .containsExactly(id, 3L, null);
+    }
+
     private UpdateSupplierCommand updateCommand(long version) {
         return new UpdateSupplierCommand(
                 "Updated Campus Cafe",

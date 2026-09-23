@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -32,6 +33,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.friendoncampus.supplier.domain.Supplier;
 import com.friendoncampus.supplier.domain.SupplierStatus;
+import com.friendoncampus.supplier.service.ChangeSupplierStatusCommand;
 import com.friendoncampus.supplier.service.CreateSupplierCommand;
 import com.friendoncampus.supplier.service.SupplierNotFoundException;
 import com.friendoncampus.supplier.service.SupplierQuery;
@@ -539,6 +541,167 @@ class SupplierControllerTest {
         verifyNoInteractions(supplierService);
     }
 
+    @Test
+    void changesSupplierStatusAndReturnsCompleteResponse() throws Exception {
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.INACTIVE, 0L);
+        Supplier updated = supplier(
+                NEW_SUPPLIER_ID,
+                "Campus Cafe",
+                SupplierStatus.INACTIVE,
+                1L);
+        when(supplierService.changeSupplierStatus(NEW_SUPPLIER_ID, command))
+                .thenReturn(updated);
+
+        mockMvc.perform(patch("/api/suppliers/{id}/status", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validStatusJson("INACTIVE", 0L)))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(NEW_SUPPLIER_ID.toString()))
+                .andExpect(jsonPath("$.name").value("Campus Cafe"))
+                .andExpect(jsonPath("$.status").value("INACTIVE"))
+                .andExpect(jsonPath("$.version").value(1));
+
+        verify(supplierService).changeSupplierStatus(NEW_SUPPLIER_ID, command);
+    }
+
+    @Test
+    void returnsCurrentSupplierForStatusNoOp() throws Exception {
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.ACTIVE, 2L);
+        Supplier unchanged = supplier(
+                NEW_SUPPLIER_ID,
+                "Campus Cafe",
+                SupplierStatus.ACTIVE,
+                2L);
+        when(supplierService.changeSupplierStatus(NEW_SUPPLIER_ID, command))
+                .thenReturn(unchanged);
+
+        mockMvc.perform(patch("/api/suppliers/{id}/status", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validStatusJson("ACTIVE", 2L)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.version").value(2));
+    }
+
+    @Test
+    void returnsFieldErrorsForInvalidStatusRequest() throws Exception {
+        mockMvc.perform(patch("/api/suppliers/{id}/status", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "version": -1
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid supplier request"))
+                .andExpect(jsonPath("$.errors.status").isArray())
+                .andExpect(jsonPath("$.errors.version").isArray());
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{",
+            "{\"status\":\"PAUSED\",\"version\":0}"
+    })
+    void returnsProblemDetailForMalformedStatusBody(String body) throws Exception {
+        mockMvc.perform(patch("/api/suppliers/{id}/status", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid supplier request"))
+                .andExpect(jsonPath("$.status").value(400));
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @Test
+    void returnsProblemDetailWhenStatusBodyIsMissing() throws Exception {
+        mockMvc.perform(patch("/api/suppliers/{id}/status", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid supplier request"));
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @Test
+    void returnsProblemDetailForStaleStatusVersion() throws Exception {
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.INACTIVE, 0L);
+        when(supplierService.changeSupplierStatus(NEW_SUPPLIER_ID, command))
+                .thenThrow(new SupplierUpdateConflictException(
+                        NEW_SUPPLIER_ID,
+                        0L,
+                        1L));
+
+        mockMvc.perform(patch("/api/suppliers/{id}/status", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validStatusJson("INACTIVE", 0L)))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Supplier update conflict"))
+                .andExpect(jsonPath("$.supplierId").value(NEW_SUPPLIER_ID.toString()))
+                .andExpect(jsonPath("$.requestedVersion").value(0))
+                .andExpect(jsonPath("$.currentVersion").value(1));
+    }
+
+    @Test
+    void resolvesCurrentVersionAfterSimultaneousStatusConflict() throws Exception {
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.ACTIVE, 1L);
+        when(supplierService.changeSupplierStatus(NEW_SUPPLIER_ID, command))
+                .thenThrow(new SupplierUpdateConflictException(
+                        NEW_SUPPLIER_ID,
+                        1L,
+                        null,
+                        new OptimisticLockingFailureException("race")));
+        when(supplierVersionLookup.findCurrentVersion(NEW_SUPPLIER_ID))
+                .thenReturn(OptionalLong.of(2L));
+
+        mockMvc.perform(patch("/api/suppliers/{id}/status", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validStatusJson("ACTIVE", 1L)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.requestedVersion").value(1))
+                .andExpect(jsonPath("$.currentVersion").value(2));
+
+        verify(supplierVersionLookup).findCurrentVersion(NEW_SUPPLIER_ID);
+    }
+
+    @Test
+    void returnsNotFoundForStatusChangeOfUnknownSupplier() throws Exception {
+        ChangeSupplierStatusCommand command =
+                new ChangeSupplierStatusCommand(SupplierStatus.INACTIVE, 0L);
+        when(supplierService.changeSupplierStatus(NEW_SUPPLIER_ID, command))
+                .thenThrow(new SupplierNotFoundException(NEW_SUPPLIER_ID));
+
+        mockMvc.perform(patch("/api/suppliers/{id}/status", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validStatusJson("INACTIVE", 0L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Supplier not found"))
+                .andExpect(jsonPath("$.supplierId").value(NEW_SUPPLIER_ID.toString()));
+    }
+
+    @Test
+    void returnsProblemDetailForMalformedStatusSupplierId() throws Exception {
+        mockMvc.perform(patch("/api/suppliers/not-a-uuid/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validStatusJson("INACTIVE", 0L)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid supplier ID"));
+
+        verifyNoInteractions(supplierService);
+    }
+
     private UpdateSupplierCommand updateCommand(long version) {
         return new UpdateSupplierCommand(
                 "Updated Campus Cafe",
@@ -570,6 +733,15 @@ class SupplierControllerTest {
                   "version": %d
                 }
                 """.formatted(version);
+    }
+
+    private String validStatusJson(String supplierStatus, long version) {
+        return """
+                {
+                  "status": "%s",
+                  "version": %d
+                }
+                """.formatted(supplierStatus, version);
     }
 
     private Supplier supplier(UUID id, String name, SupplierStatus status) {
