@@ -120,4 +120,59 @@ class SupplierTest {
         assertThat(supplier.getCreatedAt()).isEqualTo(createdAt);
         assertThat(supplier.getUpdatedAt()).isEqualTo(updatedAt);
     }
+
+    @Test
+    void changesOnlySupplierStatus() {
+        Supplier supplier = Supplier.create(
+                "Campus Cafe",
+                "Food/Coffee",
+                "COM3",
+                "1",
+                "Beside the entrance",
+                1.2948,
+                103.7716,
+                LocalTime.of(8, 0),
+                LocalTime.of(18, 0),
+                "https://example.com/cafe.jpg",
+                SupplierStatus.ACTIVE);
+        supplier.prepareForCreate();
+        OffsetDateTime createdAt = supplier.getCreatedAt();
+        OffsetDateTime updatedAt = supplier.getUpdatedAt();
+
+        boolean changed = supplier.changeStatus(SupplierStatus.INACTIVE);
+
+        assertThat(changed).isTrue();
+        assertThat(supplier.getStatus()).isEqualTo(SupplierStatus.INACTIVE);
+        assertThat(supplier.getName()).isEqualTo("Campus Cafe");
+        assertThat(supplier.getType()).isEqualTo("Food/Coffee");
+        assertThat(supplier.getBuilding()).isEqualTo("COM3");
+        assertThat(supplier.getCreatedAt()).isEqualTo(createdAt);
+        assertThat(supplier.getUpdatedAt()).isEqualTo(updatedAt);
+        assertThat(supplier.getVersion()).isZero();
+    }
+
+    @Test
+    void reportsNoChangeForExistingStatus() {
+        Supplier supplier = Supplier.create(
+                "Campus Cafe",
+                "Food",
+                "COM3",
+                null,
+                null,
+                1.2948,
+                103.7716,
+                null,
+                null,
+                null,
+                SupplierStatus.INACTIVE);
+        supplier.prepareForCreate();
+        OffsetDateTime updatedAt = supplier.getUpdatedAt();
+
+        boolean changed = supplier.changeStatus(SupplierStatus.INACTIVE);
+
+        assertThat(changed).isFalse();
+        assertThat(supplier.getStatus()).isEqualTo(SupplierStatus.INACTIVE);
+        assertThat(supplier.getUpdatedAt()).isEqualTo(updatedAt);
+        assertThat(supplier.getVersion()).isZero();
+    }
 }

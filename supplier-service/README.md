@@ -3,8 +3,8 @@
 Spring Boot service responsible for campus supplier and location data in Friend on Campus.
 
 This service provides a runnable Spring Boot application connected to its own PostgreSQL
-database, Flyway-managed baseline data, and Supplier read, create, and detail-update APIs.
-Further mutation APIs and authentication will be added in later tasks.
+database, Flyway-managed baseline data, and Supplier read, create, detail-update, and status
+APIs. Further mutation APIs and authentication will be added in later tasks.
 
 ## Prerequisites
 
@@ -211,6 +211,36 @@ invalid fields, and malformed JSON return `400 Bad Request` using Problem Detail
 > **Development security notice:** `PUT /api/suppliers/{id}` is temporarily unauthenticated
 > for local API-first testing. It must be restricted to authenticated administrators when
 > the User Service JWT contract is available.
+
+## Change supplier status
+
+Activate or deactivate a supplier without resending its details using
+`PATCH /api/suppliers/{id}/status`:
+
+```sh
+curl -i -X PATCH \
+  http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa/status \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "status": "INACTIVE",
+    "version": 0
+  }'
+```
+
+Both `status` and `version` are required. Status must be `ACTIVE` or `INACTIVE`, and version
+must be nonnegative. Use the version from the latest GET response. A successful status
+change returns `200 OK` with the complete Supplier object, increments `version`, and updates
+`updatedAt`; all supplier details and `createdAt` remain unchanged.
+
+An inactive supplier is excluded from `GET /api/suppliers` but remains available through
+direct ID lookup. Reactivating it makes it visible in listings again. Sending the supplier's
+existing status with its current version is a successful no-op and does not change the
+version or timestamp. A stale version returns the same `409 Supplier update conflict`
+Problem Details response documented above; retrieve the latest supplier before retrying.
+
+> **Development security notice:** `PATCH /api/suppliers/{id}/status` is temporarily
+> unauthenticated for local API-first testing. It must be restricted to authenticated
+> administrators when the User Service JWT contract is available.
 
 ## Run with Docker Compose
 

@@ -98,4 +98,32 @@ public class SupplierService {
         }
         return supplier;
     }
+
+    @Transactional
+    public Supplier changeSupplierStatus(UUID id, ChangeSupplierStatusCommand command) {
+        Supplier supplier = supplierRepository.findById(id)
+                .orElseThrow(() -> new SupplierNotFoundException(id));
+
+        if (supplier.getVersion() != command.version()) {
+            throw new SupplierUpdateConflictException(
+                    id,
+                    command.version(),
+                    supplier.getVersion());
+        }
+
+        if (!supplier.changeStatus(command.status())) {
+            return supplier;
+        }
+
+        try {
+            supplierRepository.flush();
+        } catch (OptimisticLockingFailureException exception) {
+            throw new SupplierUpdateConflictException(
+                    id,
+                    command.version(),
+                    null,
+                    exception);
+        }
+        return supplier;
+    }
 }

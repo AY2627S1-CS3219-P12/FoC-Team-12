@@ -5,6 +5,7 @@ import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.friendoncampus.supplier.service.SupplierQuery;
 import com.friendoncampus.supplier.service.SupplierService;
+import com.friendoncampus.supplier.web.dto.ChangeSupplierStatusRequest;
 import com.friendoncampus.supplier.web.dto.CreateSupplierRequest;
 import com.friendoncampus.supplier.web.dto.SupplierListResponse;
 import com.friendoncampus.supplier.web.dto.SupplierResponse;
@@ -63,5 +65,13 @@ public class SupplierController {
             @PathVariable UUID id,
             @Valid @RequestBody UpdateSupplierRequest request) {
         return SupplierResponse.from(supplierService.updateSupplier(id, request.toCommand()));
+    }
+
+    @PatchMapping("/{id}/status")
+    public SupplierResponse changeSupplierStatus(
+            @PathVariable UUID id,
+            @Valid @RequestBody ChangeSupplierStatusRequest request) {
+        return SupplierResponse.from(
+                supplierService.changeSupplierStatus(id, request.toCommand()));
     }
 }
