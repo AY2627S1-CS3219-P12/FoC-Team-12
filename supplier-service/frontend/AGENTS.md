@@ -25,3 +25,16 @@ These instructions apply to all work in `supplier-service/frontend/`.
 - Share components between public and administrative routes where their behavior is genuinely the same.
 - UI route guards and hidden controls are only user experience measures. The backend must enforce authentication and authorization.
 - Do not add fake roles, trusted client-side admin flags, or simulated JWT claims.
+
+## Verification and generated contracts
+
+- For frontend changes, run `npm run lint`, `npm run typecheck`, `npm test`, and
+  `npm run build` from this directory. Report each skipped or unavailable check
+  separately.
+- Regenerate `src/api/schema.d.ts` only after an actual Supplier OpenAPI contract
+  change and only against a running service at `http://localhost:8080/v3/api-docs`.
+  Review and commit the generated diff with the corresponding backend contract
+  change; do not hand-edit generated declarations.
+- Manually check affected flows at the 375px mobile reference and desktop layout,
+  including keyboard access, visible focus, validation/error feedback, and the
+  relevant unchanged route.
