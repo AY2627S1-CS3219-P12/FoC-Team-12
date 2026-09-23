@@ -44,4 +44,21 @@ public class SupplierService {
         return supplierRepository.findById(id)
                 .orElseThrow(() -> new SupplierNotFoundException(id));
     }
+
+    @Transactional
+    public Supplier createSupplier(CreateSupplierCommand command) {
+        Supplier supplier = Supplier.create(
+                command.name(),
+                command.type(),
+                command.building(),
+                command.floor(),
+                command.locationDescription(),
+                command.latitude(),
+                command.longitude(),
+                command.openingTime(),
+                command.closingTime(),
+                command.imageUrl(),
+                command.status());
+        return supplierRepository.save(supplier);
+    }
 }

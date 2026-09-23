@@ -3,8 +3,8 @@
 Spring Boot service responsible for campus supplier and location data in Friend on Campus.
 
 This service provides a runnable Spring Boot application connected to its own PostgreSQL
-database, Flyway-managed baseline data, and read-only Supplier APIs. Mutation APIs and
-authentication will be added in later tasks.
+database, Flyway-managed baseline data, and Supplier read and create APIs. Further mutation
+APIs and authentication will be added in later tasks.
 
 ## Prerequisites
 
@@ -114,6 +114,44 @@ curl http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa
 Direct ID lookup can resolve both `ACTIVE` and `INACTIVE` suppliers for historical
 references. Unknown IDs return `404 Not Found`, and malformed UUIDs return `400 Bad Request`
 using the Problem Details JSON format.
+
+## Create a supplier
+
+Create a supplier with `POST /api/suppliers`:
+
+```sh
+curl -i http://localhost:8080/api/suppliers \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "New Campus Cafe",
+    "type": "Food/Coffee",
+    "building": "COM3",
+    "floor": "1",
+    "locationDescription": "Beside the main entrance",
+    "latitude": 1.2948,
+    "longitude": 103.7716,
+    "openingTime": "08:00",
+    "closingTime": "18:00",
+    "imageUrl": "https://example.com/cafe.jpg",
+    "status": "ACTIVE"
+  }'
+```
+
+`name`, `type`, `building`, `latitude`, and `longitude` are required. Text is trimmed,
+and blank optional text is stored as `null`. Latitude must be from `-90` to `90`, longitude
+must be from `-180` to `180`, and an image URL must use HTTP or HTTPS. Opening and closing
+times are independently optional, and overnight hours are allowed. Status may be `ACTIVE`
+or `INACTIVE`; omitting it defaults to `ACTIVE`.
+
+A successful request returns `201 Created`, the complete Supplier object, and a `Location`
+header containing `/api/suppliers/{id}`. The server generates the UUID, version, and
+timestamps. Invalid fields or malformed JSON return `400 Bad Request` using Problem Details;
+field validation responses include an `errors` object.
+
+> **Development security notice:** `POST /api/suppliers` is temporarily unauthenticated for
+> local API-first testing. It must be restricted to authenticated administrators when the
+> User Service JWT contract is available. Do not treat the current endpoint as production
+> access control.
 
 ## Run with Docker Compose
 

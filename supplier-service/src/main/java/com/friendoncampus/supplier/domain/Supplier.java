@@ -2,6 +2,7 @@ package com.friendoncampus.supplier.domain;
 
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -11,6 +12,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
@@ -67,6 +70,45 @@ public class Supplier {
     private OffsetDateTime updatedAt;
 
     protected Supplier() {
+    }
+
+    public static Supplier create(
+            String name,
+            String type,
+            String building,
+            String floor,
+            String locationDescription,
+            double latitude,
+            double longitude,
+            LocalTime openingTime,
+            LocalTime closingTime,
+            String imageUrl,
+            SupplierStatus status) {
+        Supplier supplier = new Supplier();
+        supplier.name = name;
+        supplier.type = type;
+        supplier.building = building;
+        supplier.floor = floor;
+        supplier.locationDescription = locationDescription;
+        supplier.latitude = latitude;
+        supplier.longitude = longitude;
+        supplier.openingTime = openingTime;
+        supplier.closingTime = closingTime;
+        supplier.imageUrl = imageUrl;
+        supplier.status = status;
+        return supplier;
+    }
+
+    @PrePersist
+    void prepareForCreate() {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    void prepareForUpdate() {
+        updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 
     public UUID getId() {

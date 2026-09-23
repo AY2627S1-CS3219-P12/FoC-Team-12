@@ -3,9 +3,11 @@ package com.friendoncampus.supplier.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -116,6 +118,40 @@ class SupplierServiceTest {
                 .hasMessage("Supplier with ID " + id + " was not found")
                 .extracting("supplierId")
                 .isEqualTo(id);
+    }
+
+    @Test
+    void createsAndPersistsSupplierFromCommand() {
+        CreateSupplierCommand command = new CreateSupplierCommand(
+                "New Campus Cafe",
+                "Food/Coffee",
+                "COM3",
+                "1",
+                "Beside the main entrance",
+                1.2948,
+                103.7716,
+                LocalTime.of(8, 0),
+                LocalTime.of(18, 0),
+                "https://example.com/cafe.jpg",
+                SupplierStatus.INACTIVE);
+        when(supplierRepository.save(org.mockito.ArgumentMatchers.any(Supplier.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Supplier result = supplierService.createSupplier(command);
+
+        assertThat(result.getName()).isEqualTo("New Campus Cafe");
+        assertThat(result.getType()).isEqualTo("Food/Coffee");
+        assertThat(result.getBuilding()).isEqualTo("COM3");
+        assertThat(result.getFloor()).isEqualTo("1");
+        assertThat(result.getLocationDescription()).isEqualTo("Beside the main entrance");
+        assertThat(result.getLatitude()).isEqualTo(1.2948);
+        assertThat(result.getLongitude()).isEqualTo(103.7716);
+        assertThat(result.getOpeningTime()).isEqualTo(LocalTime.of(8, 0));
+        assertThat(result.getClosingTime()).isEqualTo(LocalTime.of(18, 0));
+        assertThat(result.getImageUrl()).isEqualTo("https://example.com/cafe.jpg");
+        assertThat(result.getStatus()).isEqualTo(SupplierStatus.INACTIVE);
+        assertThat(result.getVersion()).isZero();
+        verify(supplierRepository).save(same(result));
     }
 
     private Supplier supplierNamed(String name) {
