@@ -3,7 +3,8 @@
 Spring Boot service responsible for campus supplier and location data in Friend on Campus.
 
 This service provides a runnable Spring Boot application connected to its own PostgreSQL
-database. Supplier APIs, schema migrations, and authentication will be added in later tasks.
+database, Flyway-managed baseline data, and read-only Supplier APIs. Mutation APIs and
+authentication will be added in later tasks.
 
 ## Prerequisites
 
@@ -53,6 +54,31 @@ The response will report an `UP` status, for example:
 ```json
 {"groups":["liveness","readiness"],"status":"UP"}
 ```
+
+## Read suppliers
+
+List active suppliers in name order:
+
+```sh
+curl http://localhost:8080/api/suppliers
+```
+
+API paths use exact matching and do not include a trailing slash. Use
+`/api/suppliers`, not `/api/suppliers/`. The same convention applies to future
+Supplier endpoints unless their documentation says otherwise.
+
+The list response wraps records in an `items` array so pagination metadata can be added
+later without changing the top-level shape.
+
+Retrieve one supplier by UUID:
+
+```sh
+curl http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa
+```
+
+Direct ID lookup can resolve both `ACTIVE` and `INACTIVE` suppliers for historical
+references. Unknown IDs return `404 Not Found`, and malformed UUIDs return `400 Bad Request`
+using the Problem Details JSON format.
 
 ## Run with Docker Compose
 
