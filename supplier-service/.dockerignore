@@ -6,3 +6,9 @@ target/
 .vscode/
 *.iml
 README.md
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local

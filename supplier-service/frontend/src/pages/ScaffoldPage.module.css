@@ -1,0 +1,50 @@
+.page {
+  display: grid;
+  gap: var(--foc-space-16);
+  max-width: 48rem;
+}
+
+.page h1,
+.page h2,
+.page p {
+  margin: 0;
+}
+
+.page h1 {
+  color: var(--foc-ink);
+  font-size: clamp(var(--foc-text-mobile-title), 5vw, var(--foc-text-title));
+  line-height: 1.25;
+}
+
+.page h2 {
+  color: var(--foc-ink);
+  font-size: var(--foc-text-heading);
+  line-height: 1.4;
+}
+
+.eyebrow {
+  color: var(--foc-action);
+  font-size: var(--foc-text-label);
+  font-weight: 600;
+}
+
+.intro,
+.statusCard p {
+  color: var(--foc-muted);
+  font-size: var(--foc-text-body);
+  line-height: 1.5;
+}
+
+.statusCard {
+  display: grid;
+  gap: var(--foc-space-12);
+  margin-top: var(--foc-space-8);
+  padding: var(--foc-space-24);
+  border: 1px solid var(--foc-line);
+  border-radius: var(--foc-radius-12);
+  background: var(--foc-surface);
+}
+
+.error {
+  color: var(--foc-danger) !important;
+}

@@ -9,9 +9,63 @@ APIs. Authentication will be added in a later task.
 ## Prerequisites
 
 - Java 17
+- Node.js 22 and npm, for frontend development
 - Docker Desktop, for running the containerized service
 
 Maven does not need to be installed globally because the project includes the Maven Wrapper.
+
+## Frontend scaffold
+
+The Supplier-owned React, TypeScript, and Vite application lives in `frontend/`. It provides
+the foundation for the future public and administrative Supplier experiences; the current
+screens deliberately show only routing and backend-connectivity placeholders.
+
+The frontend uses these routes:
+
+```text
+/suppliers        public Supplier experience
+/admin/suppliers  future administrative Supplier experience
+```
+
+The administrative route is not an authorization boundary. It contains no mutation controls
+yet, and the backend must enforce the future `ADMIN` role when JWT security is introduced.
+
+Install dependencies and run frontend checks from `supplier-service/frontend`:
+
+```sh
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run build
+```
+
+The generated API types in `src/api/schema.d.ts` come from the running Spring Boot OpenAPI
+contract. Regenerate them after an API contract change by starting Supplier Service on port
+`8080` and running:
+
+```sh
+npm run api:generate
+```
+
+For local development, run PostgreSQL and Spring Boot as described below, then start Vite in
+another terminal:
+
+```sh
+cd supplier-service/frontend
+npm run dev
+```
+
+Open <http://localhost:5173/suppliers>. Vite proxies `/api` and `/actuator` to Spring Boot on
+port `8080`, so no development CORS configuration is required.
+
+The production frontend is built into the Spring Boot JAR and served from the same origin.
+The Docker build performs both the Node and Maven builds; it does not create a separate
+frontend container. After `docker compose up --build`, open
+<http://localhost:8080/suppliers>.
+
+Figma references and implementation rules for future frontend work are documented in
+`frontend/docs/design-source.md` and `frontend/AGENTS.md`.
 
 ## Run the tests
 
