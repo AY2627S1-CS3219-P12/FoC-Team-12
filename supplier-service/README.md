@@ -57,18 +57,53 @@ The response will report an `UP` status, for example:
 
 ## Read suppliers
 
-List active suppliers in name order:
+List active suppliers using the default first page, 20 records per page, and ascending name
+order:
 
 ```sh
 curl http://localhost:8080/api/suppliers
 ```
 
+Search, filter, sort, and paginate the active suppliers:
+
+```sh
+curl 'http://localhost:8080/api/suppliers?search=central&type=Food&building=Central%20Library&page=0&size=20&sort=name,asc'
+```
+
+The list endpoint supports these optional query parameters:
+
+| Parameter | Behavior |
+| --- | --- |
+| `search` | Case-insensitive partial match across name, building, and location description. |
+| `type` | Case-insensitive exact match. |
+| `building` | Case-insensitive exact match. |
+| `page` | Zero-based page number; defaults to `0` and cannot be negative. |
+| `size` | Records per page; defaults to `20` and must be from `1` to `100`. |
+| `sort` | `field,asc` or `field,desc`; defaults to `name,asc`. |
+
+Allowed sort fields are `name`, `type`, `building`, `openingTime`, `closingTime`,
+`createdAt`, and `updatedAt`. String sorting is case-insensitive and nullable values sort
+last. Filters combine with each other, so a record must satisfy all supplied filters. Blank
+search and filter values are ignored. Unsupported sort values and invalid page or size values
+return `400 Bad Request` using the Problem Details JSON format.
+
+List responses include the records and pagination metadata:
+
+```json
+{
+  "items": [],
+  "page": 0,
+  "size": 20,
+  "totalItems": 21,
+  "totalPages": 2
+}
+```
+
+Requesting a page beyond the final page succeeds with `200 OK` and an empty `items` array.
+
 API paths use exact matching and do not include a trailing slash. Use
 `/api/suppliers`, not `/api/suppliers/`. The same convention applies to future
 Supplier endpoints unless their documentation says otherwise.
-
-The list response wraps records in an `items` array so pagination metadata can be added
-later without changing the top-level shape.
 
 Retrieve one supplier by UUID:
 

@@ -8,10 +8,20 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import com.friendoncampus.supplier.service.InvalidSupplierQueryException;
 import com.friendoncampus.supplier.service.SupplierNotFoundException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(InvalidSupplierQueryException.class)
+    public ProblemDetail handleInvalidSupplierQuery(InvalidSupplierQueryException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST,
+                exception.getMessage());
+        problem.setTitle("Invalid supplier query");
+        return problem;
+    }
 
     @ExceptionHandler(SupplierNotFoundException.class)
     public ProblemDetail handleSupplierNotFound(SupplierNotFoundException exception) {
