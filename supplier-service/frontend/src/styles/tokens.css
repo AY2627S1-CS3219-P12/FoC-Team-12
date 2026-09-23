@@ -1,0 +1,36 @@
+:root {
+  color-scheme: light;
+
+  --foc-canvas: #f5f7f5;
+  --foc-surface: #ffffff;
+  --foc-ink: #20332d;
+  --foc-muted: #57655f;
+  --foc-action: #23654e;
+  --foc-action-soft: #e7f1ed;
+  --foc-line: #d4ddd7;
+  --foc-danger: #a2372b;
+  --foc-focus: #176bba;
+
+  --foc-space-0: 0;
+  --foc-space-4: 0.25rem;
+  --foc-space-8: 0.5rem;
+  --foc-space-12: 0.75rem;
+  --foc-space-16: 1rem;
+  --foc-space-24: 1.5rem;
+  --foc-space-32: 2rem;
+  --foc-space-56: 3.5rem;
+
+  --foc-radius-8: 0.5rem;
+  --foc-radius-12: 0.75rem;
+
+  --foc-text-caption: 0.75rem;
+  --foc-text-small: 0.875rem;
+  --foc-text-label: 0.875rem;
+  --foc-text-body: 1rem;
+  --foc-text-heading: 1.25rem;
+  --foc-text-mobile-title: 1.625rem;
+  --foc-text-title: 2rem;
+
+  /* CSS custom properties cannot currently drive media-query conditions. */
+  --foc-breakpoint-desktop: 48rem;
+}
