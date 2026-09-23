@@ -3,8 +3,8 @@
 Spring Boot service responsible for campus supplier and location data in Friend on Campus.
 
 This service provides a runnable Spring Boot application connected to its own PostgreSQL
-database, Flyway-managed baseline data, and Supplier read and create APIs. Further mutation
-APIs and authentication will be added in later tasks.
+database, Flyway-managed baseline data, and Supplier read, create, and detail-update APIs.
+Further mutation APIs and authentication will be added in later tasks.
 
 ## Prerequisites
 
@@ -152,6 +152,65 @@ field validation responses include an `errors` object.
 > local API-first testing. It must be restricted to authenticated administrators when the
 > User Service JWT contract is available. Do not treat the current endpoint as production
 > access control.
+
+## Update a supplier
+
+Replace a supplier's editable details with `PUT /api/suppliers/{id}`:
+
+```sh
+curl -i -X PUT \
+  http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "Updated Campus Cafe",
+    "type": "Food/Coffee",
+    "building": "COM3",
+    "floor": "2",
+    "locationDescription": "Now beside the lift",
+    "latitude": 1.2948,
+    "longitude": 103.7716,
+    "openingTime": "09:00",
+    "closingTime": "20:00",
+    "imageUrl": "https://example.com/updated-cafe.jpg",
+    "version": 0
+  }'
+```
+
+This is a full update, not a partial update. The request must describe the complete desired
+editable state of the supplier rather than only the fields that changed. Every request must
+include `name`, `type`, `building`, `latitude`, `longitude`, and `version`; omitting any of
+these fields returns `400 Bad Request`. The optional editable fields are `floor`,
+`locationDescription`, `openingTime`, `closingTime`, and `imageUrl`. If an optional field is
+omitted or contains blank text, it is deliberately cleared to `null`.
+
+Creation validation rules also apply here. The endpoint does not accept changes to `id`,
+`status`, `createdAt`, or `updatedAt`; the server manages the timestamp. Both active and
+inactive suppliers can be updated, but their current status remains unchanged.
+
+Use the `version` from the latest GET response. A successful change returns `200 OK`, keeps
+`createdAt`, updates `updatedAt`, and increments `version`. Sending the same details is a
+successful no-op and does not increment the version or timestamp.
+
+If another request updated the supplier first, the stale request returns `409 Conflict`:
+
+```json
+{
+  "title": "Supplier update conflict",
+  "status": 409,
+  "detail": "Supplier has changed since the requested version",
+  "supplierId": "ca9bd61f-93da-4500-9e9d-48de1bea52fa",
+  "requestedVersion": 0,
+  "currentVersion": 1
+}
+```
+
+After a conflict, retrieve the supplier again, reconcile the latest data with the intended
+changes, and retry using the new version. Unknown IDs return `404 Not Found`; malformed IDs,
+invalid fields, and malformed JSON return `400 Bad Request` using Problem Details.
+
+> **Development security notice:** `PUT /api/suppliers/{id}` is temporarily unauthenticated
+> for local API-first testing. It must be restricted to authenticated administrators when
+> the User Service JWT contract is available.
 
 ## Run with Docker Compose
 

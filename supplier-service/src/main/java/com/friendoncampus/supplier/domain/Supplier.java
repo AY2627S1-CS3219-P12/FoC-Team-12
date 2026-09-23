@@ -99,6 +99,29 @@ public class Supplier {
         return supplier;
     }
 
+    public void updateDetails(
+            String name,
+            String type,
+            String building,
+            String floor,
+            String locationDescription,
+            double latitude,
+            double longitude,
+            LocalTime openingTime,
+            LocalTime closingTime,
+            String imageUrl) {
+        this.name = name;
+        this.type = type;
+        this.building = building;
+        this.floor = floor;
+        this.locationDescription = locationDescription;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.openingTime = openingTime;
+        this.closingTime = closingTime;
+        this.imageUrl = imageUrl;
+    }
+
     @PrePersist
     void prepareForCreate() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);

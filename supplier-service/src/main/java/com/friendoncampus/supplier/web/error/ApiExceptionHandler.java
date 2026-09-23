@@ -17,9 +17,17 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.friendoncampus.supplier.service.InvalidSupplierQueryException;
 import com.friendoncampus.supplier.service.SupplierNotFoundException;
+import com.friendoncampus.supplier.service.SupplierUpdateConflictException;
+import com.friendoncampus.supplier.service.SupplierVersionLookup;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    private final SupplierVersionLookup supplierVersionLookup;
+
+    public ApiExceptionHandler(SupplierVersionLookup supplierVersionLookup) {
+        this.supplierVersionLookup = supplierVersionLookup;
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleInvalidSupplierRequest(MethodArgumentNotValidException exception) {
@@ -43,6 +51,28 @@ public class ApiExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "Request body is missing, malformed, or contains an unsupported value");
         problem.setTitle("Invalid supplier request");
+        return problem;
+    }
+
+    @ExceptionHandler(SupplierUpdateConflictException.class)
+    public ProblemDetail handleSupplierUpdateConflict(
+            SupplierUpdateConflictException exception) {
+        Long currentVersion = exception.getCurrentVersion();
+        if (currentVersion == null) {
+            currentVersion = supplierVersionLookup.findCurrentVersion(exception.getSupplierId())
+                    .stream()
+                    .boxed()
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT,
+                exception.getMessage());
+        problem.setTitle("Supplier update conflict");
+        problem.setProperty("supplierId", exception.getSupplierId());
+        problem.setProperty("requestedVersion", exception.getRequestedVersion());
+        problem.setProperty("currentVersion", currentVersion);
         return problem;
     }
 

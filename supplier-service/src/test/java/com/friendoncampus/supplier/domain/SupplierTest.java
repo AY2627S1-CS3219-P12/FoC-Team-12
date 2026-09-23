@@ -41,4 +41,83 @@ class SupplierTest {
         assertThat(supplier.getCreatedAt()).isEqualTo(createdAt);
         assertThat(supplier.getUpdatedAt()).isAfterOrEqualTo(createdAt);
     }
+
+    @Test
+    void updatesOnlyEditableDetails() {
+        Supplier supplier = Supplier.create(
+                "Original Cafe",
+                "Food",
+                "COM2",
+                "1",
+                "Original location",
+                1.0,
+                2.0,
+                LocalTime.of(8, 0),
+                LocalTime.of(17, 0),
+                "https://example.com/original.jpg",
+                SupplierStatus.INACTIVE);
+        supplier.prepareForCreate();
+        OffsetDateTime createdAt = supplier.getCreatedAt();
+
+        supplier.updateDetails(
+                "Updated Cafe",
+                "Food/Coffee",
+                "COM3",
+                null,
+                null,
+                3.0,
+                4.0,
+                null,
+                LocalTime.of(2, 0),
+                null);
+
+        assertThat(supplier.getName()).isEqualTo("Updated Cafe");
+        assertThat(supplier.getType()).isEqualTo("Food/Coffee");
+        assertThat(supplier.getBuilding()).isEqualTo("COM3");
+        assertThat(supplier.getFloor()).isNull();
+        assertThat(supplier.getLocationDescription()).isNull();
+        assertThat(supplier.getLatitude()).isEqualTo(3.0);
+        assertThat(supplier.getLongitude()).isEqualTo(4.0);
+        assertThat(supplier.getOpeningTime()).isNull();
+        assertThat(supplier.getClosingTime()).isEqualTo(LocalTime.of(2, 0));
+        assertThat(supplier.getImageUrl()).isNull();
+        assertThat(supplier.getStatus()).isEqualTo(SupplierStatus.INACTIVE);
+        assertThat(supplier.getVersion()).isZero();
+        assertThat(supplier.getCreatedAt()).isEqualTo(createdAt);
+    }
+
+    @Test
+    void leavesManagedFieldsUnchangedWhenDetailsAreIdentical() {
+        Supplier supplier = Supplier.create(
+                "Campus Cafe",
+                "Food/Coffee",
+                "COM3",
+                "1",
+                "Beside the entrance",
+                1.2948,
+                103.7716,
+                LocalTime.of(8, 0),
+                LocalTime.of(18, 0),
+                "https://example.com/cafe.jpg",
+                SupplierStatus.ACTIVE);
+        supplier.prepareForCreate();
+        OffsetDateTime createdAt = supplier.getCreatedAt();
+        OffsetDateTime updatedAt = supplier.getUpdatedAt();
+
+        supplier.updateDetails(
+                "Campus Cafe",
+                "Food/Coffee",
+                "COM3",
+                "1",
+                "Beside the entrance",
+                1.2948,
+                103.7716,
+                LocalTime.of(8, 0),
+                LocalTime.of(18, 0),
+                "https://example.com/cafe.jpg");
+
+        assertThat(supplier.getVersion()).isZero();
+        assertThat(supplier.getCreatedAt()).isEqualTo(createdAt);
+        assertThat(supplier.getUpdatedAt()).isEqualTo(updatedAt);
+    }
 }

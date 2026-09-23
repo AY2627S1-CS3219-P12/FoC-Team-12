@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,5 +61,41 @@ public class SupplierService {
                 command.imageUrl(),
                 command.status());
         return supplierRepository.save(supplier);
+    }
+
+    @Transactional
+    public Supplier updateSupplier(UUID id, UpdateSupplierCommand command) {
+        Supplier supplier = supplierRepository.findById(id)
+                .orElseThrow(() -> new SupplierNotFoundException(id));
+
+        if (supplier.getVersion() != command.version()) {
+            throw new SupplierUpdateConflictException(
+                    id,
+                    command.version(),
+                    supplier.getVersion());
+        }
+
+        supplier.updateDetails(
+                command.name(),
+                command.type(),
+                command.building(),
+                command.floor(),
+                command.locationDescription(),
+                command.latitude(),
+                command.longitude(),
+                command.openingTime(),
+                command.closingTime(),
+                command.imageUrl());
+
+        try {
+            supplierRepository.flush();
+        } catch (OptimisticLockingFailureException exception) {
+            throw new SupplierUpdateConflictException(
+                    id,
+                    command.version(),
+                    null,
+                    exception);
+        }
+        return supplier;
     }
 }
