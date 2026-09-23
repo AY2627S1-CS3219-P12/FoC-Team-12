@@ -4,6 +4,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -35,6 +36,7 @@ import com.friendoncampus.supplier.domain.Supplier;
 import com.friendoncampus.supplier.domain.SupplierStatus;
 import com.friendoncampus.supplier.service.ChangeSupplierStatusCommand;
 import com.friendoncampus.supplier.service.CreateSupplierCommand;
+import com.friendoncampus.supplier.service.DeleteSupplierCommand;
 import com.friendoncampus.supplier.service.SupplierNotFoundException;
 import com.friendoncampus.supplier.service.SupplierQuery;
 import com.friendoncampus.supplier.service.SupplierService;
@@ -696,6 +698,109 @@ class SupplierControllerTest {
         mockMvc.perform(patch("/api/suppliers/not-a-uuid/status")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validStatusJson("INACTIVE", 0L)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid supplier ID"));
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @Test
+    void deletesSupplierAndReturnsEmptyNoContentResponse() throws Exception {
+        DeleteSupplierCommand command = new DeleteSupplierCommand(2L);
+
+        mockMvc.perform(delete("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .queryParam("version", "2"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        verify(supplierService).deleteSupplier(NEW_SUPPLIER_ID, command);
+    }
+
+    @Test
+    void returnsProblemDetailWhenDeleteVersionIsMissing() throws Exception {
+        mockMvc.perform(delete("/api/suppliers/{id}", NEW_SUPPLIER_ID))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid supplier query"))
+                .andExpect(jsonPath("$.detail").value("version query parameter is required"));
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "-1", "1.5", "one", "9223372036854775808"})
+    void returnsProblemDetailForInvalidDeleteVersion(String version) throws Exception {
+        mockMvc.perform(delete("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .queryParam("version", version))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid supplier query"))
+                .andExpect(jsonPath("$.detail")
+                        .value("version must be a nonnegative whole number"));
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @Test
+    void returnsProblemDetailForStaleDeleteVersion() throws Exception {
+        DeleteSupplierCommand command = new DeleteSupplierCommand(1L);
+        org.mockito.Mockito.doThrow(new SupplierUpdateConflictException(
+                        NEW_SUPPLIER_ID,
+                        1L,
+                        2L))
+                .when(supplierService)
+                .deleteSupplier(NEW_SUPPLIER_ID, command);
+
+        mockMvc.perform(delete("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .queryParam("version", "1"))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Supplier update conflict"))
+                .andExpect(jsonPath("$.supplierId").value(NEW_SUPPLIER_ID.toString()))
+                .andExpect(jsonPath("$.requestedVersion").value(1))
+                .andExpect(jsonPath("$.currentVersion").value(2));
+    }
+
+    @Test
+    void resolvesCurrentVersionAfterSimultaneousDeleteConflict() throws Exception {
+        DeleteSupplierCommand command = new DeleteSupplierCommand(2L);
+        org.mockito.Mockito.doThrow(new SupplierUpdateConflictException(
+                        NEW_SUPPLIER_ID,
+                        2L,
+                        null,
+                        new OptimisticLockingFailureException("race")))
+                .when(supplierService)
+                .deleteSupplier(NEW_SUPPLIER_ID, command);
+        when(supplierVersionLookup.findCurrentVersion(NEW_SUPPLIER_ID))
+                .thenReturn(OptionalLong.of(3L));
+
+        mockMvc.perform(delete("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .queryParam("version", "2"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.requestedVersion").value(2))
+                .andExpect(jsonPath("$.currentVersion").value(3));
+
+        verify(supplierVersionLookup).findCurrentVersion(NEW_SUPPLIER_ID);
+    }
+
+    @Test
+    void returnsNotFoundForDeleteOfUnknownSupplier() throws Exception {
+        DeleteSupplierCommand command = new DeleteSupplierCommand(0L);
+        org.mockito.Mockito.doThrow(new SupplierNotFoundException(NEW_SUPPLIER_ID))
+                .when(supplierService)
+                .deleteSupplier(NEW_SUPPLIER_ID, command);
+
+        mockMvc.perform(delete("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .queryParam("version", "0"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Supplier not found"))
+                .andExpect(jsonPath("$.supplierId").value(NEW_SUPPLIER_ID.toString()));
+    }
+
+    @Test
+    void returnsProblemDetailForMalformedDeleteSupplierId() throws Exception {
+        mockMvc.perform(delete("/api/suppliers/not-a-uuid")
+                        .queryParam("version", "0"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Invalid supplier ID"));
 
