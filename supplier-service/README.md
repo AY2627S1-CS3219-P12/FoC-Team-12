@@ -55,6 +55,34 @@ The response will report an `UP` status, for example:
 {"groups":["liveness","readiness"],"status":"UP"}
 ```
 
+## OpenAPI and Swagger UI
+
+OpenAPI is the machine-readable contract describing the Supplier endpoints, parameters,
+request bodies, responses, and errors. Swagger UI is the interactive web page generated from
+that contract. With the service running, open:
+
+```text
+http://localhost:8080/swagger-ui/index.html
+```
+
+The generated contract is also available directly:
+
+```text
+JSON: http://localhost:8080/v3/api-docs
+YAML: http://localhost:8080/v3/api-docs.yaml
+```
+
+Select an operation in Swagger UI and choose **Try it out** to send a request. Swagger UI is
+served by the running Supplier Service, so it uses the service's real configured PostgreSQL
+database. Read requests are safe to explore, but POST, PUT, PATCH, and DELETE requests really
+create, modify, or permanently delete records.
+
+The OpenAPI contract is generated at runtime from the Spring controllers, DTO validation, and
+documentation annotations; generated JSON or YAML is not committed to the repository. The
+mutation endpoints and documentation are currently available without authentication for local
+API-first development. Production documentation exposure and `ADMIN` authorization will be
+decided when JWT security and deployment profiles are introduced.
+
 ## Read suppliers
 
 List active suppliers using the default first page, 20 records per page, and ascending name
