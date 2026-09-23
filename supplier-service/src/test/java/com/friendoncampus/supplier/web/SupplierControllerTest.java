@@ -5,7 +5,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -27,6 +29,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.friendoncampus.supplier.domain.Supplier;
 import com.friendoncampus.supplier.domain.SupplierStatus;
+import com.friendoncampus.supplier.service.CreateSupplierCommand;
 import com.friendoncampus.supplier.service.SupplierNotFoundException;
 import com.friendoncampus.supplier.service.SupplierQuery;
 import com.friendoncampus.supplier.service.SupplierService;
@@ -35,6 +38,8 @@ import com.friendoncampus.supplier.web.error.ApiExceptionHandler;
 class SupplierControllerTest {
 
     private static final UUID ANNA_ID = UUID.fromString("ca9bd61f-93da-4500-9e9d-48de1bea52fa");
+    private static final UUID NEW_SUPPLIER_ID =
+            UUID.fromString("184a5d15-0714-47ad-9ee9-524bf84f361c");
 
     private SupplierService supplierService;
     private MockMvc mockMvc;
@@ -163,6 +168,158 @@ class SupplierControllerTest {
                 .andExpect(jsonPath("$.title").value("Invalid supplier ID"))
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.detail").value("Supplier ID 'not-a-uuid' is not a valid UUID"));
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @Test
+    void createsSupplierAndReturnsLocationAndResponseBody() throws Exception {
+        CreateSupplierCommand expectedCommand = new CreateSupplierCommand(
+                "New Campus Cafe",
+                "Food/Coffee",
+                "COM3",
+                "1",
+                "Beside the main entrance",
+                1.2948,
+                103.7716,
+                LocalTime.of(8, 0),
+                LocalTime.of(18, 0),
+                "https://example.com/cafe.jpg",
+                SupplierStatus.INACTIVE);
+        Supplier created = supplier(
+                NEW_SUPPLIER_ID,
+                "New Campus Cafe",
+                SupplierStatus.INACTIVE);
+        when(supplierService.createSupplier(expectedCommand)).thenReturn(created);
+
+        mockMvc.perform(post("/api/suppliers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "  New Campus Cafe  ",
+                                  "type": " Food/Coffee ",
+                                  "building": " COM3 ",
+                                  "floor": " 1 ",
+                                  "locationDescription": " Beside the main entrance ",
+                                  "latitude": 1.2948,
+                                  "longitude": 103.7716,
+                                  "openingTime": "08:00",
+                                  "closingTime": "18:00",
+                                  "imageUrl": " https://example.com/cafe.jpg ",
+                                  "status": "INACTIVE"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Location", "/api/suppliers/" + NEW_SUPPLIER_ID))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(NEW_SUPPLIER_ID.toString()))
+                .andExpect(jsonPath("$.name").value("New Campus Cafe"))
+                .andExpect(jsonPath("$.status").value("INACTIVE"))
+                .andExpect(jsonPath("$.version").value(0))
+                .andExpect(jsonPath("$.createdAt").value("2026-09-23T00:00:00Z"))
+                .andExpect(jsonPath("$.updatedAt").value("2026-09-23T00:00:00Z"));
+
+        verify(supplierService).createSupplier(expectedCommand);
+    }
+
+    @Test
+    void defaultsStatusAndConvertsBlankOptionalTextToNull() throws Exception {
+        CreateSupplierCommand expectedCommand = new CreateSupplierCommand(
+                "New Campus Cafe",
+                "Food",
+                "COM3",
+                null,
+                null,
+                1.2948,
+                103.7716,
+                LocalTime.of(23, 0),
+                null,
+                null,
+                SupplierStatus.ACTIVE);
+        Supplier created = supplier(
+                NEW_SUPPLIER_ID,
+                "New Campus Cafe",
+                SupplierStatus.ACTIVE);
+        when(supplierService.createSupplier(expectedCommand)).thenReturn(created);
+
+        mockMvc.perform(post("/api/suppliers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "New Campus Cafe",
+                                  "type": "Food",
+                                  "building": "COM3",
+                                  "floor": " ",
+                                  "locationDescription": "  ",
+                                  "latitude": 1.2948,
+                                  "longitude": 103.7716,
+                                  "openingTime": "23:00",
+                                  "imageUrl": " "
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("ACTIVE"));
+
+        verify(supplierService).createSupplier(expectedCommand);
+    }
+
+    @Test
+    void returnsFieldErrorsForInvalidSupplierRequest() throws Exception {
+        mockMvc.perform(post("/api/suppliers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": " ",
+                                  "type": " ",
+                                  "building": " ",
+                                  "latitude": 90.01,
+                                  "longitude": 180.01,
+                                  "imageUrl": "ftp://example.com/image.jpg"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid supplier request"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.errors.name").isArray())
+                .andExpect(jsonPath("$.errors.type").isArray())
+                .andExpect(jsonPath("$.errors.building").isArray())
+                .andExpect(jsonPath("$.errors.latitude").isArray())
+                .andExpect(jsonPath("$.errors.longitude").isArray())
+                .andExpect(jsonPath("$.errors.imageUrl").isArray());
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "{",
+            "{\"name\":\"Cafe\",\"type\":\"Food\",\"building\":\"COM3\","
+                    + "\"latitude\":1.0,\"longitude\":1.0,\"status\":\"PAUSED\"}",
+            "{\"name\":\"Cafe\",\"type\":\"Food\",\"building\":\"COM3\","
+                    + "\"latitude\":1.0,\"longitude\":1.0,\"openingTime\":\"25:00\"}"
+    })
+    void returnsProblemDetailForMalformedSupplierBody(String body) throws Exception {
+        mockMvc.perform(post("/api/suppliers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid supplier request"))
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.detail").isNotEmpty());
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @Test
+    void returnsProblemDetailWhenSupplierBodyIsMissing() throws Exception {
+        mockMvc.perform(post("/api/suppliers")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid supplier request"))
+                .andExpect(jsonPath("$.status").value(400));
 
         verifyNoInteractions(supplierService);
     }
