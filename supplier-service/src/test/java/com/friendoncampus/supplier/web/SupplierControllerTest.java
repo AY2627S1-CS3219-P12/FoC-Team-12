@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,12 +15,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -33,6 +36,9 @@ import com.friendoncampus.supplier.service.CreateSupplierCommand;
 import com.friendoncampus.supplier.service.SupplierNotFoundException;
 import com.friendoncampus.supplier.service.SupplierQuery;
 import com.friendoncampus.supplier.service.SupplierService;
+import com.friendoncampus.supplier.service.SupplierUpdateConflictException;
+import com.friendoncampus.supplier.service.SupplierVersionLookup;
+import com.friendoncampus.supplier.service.UpdateSupplierCommand;
 import com.friendoncampus.supplier.web.error.ApiExceptionHandler;
 
 class SupplierControllerTest {
@@ -42,14 +48,16 @@ class SupplierControllerTest {
             UUID.fromString("184a5d15-0714-47ad-9ee9-524bf84f361c");
 
     private SupplierService supplierService;
+    private SupplierVersionLookup supplierVersionLookup;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         supplierService = mock(SupplierService.class);
+        supplierVersionLookup = mock(SupplierVersionLookup.class);
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new SupplierController(supplierService))
-                .setControllerAdvice(new ApiExceptionHandler())
+                .setControllerAdvice(new ApiExceptionHandler(supplierVersionLookup))
                 .build();
     }
 
@@ -324,7 +332,251 @@ class SupplierControllerTest {
         verifyNoInteractions(supplierService);
     }
 
+    @Test
+    void updatesSupplierAndReturnsCompleteResponse() throws Exception {
+        UpdateSupplierCommand expectedCommand = new UpdateSupplierCommand(
+                "Updated Campus Cafe",
+                "Food/Coffee",
+                "COM3",
+                "2",
+                "Now beside the lift",
+                1.2948,
+                103.7716,
+                LocalTime.of(9, 0),
+                LocalTime.of(20, 0),
+                "https://example.com/updated-cafe.jpg",
+                0L);
+        Supplier updated = supplier(
+                NEW_SUPPLIER_ID,
+                "Updated Campus Cafe",
+                SupplierStatus.ACTIVE,
+                1L);
+        when(supplierService.updateSupplier(NEW_SUPPLIER_ID, expectedCommand))
+                .thenReturn(updated);
+
+        mockMvc.perform(put("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": " Updated Campus Cafe ",
+                                  "type": " Food/Coffee ",
+                                  "building": " COM3 ",
+                                  "floor": " 2 ",
+                                  "locationDescription": " Now beside the lift ",
+                                  "latitude": 1.2948,
+                                  "longitude": 103.7716,
+                                  "openingTime": "09:00",
+                                  "closingTime": "20:00",
+                                  "imageUrl": " https://example.com/updated-cafe.jpg ",
+                                  "version": 0
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.id").value(NEW_SUPPLIER_ID.toString()))
+                .andExpect(jsonPath("$.name").value("Updated Campus Cafe"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.version").value(1));
+
+        verify(supplierService).updateSupplier(NEW_SUPPLIER_ID, expectedCommand);
+    }
+
+    @Test
+    void mapsOmittedOptionalUpdateFieldsToNull() throws Exception {
+        UpdateSupplierCommand expectedCommand = new UpdateSupplierCommand(
+                "Updated Campus Cafe",
+                "Food",
+                "COM3",
+                null,
+                null,
+                1.2948,
+                103.7716,
+                null,
+                null,
+                null,
+                2L);
+        Supplier updatedSupplier = supplier(
+                NEW_SUPPLIER_ID,
+                "Updated Campus Cafe",
+                SupplierStatus.INACTIVE,
+                3L);
+        when(supplierService.updateSupplier(NEW_SUPPLIER_ID, expectedCommand))
+                .thenReturn(updatedSupplier);
+
+        mockMvc.perform(put("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Updated Campus Cafe",
+                                  "type": "Food",
+                                  "building": "COM3",
+                                  "latitude": 1.2948,
+                                  "longitude": 103.7716,
+                                  "status": "ACTIVE",
+                                  "version": 2
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("INACTIVE"))
+                .andExpect(jsonPath("$.version").value(3));
+
+        verify(supplierService).updateSupplier(NEW_SUPPLIER_ID, expectedCommand);
+    }
+
+    @Test
+    void returnsFieldErrorsForInvalidUpdateRequest() throws Exception {
+        mockMvc.perform(put("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": " ",
+                                  "type": "Food",
+                                  "building": "COM3",
+                                  "latitude": 90.01,
+                                  "longitude": 103.7716,
+                                  "imageUrl": "ftp://example.com/image.jpg",
+                                  "version": -1
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Invalid supplier request"))
+                .andExpect(jsonPath("$.errors.name").isArray())
+                .andExpect(jsonPath("$.errors.latitude").isArray())
+                .andExpect(jsonPath("$.errors.imageUrl").isArray())
+                .andExpect(jsonPath("$.errors.version").isArray());
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @Test
+    void rejectsUpdateWithoutVersion() throws Exception {
+        mockMvc.perform(put("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "Updated Campus Cafe",
+                                  "type": "Food",
+                                  "building": "COM3",
+                                  "latitude": 1.2948,
+                                  "longitude": 103.7716
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid supplier request"))
+                .andExpect(jsonPath("$.errors.version").isArray());
+
+        verifyNoInteractions(supplierService);
+    }
+
+    @Test
+    void returnsProblemDetailForStaleUpdateVersion() throws Exception {
+        UpdateSupplierCommand command = updateCommand(0L);
+        when(supplierService.updateSupplier(NEW_SUPPLIER_ID, command))
+                .thenThrow(new SupplierUpdateConflictException(
+                        NEW_SUPPLIER_ID,
+                        0L,
+                        1L));
+
+        mockMvc.perform(put("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validUpdateJson(0L)))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Supplier update conflict"))
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.detail")
+                        .value("Supplier has changed since the requested version"))
+                .andExpect(jsonPath("$.supplierId").value(NEW_SUPPLIER_ID.toString()))
+                .andExpect(jsonPath("$.requestedVersion").value(0))
+                .andExpect(jsonPath("$.currentVersion").value(1));
+    }
+
+    @Test
+    void resolvesCurrentVersionAfterSimultaneousUpdateConflict() throws Exception {
+        UpdateSupplierCommand command = updateCommand(1L);
+        when(supplierService.updateSupplier(NEW_SUPPLIER_ID, command))
+                .thenThrow(new SupplierUpdateConflictException(
+                        NEW_SUPPLIER_ID,
+                        1L,
+                        null,
+                        new OptimisticLockingFailureException("race")));
+        when(supplierVersionLookup.findCurrentVersion(NEW_SUPPLIER_ID))
+                .thenReturn(OptionalLong.of(2L));
+
+        mockMvc.perform(put("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validUpdateJson(1L)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.requestedVersion").value(1))
+                .andExpect(jsonPath("$.currentVersion").value(2));
+
+        verify(supplierVersionLookup).findCurrentVersion(NEW_SUPPLIER_ID);
+    }
+
+    @Test
+    void returnsNotFoundForUpdateOfUnknownSupplier() throws Exception {
+        UpdateSupplierCommand command = updateCommand(0L);
+        when(supplierService.updateSupplier(NEW_SUPPLIER_ID, command))
+                .thenThrow(new SupplierNotFoundException(NEW_SUPPLIER_ID));
+
+        mockMvc.perform(put("/api/suppliers/{id}", NEW_SUPPLIER_ID)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validUpdateJson(0L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Supplier not found"))
+                .andExpect(jsonPath("$.supplierId").value(NEW_SUPPLIER_ID.toString()));
+    }
+
+    @Test
+    void returnsProblemDetailForMalformedUpdateId() throws Exception {
+        mockMvc.perform(put("/api/suppliers/not-a-uuid")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validUpdateJson(0L)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Invalid supplier ID"));
+
+        verifyNoInteractions(supplierService);
+    }
+
+    private UpdateSupplierCommand updateCommand(long version) {
+        return new UpdateSupplierCommand(
+                "Updated Campus Cafe",
+                "Food/Coffee",
+                "COM3",
+                "2",
+                "Now beside the lift",
+                1.2948,
+                103.7716,
+                LocalTime.of(9, 0),
+                LocalTime.of(20, 0),
+                "https://example.com/updated-cafe.jpg",
+                version);
+    }
+
+    private String validUpdateJson(long version) {
+        return """
+                {
+                  "name": "Updated Campus Cafe",
+                  "type": "Food/Coffee",
+                  "building": "COM3",
+                  "floor": "2",
+                  "locationDescription": "Now beside the lift",
+                  "latitude": 1.2948,
+                  "longitude": 103.7716,
+                  "openingTime": "09:00",
+                  "closingTime": "20:00",
+                  "imageUrl": "https://example.com/updated-cafe.jpg",
+                  "version": %d
+                }
+                """.formatted(version);
+    }
+
     private Supplier supplier(UUID id, String name, SupplierStatus status) {
+        return supplier(id, name, status, 0L);
+    }
+
+    private Supplier supplier(UUID id, String name, SupplierStatus status, long version) {
         Supplier supplier = mock(Supplier.class);
         when(supplier.getId()).thenReturn(id);
         when(supplier.getName()).thenReturn(name);
@@ -338,7 +590,7 @@ class SupplierControllerTest {
         when(supplier.getClosingTime()).thenReturn(LocalTime.of(18, 0));
         when(supplier.getImageUrl()).thenReturn("https://example.com/supplier.jpg");
         when(supplier.getStatus()).thenReturn(status);
-        when(supplier.getVersion()).thenReturn(0L);
+        when(supplier.getVersion()).thenReturn(version);
         when(supplier.getCreatedAt()).thenReturn(OffsetDateTime.parse("2026-09-23T00:00:00Z"));
         when(supplier.getUpdatedAt()).thenReturn(OffsetDateTime.parse("2026-09-23T00:00:00Z"));
         return supplier;

@@ -3,6 +3,7 @@ package com.friendoncampus.supplier.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -152,6 +154,103 @@ class SupplierServiceTest {
         assertThat(result.getStatus()).isEqualTo(SupplierStatus.INACTIVE);
         assertThat(result.getVersion()).isZero();
         verify(supplierRepository).save(same(result));
+    }
+
+    @Test
+    void updatesSupplierAndFlushesManagedEntity() {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        UpdateSupplierCommand command = updateCommand(3L);
+        when(supplier.getVersion()).thenReturn(3L);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+
+        Supplier result = supplierService.updateSupplier(id, command);
+
+        assertThat(result).isSameAs(supplier);
+        verify(supplier).updateDetails(
+                command.name(),
+                command.type(),
+                command.building(),
+                command.floor(),
+                command.locationDescription(),
+                command.latitude(),
+                command.longitude(),
+                command.openingTime(),
+                command.closingTime(),
+                command.imageUrl());
+        verify(supplierRepository).flush();
+    }
+
+    @Test
+    void rejectsUnknownSupplierDuringUpdate() {
+        UUID id = UUID.randomUUID();
+        when(supplierRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> supplierService.updateSupplier(id, updateCommand(0L)))
+                .isInstanceOf(SupplierNotFoundException.class)
+                .extracting("supplierId")
+                .isEqualTo(id);
+
+        verify(supplierRepository, never()).flush();
+    }
+
+    @Test
+    void rejectsAlreadyStaleVersionBeforeChangingSupplier() {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        when(supplier.getVersion()).thenReturn(4L);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+
+        assertThatThrownBy(() -> supplierService.updateSupplier(id, updateCommand(3L)))
+                .isInstanceOf(SupplierUpdateConflictException.class)
+                .hasMessage("Supplier has changed since the requested version")
+                .extracting("supplierId", "requestedVersion", "currentVersion")
+                .containsExactly(id, 3L, 4L);
+
+        verify(supplier, never()).updateDetails(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyDouble(),
+                org.mockito.ArgumentMatchers.anyDouble(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any());
+        verify(supplierRepository, never()).flush();
+    }
+
+    @Test
+    void translatesFlushRaceIntoVersionConflict() {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        when(supplier.getVersion()).thenReturn(3L);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+        OptimisticLockingFailureException race =
+                new OptimisticLockingFailureException("concurrent update");
+        org.mockito.Mockito.doThrow(race).when(supplierRepository).flush();
+
+        assertThatThrownBy(() -> supplierService.updateSupplier(id, updateCommand(3L)))
+                .isInstanceOf(SupplierUpdateConflictException.class)
+                .hasCause(race)
+                .extracting("supplierId", "requestedVersion", "currentVersion")
+                .containsExactly(id, 3L, null);
+    }
+
+    private UpdateSupplierCommand updateCommand(long version) {
+        return new UpdateSupplierCommand(
+                "Updated Campus Cafe",
+                "Food/Coffee",
+                "COM3",
+                "2",
+                "Now beside the lift",
+                1.2948,
+                103.7716,
+                LocalTime.of(9, 0),
+                LocalTime.of(20, 0),
+                "https://example.com/updated-cafe.jpg",
+                version);
     }
 
     private Supplier supplierNamed(String name) {
