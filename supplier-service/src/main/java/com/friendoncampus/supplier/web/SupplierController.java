@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.friendoncampus.supplier.service.DeleteSupplierCommand;
 import com.friendoncampus.supplier.service.SupplierQuery;
 import com.friendoncampus.supplier.service.SupplierService;
 import com.friendoncampus.supplier.web.dto.ChangeSupplierStatusRequest;
@@ -73,5 +75,13 @@ public class SupplierController {
             @Valid @RequestBody ChangeSupplierStatusRequest request) {
         return SupplierResponse.from(
                 supplierService.changeSupplierStatus(id, request.toCommand()));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteSupplier(
+            @PathVariable UUID id,
+            @RequestParam(required = false) String version) {
+        supplierService.deleteSupplier(id, DeleteSupplierCommand.from(version));
+        return ResponseEntity.noContent().build();
     }
 }

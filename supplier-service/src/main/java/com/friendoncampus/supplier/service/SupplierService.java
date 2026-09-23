@@ -126,4 +126,28 @@ public class SupplierService {
         }
         return supplier;
     }
+
+    @Transactional
+    public void deleteSupplier(UUID id, DeleteSupplierCommand command) {
+        Supplier supplier = supplierRepository.findById(id)
+                .orElseThrow(() -> new SupplierNotFoundException(id));
+
+        if (supplier.getVersion() != command.version()) {
+            throw new SupplierUpdateConflictException(
+                    id,
+                    command.version(),
+                    supplier.getVersion());
+        }
+
+        try {
+            supplierRepository.delete(supplier);
+            supplierRepository.flush();
+        } catch (OptimisticLockingFailureException exception) {
+            throw new SupplierUpdateConflictException(
+                    id,
+                    command.version(),
+                    null,
+                    exception);
+        }
+    }
 }

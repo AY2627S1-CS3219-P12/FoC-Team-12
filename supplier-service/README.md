@@ -3,8 +3,8 @@
 Spring Boot service responsible for campus supplier and location data in Friend on Campus.
 
 This service provides a runnable Spring Boot application connected to its own PostgreSQL
-database, Flyway-managed baseline data, and Supplier read, create, detail-update, and status
-APIs. Further mutation APIs and authentication will be added in later tasks.
+database, Flyway-managed baseline data, and Supplier read, create, update, status, and delete
+APIs. Authentication will be added in a later task.
 
 ## Prerequisites
 
@@ -239,6 +239,39 @@ version or timestamp. A stale version returns the same `409 Supplier update conf
 Problem Details response documented above; retrieve the latest supplier before retrying.
 
 > **Development security notice:** `PATCH /api/suppliers/{id}/status` is temporarily
+> unauthenticated for local API-first testing. It must be restricted to authenticated
+> administrators when the User Service JWT contract is available.
+
+## Permanently delete a supplier
+
+Permanently remove either an active or inactive supplier using its latest version:
+
+```sh
+curl -i -X DELETE \
+  'http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa?version=2'
+```
+
+A successful deletion returns `204 No Content`. The record is removed from PostgreSQL and
+cannot be retrieved or reactivated afterward. Prefer changing the supplier to `INACTIVE`
+when it should only be hidden from normal listings; hard deletion should be reserved for
+records that genuinely need to be removed permanently.
+
+The required `version` protects against deleting changes the requester has not seen. For
+example, if Admin A retrieves version `2` and Admin B then updates the supplier to version
+`3`, Admin A's `?version=2` deletion returns `409 Conflict` instead of permanently deleting
+Admin B's newer changes. After a conflict, retrieve the supplier again and deliberately
+decide whether to delete its latest version.
+
+Version is passed as a query parameter because it is a precondition for the deletion, not
+part of the Supplier data being deleted. DELETE request bodies also have inconsistent
+support across HTTP clients and proxies. A numeric `?version=` keeps the request explicit
+and follows the same optimistic-locking model used by PUT and PATCH.
+
+The version must be a nonnegative whole number. Missing or invalid versions return
+`400 Bad Request`, stale versions return the existing `409 Supplier update conflict`
+Problem Details response, and unknown or already-deleted suppliers return `404 Not Found`.
+
+> **Development security notice:** `DELETE /api/suppliers/{id}` is temporarily
 > unauthenticated for local API-first testing. It must be restricted to authenticated
 > administrators when the User Service JWT contract is available.
 

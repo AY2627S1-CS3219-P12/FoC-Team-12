@@ -15,6 +15,8 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
@@ -323,6 +325,78 @@ class SupplierServiceTest {
                 .hasCause(race)
                 .extracting("supplierId", "requestedVersion", "currentVersion")
                 .containsExactly(id, 3L, null);
+    }
+
+    @ParameterizedTest
+    @EnumSource(SupplierStatus.class)
+    void deletesActiveOrInactiveSupplierAndFlushes(SupplierStatus status) {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        DeleteSupplierCommand command = new DeleteSupplierCommand(2L);
+        when(supplier.getStatus()).thenReturn(status);
+        when(supplier.getVersion()).thenReturn(2L);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+
+        supplierService.deleteSupplier(id, command);
+
+        verify(supplierRepository).delete(same(supplier));
+        verify(supplierRepository).flush();
+    }
+
+    @Test
+    void rejectsUnknownSupplierDuringDelete() {
+        UUID id = UUID.randomUUID();
+        when(supplierRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> supplierService.deleteSupplier(
+                        id,
+                        new DeleteSupplierCommand(0L)))
+                .isInstanceOf(SupplierNotFoundException.class)
+                .extracting("supplierId")
+                .isEqualTo(id);
+
+        verify(supplierRepository, never()).delete(
+                org.mockito.ArgumentMatchers.any(Supplier.class));
+        verify(supplierRepository, never()).flush();
+    }
+
+    @Test
+    void rejectsStaleDeleteBeforeRemovingSupplier() {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        when(supplier.getVersion()).thenReturn(3L);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+
+        assertThatThrownBy(() -> supplierService.deleteSupplier(
+                        id,
+                        new DeleteSupplierCommand(2L)))
+                .isInstanceOf(SupplierUpdateConflictException.class)
+                .extracting("supplierId", "requestedVersion", "currentVersion")
+                .containsExactly(id, 2L, 3L);
+
+        verify(supplierRepository, never()).delete(
+                org.mockito.ArgumentMatchers.any(Supplier.class));
+        verify(supplierRepository, never()).flush();
+    }
+
+    @Test
+    void translatesDeleteFlushRaceIntoVersionConflict() {
+        UUID id = UUID.randomUUID();
+        Supplier supplier = mock(Supplier.class);
+        DeleteSupplierCommand command = new DeleteSupplierCommand(3L);
+        when(supplier.getVersion()).thenReturn(3L);
+        when(supplierRepository.findById(id)).thenReturn(Optional.of(supplier));
+        OptimisticLockingFailureException race =
+                new OptimisticLockingFailureException("concurrent delete");
+        org.mockito.Mockito.doThrow(race).when(supplierRepository).flush();
+
+        assertThatThrownBy(() -> supplierService.deleteSupplier(id, command))
+                .isInstanceOf(SupplierUpdateConflictException.class)
+                .hasCause(race)
+                .extracting("supplierId", "requestedVersion", "currentVersion")
+                .containsExactly(id, 3L, null);
+
+        verify(supplierRepository).delete(same(supplier));
     }
 
     private UpdateSupplierCommand updateCommand(long version) {
