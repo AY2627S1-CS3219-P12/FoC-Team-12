@@ -12,7 +12,12 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 import com.friendoncampus.supplier.domain.Supplier;
 import com.friendoncampus.supplier.domain.SupplierStatus;
@@ -30,20 +35,52 @@ class SupplierServiceTest {
     }
 
     @Test
-    void listsActiveSuppliersInRepositoryOrder() {
+    @SuppressWarnings("unchecked")
+    void listsSuppliersUsingCombinedSpecificationAndSafePageRequest() {
         Supplier anna = supplierNamed("Anna's x Soup Union");
         Supplier heBrews = supplierNamed("he by He Brews");
-        Supplier nusCoOp = supplierNamed("NUS Co-op");
-        Sort nameAscending = Sort.by(Sort.Order.asc("name").ignoreCase());
-        when(supplierRepository.findAllByStatus(SupplierStatus.ACTIVE, nameAscending))
-                .thenReturn(List.of(anna, heBrews, nusCoOp));
+        SupplierQuery query = SupplierQuery.from(
+                " coffee ", " Food ", " Central Library ", "1", "2", "building,desc");
+        PageRequest pageRequest = query.toPageRequest();
+        Page<Supplier> repositoryPage = new PageImpl<>(
+                List.of(anna, heBrews),
+                pageRequest,
+                5);
+        when(supplierRepository.findAll(
+                org.mockito.ArgumentMatchers.<Specification<Supplier>>any(),
+                org.mockito.ArgumentMatchers.eq(pageRequest)))
+                .thenReturn(repositoryPage);
 
-        List<Supplier> result = supplierService.listActiveSuppliers();
+        Page<Supplier> result = supplierService.listActiveSuppliers(query);
 
-        assertThat(result).containsExactly(anna, heBrews, nusCoOp);
-        assertThat(result).extracting(Supplier::getName)
-                .containsExactly("Anna's x Soup Union", "he by He Brews", "NUS Co-op");
-        verify(supplierRepository).findAllByStatus(SupplierStatus.ACTIVE, nameAscending);
+        assertThat(result).isSameAs(repositoryPage);
+        assertThat(result.getContent()).containsExactly(anna, heBrews);
+        ArgumentCaptor<Specification<Supplier>> specificationCaptor =
+                ArgumentCaptor.forClass(Specification.class);
+        verify(supplierRepository).findAll(
+                specificationCaptor.capture(),
+                org.mockito.ArgumentMatchers.eq(pageRequest));
+        assertThat(specificationCaptor.getValue()).isNotNull();
+    }
+
+    @Test
+    void usesDefaultPaginationAndNameOrder() {
+        SupplierQuery query = SupplierQuery.from(null, null, null, null, null, null);
+        PageRequest expectedPageRequest = PageRequest.of(
+                0,
+                20,
+                Sort.by(Sort.Order.asc("name").ignoreCase().nullsLast()));
+        when(supplierRepository.findAll(
+                org.mockito.ArgumentMatchers.<Specification<Supplier>>any(),
+                org.mockito.ArgumentMatchers.eq(expectedPageRequest)))
+                .thenReturn(Page.empty(expectedPageRequest));
+
+        Page<Supplier> result = supplierService.listActiveSuppliers(query);
+
+        assertThat(result).isEmpty();
+        verify(supplierRepository).findAll(
+                org.mockito.ArgumentMatchers.<Specification<Supplier>>any(),
+                org.mockito.ArgumentMatchers.eq(expectedPageRequest));
     }
 
     @Test
