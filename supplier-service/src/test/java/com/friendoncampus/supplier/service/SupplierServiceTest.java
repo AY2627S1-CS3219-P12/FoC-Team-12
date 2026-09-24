@@ -90,6 +90,46 @@ class SupplierServiceTest {
     }
 
     @Test
+    void listsEveryStatusForAdminWhenStatusIsAbsent() {
+        AdminSupplierQuery query = AdminSupplierQuery.from(
+                null, null, null, null, null, null, null);
+        Page<Supplier> repositoryPage = new PageImpl<>(List.of(
+                supplierNamed("Active supplier"),
+                supplierNamed("Inactive supplier")),
+                query.supplierQuery().toPageRequest(),
+                2);
+        when(supplierRepository.findAll(
+                org.mockito.ArgumentMatchers.<Specification<Supplier>>any(),
+                org.mockito.ArgumentMatchers.eq(query.supplierQuery().toPageRequest())))
+                .thenReturn(repositoryPage);
+
+        Page<Supplier> result = supplierService.listSuppliersForAdmin(query);
+
+        assertThat(result).isSameAs(repositoryPage);
+        verify(supplierRepository).findAll(
+                org.mockito.ArgumentMatchers.<Specification<Supplier>>any(),
+                org.mockito.ArgumentMatchers.eq(query.supplierQuery().toPageRequest()));
+    }
+
+    @Test
+    void listsOnlyRequestedStatusForAdminWithSharedFilters() {
+        AdminSupplierQuery query = AdminSupplierQuery.from(
+                "coffee", "Food/Coffee", "COM3", "inactive", "0", "5", "status,asc");
+        when(supplierRepository.findAll(
+                org.mockito.ArgumentMatchers.<Specification<Supplier>>any(),
+                org.mockito.ArgumentMatchers.eq(query.supplierQuery().toPageRequest())))
+                .thenReturn(Page.empty(query.supplierQuery().toPageRequest()));
+
+        Page<Supplier> result = supplierService.listSuppliersForAdmin(query);
+
+        assertThat(result).isEmpty();
+        assertThat(query.status()).isEqualTo(SupplierStatus.INACTIVE);
+        verify(supplierRepository).findAll(
+                org.mockito.ArgumentMatchers.<Specification<Supplier>>any(),
+                org.mockito.ArgumentMatchers.eq(query.supplierQuery().toPageRequest()));
+    }
+
+    @Test
     void retrievesSupplierById() {
         UUID id = UUID.randomUUID();
         Supplier supplier = mock(Supplier.class);
@@ -139,6 +179,33 @@ class SupplierServiceTest {
                 .thenReturn(List.of());
 
         SupplierMetadata metadata = supplierService.getActiveSupplierMetadata();
+
+        assertThat(metadata.types()).isEmpty();
+        assertThat(metadata.buildings()).isEmpty();
+    }
+
+    @Test
+    void returnsDistinctMetadataAcrossEveryStatus() {
+        when(supplierRepository.findDistinctTypes())
+                .thenReturn(List.of("Shopping", "Food", "printing", "Food"));
+        when(supplierRepository.findDistinctBuildings())
+                .thenReturn(List.of("The Ridge", "COM3", "central Library", "COM3"));
+
+        SupplierMetadata metadata = supplierService.getAllSupplierMetadata();
+
+        assertThat(metadata.types()).containsExactly("Food", "printing", "Shopping");
+        assertThat(metadata.buildings())
+                .containsExactly("central Library", "COM3", "The Ridge");
+        verify(supplierRepository).findDistinctTypes();
+        verify(supplierRepository).findDistinctBuildings();
+    }
+
+    @Test
+    void returnsEmptyMetadataWhenNoSuppliersExist() {
+        when(supplierRepository.findDistinctTypes()).thenReturn(List.of());
+        when(supplierRepository.findDistinctBuildings()).thenReturn(List.of());
+
+        SupplierMetadata metadata = supplierService.getAllSupplierMetadata();
 
         assertThat(metadata.types()).isEmpty();
         assertThat(metadata.buildings()).isEmpty();

@@ -15,8 +15,9 @@ public class OpenApiConfiguration {
                 .title("Friend on Campus Supplier API")
                 .version("v1")
                 .description("""
-                        Manages campus suppliers for Friend on Campus. Read endpoints expose
-                        active supplier listings and direct lookup. Mutation endpoints are
+                        Manages campus suppliers for Friend on Campus. Public listings expose
+                        active suppliers, while administrative listings expose active and
+                        inactive suppliers. Administrative reads and all mutations are
                         temporarily unauthenticated for API-first development and will later
                         require the ADMIN role. Updates, status changes, and deletion use the
                         supplier version to prevent overwriting or deleting unseen changes.

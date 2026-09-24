@@ -216,6 +216,43 @@ are sorted case-insensitively and are empty when no active suppliers exist. The 
 directory uses this response to populate its exact-match dropdowns rather than hard-coding
 database values.
 
+## Read suppliers for administration
+
+List both active and inactive suppliers through the separate administrative route:
+
+```sh
+curl 'http://localhost:8080/api/admin/suppliers?page=0&size=20&sort=name,asc'
+```
+
+The administrative list supports the public `search`, `type`, `building`, `page`, `size`,
+and `sort` parameters with the same matching, escaping, defaults, and limits. It additionally
+accepts an optional case-insensitive `status` filter:
+
+```sh
+curl 'http://localhost:8080/api/admin/suppliers?search=central&status=inactive&sort=status,asc'
+```
+
+Omitting `status`, or providing a blank value, includes both `ACTIVE` and `INACTIVE`
+suppliers. Supported values are `ACTIVE` and `INACTIVE`; any other value returns
+`400 Bad Request` using Problem Details. The administrative route also allows `status` as a
+sort field. Its response uses the same `items`, `page`, `size`, `totalItems`, and `totalPages`
+shape as the public list.
+
+Retrieve administrative filter values with:
+
+```sh
+curl http://localhost:8080/api/admin/suppliers/metadata
+```
+
+Unlike public metadata, administrative metadata includes distinct types and buildings from
+both active and inactive suppliers. This matters when a type or building exists only on an
+inactive record.
+
+> **Development security notice:** both `/api/admin/suppliers` endpoints are temporarily
+> unauthenticated for local API-first development. The future User Service admin-mode toggle
+> may control whether the UI shows administrative navigation, but Supplier Service must still
+> validate the User Service JWT and enforce `ADMIN` on these routes independently.
+
 ## Create a supplier
 
 Create a supplier with `POST /api/suppliers`:

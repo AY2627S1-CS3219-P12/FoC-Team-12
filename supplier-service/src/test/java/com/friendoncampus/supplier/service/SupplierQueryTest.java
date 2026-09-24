@@ -74,7 +74,7 @@ class SupplierQueryTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "", "name", "name,asc,extra", "id,asc", "name,sideways", ",asc", "name,"
+            "", "name", "name,asc,extra", "id,asc", "status,asc", "name,sideways", ",asc", "name,"
     })
     void rejectsInvalidSorts(String sort) {
         assertInvalidQuery(null, null, null, null, null, sort);

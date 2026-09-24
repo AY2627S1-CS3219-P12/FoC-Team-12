@@ -15,8 +15,12 @@ public final class SupplierSpecifications {
     }
 
     public static Specification<Supplier> isActive() {
+        return hasStatus(SupplierStatus.ACTIVE);
+    }
+
+    public static Specification<Supplier> hasStatus(SupplierStatus status) {
         return (root, query, criteriaBuilder) ->
-                criteriaBuilder.equal(root.get("status"), SupplierStatus.ACTIVE);
+                criteriaBuilder.equal(root.get("status"), status);
     }
 
     public static Specification<Supplier> matchesSearch(String search) {

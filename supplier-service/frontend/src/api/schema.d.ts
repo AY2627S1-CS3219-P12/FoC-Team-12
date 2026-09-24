@@ -96,6 +96,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List suppliers for administration
+         * @description Searches active and inactive suppliers. An optional status filter narrows the results. This endpoint is temporarily unauthenticated and will later require ADMIN.
+         */
+        get: operations["listSuppliersForAdmin"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/admin/suppliers/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get administrative supplier filter values
+         * @description Returns distinct types and buildings across active and inactive suppliers. This endpoint is temporarily unauthenticated and will later require ADMIN.
+         */
+        get: operations["getAdminSupplierMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -419,9 +459,9 @@ export interface components {
              */
             version: number;
         };
-        /** @description Page of active suppliers and pagination metadata */
+        /** @description Page of suppliers and pagination metadata */
         SupplierListResponse: {
-            /** @description Active suppliers in the requested page */
+            /** @description Suppliers in the requested page */
             items?: components["schemas"]["SupplierResponse"][];
             /**
              * Format: int32
@@ -437,7 +477,7 @@ export interface components {
             size?: number;
             /**
              * Format: int64
-             * @description Number of active suppliers matching the query
+             * @description Number of suppliers matching the query
              * @example 21
              */
             totalItems?: number;
@@ -448,10 +488,10 @@ export interface components {
              */
             totalPages?: number;
         };
-        /** @description Filter values available among active suppliers */
+        /** @description Supplier filter values for the endpoint's visibility scope */
         SupplierMetadataResponse: {
             /**
-             * @description Distinct active supplier categories sorted case-insensitively
+             * @description Distinct supplier categories sorted case-insensitively
              * @example [
              *       "Food",
              *       "Food/Coffee",
@@ -461,7 +501,7 @@ export interface components {
              */
             types?: string[];
             /**
-             * @description Distinct active supplier buildings sorted case-insensitively
+             * @description Distinct supplier buildings sorted case-insensitively
              * @example [
              *       "Blk AS8",
              *       "Central Library"
@@ -798,6 +838,91 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Filter metadata for active suppliers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SupplierMetadataResponse"];
+                };
+            };
+        };
+    };
+    listSuppliersForAdmin: {
+        parameters: {
+            query?: {
+                /**
+                 * @description Case-insensitive partial match across name, building, and location description
+                 * @example central
+                 */
+                search?: string;
+                /**
+                 * @description Case-insensitive exact supplier type
+                 * @example Food
+                 */
+                type?: string;
+                /**
+                 * @description Case-insensitive exact building name
+                 * @example Central Library
+                 */
+                building?: string;
+                /**
+                 * @description Optional supplier status. Omit to include every status.
+                 * @example INACTIVE
+                 */
+                status?: "ACTIVE" | "INACTIVE";
+                /**
+                 * @description Zero-based page number
+                 * @example 0
+                 */
+                page?: number;
+                /**
+                 * @description Records per page
+                 * @example 20
+                 */
+                size?: number;
+                /**
+                 * @description Sort as field,direction. Fields: name, type, building, openingTime, closingTime, createdAt, updatedAt, status. Directions: asc or desc.
+                 * @example updatedAt,desc
+                 */
+                sort?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of matching suppliers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SupplierListResponse"];
+                };
+            };
+            /** @description Invalid status, pagination, or sort query */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["InvalidRequestProblem"];
+                };
+            };
+        };
+    };
+    getAdminSupplierMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Filter metadata across all suppliers */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -6,11 +6,11 @@ import com.friendoncampus.supplier.service.SupplierMetadata;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-@Schema(description = "Filter values available among active suppliers")
+@Schema(description = "Supplier filter values for the endpoint's visibility scope")
 public record SupplierMetadataResponse(
-        @Schema(description = "Distinct active supplier categories sorted case-insensitively", example = "[\"Food\", \"Food/Coffee\", \"Printing\", \"Shopping\"]")
+        @Schema(description = "Distinct supplier categories sorted case-insensitively", example = "[\"Food\", \"Food/Coffee\", \"Printing\", \"Shopping\"]")
         List<String> types,
-        @Schema(description = "Distinct active supplier buildings sorted case-insensitively", example = "[\"Blk AS8\", \"Central Library\"]")
+        @Schema(description = "Distinct supplier buildings sorted case-insensitively", example = "[\"Blk AS8\", \"Central Library\"]")
         List<String> buildings) {
 
     public SupplierMetadataResponse {

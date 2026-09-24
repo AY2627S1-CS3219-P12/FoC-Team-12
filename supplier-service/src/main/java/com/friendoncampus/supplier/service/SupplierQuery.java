@@ -21,10 +21,12 @@ public record SupplierQuery(
     public static final int MAX_SIZE = 100;
     public static final String DEFAULT_SORT = "name,asc";
 
-    private static final String ALLOWED_SORT_FIELDS_DESCRIPTION =
+    private static final String PUBLIC_SORT_FIELDS_DESCRIPTION =
             "name, type, building, openingTime, closingTime, createdAt, updatedAt";
+    private static final String ADMIN_SORT_FIELDS_DESCRIPTION =
+            PUBLIC_SORT_FIELDS_DESCRIPTION + ", status";
 
-    private static final Map<String, String> ALLOWED_SORT_FIELDS = Map.of(
+    private static final Map<String, String> PUBLIC_SORT_FIELDS = Map.of(
             "name", "name",
             "type", "type",
             "building", "building",
@@ -32,6 +34,15 @@ public record SupplierQuery(
             "closingTime", "closingTime",
             "createdAt", "createdAt",
             "updatedAt", "updatedAt");
+    private static final Map<String, String> ADMIN_SORT_FIELDS = Map.of(
+            "name", "name",
+            "type", "type",
+            "building", "building",
+            "openingTime", "openingTime",
+            "closingTime", "closingTime",
+            "createdAt", "createdAt",
+            "updatedAt", "updatedAt",
+            "status", "status");
 
     private static final Set<String> STRING_SORT_FIELDS = Set.of("name", "type", "building");
 
@@ -42,6 +53,44 @@ public record SupplierQuery(
             String page,
             String size,
             String sort) {
+        return parse(
+                search,
+                type,
+                building,
+                page,
+                size,
+                sort,
+                PUBLIC_SORT_FIELDS,
+                PUBLIC_SORT_FIELDS_DESCRIPTION);
+    }
+
+    static SupplierQuery fromAdmin(
+            String search,
+            String type,
+            String building,
+            String page,
+            String size,
+            String sort) {
+        return parse(
+                search,
+                type,
+                building,
+                page,
+                size,
+                sort,
+                ADMIN_SORT_FIELDS,
+                ADMIN_SORT_FIELDS_DESCRIPTION);
+    }
+
+    private static SupplierQuery parse(
+            String search,
+            String type,
+            String building,
+            String page,
+            String size,
+            String sort,
+            Map<String, String> allowedSortFields,
+            String allowedSortFieldsDescription) {
         int parsedPage = parseInteger("page", page, DEFAULT_PAGE);
         if (parsedPage < 0) {
             throw new InvalidSupplierQueryException("page must be greater than or equal to 0");
@@ -65,11 +114,11 @@ public record SupplierQuery(
         }
 
         String requestedField = sortParts[0].trim();
-        String mappedField = ALLOWED_SORT_FIELDS.get(requestedField);
+        String mappedField = allowedSortFields.get(requestedField);
         if (mappedField == null) {
             throw new InvalidSupplierQueryException(
                     "Unsupported sort field '" + requestedField + "'. Allowed fields: "
-                            + ALLOWED_SORT_FIELDS_DESCRIPTION);
+                            + allowedSortFieldsDescription);
         }
 
         String directionValue = sortParts[1].trim().toLowerCase(Locale.ROOT);
