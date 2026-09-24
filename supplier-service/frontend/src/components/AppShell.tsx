@@ -1,31 +1,18 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, Outlet } from 'react-router-dom'
+import bagIcon from '../assets/foc-bag.svg'
 import styles from './AppShell.module.css'
 
 export function AppShell() {
   return (
     <div className={styles.app}>
       <header className={styles.header}>
-        <NavLink className={styles.brand} to="/suppliers">
-          Friend on Campus
-        </NavLink>
-        <nav aria-label="Supplier sections" className={styles.navigation}>
-          <NavLink
-            className={({ isActive }) =>
-              isActive ? styles.activeLink : styles.link
-            }
-            to="/suppliers"
-          >
-            Suppliers
-          </NavLink>
-          <NavLink
-            className={({ isActive }) =>
-              isActive ? styles.activeLink : styles.link
-            }
-            to="/admin/suppliers"
-          >
-            Admin
-          </NavLink>
-        </nav>
+        <div className={styles.headerContent}>
+          <Link className={styles.brand} to="/suppliers">
+            <img alt="" height="24" src={bagIcon} width="24" />
+            <span>Friend on Campus</span>
+          </Link>
+          <span className={styles.sectionName}>Campus locations</span>
+        </div>
       </header>
       <main className={styles.main}>
         <Outlet />

@@ -1,0 +1,215 @@
+.page {
+  display: grid;
+  gap: var(--foc-space-24);
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--foc-space-8);
+  width: fit-content;
+  min-height: 2.75rem;
+  color: var(--foc-action);
+  font-size: var(--foc-text-small);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.backLink img {
+  transform: rotate(180deg);
+}
+
+.backLink:hover span {
+  text-decoration: underline;
+}
+
+.detailLayout {
+  display: grid;
+  gap: var(--foc-space-24);
+}
+
+.content {
+  display: grid;
+  align-content: start;
+  gap: var(--foc-space-24);
+  min-width: 0;
+  padding: var(--foc-space-24);
+  border: 1px solid var(--foc-line);
+  border-radius: var(--foc-radius-12);
+  background: var(--foc-surface);
+}
+
+.heading {
+  display: grid;
+  justify-items: start;
+  gap: var(--foc-space-8);
+  padding-bottom: var(--foc-space-24);
+  border-bottom: 1px solid var(--foc-line);
+}
+
+.heading h1,
+.heading p {
+  margin: 0;
+}
+
+.heading h1 {
+  color: var(--foc-ink);
+  font-size: clamp(var(--foc-text-mobile-title), 7vw, var(--foc-text-title));
+  line-height: 1.25;
+}
+
+.heading p {
+  color: var(--foc-muted);
+  line-height: 1.5;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  padding: 0 var(--foc-space-12);
+  border-radius: var(--foc-radius-pill);
+  color: var(--foc-action);
+  background: var(--foc-action-soft);
+  font-size: var(--foc-text-caption);
+  font-weight: 600;
+}
+
+.details {
+  display: grid;
+  gap: var(--foc-space-24);
+  margin: 0;
+}
+
+.details div {
+  display: grid;
+  gap: var(--foc-space-4);
+}
+
+.details dt {
+  color: var(--foc-muted);
+  font-size: var(--foc-text-small);
+  font-weight: 600;
+}
+
+.details dd {
+  margin: 0;
+  color: var(--foc-ink);
+  line-height: 1.5;
+}
+
+.imageFrame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  min-height: 15rem;
+  overflow: hidden;
+  border: 1px solid var(--foc-line);
+  border-radius: var(--foc-radius-12);
+  background: var(--foc-action-soft);
+}
+
+.imagePlaceholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--foc-space-4);
+  padding: var(--foc-space-24);
+  color: var(--foc-muted);
+  text-align: center;
+  background:
+    radial-gradient(circle at 15% 20%, rgb(255 255 255 / 75%), transparent 28%),
+    linear-gradient(145deg, var(--foc-action-soft), #f4f8f6);
+}
+
+.imagePlaceholder img {
+  width: min(85%, 20rem);
+  max-height: 11rem;
+}
+
+.imagePlaceholder p {
+  margin: 0;
+  font-size: var(--foc-text-small);
+}
+
+.imagePlaceholder .placeholderTitle {
+  color: var(--foc-ink);
+  font-size: var(--foc-text-body);
+  font-weight: 600;
+}
+
+.imagePlaceholder span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  margin-top: var(--foc-space-8);
+  padding: 0 var(--foc-space-12);
+  border-radius: var(--foc-radius-pill);
+  color: var(--foc-action);
+  background: var(--foc-surface);
+  font-size: var(--foc-text-caption);
+  font-weight: 600;
+}
+
+.supplierImage {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+
+.supplierImage.imageLoaded {
+  opacity: 1;
+}
+
+.detailSkeleton {
+  display: grid;
+  gap: var(--foc-space-16);
+  min-height: 24rem;
+  padding: var(--foc-space-24);
+  border: 1px solid var(--foc-line);
+  border-radius: var(--foc-radius-12);
+  background: var(--foc-surface);
+}
+
+.detailSkeleton span {
+  display: block;
+  width: 65%;
+  height: 1rem;
+  border-radius: var(--foc-radius-8);
+  background: var(--foc-action-soft);
+}
+
+.detailSkeleton span:first-child {
+  width: 45%;
+  height: 2rem;
+}
+
+@media (min-width: 48rem) {
+  .content {
+    padding: var(--foc-space-32);
+  }
+
+  .details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 68rem) {
+  .detailLayout {
+    grid-template-columns: minmax(0, 3fr) minmax(20rem, 2fr);
+    align-items: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .supplierImage {
+    transition: none;
+  }
+}
