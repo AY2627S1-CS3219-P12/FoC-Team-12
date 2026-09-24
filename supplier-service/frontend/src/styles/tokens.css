@@ -13,6 +13,8 @@
   --foc-focus: #176bba;
   --foc-info: #215b80;
   --foc-info-soft: #eaf2f8;
+  --foc-warning: #84530b;
+  --foc-warning-soft: #fff3dc;
   --foc-shadow: 0 10px 30px rgb(32 51 45 / 8%);
 
   --foc-space-0: 0;
