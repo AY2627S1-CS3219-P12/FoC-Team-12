@@ -19,4 +19,10 @@ public interface SupplierRepository
 
     @Query("select distinct supplier.building from Supplier supplier where supplier.status = :status")
     List<String> findDistinctBuildingsByStatus(@Param("status") SupplierStatus status);
+
+    @Query("select distinct supplier.type from Supplier supplier")
+    List<String> findDistinctTypes();
+
+    @Query("select distinct supplier.building from Supplier supplier")
+    List<String> findDistinctBuildings();
 }

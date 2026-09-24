@@ -25,8 +25,23 @@ public class SupplierService {
     }
 
     public Page<Supplier> listActiveSuppliers(SupplierQuery supplierQuery) {
-        Specification<Supplier> specification = SupplierSpecifications.isActive();
+        return listSuppliers(supplierQuery, SupplierStatus.ACTIVE);
+    }
 
+    public Page<Supplier> listSuppliersForAdmin(AdminSupplierQuery adminQuery) {
+        return listSuppliers(adminQuery.supplierQuery(), adminQuery.status());
+    }
+
+    private Page<Supplier> listSuppliers(
+            SupplierQuery supplierQuery,
+            SupplierStatus requiredStatus) {
+        Specification<Supplier> specification = (root, query, criteriaBuilder) ->
+                criteriaBuilder.conjunction();
+
+        if (requiredStatus != null) {
+            specification = specification.and(
+                    SupplierSpecifications.hasStatus(requiredStatus));
+        }
         if (supplierQuery.search() != null) {
             specification = specification.and(
                     SupplierSpecifications.matchesSearch(supplierQuery.search()));
@@ -54,6 +69,12 @@ public class SupplierService {
                         supplierRepository.findDistinctTypesByStatus(SupplierStatus.ACTIVE)),
                 sortedCaseInsensitively(
                         supplierRepository.findDistinctBuildingsByStatus(SupplierStatus.ACTIVE)));
+    }
+
+    public SupplierMetadata getAllSupplierMetadata() {
+        return new SupplierMetadata(
+                sortedCaseInsensitively(supplierRepository.findDistinctTypes()),
+                sortedCaseInsensitively(supplierRepository.findDistinctBuildings()));
     }
 
     private static List<String> sortedCaseInsensitively(List<String> values) {
