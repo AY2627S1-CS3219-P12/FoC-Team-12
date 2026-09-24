@@ -56,3 +56,22 @@ Service workflow:
 - Supplier details use a local, Figma-aligned campus storefront illustration when a photo is
   missing, loading, or unavailable. This preserves the image layout without implying that a
   generic photograph depicts the real location.
+
+## Task 15 administration adaptations
+
+The administrative UI follows Supplier screens L01–L05 while adapting the hurried draft to
+the complete API and a safer responsive workflow:
+
+- L01's location cards become a readable table on desktop and management cards on mobile;
+  both show status and expose the same edit, activate/deactivate, and delete actions.
+- Search, category, building, status, sorting, and pagination use the administrative API and
+  remain shareable through URL parameters.
+- L02/L03 use one reusable form containing every real Supplier field. Status is selectable on
+  creation and remains a separate version-checked action during editing.
+- L04/L05 are implemented as focused confirmation dialogs and accessible in-page success
+  feedback instead of separate destructive-action routes. This keeps context on small screens
+  and makes cancellation unambiguous.
+- Deletion explicitly recommends `INACTIVE` for ordinary removal. `409` conflicts require a
+  deliberate latest-record reload and are never silently retried.
+- The route remains absent from public navigation and carries an unauthenticated-development
+  warning until backend `ADMIN` JWT enforcement exists.

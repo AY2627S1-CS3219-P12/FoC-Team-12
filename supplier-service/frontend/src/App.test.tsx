@@ -427,10 +427,11 @@ describe('Public supplier details', () => {
 })
 
 describe('Other frontend routes', () => {
-  it('keeps the unlinked admin placeholder', () => {
+  it('keeps the administrative experience unlinked from the public shell', () => {
+    mockApi()
     renderRoute('/admin/suppliers')
     expect(
-      screen.getByRole('heading', { name: 'Supplier administration' }),
+      screen.getByRole('heading', { name: 'Campus locations' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('link', { name: 'Admin' }),

@@ -32,11 +32,23 @@ The frontend uses these routes:
 ```text
 /suppliers        public active-location directory
 /suppliers/{id}   public location details, including inactive historical references
-/admin/suppliers  future administrative Supplier experience (not linked publicly)
+/admin/suppliers  administrative list, filters, status controls, and deletion
+/admin/suppliers/new
+                   create a supplier
+/admin/suppliers/{id}/edit
+                   fully replace editable supplier details
 ```
 
-The administrative route is not an authorization boundary. It contains no mutation controls
-yet, and the backend must enforce the future `ADMIN` role when JWT security is introduced.
+The responsive administrative experience uses a table on desktop and management cards on
+mobile. It reads both active and inactive suppliers, keeps list filters in the URL, validates
+the complete create/edit contract, and confirms status changes and permanent deletion.
+Optimistic-lock conflicts are never retried automatically: reload the latest supplier before
+trying the mutation again. The administrative routes remain deliberately absent from public
+navigation.
+
+The administrative route is not an authorization boundary. These pages and the mutation APIs
+are temporarily unauthenticated for development; Supplier Service must independently enforce
+the future User Service `ADMIN` JWT role before production use.
 
 Install dependencies and run frontend checks from `supplier-service/frontend`:
 

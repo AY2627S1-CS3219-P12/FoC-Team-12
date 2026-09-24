@@ -28,7 +28,8 @@
 }
 
 .button,
-.primaryButton {
+.primaryButton,
+.dangerButton {
   min-height: 2.75rem;
   padding: 0 var(--foc-space-16);
   border: 1px solid var(--foc-line);
@@ -46,6 +47,12 @@
   background: var(--foc-action);
 }
 
+.dangerButton {
+  border-color: var(--foc-danger);
+  color: var(--foc-surface);
+  background: var(--foc-danger);
+}
+
 .button:hover {
   border-color: var(--foc-action);
   background: var(--foc-action-soft);
@@ -55,8 +62,13 @@
   filter: brightness(0.93);
 }
 
+.dangerButton:hover {
+  filter: brightness(0.9);
+}
+
 .button:disabled,
-.primaryButton:disabled {
+.primaryButton:disabled,
+.dangerButton:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
