@@ -31,12 +31,13 @@ export function formatBuilding(building?: string, floor?: string | null) {
 }
 
 export function displayImageUrl(value?: string | null) {
-  if (!value) return null
+  const normalizedValue = value?.trim()
+  if (!normalizedValue) return null
 
-  const match = value.match(
+  const match = normalizedValue.match(
     /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/,
   )
-  if (!match) return value
+  if (!match) return normalizedValue
 
   const [, owner, repository, branch, path] = match
   return `https://raw.githubusercontent.com/${owner}/${repository}/${branch}/${path}`

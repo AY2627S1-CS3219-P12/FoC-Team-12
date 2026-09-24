@@ -302,7 +302,7 @@ describe('Public supplier details', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders active details and hides a failed optional image', async () => {
+  it('loads an active supplier image over the branded placeholder', async () => {
     mockApi()
     renderRoute(`/suppliers/${supplierId}`)
 
@@ -320,10 +320,29 @@ describe('Public supplier details', () => {
       'src',
       'https://raw.githubusercontent.com/example/assets/main/anna.jpg',
     )
+    expect(screen.getByText('Loading photo…')).toBeInTheDocument()
+
+    fireEvent.load(image)
+    expect(image.className).toContain('imageLoaded')
+  })
+
+  it('replaces a failed supplier image with the branded placeholder', async () => {
+    mockApi()
+    renderRoute(`/suppliers/${supplierId}`)
+
+    const image = await screen.findByRole('img', {
+      name: /Anna's x Soup Union location/,
+    })
     fireEvent.error(image)
     expect(
       screen.queryByRole('img', { name: /Anna's x Soup Union location/ }),
     ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('img', {
+        name: "Anna's x Soup Union photo not available",
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Photo not available')).toBeInTheDocument()
     expect(screen.getByText('Next to NUS Co-op')).toBeInTheDocument()
   })
 
@@ -337,6 +356,31 @@ describe('Public supplier details', () => {
     expect(
       screen.getByText('Location currently unavailable'),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('img', {
+        name: 'Former Campus Shop photo not available',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Photo not available')).toBeInTheDocument()
+  })
+
+  it('treats a blank supplier image URL as missing', async () => {
+    mockApi((url) => {
+      if (url.includes(`/api/suppliers/${supplierId}`)) {
+        return jsonResponse({ ...activeSupplier, imageUrl: '   ' })
+      }
+      return undefined
+    })
+    renderRoute(`/suppliers/${supplierId}`)
+
+    expect(
+      await screen.findByRole('img', {
+        name: "Anna's x Soup Union photo not available",
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('img', { name: /Anna's x Soup Union location/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('rejects malformed IDs without calling the detail API', () => {
