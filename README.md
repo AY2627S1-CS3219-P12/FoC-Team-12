@@ -12,13 +12,15 @@ withdrawn, or exchanged for money, and only circulate within the platform.
 
 ## Team Members
 
-| Name | Role |
-| ----- | ----- |
-| Your Name | Your ownership |
-| Your Name | Your ownership |
-| Your Name | Your ownership |
-| Your Name | Your ownership |
-| Your Name | Your ownership |
+| Name | Mandatory service | Additional ownership |
+| ---- | ----------------- | -------------------- |
+| Darryl | User Service | Admin Dashboard |
+| Jun Hui | Supplier Service | Logging, event-broker reliability, observability |
+| XueTing | Order Service | Notifications, event definitions and transitions |
+| Eldridge | Credit Service | Chat and Translation |
+
+Cloud infrastructure, integration, CI/CD, and demonstrations are shared responsibilities.
+The detailed task boundaries are in [`TASK_SPLIT.md`](TASK_SPLIT.md).
 
 ---
 

@@ -1,10 +1,15 @@
 # Supplier Service
 
+Owner: Jun Hui. Additional ownership: Logging Service, event-broker reliability, and
+observability.
+
 Spring Boot service responsible for campus supplier and location data in Friend on Campus.
 
 This service provides a runnable Spring Boot application connected to its own PostgreSQL
 database, Flyway-managed baseline data, and Supplier read, create, update, status, and delete
 APIs. Authentication will be added in a later task.
+
+Task boundaries are in [`AGENTS.md`](AGENTS.md) and [`../TASK_SPLIT.md`](../TASK_SPLIT.md).
 
 ## Prerequisites
 

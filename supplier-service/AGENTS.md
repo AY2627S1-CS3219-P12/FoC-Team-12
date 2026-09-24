@@ -1,33 +1,22 @@
-# Supplier Service instructions
+# Supplier Service agent boundary
 
-These instructions apply to backend work in `supplier-service/`; the frontend has
-additional instructions in `frontend/AGENTS.md`.
+Owner: Jun Hui.
 
-## Architecture and contracts
+## In scope
 
-- Preserve the current layering: web DTO/controller concerns in `web/`, domain
-  state in `domain/`, use cases in `service/`, and persistence/query logic in
-  `repository/`.
-- Treat the running OpenAPI document at `/v3/api-docs`, controller/DTO validation,
-  and the Supplier README as one contract. Update the relevant contract evidence
-  when externally observable API behavior changes.
-- Retain server-side validation, Problem Details error behavior, and optimistic
-  locking semantics. UI authorization or hidden controls never substitute for
-  backend authorization.
+- Supplier/location schema and data, CRUD/query APIs, ACTIVE/INACTIVE behavior, Supplier UI,
+  authentication/RBAC integration, migrations, tests, and API contract.
+- Logging, event-broker reliability/retries/failure recording, and observability.
 
-## Data changes
+## Out of scope
 
-- Do not alter a Flyway migration that may have been applied or shared. Create the
-  next versioned migration for schema or baseline-data changes and test the
-  affected persistence behavior.
-- Keep Supplier data ownership inside this service unless an explicitly approved
-  cross-service contract requires otherwise.
+Do not implement user identity, Order lifecycle, Credit rules, Notifications, or Chat. Use
+published identities/contracts and never access another service's database.
 
-## Verification
+## Existing checks
 
-- Run `./mvnw test` on Unix-like shells or `.\\mvnw.cmd test` in PowerShell for
-  backend code, tests, schema migrations, or API-contract changes.
-- For packaging, runtime configuration, or migration integration changes, run the
-  applicable Docker Compose build/start and health check when Docker and required
-  local environment values are available. Report unavailable dependencies as
-  limitations, never as passing checks.
+- Backend: `./mvnw test`
+- Frontend: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`
+
+Frontend work must also follow `frontend/AGENTS.md`. Do not invent unresolved authentication,
+event-broker, logging-retention, or cloud behavior.

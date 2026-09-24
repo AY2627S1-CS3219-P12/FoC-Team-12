@@ -1,24 +1,13 @@
-# Friend on Campus repository guidance
+# Repository agent boundaries
 
-## Service boundaries
+Before coding, identify the target service named in the task. Read [`TASK_SPLIT.md`](TASK_SPLIT.md)
+and that service's `AGENTS.md`. If the task does not name a service or owner, ask rather than
+choosing one.
 
-- Start every feature iteration by naming one owning service. Keep implementation,
-  tests, documentation, and generated artifacts in that service unless the user has
-  explicitly approved a cross-service contract change.
-- `supplier-service/` is the only service with an implemented application and
-  established verification workflow. `user-service/`, `order-service/`, and
-  `credit-service/` are scaffolds; establish their build, test, contract, and
-  runtime conventions before treating them as supported iteration targets.
-- Use the repository-local `$foc-iterate-feature` skill for planned, user-visible
-  FoC changes. It orchestrates the installed analysis, test-design,
-  implementation, UI, review, and verification skills with project rules.
-
-## Version-control policy
-
-- Use Conventional Commit subjects for new commits: `type: concise imperative
-  description`. Use lowercase types such as `feat`, `fix`, `test`, `docs`, and
-  `chore`; do not add a scope unless the requester asks for one.
-- Use `$foc-commit` to prepare a logical FoC commit. It supplements the installed
-  `$commit` workflow with service boundaries, generated-contract, migration, and
-  validation rules. Never add local secrets, generated build output, dependencies,
-  or unrelated work.
+- Work only in the identified service's folder and explicitly assigned nice-to-have area.
+- Do not edit another service, database, API contract, or frontend to make your task pass.
+- Keep service data private; cross-service integration uses explicit APIs or events.
+- Root files such as `compose.yaml`, `.env.example`, and CI configuration are shared: one owner
+  edits them and affected service owners review.
+- Do not guess missing product rules. Flag them for confirmation against the backlog/wireframes.
+- Update tests and the service README when implementation behavior changes.
