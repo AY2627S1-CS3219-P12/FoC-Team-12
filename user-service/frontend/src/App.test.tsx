@@ -1,0 +1,5 @@
+import {render,screen} from '@testing-library/react'; import userEvent from '@testing-library/user-event'; import {vi,test,expect,afterEach} from 'vitest'; import {App} from './App';
+afterEach(()=>vi.restoreAllMocks()); const fill=async()=>{const u=userEvent.setup();await u.type(screen.getByLabelText('Email'),'alice@u.nus.edu');await u.type(screen.getByLabelText('Username'),'Alice');await u.type(screen.getByLabelText('Password'),'123456789012345');return u};
+test('submits valid registration',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:true}));render(<App/>);const u=await fill();await u.click(screen.getByRole('button'));expect(fetch).toHaveBeenCalled();await screen.findByText(/Registration successful/)});
+test('shows invalid fields',async()=>{render(<App/>);await userEvent.click(screen.getByRole('button'));await screen.findByRole('alert')});
+test('shows API validation error',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue({ok:false,json:async()=>({detail:'email is already taken'})}));render(<App/>);const u=await fill();await u.click(screen.getByRole('button'));await screen.findByText('email is already taken')});
