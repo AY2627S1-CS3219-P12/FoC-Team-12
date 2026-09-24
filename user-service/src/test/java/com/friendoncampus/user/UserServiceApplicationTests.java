@@ -3,7 +3,10 @@ package com.friendoncampus.user;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import com.friendoncampus.user.repository.UserRepository;
+import com.friendoncampus.user.support.JwtTestProperties;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -14,6 +17,11 @@ import com.friendoncampus.user.repository.UserRepository;
 class UserServiceApplicationTests {
     @MockitoBean
     private UserRepository userRepository;
+
+    @DynamicPropertySource
+    static void jwtProperties(DynamicPropertyRegistry registry) {
+        JwtTestProperties.register(registry);
+    }
 
     @Test
     void contextLoads() {
