@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import arrowIcon from '../assets/foc-arrow.svg'
+import placeholderArtwork from '../assets/supplier-location-placeholder.svg'
 import {
   SupplierApiError,
   useSupplierDetailQuery,
@@ -18,19 +19,44 @@ interface ReturnLocationState {
   from?: string
 }
 
-function SupplierImage({ name, url }: { name: string; url: string }) {
+function SupplierImage({
+  category,
+  name,
+  url,
+}: {
+  category: string
+  name: string
+  url: string | null
+}) {
+  const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
-  if (failed) return null
+  const hasImage = Boolean(url) && !failed
 
   return (
     <div className={styles.imageFrame}>
-      <img
-        alt={`${name} location`}
-        loading="lazy"
-        onError={() => setFailed(true)}
-        referrerPolicy="no-referrer"
-        src={url}
-      />
+      <div
+        aria-label={hasImage ? undefined : `${name} photo not available`}
+        aria-hidden={hasImage || undefined}
+        className={styles.imagePlaceholder}
+        role={hasImage ? undefined : 'img'}
+      >
+        <img alt="" src={placeholderArtwork} />
+        <p className={styles.placeholderTitle}>Campus location</p>
+        <p>{hasImage ? 'Loading photo…' : 'Photo not available'}</p>
+        <span>{category}</span>
+      </div>
+      {hasImage && (
+        <img
+          alt={`${name} location`}
+          className={`${styles.supplierImage} ${loaded ? styles.imageLoaded : ''}`}
+          decoding="async"
+          loading="eager"
+          onError={() => setFailed(true)}
+          onLoad={() => setLoaded(true)}
+          referrerPolicy="no-referrer"
+          src={url!}
+        />
+      )}
     </div>
   )
 }
@@ -152,13 +178,12 @@ export function SupplierDetailPage() {
             </div>
           </dl>
         </div>
-        {imageUrl && (
-          <SupplierImage
-            key={supplier.id}
-            name={supplier.name ?? 'Campus'}
-            url={imageUrl}
-          />
-        )}
+        <SupplierImage
+          key={supplier.id}
+          category={supplier.type ?? 'Campus'}
+          name={supplier.name ?? 'Campus'}
+          url={imageUrl}
+        />
       </div>
     </article>
   )

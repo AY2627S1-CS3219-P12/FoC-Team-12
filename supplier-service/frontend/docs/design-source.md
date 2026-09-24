@@ -53,3 +53,6 @@ Service workflow:
   The Admin scaffold remains directly reachable for later authenticated work.
 - The exact Figma bag and arrow vectors are committed under `src/assets/`; no expiring Figma
   asset URLs are used at runtime.
+- Supplier details use a local, Figma-aligned campus storefront illustration when a photo is
+  missing, loading, or unavailable. This preserves the image layout without implying that a
+  generic photograph depicts the real location.
