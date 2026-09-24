@@ -49,8 +49,14 @@ $env:DB_PORT = "5434"
 $env:DB_NAME = "user_db"
 $env:DB_USER = "user_user"
 $env:DB_PASSWORD = "change-me"
+$rsa = [System.Security.Cryptography.RSA]::Create(2048)
+$env:JWT_PRIVATE_KEY = [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey())
 .\mvnw.cmd spring-boot:run
 ```
+
+The two JWT commands generate an ephemeral development key. For a persistent environment, generate
+the key once, store the Base64-encoded PKCS#8 private key in the deployment secret store, and set it
+as `JWT_PRIVATE_KEY`. Never commit or share this value.
 
 The service listens on port `8081`. Verify its health in another terminal:
 
@@ -64,11 +70,15 @@ From the repository root:
 
 ```powershell
 Copy-Item .env.example .env
+$rsa = [System.Security.Cryptography.RSA]::Create(2048)
+$env:JWT_PRIVATE_KEY = [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey())
 docker compose build user-service
-docker compose up -d user-service
-docker compose ps
-Invoke-RestMethod http://localhost:8081/actuator/health
+docker compose run --rm --service-ports -e JWT_PRIVATE_KEY=$env:JWT_PRIVATE_KEY user-service
 ```
+
+The current shared Compose file does not yet pass `JWT_PRIVATE_KEY` to `user-service`, so use the
+`docker compose run -e` command above for this login iteration. The process stays attached; verify
+health from a second terminal with `Invoke-RestMethod http://localhost:8081/actuator/health`.
 
 The User database is independent of the Supplier database. It is stored in the
 `user-db-data` Docker volume and is available to local PostgreSQL tools at
@@ -92,6 +102,44 @@ Future schema changes must be introduced through forward-only Flyway migrations 
 `POST /api/users/registrations` accepts an email from `@u.nus.edu`, `@u.duke.nus.edu`, or
 `@u.yale-nus.edu.sg`, a case-insensitively unique username of at most 20 characters, and a
 15–64-character password. New accounts are `ACTIVE` with the `USER` role.
+
+## Login and JWT verification
+
+`POST /api/users/login` accepts an email and password. It returns a `Bearer` access token valid for
+15 minutes, its ISO-8601 expiry, stable `userId`, `username`, and `role`. Unknown emails, incorrect
+passwords, and non-active accounts all receive the same `401 Unauthorized` response.
+
+Tokens are signed with RS256 and contain these claims:
+
+| Claim | Value |
+| --- | --- |
+| `sub` | Stable User UUID |
+| `username` | User's display username |
+| `role` | `USER` or `ADMIN` |
+| `iss` | `friend-on-campus-user-service` |
+| `aud` | `friend-on-campus-api` |
+| `iat`, `exp` | Issue and 15-minute expiry timestamps |
+
+The public key set is published at `GET /.well-known/jwks.json`. Jun Hui and other service owners
+must verify the `RS256` signature using the key selected by `kid`, and require the issuer, audience,
+and expiry claims above. Consumers must use this endpoint rather than User Service database access;
+they should cache keys and refresh them when an unfamiliar `kid` is received.
+
+`GET /api/users/me` is a temporary authenticated JWT-validation endpoint. Send the access token as
+`Authorization: Bearer <token>`. It returns only the token identity and will be replaced by the real
+profile endpoint in a later User Service iteration.
+
+With the service running, this PowerShell sequence registers an account, logs in, and exercises the
+temporary protected endpoint:
+
+```powershell
+$registration = @{ email = "alice@u.nus.edu"; username = "Alice"; password = "password-with-at-least-15-chars" } | ConvertTo-Json
+Invoke-RestMethod -Method Post http://localhost:8081/api/users/registrations -ContentType "application/json" -Body $registration
+$login = @{ email = "alice@u.nus.edu"; password = "password-with-at-least-15-chars" } | ConvertTo-Json
+$session = Invoke-RestMethod -Method Post http://localhost:8081/api/users/login -ContentType "application/json" -Body $login
+Invoke-RestMethod http://localhost:8081/.well-known/jwks.json
+Invoke-RestMethod http://localhost:8081/api/users/me -Headers @{ Authorization = "Bearer $($session.accessToken)" }
+```
 
 ## Frontend
 

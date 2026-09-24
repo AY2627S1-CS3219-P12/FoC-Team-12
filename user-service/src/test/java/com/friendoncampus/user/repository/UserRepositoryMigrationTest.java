@@ -5,9 +5,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import com.friendoncampus.user.support.JwtTestProperties;
 
 @SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:users;MODE=PostgreSQL;DB_CLOSE_DELAY=-1","spring.datasource.driver-class-name=org.h2.Driver","spring.datasource.username=sa","spring.datasource.password="})
 class UserRepositoryMigrationTest {
  @Autowired JdbcTemplate jdbc;
+ @DynamicPropertySource static void jwtProperties(DynamicPropertyRegistry registry) { JwtTestProperties.register(registry); }
  @Test void flywayCreatesUsersTable() { assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'USERS'", Integer.class)).isGreaterThan(0); }
 }
