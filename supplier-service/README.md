@@ -14,17 +14,20 @@ APIs. Authentication will be added in a later task.
 
 Maven does not need to be installed globally because the project includes the Maven Wrapper.
 
-## Frontend scaffold
+## Supplier frontend
 
 The Supplier-owned React, TypeScript, and Vite application lives in `frontend/`. It provides
-the foundation for the future public and administrative Supplier experiences; the current
-screens deliberately show only routing and backend-connectivity placeholders.
+a responsive public directory backed by the live Supplier API. Search, category, building,
+sort, and page selections are stored in the URL, so directory views can be refreshed,
+bookmarked, and shared. Supplier details are read-only and intentionally omit administrative
+fields such as version and timestamps.
 
 The frontend uses these routes:
 
 ```text
-/suppliers        public Supplier experience
-/admin/suppliers  future administrative Supplier experience
+/suppliers        public active-location directory
+/suppliers/{id}   public location details, including inactive historical references
+/admin/suppliers  future administrative Supplier experience (not linked publicly)
 ```
 
 The administrative route is not an authorization boundary. It contains no mutation controls
@@ -196,6 +199,17 @@ curl http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa
 Direct ID lookup can resolve both `ACTIVE` and `INACTIVE` suppliers for historical
 references. Unknown IDs return `404 Not Found`, and malformed UUIDs return `400 Bad Request`
 using the Problem Details JSON format.
+
+Retrieve the available public filter values:
+
+```sh
+curl http://localhost:8080/api/suppliers/metadata
+```
+
+This endpoint returns distinct `types` and `buildings` from active suppliers only. Both lists
+are sorted case-insensitively and are empty when no active suppliers exist. The public
+directory uses this response to populate its exact-match dropdowns rather than hard-coding
+database values.
 
 ## Create a supplier
 

@@ -12,6 +12,7 @@ The Figma file is a visual and workflow reference for the responsive Supplier UI
   - Supplier L05 Delete success: node `6:6965`
 - [Mobile Supplier starting point](https://www.figma.com/design/C0Y1GNnZrxvPX36oQemnff/Friend-on-Campus-%E2%80%94-Impeccable-Redesign?node-id=7-1421&t=itVba3jHlA5ZxVp0-1): node `7:1421`
 - [Shared components section](https://www.figma.com/design/C0Y1GNnZrxvPX36oQemnff/Friend-on-Campus-%E2%80%94-Impeccable-Redesign?node-id=4-198&t=itVba3jHlA5ZxVp0-1): node `4:198`
+- [Public directory reference](https://www.figma.com/design/C0Y1GNnZrxvPX36oQemnff/Friend-on-Campus-%E2%80%94-Impeccable-Redesign?node-id=6-1420&t=itVba3jHlA5ZxVp0-1): R02 node `6:1420`
 
 The shared-components link currently targets the section heading. When implementing a component, inspect the component instances used by the target screen and then locate the corresponding component beneath that section.
 
@@ -34,3 +35,21 @@ The backend contract takes precedence over example data and incomplete form fiel
 - Mobile reference width: 375 pixels; desktop reference width: 1280 pixels.
 
 Use the CSS custom properties in `src/styles/tokens.css` rather than copying raw values throughout components.
+
+## Task 13 directory adaptations
+
+The public Supplier experience deliberately adapts R02 rather than reproducing its Order
+Service workflow:
+
+- “Choose a pickup location” becomes a standalone “Campus locations” directory, with no
+  selection action.
+- Search is joined by API-backed category and building filters, safe sorting, result totals,
+  and pagination because the real Supplier API supports those operations.
+- Cards become a responsive one-, two-, or three-column grid and include operating hours and
+  directions when available.
+- A separate detail route shows coordinates and optional images; administrative version and
+  timestamp fields stay hidden.
+- Unimplemented global navigation and the Admin route are not linked from the public shell.
+  The Admin scaffold remains directly reachable for later authenticated work.
+- The exact Figma bag and arrow vectors are committed under `src/assets/`; no expiring Figma
+  asset URLs are used at runtime.
