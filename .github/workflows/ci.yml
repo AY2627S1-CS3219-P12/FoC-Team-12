@@ -25,6 +25,8 @@ jobs:
           java-version: "17"
           cache: maven
           cache-dependency-path: user-service/pom.xml
+      - name: Make Maven wrapper executable
+        run: chmod +x ./mvnw
       - name: Verify backend
         run: ./mvnw --batch-mode --no-transfer-progress verify
 
