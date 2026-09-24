@@ -76,6 +76,26 @@ export interface paths {
         patch: operations["changeSupplierStatus"];
         trace?: never;
     };
+    "/api/suppliers/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get active supplier filter values
+         * @description Returns distinct supplier types and buildings from active suppliers, sorted case-insensitively.
+         */
+        get: operations["getSupplierMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -428,6 +448,27 @@ export interface components {
              */
             totalPages?: number;
         };
+        /** @description Filter values available among active suppliers */
+        SupplierMetadataResponse: {
+            /**
+             * @description Distinct active supplier categories sorted case-insensitively
+             * @example [
+             *       "Food",
+             *       "Food/Coffee",
+             *       "Printing",
+             *       "Shopping"
+             *     ]
+             */
+            types?: string[];
+            /**
+             * @description Distinct active supplier buildings sorted case-insensitively
+             * @example [
+             *       "Blk AS8",
+             *       "Central Library"
+             *     ]
+             */
+            buildings?: string[];
+        };
     };
     responses: never;
     parameters: never;
@@ -743,6 +784,26 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["SupplierUpdateConflictProblem"];
+                };
+            };
+        };
+    };
+    getSupplierMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Filter metadata for active suppliers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SupplierMetadataResponse"];
                 };
             };
         };

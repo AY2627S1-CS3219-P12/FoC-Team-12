@@ -1,14 +1,16 @@
 package com.friendoncampus.supplier.service;
 
+import java.util.List;
 import java.util.UUID;
 
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.friendoncampus.supplier.domain.Supplier;
+import com.friendoncampus.supplier.domain.SupplierStatus;
 import com.friendoncampus.supplier.repository.SupplierRepository;
 import com.friendoncampus.supplier.repository.SupplierSpecifications;
 
@@ -44,6 +46,21 @@ public class SupplierService {
     public Supplier getSupplier(UUID id) {
         return supplierRepository.findById(id)
                 .orElseThrow(() -> new SupplierNotFoundException(id));
+    }
+
+    public SupplierMetadata getActiveSupplierMetadata() {
+        return new SupplierMetadata(
+                sortedCaseInsensitively(
+                        supplierRepository.findDistinctTypesByStatus(SupplierStatus.ACTIVE)),
+                sortedCaseInsensitively(
+                        supplierRepository.findDistinctBuildingsByStatus(SupplierStatus.ACTIVE)));
+    }
+
+    private static List<String> sortedCaseInsensitively(List<String> values) {
+        return values.stream()
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER.thenComparing(String::compareTo))
+                .toList();
     }
 
     @Transactional

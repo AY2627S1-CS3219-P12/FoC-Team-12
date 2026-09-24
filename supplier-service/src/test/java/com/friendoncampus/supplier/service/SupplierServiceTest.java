@@ -113,6 +113,38 @@ class SupplierServiceTest {
     }
 
     @Test
+    void returnsDistinctActiveMetadataInCaseInsensitiveOrder() {
+        when(supplierRepository.findDistinctTypesByStatus(SupplierStatus.ACTIVE))
+                .thenReturn(List.of(
+                        "Shopping", "Food/Coffee", "Food", "printing", "Food"));
+        when(supplierRepository.findDistinctBuildingsByStatus(SupplierStatus.ACTIVE))
+                .thenReturn(List.of(
+                        "COM3", "Blk AS8", "central Library", "COM3"));
+
+        SupplierMetadata metadata = supplierService.getActiveSupplierMetadata();
+
+        assertThat(metadata.types())
+                .containsExactly("Food", "Food/Coffee", "printing", "Shopping");
+        assertThat(metadata.buildings())
+                .containsExactly("Blk AS8", "central Library", "COM3");
+        verify(supplierRepository).findDistinctTypesByStatus(SupplierStatus.ACTIVE);
+        verify(supplierRepository).findDistinctBuildingsByStatus(SupplierStatus.ACTIVE);
+    }
+
+    @Test
+    void returnsEmptyMetadataWhenNoActiveSuppliersExist() {
+        when(supplierRepository.findDistinctTypesByStatus(SupplierStatus.ACTIVE))
+                .thenReturn(List.of());
+        when(supplierRepository.findDistinctBuildingsByStatus(SupplierStatus.ACTIVE))
+                .thenReturn(List.of());
+
+        SupplierMetadata metadata = supplierService.getActiveSupplierMetadata();
+
+        assertThat(metadata.types()).isEmpty();
+        assertThat(metadata.buildings()).isEmpty();
+    }
+
+    @Test
     void rejectsUnknownSupplierId() {
         UUID id = UUID.randomUUID();
         when(supplierRepository.findById(id)).thenReturn(Optional.empty());

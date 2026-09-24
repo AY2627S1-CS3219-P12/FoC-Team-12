@@ -22,6 +22,7 @@ import com.friendoncampus.supplier.service.SupplierService;
 import com.friendoncampus.supplier.web.dto.ChangeSupplierStatusRequest;
 import com.friendoncampus.supplier.web.dto.CreateSupplierRequest;
 import com.friendoncampus.supplier.web.dto.SupplierListResponse;
+import com.friendoncampus.supplier.web.dto.SupplierMetadataResponse;
 import com.friendoncampus.supplier.web.dto.SupplierResponse;
 import com.friendoncampus.supplier.web.dto.UpdateSupplierRequest;
 import com.friendoncampus.supplier.web.error.ApiErrorDocumentation;
@@ -88,6 +89,19 @@ public class SupplierController {
             @RequestParam(required = false) String sort) {
         SupplierQuery query = SupplierQuery.from(search, type, building, page, size, sort);
         return SupplierListResponse.from(supplierService.listActiveSuppliers(query));
+    }
+
+    @Operation(
+            operationId = "getSupplierMetadata",
+            summary = "Get active supplier filter values",
+            description = "Returns distinct supplier types and buildings from active suppliers, sorted case-insensitively.")
+    @ApiResponse(
+            responseCode = "200",
+            description = "Filter metadata for active suppliers",
+            content = @Content(schema = @Schema(implementation = SupplierMetadataResponse.class)))
+    @GetMapping("/metadata")
+    public SupplierMetadataResponse getSupplierMetadata() {
+        return SupplierMetadataResponse.from(supplierService.getActiveSupplierMetadata());
     }
 
     @Operation(

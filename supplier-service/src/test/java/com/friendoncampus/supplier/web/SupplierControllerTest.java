@@ -38,6 +38,7 @@ import com.friendoncampus.supplier.service.ChangeSupplierStatusCommand;
 import com.friendoncampus.supplier.service.CreateSupplierCommand;
 import com.friendoncampus.supplier.service.DeleteSupplierCommand;
 import com.friendoncampus.supplier.service.SupplierNotFoundException;
+import com.friendoncampus.supplier.service.SupplierMetadata;
 import com.friendoncampus.supplier.service.SupplierQuery;
 import com.friendoncampus.supplier.service.SupplierService;
 import com.friendoncampus.supplier.service.SupplierUpdateConflictException;
@@ -126,6 +127,22 @@ class SupplierControllerTest {
                 .andExpect(jsonPath("$.items.length()").value(0));
 
         verify(supplierService).listActiveSuppliers(expectedQuery);
+    }
+
+    @Test
+    void returnsActiveSupplierMetadata() throws Exception {
+        when(supplierService.getActiveSupplierMetadata()).thenReturn(new SupplierMetadata(
+                List.of("Food", "Food/Coffee", "Printing", "Shopping"),
+                List.of("Blk AS8", "Central Library")));
+
+        mockMvc.perform(get("/api/suppliers/metadata"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.types.length()").value(4))
+                .andExpect(jsonPath("$.types[0]").value("Food"))
+                .andExpect(jsonPath("$.types[3]").value("Shopping"))
+                .andExpect(jsonPath("$.buildings.length()").value(2))
+                .andExpect(jsonPath("$.buildings[1]").value("Central Library"));
     }
 
     @ParameterizedTest

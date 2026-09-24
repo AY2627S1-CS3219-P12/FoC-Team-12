@@ -9,7 +9,11 @@
   --foc-action-soft: #e7f1ed;
   --foc-line: #d4ddd7;
   --foc-danger: #a2372b;
+  --foc-danger-soft: #f9ece9;
   --foc-focus: #176bba;
+  --foc-info: #215b80;
+  --foc-info-soft: #eaf2f8;
+  --foc-shadow: 0 10px 30px rgb(32 51 45 / 8%);
 
   --foc-space-0: 0;
   --foc-space-4: 0.25rem;
@@ -22,6 +26,7 @@
 
   --foc-radius-8: 0.5rem;
   --foc-radius-12: 0.75rem;
+  --foc-radius-pill: 999px;
 
   --foc-text-caption: 0.75rem;
   --foc-text-small: 0.875rem;
