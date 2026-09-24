@@ -6,8 +6,8 @@ description: Orchestrate one approved Friend on Campus feature through analysis,
 # FoC Iterate Feature
 
 Use this explicit workflow for one bounded, user-visible Friend on Campus outcome.
-It is a thin project-specific orchestrator: it calls the installed specialist
-skills rather than duplicating their work.
+It orchestrates the FoC-specific specialist skills rather than duplicating
+their stage responsibilities.
 
 ## Invocation
 
@@ -22,21 +22,21 @@ the user has explicitly approved its contract and ownership boundaries.
 ## Workflow
 
 1. Read the applicable root and service `AGENTS.md`, then apply
-   `$feature-analysis`. Its brief must identify the owning service, observable
+   `$foc-feature-analysis`. Its brief must identify the owning service, observable
    outcome, contract/data effects, UI impact, dependencies, exclusions, and
    unresolved cross-service decisions. Stop for explicit approval before editing
    product files.
-2. Apply `$test-design` after approval. Select the owning service's existing test
+2. Apply `$foc-test-design` after approval. Select the owning service's existing test
    conventions and distinguish automated checks from manual acceptance.
-3. Apply `$feature-implementation` for only the approved behavior and tests.
-4. When the change is interactive, apply `$ui-iteration`. For Supplier UI work,
+3. Apply `$foc-feature-implementation` for only the approved behavior and tests.
+4. When the change is interactive, apply `$foc-ui-iteration`. For Supplier UI work,
    follow `supplier-service/frontend/AGENTS.md`: inspect the relevant Figma
    nodes, use the typed client and TanStack Query, reuse tokens/components, and
    produce responsive and accessible acceptance checks. Otherwise record why this
    stage is not applicable.
-5. Apply `$quality-review`. Return confirmed high-risk issues to the responsible
+5. Apply `$foc-quality-review`. Return confirmed high-risk issues to the responsible
    implementation or UI stage, then review the repair.
-6. Apply `$verify-feature` with the checks selected below. Return failures to the
+6. Apply `$foc-verify-feature` with the checks selected below. Return failures to the
    responsible stage and rerun affected checks after repair.
 7. Present required manual checks and stop for explicit user acceptance. A
    reported failure returns to the relevant implementation stage. After
