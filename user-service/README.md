@@ -86,3 +86,9 @@ YAML:       http://localhost:8081/v3/api-docs.yaml
 
 Future schema changes must be introduced through forward-only Flyway migrations in
 `src/main/resources/db/migration`.
+
+## Register
+
+`POST /api/users/registrations` accepts an email from `@u.nus.edu`, `@u.duke.nus.edu`, or
+`@u.yale-nus.edu.sg`, a case-insensitively unique username of at most 20 characters, and a
+15–64-character password. New accounts are `ACTIVE` with the `USER` role.
