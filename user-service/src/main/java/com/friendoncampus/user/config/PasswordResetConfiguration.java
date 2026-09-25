@@ -11,6 +11,9 @@ import org.springframework.context.annotation.Configuration;
 import com.friendoncampus.user.service.DisabledPasswordResetMailer;
 import com.friendoncampus.user.service.PasswordResetMailer;
 import com.friendoncampus.user.service.SendGridPasswordResetMailer;
+import com.friendoncampus.user.service.EmailVerificationMailer;
+import com.friendoncampus.user.service.DisabledEmailVerificationMailer;
+import com.friendoncampus.user.service.SendGridEmailVerificationMailer;
 
 @Configuration
 @EnableConfigurationProperties(MailProperties.class)
@@ -30,5 +33,17 @@ public class PasswordResetConfiguration {
     @ConditionalOnMissingBean(PasswordResetMailer.class)
     PasswordResetMailer disabledPasswordResetMailer() {
         return new DisabledPasswordResetMailer();
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "app.mail.provider", havingValue = "sendgrid")
+    EmailVerificationMailer sendGridEmailVerificationMailer(MailProperties properties) {
+        return new SendGridEmailVerificationMailer(properties.sendgridApiKey(), properties.fromEmail());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(EmailVerificationMailer.class)
+    EmailVerificationMailer disabledEmailVerificationMailer() {
+        return new DisabledEmailVerificationMailer();
     }
 }

@@ -22,7 +22,7 @@ public class User {
     public static User register(String email, String username, String normalizedUsername, String passwordHash) {
         User user = new User(); user.id = UUID.randomUUID(); user.email = email; user.username = username;
         user.usernameNormalized = normalizedUsername; user.passwordHash = passwordHash; user.role = UserRole.USER;
-        user.status = UserStatus.ACTIVE; OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC); user.createdAt = now; user.updatedAt = now;
+        user.status = UserStatus.UNVERIFIED; OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC); user.createdAt = now; user.updatedAt = now;
         return user;
     }
     public UUID getId() { return id; } public String getEmail() { return email; } public String getUsername() { return username; }
@@ -31,6 +31,11 @@ public class User {
 
     public void changePasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+        this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    }
+
+    public void activate() {
+        this.status = UserStatus.ACTIVE;
         this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 }

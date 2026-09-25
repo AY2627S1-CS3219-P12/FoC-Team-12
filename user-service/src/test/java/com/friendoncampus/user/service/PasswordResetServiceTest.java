@@ -43,6 +43,7 @@ class PasswordResetServiceTest {
         mailer = new FakePasswordResetMailer();
         service = new PasswordResetService(users, tokens, passwords, mailer, Clock.fixed(NOW, ZoneOffset.UTC));
         user = User.register("alice@u.nus.edu", "Alice", "alice", "old-hash");
+        user.activate();
     }
 
     @Test

@@ -57,7 +57,8 @@ test('preserves registration from the account switcher', async () => {
   await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
 
   expect(fetch).toHaveBeenCalledWith('/api/users/registrations', expect.objectContaining({ method: 'POST' }))
-  await screen.findByText('Registration successful. You can now sign in.')
+  await screen.findByText('Registration successful. Check your email for a verification code before signing in.')
+  expect(screen.getByRole('button', { name: 'Verify email' })).toBeInTheDocument()
 })
 
 test('keeps registration failures clear when the API is unavailable', async () => {
@@ -95,6 +96,54 @@ test('shows an accessible generic failure when a reset request cannot be complet
   await user.click(screen.getByRole('button', { name: 'Send reset code' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to request a password reset right now. Please try again.')
+})
+
+test('verifies a registered email with the live verification API', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })
+    .mockResolvedValueOnce({ ok: true, status: 204 }))
+  render(<App />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Create account', pressed: false }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.type(screen.getByLabelText('Username'), 'Alice')
+  await user.type(screen.getByLabelText('Password'), '123456789012345')
+  await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
+  await user.click(await screen.findByRole('button', { name: 'Verify email' }))
+  await user.type(screen.getByLabelText('Verification code'), '123456')
+  await user.click(screen.getByRole('button', { name: 'Verify email' }))
+
+  expect(fetch).toHaveBeenLastCalledWith('/api/users/email-verifications', expect.objectContaining({ method: 'POST' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('Email verified. You can now sign in.')
+})
+
+test('shows a clear cooldown error when resending an email verification code', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: false,
+    status: 429,
+    headers: new Headers({ 'Retry-After': '90' }),
+    json: async () => ({ detail: 'Email verification resend is not available yet' }),
+  }))
+  render(<App />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Verify email' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(screen.getByRole('button', { name: 'Resend verification code' }))
+
+  expect(fetch).toHaveBeenCalledWith('/api/users/email-verification-resends', expect.objectContaining({ method: 'POST' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Please wait 90 seconds before requesting another code.')
+})
+
+test('confirms that a resend request was accepted without exposing a code', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 202 }))
+  render(<App />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Verify email' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(screen.getByRole('button', { name: 'Resend verification code' }))
+
+  expect(await screen.findByRole('status')).toHaveTextContent('A new verification code has been sent.')
+  expect(screen.queryByText(/123456/)).not.toBeInTheDocument()
 })
 
 test('confirms a reset code and lets the user return to sign in', async () => {
