@@ -157,12 +157,13 @@ these tokens must verify the `RS256` signature using the key selected by `kid`, 
 issuer, audience, and expiry claims above. Consumers must use this endpoint rather than User Service
 database access; they should cache keys and refresh them when an unfamiliar `kid` is received.
 
-`GET /api/users/me` is a temporary authenticated JWT-validation endpoint. Send the access token as
-`Authorization: Bearer <token>`. It returns only the token identity and will be replaced by the real
-profile endpoint in a later User Service iteration.
+`GET /api/users/me` returns the authenticated user's persisted profile. Send the access token as
+`Authorization: Bearer <token>`. Its response contains the stable user ID, NUS email, username,
+role, account status, and account creation timestamp. It is view-only: the profile API does not
+permit changing email, username, password, role, or status.
 
-With the service running, this PowerShell sequence registers an account, logs in, and exercises the
-temporary protected endpoint:
+With the service running, this PowerShell sequence registers an account, logs in, and reads the
+authenticated profile:
 
 ```powershell
 $registration = @{ email = "alice@u.nus.edu"; username = "Alice"; password = "password-with-at-least-15-chars" } | ConvertTo-Json

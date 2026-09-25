@@ -16,8 +16,10 @@ test('attaches the browser session token through the shared API client', async (
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
 
   await api.register({ email: 'alice@u.nus.edu', username: 'Alice', password: '123456789012345' })
+  await api.getProfile()
 
-  const [, options] = vi.mocked(fetch).mock.calls[0]
+  const [, options] = vi.mocked(fetch).mock.calls[1]
+  expect(fetch).toHaveBeenNthCalledWith(2, '/api/users/me', expect.objectContaining({ method: 'GET' }))
   expect((options?.headers as Headers).get('Authorization')).toBe('Bearer signed.jwt')
 })
 

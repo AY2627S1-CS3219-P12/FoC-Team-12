@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { App } from './App'
+import { saveSession } from './auth/session'
 
 afterEach(() => {
   sessionStorage.clear()
@@ -17,22 +18,71 @@ const fillLogin = async () => {
 }
 
 test('signs in successfully and stores the browser session', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
       accessToken: 'signed.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
       userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
-    }),
-  }))
+      }),
+    })
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Persisted Alice',
+        role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+      }),
+    }))
   render(<App />)
   const user = await fillLogin()
 
   await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
 
   expect(fetch).toHaveBeenCalledWith('/api/users/login', expect.objectContaining({ method: 'POST' }))
-  await screen.findByRole('heading', { name: 'You’re signed in' })
-  expect(screen.getByText('Alice')).toBeInTheDocument()
+  await screen.findByRole('heading', { name: 'Your profile' })
+  expect(await screen.findByText('Persisted Alice')).toBeInTheDocument()
+  expect(fetch).toHaveBeenLastCalledWith('/api/users/me', expect.objectContaining({ method: 'GET' }))
+  expect(screen.getByText('alice@u.nus.edu')).toBeInTheDocument()
+  expect(screen.getByText('ACTIVE')).toBeInTheDocument()
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({ accessToken: 'signed.jwt' })
+})
+
+test('shows an accessible error when the live profile cannot be loaded', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        accessToken: 'signed.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+      }),
+    })
+    .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ detail: 'Unavailable' }) }))
+  render(<App />)
+  const user = await fillLogin()
+
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load your profile. Please sign out and sign in again.')
+})
+
+test('reloads the live profile when restoring a browser session', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Stale name', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Persisted Alice',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }),
+  }))
+
+  render(<App />)
+
+  expect(await screen.findByText('Persisted Alice')).toBeInTheDocument()
+  const [, options] = vi.mocked(fetch).mock.calls[0]
+  expect((options?.headers as Headers).get('Authorization')).toBe('Bearer restored.jwt')
 })
 
 test('shows one generic failure for failed login', async () => {

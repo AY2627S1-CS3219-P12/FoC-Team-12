@@ -30,6 +30,15 @@ type EmailVerificationResendRequest = {
   email: string
 }
 
+export type UserProfile = {
+  userId: string
+  email: string
+  username: string
+  role: 'USER' | 'ADMIN'
+  status: 'UNVERIFIED' | 'ACTIVE' | 'BANNED'
+  createdAt: string
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -100,5 +109,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(requestBody),
     })
+  },
+  getProfile() {
+    return request<UserProfile>('/api/users/me', { method: 'GET' })
   },
 }

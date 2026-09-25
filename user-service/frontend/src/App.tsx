@@ -1,6 +1,6 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 
-import { ApiError, api } from './api/client'
+import { ApiError, api, type UserProfile } from './api/client'
 import { clearSession, readSession, saveSession, type AuthSession } from './auth/session'
 
 type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-confirmation'
@@ -12,6 +12,8 @@ const emailFormat = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 export function App() {
   const [view, setView] = useState<View>('login')
   const [session, setSession] = useState<AuthSession | null>(() => readSession())
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profileMessage, setProfileMessage] = useState('')
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [loginState, setLoginState] = useState<State>('idle')
@@ -35,6 +37,28 @@ export function App() {
   const [resetRequestMessage, setResetRequestMessage] = useState('')
   const [resetConfirmationState, setResetConfirmationState] = useState<State>('idle')
   const [resetConfirmationMessage, setResetConfirmationMessage] = useState('')
+
+  useEffect(() => {
+    if (!session) {
+      return
+    }
+
+    let cancelled = false
+    void api.getProfile()
+      .then(value => {
+        if (!cancelled) {
+          setProfile(value)
+          setProfileMessage('')
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProfileMessage('Unable to load your profile. Please sign out and sign in again.')
+        }
+      })
+
+    return () => { cancelled = true }
+  }, [session])
 
   const show = (nextView: View) => {
     setView(nextView)
@@ -66,6 +90,8 @@ export function App() {
     }
     setLoginState('loading')
     setLoginMessage('')
+    setProfile(null)
+    setProfileMessage('')
     try {
       const nextSession = await api.login({ email: loginEmail, password: loginPassword })
       saveSession(nextSession)
@@ -215,16 +241,20 @@ export function App() {
   }
 
   if (session) {
-    return <main><section aria-labelledby="signed-in-title">
+    const displayedProfile = profile?.userId === session.userId ? profile : null
+    return <main><section aria-labelledby="profile-title">
       <p className="eyebrow">Friend on Campus</p>
-      <h1 id="signed-in-title">You’re signed in</h1>
-      <p className="intro">This browser session is active until you sign out or close the tab.</p>
-      <dl className="identity-card">
-        <div><dt>Username</dt><dd>{session.username}</dd></div>
-        <div><dt>Role</dt><dd>{session.role}</dd></div>
-        <div><dt>User ID</dt><dd className="identifier">{session.userId}</dd></div>
-        <div><dt>Expires</dt><dd>{new Date(session.expiresAt).toLocaleString()}</dd></div>
-      </dl>
+      <h1 id="profile-title">Your profile</h1>
+      <p className="intro">Your account details are read from Friend on Campus.</p>
+      {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
+      {profileMessage && <p role="alert" className="error">{profileMessage}</p>}
+      {displayedProfile && <dl className="identity-card">
+        <div><dt>Email</dt><dd>{displayedProfile.email}</dd></div>
+        <div><dt>Username</dt><dd>{displayedProfile.username}</dd></div>
+        <div><dt>Role</dt><dd>{displayedProfile.role}</dd></div>
+        <div><dt>Account status</dt><dd>{displayedProfile.status}</dd></div>
+        <div><dt>Member since</dt><dd>{new Date(displayedProfile.createdAt).toLocaleString()}</dd></div>
+      </dl>}
       <button type="button" className="secondary" onClick={() => { clearSession(); setSession(null); show('login') }}>Sign out</button>
     </section></main>
   }

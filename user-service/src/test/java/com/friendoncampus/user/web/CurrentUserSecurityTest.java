@@ -73,15 +73,21 @@ class CurrentUserSecurityTest {
     }
 
     @Test
-    void permitsAValidTokenOnTheTemporaryProtectedEndpoint() throws Exception {
-        UUID userId = UUID.randomUUID();
+    void returnsThePersistedProfileForTheAuthenticatedUser() throws Exception {
+        User user = User.register("profile-" + UUID.randomUUID() + "@u.nus.edu", "Persisted Alice",
+                "persisted" + UUID.randomUUID().toString().substring(0, 8), passwords.encode("password-with-at-least-15-chars"));
+        user.activate();
+        users.save(user);
 
         mvc.perform(get("/api/users/me").header("Authorization", "Bearer " + token(ISSUER, List.of(AUDIENCE),
-                Instant.now().plusSeconds(60), userId)))
+                Instant.now().plusSeconds(60), user.getId())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.userId").value(userId.toString()))
-                .andExpect(jsonPath("$.username").value("Alice"))
-                .andExpect(jsonPath("$.role").value("USER"));
+                .andExpect(jsonPath("$.userId").value(user.getId().toString()))
+                .andExpect(jsonPath("$.email").value(user.getEmail()))
+                .andExpect(jsonPath("$.username").value("Persisted Alice"))
+                .andExpect(jsonPath("$.role").value("USER"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andExpect(jsonPath("$.createdAt").exists());
     }
 
     @Test
