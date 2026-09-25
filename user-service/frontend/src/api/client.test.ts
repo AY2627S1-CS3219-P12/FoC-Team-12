@@ -32,3 +32,15 @@ test('handles password reset responses with no response body', async () => {
   expect(fetch).toHaveBeenNthCalledWith(1, '/api/users/password-reset-requests', expect.objectContaining({ method: 'POST' }))
   expect(fetch).toHaveBeenNthCalledWith(2, '/api/users/password-reset-confirmations', expect.objectContaining({ method: 'POST' }))
 })
+
+test('handles email verification and resend responses with no response body', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 204 })
+    .mockResolvedValueOnce({ ok: true, status: 202 }))
+
+  await api.verifyEmail({ email: 'alice@u.nus.edu', code: '123456' })
+  await api.resendEmailVerification({ email: 'alice@u.nus.edu' })
+
+  expect(fetch).toHaveBeenNthCalledWith(1, '/api/users/email-verifications', expect.objectContaining({ method: 'POST' }))
+  expect(fetch).toHaveBeenNthCalledWith(2, '/api/users/email-verification-resends', expect.objectContaining({ method: 'POST' }))
+})

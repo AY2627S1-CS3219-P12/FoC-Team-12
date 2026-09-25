@@ -76,9 +76,24 @@ docker compose build user-service
 docker compose run --rm --service-ports -e JWT_PRIVATE_KEY=$env:JWT_PRIVATE_KEY user-service
 ```
 
-The current shared Compose file does not yet pass `JWT_PRIVATE_KEY` to `user-service`, so use the
-`docker compose run -e` command above for this login iteration. The process stays attached; verify
-health from a second terminal with `Invoke-RestMethod http://localhost:8081/actuator/health`.
+The Compose file passes `JWT_PRIVATE_KEY` to `user-service`. Generate an ephemeral development key
+before starting the stack (or store a persistent Base64-encoded PKCS#8 key in `.env`):
+
+```powershell
+$rsa = [System.Security.Cryptography.RSA]::Create(2048)
+$env:JWT_PRIVATE_KEY = [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey())
+```
+
+The Vite development frontend then starts automatically alongside the backend:
+
+```powershell
+docker compose up --build user-service user-frontend
+```
+
+Open <http://localhost:5174>. The frontend container runs `npm run dev` and proxies `/api` to the
+`user-service` container. For local frontend-only development, continue to use `npm run dev` from
+`user-service/frontend`. Verify backend health from another terminal with
+`Invoke-RestMethod http://localhost:8081/actuator/health`.
 
 The User database is independent of the Supplier database. It is stored in the
 `user-db-data` Docker volume and is available to local PostgreSQL tools at
@@ -101,7 +116,24 @@ Future schema changes must be introduced through forward-only Flyway migrations 
 
 `POST /api/users/registrations` accepts an email from `@u.nus.edu`, `@u.duke.nus.edu`, or
 `@u.yale-nus.edu.sg`, a case-insensitively unique username of at most 20 characters, and a
-15–64-character password. New accounts are `ACTIVE` with the `USER` role.
+15–64-character password. New accounts are `UNVERIFIED` with the `USER` role and cannot log in
+until their NUS email is verified.
+
+## Email verification
+
+After registration, the service sends a six-digit verification code through Twilio SendGrid. Codes
+are stored only as verifiers, expire after 10 minutes, allow five attempts, and become unusable after
+successful verification. Confirm the code with `POST /api/users/email-verifications`, supplying
+`email` and `code`; success returns `204 No Content` and activates the account.
+
+Use `POST /api/users/email-verification-resends` with `email` to resend a code. Resends are limited
+to one email per 90 seconds and invalidate all earlier verification attempts. A request before the
+cooldown expires returns `429 Too Many Requests` with a `Retry-After` header. Per the approved
+product rule, resend returns specific responses: `404` for an unknown email, `409` when already
+verified, and `403` for a banned account.
+
+Email verification uses the same `MAIL_PROVIDER`, `SENDGRID_API_KEY`, and `SENDGRID_FROM_EMAIL`
+environment variables documented under Password reset. Never commit these credentials or a code.
 
 ## Login and JWT verification
 
@@ -179,3 +211,6 @@ npm run build
 ```
 
 The Vite frontend runs at `http://localhost:5174` and proxies `/api` to the User Service on port `8081`.
+It includes registration, email-verification and resend-code screens, login, and password-reset flows.
+After registration, use **Verify email** and enter the six-digit code delivered to the registered NUS email;
+the resend action reflects the server's 90-second cooldown.

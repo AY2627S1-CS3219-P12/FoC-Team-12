@@ -3,7 +3,7 @@ import { type FormEvent, useState } from 'react'
 import { ApiError, api } from './api/client'
 import { clearSession, readSession, saveSession, type AuthSession } from './auth/session'
 
-type View = 'login' | 'register' | 'reset-request' | 'reset-confirmation'
+type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-confirmation'
 type State = 'idle' | 'loading' | 'success' | 'error'
 
 const eligibleEmail = /^[^@]+@(u\.nus\.edu|u\.duke\.nus\.edu|u\.yale-nus\.edu\.sg)$/i
@@ -21,6 +21,12 @@ export function App() {
   const [password, setPassword] = useState('')
   const [registrationState, setRegistrationState] = useState<State>('idle')
   const [registrationMessage, setRegistrationMessage] = useState('')
+  const [verificationEmail, setVerificationEmail] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
+  const [verificationState, setVerificationState] = useState<State>('idle')
+  const [verificationMessage, setVerificationMessage] = useState('')
+  const [resendState, setResendState] = useState<State>('idle')
+  const [resendMessage, setResendMessage] = useState('')
   const [resetEmail, setResetEmail] = useState('')
   const [resetCode, setResetCode] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -36,6 +42,10 @@ export function App() {
     setLoginMessage('')
     setRegistrationState('idle')
     setRegistrationMessage('')
+    setVerificationState('idle')
+    setVerificationMessage('')
+    setResendState('idle')
+    setResendMessage('')
     setResetRequestState('idle')
     setResetRequestMessage('')
     setResetConfirmationState('idle')
@@ -88,13 +98,63 @@ export function App() {
     setRegistrationMessage('')
     try {
       await api.register({ email, username, password })
+      setVerificationEmail(email)
       setRegistrationState('success')
-      setRegistrationMessage('Registration successful. You can now sign in.')
+      setRegistrationMessage('Registration successful. Check your email for a verification code before signing in.')
     } catch (error) {
       setRegistrationState('error')
       setRegistrationMessage(error instanceof ApiError && error.status === 400
         ? error.message
         : 'Registration could not be completed. Please try again.')
+    }
+  }
+
+  const verifyEmail = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!eligibleEmail.test(verificationEmail)) {
+      setVerificationState('error')
+      setVerificationMessage('Use an eligible NUS student email.')
+      return
+    }
+    if (!/^\d{6}$/.test(verificationCode)) {
+      setVerificationState('error')
+      setVerificationMessage('Enter the six-digit code from your email.')
+      return
+    }
+    setVerificationState('loading')
+    setVerificationMessage('')
+    try {
+      await api.verifyEmail({ email: verificationEmail, code: verificationCode })
+      setVerificationState('success')
+      setVerificationMessage('Email verified. You can now sign in.')
+      setVerificationCode('')
+    } catch (error) {
+      setVerificationState('error')
+      setVerificationMessage(error instanceof ApiError
+        ? error.message
+        : 'Unable to verify your email right now. Please try again.')
+    }
+  }
+
+  const resendVerification = async () => {
+    if (!eligibleEmail.test(verificationEmail)) {
+      setResendState('error')
+      setResendMessage('Use an eligible NUS student email.')
+      return
+    }
+    setResendState('loading')
+    setResendMessage('')
+    try {
+      await api.resendEmailVerification({ email: verificationEmail })
+      setResendState('success')
+      setResendMessage('A new verification code has been sent.')
+    } catch (error) {
+      setResendState('error')
+      if (error instanceof ApiError && error.status === 429 && error.retryAfterSeconds) {
+        setResendMessage(`Please wait ${error.retryAfterSeconds} seconds before requesting another code.`)
+      } else {
+        setResendMessage(error instanceof ApiError ? error.message : 'Unable to resend a verification code right now. Please try again.')
+      }
     }
   }
 
@@ -170,6 +230,7 @@ export function App() {
   }
 
   const busy = loginState === 'loading' || registrationState === 'loading'
+    || verificationState === 'loading' || resendState === 'loading'
     || resetRequestState === 'loading' || resetConfirmationState === 'loading'
 
   return <main><section aria-labelledby="account-title">
@@ -186,6 +247,7 @@ export function App() {
       <label>Password<input type="password" value={loginPassword} onChange={event => setLoginPassword(event.target.value)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
       <button disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
       <button type="button" className="text-button" onClick={() => show('reset-request')}>Forgot password?</button>
+      <button type="button" className="text-button" onClick={() => show('email-verification')}>Verify email</button>
       {loginMessage && <p role="alert" className="error">{loginMessage}</p>}
     </form>}
 
@@ -197,6 +259,22 @@ export function App() {
       <label>Password<input type="password" value={password} onChange={event => setPassword(event.target.value)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
       <button disabled={busy}>{registrationState === 'loading' ? 'Creating account…' : 'Create account'}</button>
       {registrationMessage && <p role={registrationState === 'error' ? 'alert' : 'status'} className={registrationState}>{registrationMessage}</p>}
+      {registrationState === 'success' && <button type="button" className="secondary" onClick={() => show('email-verification')}>Verify email</button>}
+    </form>}
+
+    {view === 'email-verification' && <form onSubmit={verifyEmail} noValidate aria-busy={busy} aria-label="Verify email form">
+      <h1 id="account-title">Verify your email</h1>
+      <p className="intro">Enter the six-digit code sent to your NUS email. You must verify your email before you can sign in.</p>
+      <label>Email<input type="email" autoComplete="email" value={verificationEmail} onChange={event => setVerificationEmail(event.target.value)} disabled={busy} aria-invalid={verificationState === 'error' || resendState === 'error'} /></label>
+      <label>Verification code<input inputMode="numeric" autoComplete="one-time-code" value={verificationCode} maxLength={6} onChange={event => setVerificationCode(event.target.value.replace(/\D/g, ''))} disabled={busy} aria-invalid={verificationState === 'error'} /></label>
+      <button disabled={busy}>{verificationState === 'loading' ? 'Verifying…' : 'Verify email'}</button>
+      {verificationMessage && <p role={verificationState === 'error' ? 'alert' : 'status'} className={verificationState}>{verificationMessage}</p>}
+      {verificationState === 'success' && <button type="button" className="secondary" onClick={() => show('login')}>Sign in</button>}
+      {verificationState !== 'success' && <>
+        <button type="button" className="secondary" disabled={busy} onClick={resendVerification}>{resendState === 'loading' ? 'Sending…' : 'Resend verification code'}</button>
+        {resendMessage && <p role={resendState === 'error' ? 'alert' : 'status'} className={resendState}>{resendMessage}</p>}
+      </>}
+      <button type="button" className="text-button" onClick={() => show('login')}>Back to sign in</button>
     </form>}
 
     {view === 'reset-request' && <form onSubmit={requestPasswordReset} noValidate aria-busy={busy} aria-label="Request password reset form">

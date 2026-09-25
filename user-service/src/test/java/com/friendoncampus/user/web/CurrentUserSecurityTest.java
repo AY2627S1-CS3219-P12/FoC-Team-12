@@ -55,8 +55,10 @@ class CurrentUserSecurityTest {
     @Test
     void issuesAVerifiableTokenForValidLogin() throws Exception {
         String email = "login-" + UUID.randomUUID() + "@u.nus.edu";
-        User user = users.save(User.register(email, "Alice", "alice" + UUID.randomUUID().toString().substring(0, 8),
-                passwords.encode("password-with-at-least-15-chars")));
+        User user = User.register(email, "Alice", "alice" + UUID.randomUUID().toString().substring(0, 8),
+                passwords.encode("password-with-at-least-15-chars"));
+        user.activate();
+        users.save(user);
 
         MvcResult result = mvc.perform(post("/api/users/login").contentType("application/json")
                         .content("{\"email\":\"" + email + "\",\"password\":\"password-with-at-least-15-chars\"}"))

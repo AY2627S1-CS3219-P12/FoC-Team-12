@@ -28,6 +28,7 @@ class LoginServiceTest {
     @Test
     void authenticatesAnActiveUserWithMatchingPassword() {
         User user = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
+        user.activate();
         JwtTokenService.IssuedToken token = new JwtTokenService.IssuedToken("signed.jwt", Instant.now().plusSeconds(900));
         when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
         when(passwords.matches("password", "hash")).thenReturn(true);
@@ -66,6 +67,18 @@ class LoginServiceTest {
                 .isInstanceOf(InvalidCredentialsException.class)
                 .hasMessage("Invalid email or password");
         verify(passwords).matches("password", "hash");
+        verifyNoInteractions(tokens);
+    }
+
+    @Test
+    void rejectsAnUnverifiedAccountEvenWithTheCorrectPassword() {
+        User unverified = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
+        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(unverified));
+        when(passwords.matches("password", "hash")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.login("alice@u.nus.edu", "password"))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessage("Invalid email or password");
         verifyNoInteractions(tokens);
     }
 }

@@ -9,12 +9,27 @@ services:
       DB_NAME: ${USER_DB_NAME:?USER_DB_NAME must be set}
       DB_USER: ${USER_DB_USER:?USER_DB_USER must be set}
       DB_PASSWORD: ${USER_DB_PASSWORD:?USER_DB_PASSWORD must be set}
-      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:-}
+      JWT_PRIVATE_KEY: ${JWT_PRIVATE_KEY:?JWT_PRIVATE_KEY must be set}
+      MAIL_PROVIDER: ${MAIL_PROVIDER:-noop}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      SENDGRID_FROM_EMAIL: ${SENDGRID_FROM_EMAIL:-}
     depends_on:
       user-db:
         condition: service_healthy
     ports:
       - "8081:8081"
+
+  user-frontend:
+    build:
+      context: ./user-service/frontend
+      dockerfile: Dockerfile
+    environment:
+      VITE_API_PROXY_TARGET: http://user-service:8081
+    depends_on:
+      user-service:
+        condition: service_started
+    ports:
+      - "5174:5174"
 
   user-db:
     image: postgres:17-alpine
