@@ -3,10 +3,11 @@ import { type FormEvent, useState } from 'react'
 import { ApiError, api } from './api/client'
 import { clearSession, readSession, saveSession, type AuthSession } from './auth/session'
 
-type View = 'login' | 'register'
+type View = 'login' | 'register' | 'reset-request' | 'reset-confirmation'
 type State = 'idle' | 'loading' | 'success' | 'error'
 
 const eligibleEmail = /^[^@]+@(u\.nus\.edu|u\.duke\.nus\.edu|u\.yale-nus\.edu\.sg)$/i
+const emailFormat = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 export function App() {
   const [view, setView] = useState<View>('login')
@@ -20,6 +21,14 @@ export function App() {
   const [password, setPassword] = useState('')
   const [registrationState, setRegistrationState] = useState<State>('idle')
   const [registrationMessage, setRegistrationMessage] = useState('')
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetCode, setResetCode] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [resetRequestState, setResetRequestState] = useState<State>('idle')
+  const [resetRequestMessage, setResetRequestMessage] = useState('')
+  const [resetConfirmationState, setResetConfirmationState] = useState<State>('idle')
+  const [resetConfirmationMessage, setResetConfirmationMessage] = useState('')
 
   const show = (nextView: View) => {
     setView(nextView)
@@ -27,6 +36,10 @@ export function App() {
     setLoginMessage('')
     setRegistrationState('idle')
     setRegistrationMessage('')
+    setResetRequestState('idle')
+    setResetRequestMessage('')
+    setResetConfirmationState('idle')
+    setResetConfirmationMessage('')
   }
 
   const login = async (event: FormEvent) => {
@@ -41,7 +54,6 @@ export function App() {
       setLoginMessage('Password is required.')
       return
     }
-
     setLoginState('loading')
     setLoginMessage('')
     try {
@@ -72,7 +84,6 @@ export function App() {
       setRegistrationMessage('Password must be 15 to 64 characters.')
       return
     }
-
     setRegistrationState('loading')
     setRegistrationMessage('')
     try {
@@ -84,6 +95,62 @@ export function App() {
       setRegistrationMessage(error instanceof ApiError && error.status === 400
         ? error.message
         : 'Registration could not be completed. Please try again.')
+    }
+  }
+
+  const requestPasswordReset = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!emailFormat.test(resetEmail)) {
+      setResetRequestState('error')
+      setResetRequestMessage('Enter a valid email address.')
+      return
+    }
+    setResetRequestState('loading')
+    setResetRequestMessage('')
+    try {
+      await api.requestPasswordReset({ email: resetEmail })
+      setResetRequestState('success')
+      setResetRequestMessage('If an eligible active account matches that email, a reset code has been sent.')
+    } catch {
+      setResetRequestState('error')
+      setResetRequestMessage('Unable to request a password reset right now. Please try again.')
+    }
+  }
+
+  const confirmPasswordReset = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!emailFormat.test(resetEmail)) {
+      setResetConfirmationState('error')
+      setResetConfirmationMessage('Enter a valid email address.')
+      return
+    }
+    if (!/^\d{6}$/.test(resetCode)) {
+      setResetConfirmationState('error')
+      setResetConfirmationMessage('Enter the six-digit code from your email.')
+      return
+    }
+    if (newPassword.length < 15 || newPassword.length > 64) {
+      setResetConfirmationState('error')
+      setResetConfirmationMessage('Password must be 15 to 64 characters.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setResetConfirmationState('error')
+      setResetConfirmationMessage('Passwords do not match.')
+      return
+    }
+    setResetConfirmationState('loading')
+    setResetConfirmationMessage('')
+    try {
+      await api.confirmPasswordReset({ email: resetEmail, code: resetCode, password: newPassword })
+      setResetConfirmationState('success')
+      setResetConfirmationMessage('Your password has been updated. You can now sign in.')
+      setResetCode('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch {
+      setResetConfirmationState('error')
+      setResetConfirmationMessage('The code is invalid or expired. Request a new code and try again.')
     }
   }
 
@@ -102,29 +169,57 @@ export function App() {
     </section></main>
   }
 
-  const busy = view === 'login' ? loginState === 'loading' : registrationState === 'loading'
+  const busy = loginState === 'loading' || registrationState === 'loading'
+    || resetRequestState === 'loading' || resetConfirmationState === 'loading'
+
   return <main><section aria-labelledby="account-title">
     <p className="eyebrow">Friend on Campus</p>
-    <nav className="tabs" aria-label="Account actions">
+    {(view === 'login' || view === 'register') && <nav className="tabs" aria-label="Account actions">
       <button type="button" aria-pressed={view === 'login'} className={view === 'login' ? 'tab active' : 'tab'} onClick={() => show('login')}>Sign in</button>
       <button type="button" aria-pressed={view === 'register'} className={view === 'register' ? 'tab active' : 'tab'} onClick={() => show('register')}>Create account</button>
-    </nav>
+    </nav>}
 
-    {view === 'login' ? <form onSubmit={login} noValidate aria-busy={busy} aria-label="Sign in form">
+    {view === 'login' && <form onSubmit={login} noValidate aria-busy={busy} aria-label="Sign in form">
       <h1 id="account-title">Sign in</h1>
       <p className="intro">Use your NUS student email to continue.</p>
       <label>Email<input type="email" value={loginEmail} onChange={event => setLoginEmail(event.target.value)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
       <label>Password<input type="password" value={loginPassword} onChange={event => setLoginPassword(event.target.value)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
-      <button disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      <button disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
+      <button type="button" className="text-button" onClick={() => show('reset-request')}>Forgot password?</button>
       {loginMessage && <p role="alert" className="error">{loginMessage}</p>}
-    </form> : <form onSubmit={register} noValidate aria-busy={busy} aria-label="Create account form">
+    </form>}
+
+    {view === 'register' && <form onSubmit={register} noValidate aria-busy={busy} aria-label="Create account form">
       <h1 id="account-title">Create your account</h1>
       <p className="intro">Use your NUS student email to join the campus community.</p>
       <label>Email<input type="email" value={email} onChange={event => setEmail(event.target.value)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
       <label>Username<input value={username} maxLength={20} onChange={event => setUsername(event.target.value)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
       <label>Password<input type="password" value={password} onChange={event => setPassword(event.target.value)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
-      <button disabled={busy}>{busy ? 'Creating account…' : 'Create account'}</button>
+      <button disabled={busy}>{registrationState === 'loading' ? 'Creating account…' : 'Create account'}</button>
       {registrationMessage && <p role={registrationState === 'error' ? 'alert' : 'status'} className={registrationState}>{registrationMessage}</p>}
+    </form>}
+
+    {view === 'reset-request' && <form onSubmit={requestPasswordReset} noValidate aria-busy={busy} aria-label="Request password reset form">
+      <h1 id="account-title">Reset your password</h1>
+      <p className="intro">Enter your email and we’ll send a reset code if an eligible active account matches it.</p>
+      <label>Email<input type="email" autoComplete="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} disabled={busy} aria-invalid={resetRequestState === 'error'} /></label>
+      <button disabled={busy}>{resetRequestState === 'loading' ? 'Sending…' : 'Send reset code'}</button>
+      {resetRequestMessage && <p role={resetRequestState === 'error' ? 'alert' : 'status'} className={resetRequestState}>{resetRequestMessage}</p>}
+      {resetRequestState === 'success' && <button type="button" className="secondary" onClick={() => show('reset-confirmation')}>Enter reset code</button>}
+      <button type="button" className="text-button" onClick={() => show('login')}>Back to sign in</button>
+    </form>}
+
+    {view === 'reset-confirmation' && <form onSubmit={confirmPasswordReset} noValidate aria-busy={busy} aria-label="Confirm password reset form">
+      <h1 id="account-title">Choose a new password</h1>
+      <p className="intro">Enter the six-digit code sent to your email and choose a new password.</p>
+      <label>Email<input type="email" autoComplete="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} disabled={busy} aria-invalid={resetConfirmationState === 'error'} /></label>
+      <label>Reset code<input inputMode="numeric" autoComplete="one-time-code" value={resetCode} maxLength={6} onChange={event => setResetCode(event.target.value.replace(/\D/g, ''))} disabled={busy} aria-invalid={resetConfirmationState === 'error'} /></label>
+      <label>New password<input type="password" autoComplete="new-password" value={newPassword} onChange={event => setNewPassword(event.target.value)} disabled={busy} aria-invalid={resetConfirmationState === 'error'} /></label>
+      <label>Confirm new password<input type="password" autoComplete="new-password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} disabled={busy} aria-invalid={resetConfirmationState === 'error'} /></label>
+      <button disabled={busy}>{resetConfirmationState === 'loading' ? 'Updating…' : 'Update password'}</button>
+      {resetConfirmationMessage && <p role={resetConfirmationState === 'error' ? 'alert' : 'status'} className={resetConfirmationState}>{resetConfirmationMessage}</p>}
+      {resetConfirmationState === 'success' && <button type="button" className="secondary" onClick={() => show('login')}>Sign in</button>}
+      <button type="button" className="text-button" onClick={() => show('reset-request')}>Request another code</button>
     </form>}
   </section></main>
 }

@@ -11,6 +11,16 @@ type LoginRequest = {
   password: string
 }
 
+type PasswordResetRequest = {
+  email: string
+}
+
+type PasswordResetConfirmation = {
+  email: string
+  code: string
+  password: string
+}
+
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
     super(message)
@@ -33,6 +43,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const body = await response.json().catch(() => null)
     throw new ApiError(response.status, body?.detail ?? 'Request could not be completed.')
   }
+  if (response.status === 202 || response.status === 204) {
+    return undefined as T
+  }
   return response.json() as Promise<T>
 }
 
@@ -45,6 +58,18 @@ export const api = {
   },
   login(requestBody: LoginRequest) {
     return request<AuthSession>('/api/users/login', {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    })
+  },
+  requestPasswordReset(requestBody: PasswordResetRequest) {
+    return request<void>('/api/users/password-reset-requests', {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    })
+  },
+  confirmPasswordReset(requestBody: PasswordResetConfirmation) {
+    return request<void>('/api/users/password-reset-confirmations', {
       method: 'POST',
       body: JSON.stringify(requestBody),
     })
