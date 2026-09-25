@@ -57,4 +57,22 @@ public final class ApiErrorDocumentation {
             @Schema(format = "int64", example = "0", minimum = "0") long requestedVersion,
             @Schema(format = "int64", example = "1", minimum = "0", nullable = true) Long currentVersion) {
     }
+
+    @Schema(name = "UnauthorizedProblem", description = "Problem Details response when a valid bearer token is absent")
+    public record Unauthorized(
+            @Schema(example = "about:blank") String type,
+            @Schema(example = "Unauthorized") String title,
+            @Schema(example = "401") int status,
+            @Schema(example = "A valid bearer token is required") String detail,
+            @Schema(example = "/api/admin/suppliers") String instance) {
+    }
+
+    @Schema(name = "ForbiddenProblem", description = "Problem Details response when the authenticated user is not an administrator")
+    public record Forbidden(
+            @Schema(example = "about:blank") String type,
+            @Schema(example = "Forbidden") String title,
+            @Schema(example = "403") int status,
+            @Schema(example = "Administrator access is required") String detail,
+            @Schema(example = "/api/admin/suppliers") String instance) {
+    }
 }
