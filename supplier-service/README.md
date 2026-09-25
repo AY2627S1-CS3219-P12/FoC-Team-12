@@ -47,9 +47,11 @@ Optimistic-lock conflicts are never retried automatically: reload the latest sup
 trying the mutation again. The administrative routes remain deliberately absent from public
 navigation.
 
-The administrative page is not itself an authorization boundary. It remains unlinked and its
-frontend login integration is still pending, but Supplier Service independently requires a valid
-User Service `ADMIN` JWT for every administrative API request.
+The administrative page is guarded in the browser for a clear user experience and remains
+protected independently by Supplier Service. A guest who opens an admin URL is sent to the shared
+login with a safe relative return path; a signed-in `USER` sees an access-denied screen; and an
+`ADMIN` sees the management UI. These client checks are not an authorization boundary: every
+administrative API request still requires a valid User Service `ADMIN` JWT.
 
 Install dependencies and run frontend checks from `supplier-service/frontend`:
 
@@ -62,8 +64,8 @@ npm run build
 ```
 
 The generated API types in `src/api/schema.d.ts` come from the running Spring Boot OpenAPI
-contract. Regenerate them after an API contract change by starting Supplier Service on port
-`8080` and running:
+contract. Regenerate them after an API contract change by starting the stack on gateway port
+`8088` and running:
 
 ```sh
 npm run api:generate
@@ -77,13 +79,21 @@ cd supplier-service/frontend
 npm run dev
 ```
 
-Open <http://localhost:5173/suppliers>. Vite proxies `/api` and `/actuator` to Spring Boot on
-port `8080`, so no development CORS configuration is required.
+Open <http://localhost:5173/suppliers>. Vite proxies `/api` and `/actuator` to the gateway on
+port `8088`, so development exercises the same routing contract without CORS configuration.
 
-The production frontend is built into the Spring Boot JAR and served from the same origin.
-The Docker build performs both the Node and Maven builds; it does not create a separate
-frontend container. After `docker compose up --build`, open
-<http://localhost:8080/suppliers>.
+The production frontend uses the collision-free `/supplier-assets/` base path, is built into the
+Spring Boot JAR, and is served through the gateway origin. The Docker build performs both the Node
+and Maven builds; it does not create a separate frontend container. After
+`docker compose up --build`, open <http://localhost:8088/suppliers>. Use port `8080` only for
+direct Supplier Service debugging.
+
+The Supplier SPA reads the validated `sessionStorage["foc.user-session"]` value created by the
+User SPA on the shared `8088` origin and adds its bearer token to API requests. Public reads still
+work without a session. A protected response of `401` clears the stale session and returns the
+visitor to login; `403` preserves the session and displays an access-denied state. The header shows
+sign-in or signed-in identity actions and gives administrators an explicit switch between the
+public and management views.
 
 Figma references and implementation rules for future frontend work are documented in
 `frontend/docs/design-source.md` and `frontend/AGENTS.md`.
@@ -199,9 +209,8 @@ curl http://localhost:8080/api/admin/suppliers \
 
 A missing, expired, incorrectly signed, or otherwise invalid token returns `401 Unauthorized`.
 A valid `USER` token on an administrator operation returns `403 Forbidden`. Both use
-`application/problem+json`. The React admin page can currently load without a token, but its API
-requests receive `401` until frontend session integration is completed; hiding a route in React
-is never a substitute for these backend checks.
+`application/problem+json`. The React route guard and role-aware navigation provide feedback, but
+hiding a route in React is never a substitute for these backend checks.
 
 ## Read suppliers
 

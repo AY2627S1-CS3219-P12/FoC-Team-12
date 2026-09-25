@@ -84,16 +84,17 @@ $rsa = [System.Security.Cryptography.RSA]::Create(2048)
 $env:JWT_PRIVATE_KEY = [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey())
 ```
 
-The Vite development frontend then starts automatically alongside the backend:
+The Docker image packages the production React application into the User Service JAR. Start the
+complete presentation stack from the repository root:
 
 ```powershell
-docker compose up --build user-service user-frontend
+docker compose up --build
 ```
 
-Open <http://localhost:5174>. The frontend container runs `npm run dev` and proxies `/api` to the
-`user-service` container. For local frontend-only development, continue to use `npm run dev` from
-`user-service/frontend`. Verify backend health from another terminal with
-`Invoke-RestMethod http://localhost:8081/actuator/health`.
+Open <http://localhost:8088>. The gateway sends `/` and `/user-assets/**` to User Service. After
+login, the service hub links to the public Supplier directory and, for an `ADMIN`, Supplier
+management. There is no separate production frontend container. Port `8081` remains available for
+backend and packaged-asset troubleshooting.
 
 The User database is independent of the Supplier database. It is stored in the
 `user-db-data` Docker volume and is available to local PostgreSQL tools at
@@ -210,7 +211,21 @@ npm test
 npm run build
 ```
 
-The Vite frontend runs at `http://localhost:5174` and proxies `/api` to the User Service on port `8081`.
-It includes registration, email-verification and resend-code screens, login, and password-reset flows.
-After registration, use **Verify email** and enter the six-digit code delivered to the registered NUS email;
-the resend action reflects the server's 90-second cooldown.
+For standalone component development, Vite runs at `http://localhost:5174` and proxies `/api` to
+the gateway on port `8088`. Start the backend stack first. The production build uses the
+`/user-assets/` base path and is copied into the User Service JAR and Docker image.
+
+The frontend includes registration, email-verification and resend-code screens, login,
+password-reset flows, and the signed-in service hub. Login stores the User Service response in
+`sessionStorage["foc.user-session"]`. The value contains the access token, token type, expiry,
+user ID, username, and `USER` or `ADMIN` role. It is tab-scoped, is cleared on sign-out, and is
+discarded when malformed or expired.
+
+An unauthenticated visitor can browse Suppliers without signing in. `USER` accounts see the
+public Supplier entry; `ADMIN` accounts additionally see **Manage suppliers**. A validated relative
+`returnTo` may return an administrator to a requested Supplier admin route after login. Absolute,
+external, and non-Supplier redirects are rejected, and a non-admin remains in the hub with an
+access-denied explanation.
+
+After registration, use **Verify email** and enter the six-digit code delivered to the registered
+NUS email; the resend action reflects the server's 90-second cooldown.

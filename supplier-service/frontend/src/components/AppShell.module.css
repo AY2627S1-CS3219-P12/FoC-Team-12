@@ -31,10 +31,46 @@
   text-decoration: none;
 }
 
-.sectionName {
+.sectionName,
+.sessionName {
   color: var(--foc-muted);
   font-size: var(--foc-text-small);
   font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--foc-space-12);
+}
+
+.actions a,
+.actions button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--foc-action);
+  font-size: var(--foc-text-small);
+  font-weight: 600;
+}
+
+.actions button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+@media (max-width: 35rem) {
+  .sessionName {
+    display: none;
+  }
+
+  .actions {
+    gap: var(--foc-space-8);
+  }
 }
 
 .main {

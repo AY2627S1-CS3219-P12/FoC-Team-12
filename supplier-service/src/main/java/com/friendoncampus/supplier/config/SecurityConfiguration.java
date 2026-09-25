@@ -72,7 +72,7 @@ public class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
-                                "/", "/index.html", "/assets/**",
+                                "/", "/index.html", "/assets/**", "/supplier-assets/**",
                                 "/suppliers", "/suppliers/**",
                                 "/admin/suppliers", "/admin/suppliers/**",
                                 "/actuator/health",

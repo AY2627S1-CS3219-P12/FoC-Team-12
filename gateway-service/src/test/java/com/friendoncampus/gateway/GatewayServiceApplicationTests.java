@@ -110,6 +110,26 @@ class GatewayServiceApplicationTests {
     }
 
     @Test
+    void routesPackagedUserAndSupplierFrontendsWithoutACatchAll() throws Exception {
+        Map<String, String> expectedBackends = Map.of(
+                "/", "user",
+                "/user-assets/index.js", "user",
+                "/suppliers", "supplier",
+                "/suppliers/example-id", "supplier",
+                "/admin/suppliers/example-id/edit", "supplier",
+                "/supplier-assets/index.js", "supplier");
+
+        for (Map.Entry<String, String> expected : expectedBackends.entrySet()) {
+            HttpResponse<String> response = get(expected.getKey());
+            assertThat(response.statusCode()).as(expected.getKey()).isEqualTo(200);
+            assertThat(response.body())
+                    .as(expected.getKey())
+                    .contains("\"backend\":\"" + expected.getValue() + "\"")
+                    .contains("\"path\":\"" + expected.getKey() + "\"");
+        }
+    }
+
+    @Test
     void routesJwksToUserService() throws Exception {
         HttpResponse<String> response = get("/.well-known/jwks.json");
 

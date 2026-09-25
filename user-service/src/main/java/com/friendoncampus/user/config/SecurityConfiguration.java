@@ -29,6 +29,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/api/users/login", "/api/users/registrations", "/api/users/password-reset-requests",
                                 "/api/users/password-reset-confirmations", "/api/users/email-verifications",
                                 "/api/users/email-verification-resends", "/.well-known/jwks.json",
+                                "/", "/user-assets/**",
                                 "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
                         .requestMatchers("/api/users/me").authenticated()

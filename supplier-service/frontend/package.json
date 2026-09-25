@@ -12,7 +12,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "api:generate": "openapi-typescript http://localhost:8080/v3/api-docs -o src/api/schema.d.ts"
+    "api:generate": "openapi-typescript http://localhost:8088/docs/supplier/openapi.json -o src/api/schema.d.ts"
   },
   "dependencies": {
     "@fontsource/public-sans": "^5.2.6",

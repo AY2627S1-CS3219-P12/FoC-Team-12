@@ -7,6 +7,9 @@ import type { InitialEntry } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { supplierApi } from './api/client'
+import { navigateTo } from './navigation'
+
+vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 
 const supplierId = 'ca9bd61f-93da-4500-9e9d-48de1bea52fa'
 const secondSupplierId = '184a5d15-0714-47ad-9ee9-524bf84f361c'
@@ -132,6 +135,8 @@ function renderRoute(route: InitialEntry, extra?: ReactNode) {
 
 describe('Public supplier directory', () => {
   afterEach(() => {
+    sessionStorage.clear()
+    vi.clearAllMocks()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     vi.useRealTimers()
@@ -427,15 +432,62 @@ describe('Public supplier details', () => {
 })
 
 describe('Other frontend routes', () => {
-  it('keeps the administrative experience unlinked from the public shell', () => {
+  it('sends unauthenticated administrators to login without rendering CRUD', () => {
     mockApi()
     renderRoute('/admin/suppliers')
     expect(
-      screen.getByRole('heading', { name: 'Campus locations' }),
+      screen.getByRole('heading', { name: 'Taking you to sign in…' }),
+    ).toBeInTheDocument()
+    expect(navigateTo).toHaveBeenCalledWith('/?returnTo=%2Fadmin%2Fsuppliers')
+    expect(
+      screen.queryByRole('link', { name: 'Add supplier' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows access denied to signed-in non-admin users', () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'user.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Alice',
+        role: 'USER',
+      }),
+    )
+    renderRoute('/admin/suppliers')
+    expect(
+      screen.getByRole('heading', { name: 'You cannot manage suppliers' }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('link', { name: 'Admin' }),
+      screen.queryByRole('link', { name: 'Add supplier' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('shows access denied when Supplier Service rejects an admin session', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'mismatched.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    mockApi()
+    renderRoute('/admin/suppliers')
+
+    window.dispatchEvent(new Event('foc:access-denied'))
+
+    expect(
+      await screen.findByRole('heading', {
+        name: 'You cannot manage suppliers',
+      }),
+    ).toBeInTheDocument()
+    expect(sessionStorage.getItem('foc.user-session')).not.toBeNull()
   })
 
   it('handles unknown routes', () => {

@@ -1,186 +1,467 @@
-import { afterEach, expect, test, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { afterEach, expect, test, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
-import { App } from './App'
+import { App } from "./App";
+import { safeReturnTo } from "./auth/session";
+import { navigateTo } from "./navigation";
+
+vi.mock("./navigation", () => ({ navigateTo: vi.fn() }));
 
 afterEach(() => {
-  sessionStorage.clear()
-  vi.restoreAllMocks()
-})
+  sessionStorage.clear();
+  window.history.replaceState({}, "", "/");
+  vi.clearAllMocks();
+  vi.restoreAllMocks();
+});
 
 const fillLogin = async () => {
-  const user = userEvent.setup()
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.type(screen.getByLabelText('Password'), 'password-with-at-least-15-chars')
-  return user
-}
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.type(
+    screen.getByLabelText("Password"),
+    "password-with-at-least-15-chars",
+  );
+  return user;
+};
 
-test('signs in successfully and stores the browser session', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      accessToken: 'signed.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
-      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+test("signs in successfully and stores the browser session", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        accessToken: "signed.jwt",
+        tokenType: "Bearer",
+        expiresAt: "2030-01-01T00:15:00Z",
+        userId: "c3e8d15c-0bb4-443f-989e-b6fda9f38993",
+        username: "Alice",
+        role: "USER",
+      }),
     }),
-  }))
-  render(<App />)
-  const user = await fillLogin()
+  );
+  render(<App />);
+  const user = await fillLogin();
 
-  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+  await user.click(
+    within(screen.getByRole("form", { name: "Sign in form" })).getByRole(
+      "button",
+      { name: "Sign in" },
+    ),
+  );
 
-  expect(fetch).toHaveBeenCalledWith('/api/users/login', expect.objectContaining({ method: 'POST' }))
-  await screen.findByRole('heading', { name: 'You’re signed in' })
-  expect(screen.getByText('Alice')).toBeInTheDocument()
-  expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({ accessToken: 'signed.jwt' })
-})
+  expect(fetch).toHaveBeenCalledWith(
+    "/api/users/login",
+    expect.objectContaining({ method: "POST" }),
+  );
+  await screen.findByRole("heading", { name: "Where would you like to go?" });
+  expect(screen.getAllByText("Alice")).toHaveLength(2);
+  expect(
+    screen.getByRole("link", { name: /Browse suppliers/i }),
+  ).toHaveAttribute("href", "/suppliers");
+  expect(
+    screen.queryByRole("link", { name: /Manage suppliers/i }),
+  ).not.toBeInTheDocument();
+  expect(
+    JSON.parse(sessionStorage.getItem("foc.user-session") ?? "{}"),
+  ).toMatchObject({ accessToken: "signed.jwt" });
+});
 
-test('shows one generic failure for failed login', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => ({ detail: 'Invalid email or password' }) }))
-  render(<App />)
-  const user = await fillLogin()
+test("shows supplier management to administrators", () => {
+  sessionStorage.setItem(
+    "foc.user-session",
+    JSON.stringify({
+      accessToken: "admin.jwt",
+      tokenType: "Bearer",
+      expiresAt: "2030-01-01T00:15:00Z",
+      userId: "c3e8d15c-0bb4-443f-989e-b6fda9f38993",
+      username: "Admin",
+      role: "ADMIN",
+    }),
+  );
 
-  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+  render(<App />);
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to sign in with those credentials.')
-  expect(sessionStorage.getItem('foc.user-session')).toBeNull()
-})
+  expect(
+    screen.getByRole("link", { name: /Browse suppliers/i }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: /Manage suppliers/i }),
+  ).toHaveAttribute("href", "/admin/suppliers");
+});
 
-test('preserves registration from the account switcher', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
-  render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Create account', pressed: false }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.type(screen.getByLabelText('Username'), 'Alice')
-  await user.type(screen.getByLabelText('Password'), '123456789012345')
-  await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
+test("clears expired sessions and offers public browsing", () => {
+  sessionStorage.setItem(
+    "foc.user-session",
+    JSON.stringify({
+      accessToken: "expired.jwt",
+      tokenType: "Bearer",
+      expiresAt: "2020-01-01T00:00:00Z",
+      userId: "c3e8d15c-0bb4-443f-989e-b6fda9f38993",
+      username: "Alice",
+      role: "USER",
+    }),
+  );
 
-  expect(fetch).toHaveBeenCalledWith('/api/users/registrations', expect.objectContaining({ method: 'POST' }))
-  await screen.findByText('Registration successful. Check your email for a verification code before signing in.')
-  expect(screen.getByRole('button', { name: 'Verify email' })).toBeInTheDocument()
-})
+  render(<App />);
 
-test('keeps registration failures clear when the API is unavailable', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, json: async () => { throw new Error('not JSON') } }))
-  render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Create account', pressed: false }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.type(screen.getByLabelText('Username'), 'Alice')
-  await user.type(screen.getByLabelText('Password'), '123456789012345')
-  await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
+  expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "Browse suppliers without signing in" }),
+  ).toHaveAttribute("href", "/suppliers");
+  expect(sessionStorage.getItem("foc.user-session")).toBeNull();
+});
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Registration could not be completed. Please try again.')
-})
+test("accepts only local Supplier return destinations", () => {
+  expect(safeReturnTo("?returnTo=%2Fadmin%2Fsuppliers%3Fpage%3D1")).toBe(
+    "/admin/suppliers?page=1",
+  );
+  expect(safeReturnTo("?returnTo=https%3A%2F%2Fevil.example")).toBeNull();
+  expect(safeReturnTo("?returnTo=%2F%2Fevil.example")).toBeNull();
+  expect(safeReturnTo("?returnTo=%2Fapi%2Fusers")).toBeNull();
+});
 
-test('requests a password reset with generic success feedback and never exposes an OTP', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 202 }))
-  render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.click(within(screen.getByRole('form', { name: 'Request password reset form' })).getByRole('button', { name: 'Send reset code' }))
+test("returns an administrator to a safe requested route after login", async () => {
+  window.history.replaceState({}, "", "/?returnTo=%2Fadmin%2Fsuppliers");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        accessToken: "admin.jwt",
+        tokenType: "Bearer",
+        expiresAt: "2030-01-01T00:15:00Z",
+        userId: "c3e8d15c-0bb4-443f-989e-b6fda9f38993",
+        username: "Admin",
+        role: "ADMIN",
+      }),
+    }),
+  );
+  render(<App />);
+  const user = await fillLogin();
 
-  expect(fetch).toHaveBeenCalledWith('/api/users/password-reset-requests', expect.objectContaining({ method: 'POST' }))
-  expect(await screen.findByRole('status')).toHaveTextContent('If an eligible active account matches that email, a reset code has been sent.')
-  expect(screen.queryByText(/123456/)).not.toBeInTheDocument()
-})
+  await user.click(
+    within(screen.getByRole("form", { name: "Sign in form" })).getByRole(
+      "button",
+      { name: "Sign in" },
+    ),
+  );
 
-test('shows an accessible generic failure when a reset request cannot be completed', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({ detail: 'Unavailable' }) }))
-  render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+  expect(navigateTo).toHaveBeenCalledWith("/admin/suppliers");
+});
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to request a password reset right now. Please try again.')
-})
+test("keeps a normal user in the hub when an admin destination was requested", async () => {
+  window.history.replaceState({}, "", "/?returnTo=%2Fadmin%2Fsuppliers");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        accessToken: "user.jwt",
+        tokenType: "Bearer",
+        expiresAt: "2030-01-01T00:15:00Z",
+        userId: "c3e8d15c-0bb4-443f-989e-b6fda9f38993",
+        username: "Alice",
+        role: "USER",
+      }),
+    }),
+  );
+  render(<App />);
+  const user = await fillLogin();
 
-test('verifies a registered email with the live verification API', async () => {
-  vi.stubGlobal('fetch', vi.fn()
-    .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })
-    .mockResolvedValueOnce({ ok: true, status: 204 }))
-  render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Create account', pressed: false }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.type(screen.getByLabelText('Username'), 'Alice')
-  await user.type(screen.getByLabelText('Password'), '123456789012345')
-  await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
-  await user.click(await screen.findByRole('button', { name: 'Verify email' }))
-  await user.type(screen.getByLabelText('Verification code'), '123456')
-  await user.click(screen.getByRole('button', { name: 'Verify email' }))
+  await user.click(
+    within(screen.getByRole("form", { name: "Sign in form" })).getByRole(
+      "button",
+      { name: "Sign in" },
+    ),
+  );
 
-  expect(fetch).toHaveBeenLastCalledWith('/api/users/email-verifications', expect.objectContaining({ method: 'POST' }))
-  expect(await screen.findByRole('status')).toHaveTextContent('Email verified. You can now sign in.')
-})
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Administrator access is required",
+  );
+  expect(navigateTo).not.toHaveBeenCalled();
+});
 
-test('shows a clear cooldown error when resending an email verification code', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: false,
-    status: 429,
-    headers: new Headers({ 'Retry-After': '90' }),
-    json: async () => ({ detail: 'Email verification resend is not available yet' }),
-  }))
-  render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Verify email' }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.click(screen.getByRole('button', { name: 'Resend verification code' }))
+test("shows one generic failure for failed login", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ detail: "Invalid email or password" }),
+    }),
+  );
+  render(<App />);
+  const user = await fillLogin();
 
-  expect(fetch).toHaveBeenCalledWith('/api/users/email-verification-resends', expect.objectContaining({ method: 'POST' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('Please wait 90 seconds before requesting another code.')
-})
+  await user.click(
+    within(screen.getByRole("form", { name: "Sign in form" })).getByRole(
+      "button",
+      { name: "Sign in" },
+    ),
+  );
 
-test('confirms that a resend request was accepted without exposing a code', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 202 }))
-  render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Verify email' }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.click(screen.getByRole('button', { name: 'Resend verification code' }))
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to sign in with those credentials.",
+  );
+  expect(sessionStorage.getItem("foc.user-session")).toBeNull();
+});
 
-  expect(await screen.findByRole('status')).toHaveTextContent('A new verification code has been sent.')
-  expect(screen.queryByText(/123456/)).not.toBeInTheDocument()
-})
+test("preserves registration from the account switcher", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
+  );
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(
+    screen.getByRole("button", { name: "Create account", pressed: false }),
+  );
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.type(screen.getByLabelText("Username"), "Alice");
+  await user.type(screen.getByLabelText("Password"), "123456789012345");
+  await user.click(
+    within(screen.getByRole("form", { name: "Create account form" })).getByRole(
+      "button",
+      { name: "Create account" },
+    ),
+  );
 
-test('confirms a reset code and lets the user return to sign in', async () => {
-  vi.stubGlobal('fetch', vi.fn()
-    .mockResolvedValueOnce({ ok: true, status: 202 })
-    .mockResolvedValueOnce({ ok: true, status: 204 }))
-  render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
-  await user.click(await screen.findByRole('button', { name: 'Enter reset code' }))
-  await user.type(screen.getByLabelText('Reset code'), '123456')
-  await user.type(screen.getByLabelText('New password'), 'new-password-with-15-chars')
-  await user.type(screen.getByLabelText('Confirm new password'), 'new-password-with-15-chars')
-  await user.click(screen.getByRole('button', { name: 'Update password' }))
+  expect(fetch).toHaveBeenCalledWith(
+    "/api/users/registrations",
+    expect.objectContaining({ method: "POST" }),
+  );
+  await screen.findByText(
+    "Registration successful. Check your email for a verification code before signing in.",
+  );
+  expect(
+    screen.getByRole("button", { name: "Verify email" }),
+  ).toBeInTheDocument();
+});
 
-  expect(fetch).toHaveBeenLastCalledWith('/api/users/password-reset-confirmations', expect.objectContaining({ method: 'POST' }))
-  expect(await screen.findByRole('status')).toHaveTextContent('Your password has been updated. You can now sign in.')
-  await user.click(screen.getByRole('button', { name: 'Sign in' }))
-  expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
-})
+test("keeps registration failures clear when the API is unavailable", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => {
+        throw new Error("not JSON");
+      },
+    }),
+  );
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(
+    screen.getByRole("button", { name: "Create account", pressed: false }),
+  );
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.type(screen.getByLabelText("Username"), "Alice");
+  await user.type(screen.getByLabelText("Password"), "123456789012345");
+  await user.click(
+    within(screen.getByRole("form", { name: "Create account form" })).getByRole(
+      "button",
+      { name: "Create account" },
+    ),
+  );
 
-test('shows a generic confirmation failure for an invalid or expired code', async () => {
-  vi.stubGlobal('fetch', vi.fn()
-    .mockResolvedValueOnce({ ok: true, status: 202 })
-    .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ detail: 'Invalid or expired password reset code' }) }))
-  render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
-  await user.click(await screen.findByRole('button', { name: 'Enter reset code' }))
-  await user.type(screen.getByLabelText('Reset code'), '000000')
-  await user.type(screen.getByLabelText('New password'), 'new-password-with-15-chars')
-  await user.type(screen.getByLabelText('Confirm new password'), 'new-password-with-15-chars')
-  await user.click(screen.getByRole('button', { name: 'Update password' }))
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Registration could not be completed. Please try again.",
+  );
+});
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('The code is invalid or expired. Request a new code and try again.')
-})
+test("requests a password reset with generic success feedback and never exposes an OTP", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 202 }));
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.click(
+    within(
+      screen.getByRole("form", { name: "Request password reset form" }),
+    ).getByRole("button", { name: "Send reset code" }),
+  );
+
+  expect(fetch).toHaveBeenCalledWith(
+    "/api/users/password-reset-requests",
+    expect.objectContaining({ method: "POST" }),
+  );
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "If an eligible active account matches that email, a reset code has been sent.",
+  );
+  expect(screen.queryByText(/123456/)).not.toBeInTheDocument();
+});
+
+test("shows an accessible generic failure when a reset request cannot be completed", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ detail: "Unavailable" }),
+    }),
+  );
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.click(screen.getByRole("button", { name: "Send reset code" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Unable to request a password reset right now. Please try again.",
+  );
+});
+
+test("verifies a registered email with the live verification API", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })
+      .mockResolvedValueOnce({ ok: true, status: 204 }),
+  );
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(
+    screen.getByRole("button", { name: "Create account", pressed: false }),
+  );
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.type(screen.getByLabelText("Username"), "Alice");
+  await user.type(screen.getByLabelText("Password"), "123456789012345");
+  await user.click(
+    within(screen.getByRole("form", { name: "Create account form" })).getByRole(
+      "button",
+      { name: "Create account" },
+    ),
+  );
+  await user.click(await screen.findByRole("button", { name: "Verify email" }));
+  await user.type(screen.getByLabelText("Verification code"), "123456");
+  await user.click(screen.getByRole("button", { name: "Verify email" }));
+
+  expect(fetch).toHaveBeenLastCalledWith(
+    "/api/users/email-verifications",
+    expect.objectContaining({ method: "POST" }),
+  );
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Email verified. You can now sign in.",
+  );
+});
+
+test("shows a clear cooldown error when resending an email verification code", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers({ "Retry-After": "90" }),
+      json: async () => ({
+        detail: "Email verification resend is not available yet",
+      }),
+    }),
+  );
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Verify email" }));
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.click(
+    screen.getByRole("button", { name: "Resend verification code" }),
+  );
+
+  expect(fetch).toHaveBeenCalledWith(
+    "/api/users/email-verification-resends",
+    expect.objectContaining({ method: "POST" }),
+  );
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Please wait 90 seconds before requesting another code.",
+  );
+});
+
+test("confirms that a resend request was accepted without exposing a code", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 202 }));
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Verify email" }));
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.click(
+    screen.getByRole("button", { name: "Resend verification code" }),
+  );
+
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "A new verification code has been sent.",
+  );
+  expect(screen.queryByText(/123456/)).not.toBeInTheDocument();
+});
+
+test("confirms a reset code and lets the user return to sign in", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 202 })
+      .mockResolvedValueOnce({ ok: true, status: 204 }),
+  );
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.click(screen.getByRole("button", { name: "Send reset code" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Enter reset code" }),
+  );
+  await user.type(screen.getByLabelText("Reset code"), "123456");
+  await user.type(
+    screen.getByLabelText("New password"),
+    "new-password-with-15-chars",
+  );
+  await user.type(
+    screen.getByLabelText("Confirm new password"),
+    "new-password-with-15-chars",
+  );
+  await user.click(screen.getByRole("button", { name: "Update password" }));
+
+  expect(fetch).toHaveBeenLastCalledWith(
+    "/api/users/password-reset-confirmations",
+    expect.objectContaining({ method: "POST" }),
+  );
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "Your password has been updated. You can now sign in.",
+  );
+  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  expect(screen.getByRole("heading", { name: "Sign in" })).toBeInTheDocument();
+});
+
+test("shows a generic confirmation failure for an invalid or expired code", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 202 })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          detail: "Invalid or expired password reset code",
+        }),
+      }),
+  );
+  render(<App />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Forgot password?" }));
+  await user.type(screen.getByLabelText("Email"), "alice@u.nus.edu");
+  await user.click(screen.getByRole("button", { name: "Send reset code" }));
+  await user.click(
+    await screen.findByRole("button", { name: "Enter reset code" }),
+  );
+  await user.type(screen.getByLabelText("Reset code"), "000000");
+  await user.type(
+    screen.getByLabelText("New password"),
+    "new-password-with-15-chars",
+  );
+  await user.type(
+    screen.getByLabelText("Confirm new password"),
+    "new-password-with-15-chars",
+  );
+  await user.click(screen.getByRole("button", { name: "Update password" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The code is invalid or expired. Request a new code and try again.",
+  );
+});

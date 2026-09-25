@@ -6,6 +6,21 @@ spring:
       server:
         webmvc:
           routes:
+            - id: user-ui-root
+              uri: ${USER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/
+                - Method=GET
+            - id: user-ui-assets
+              uri: ${USER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/user-assets/**
+                - Method=GET
+            - id: supplier-ui
+              uri: ${SUPPLIER_SERVICE_URL:http://localhost:8080}
+              predicates:
+                - Path=/suppliers,/suppliers/**,/admin/suppliers,/admin/suppliers/**,/supplier-assets/**
+                - Method=GET
             - id: user-api
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:

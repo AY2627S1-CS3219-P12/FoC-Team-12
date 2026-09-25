@@ -20,9 +20,9 @@ The shared-components link currently targets the section heading. When implement
 
 With Supplier Service running:
 
-- Swagger UI: <http://localhost:8080/swagger-ui/index.html>
-- OpenAPI JSON: <http://localhost:8080/v3/api-docs>
-- Supplier API: <http://localhost:8080/api/suppliers>
+- Gateway Swagger UI: <http://localhost:8088/swagger-ui/index.html>
+- OpenAPI JSON: <http://localhost:8088/docs/supplier/openapi.json>
+- Supplier API: <http://localhost:8088/api/suppliers>
 
 The backend contract takes precedence over example data and incomplete form fields in Figma. In particular, the real Supplier model includes building information, optional location details, operating hours, image URL, status, timestamps, and optimistic-lock versioning.
 
@@ -73,5 +73,20 @@ the complete API and a safer responsive workflow:
   and makes cancellation unambiguous.
 - Deletion explicitly recommends `INACTIVE` for ordinary removal. `409` conflicts require a
   deliberate latest-record reload and are never silently retried.
-- The route remains absent from public navigation and carries an unauthenticated-development
-  warning until backend `ADMIN` JWT enforcement exists.
+- The route is shown only to a valid `ADMIN` session. Guests return to the shared login and
+  ordinary users receive an access-denied screen. Supplier Service still enforces the role.
+
+## Shared-origin authentication adaptation
+
+The User and Supplier SPAs are separate service-owned applications but are presented through the
+gateway at the same `http://localhost:8088` origin. This deliberately enables their tab-scoped
+session storage contract without cookies or cross-origin copying:
+
+- The User service hub keeps public browsing available to everyone and exposes management only to
+  administrators; it never forces an admin away from the public experience.
+- Supplier pages add identity and sign-out actions to the existing header without redesigning the
+  directory or CRUD workflows.
+- User and Supplier production bundles use `/user-assets/**` and `/supplier-assets/**`, avoiding
+  filename collisions while keeping one browser origin.
+- Client role checks control navigation and feedback only. Backend JWT validation remains the
+  authoritative security boundary.
