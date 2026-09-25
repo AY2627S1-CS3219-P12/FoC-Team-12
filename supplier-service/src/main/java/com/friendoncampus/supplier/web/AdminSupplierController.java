@@ -18,13 +18,15 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
 @RequestMapping("/api/admin/suppliers")
 @Tag(
         name = "Supplier administration",
-        description = "Administrative Supplier queries that will require the ADMIN role")
+        description = "Administrative Supplier queries restricted to the ADMIN role")
+@SecurityRequirement(name = "bearerAuth")
 public class AdminSupplierController {
 
     private final SupplierService supplierService;
@@ -36,7 +38,7 @@ public class AdminSupplierController {
     @Operation(
             operationId = "listSuppliersForAdmin",
             summary = "List suppliers for administration",
-            description = "Searches active and inactive suppliers. An optional status filter narrows the results. This endpoint is temporarily unauthenticated and will later require ADMIN.")
+            description = "Searches active and inactive suppliers. An optional status filter narrows the results. Requires an ADMIN access token.")
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
@@ -47,7 +49,19 @@ public class AdminSupplierController {
                     description = "Invalid status, pagination, or sort query",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
-                            schema = @Schema(implementation = ApiErrorDocumentation.InvalidRequest.class)))
+                            schema = @Schema(implementation = ApiErrorDocumentation.InvalidRequest.class))),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Bearer token is missing or invalid",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Unauthorized.class))),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Authenticated user is not an administrator",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Forbidden.class)))
     })
     @GetMapping
     public SupplierListResponse listSuppliers(
@@ -85,11 +99,25 @@ public class AdminSupplierController {
     @Operation(
             operationId = "getAdminSupplierMetadata",
             summary = "Get administrative supplier filter values",
-            description = "Returns distinct types and buildings across active and inactive suppliers. This endpoint is temporarily unauthenticated and will later require ADMIN.")
-    @ApiResponse(
-            responseCode = "200",
-            description = "Filter metadata across all suppliers",
-            content = @Content(schema = @Schema(implementation = SupplierMetadataResponse.class)))
+            description = "Returns distinct types and buildings across active and inactive suppliers. Requires an ADMIN access token.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Filter metadata across all suppliers",
+                    content = @Content(schema = @Schema(implementation = SupplierMetadataResponse.class))),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Bearer token is missing or invalid",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Unauthorized.class))),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Authenticated user is not an administrator",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Forbidden.class)))
+    })
     @GetMapping("/metadata")
     public SupplierMetadataResponse getSupplierMetadata() {
         return SupplierMetadataResponse.from(supplierService.getAllSupplierMetadata());

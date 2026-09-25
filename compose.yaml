@@ -57,6 +57,9 @@ services:
       DB_NAME: ${SUPPLIER_DB_NAME:?SUPPLIER_DB_NAME must be set}
       DB_USER: ${SUPPLIER_DB_USER:?SUPPLIER_DB_USER must be set}
       DB_PASSWORD: ${SUPPLIER_DB_PASSWORD:?SUPPLIER_DB_PASSWORD must be set}
+      SUPPLIER_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
+      SUPPLIER_JWT_ISSUER: friend-on-campus-user-service
+      SUPPLIER_JWT_AUDIENCE: friend-on-campus-api
     depends_on:
       supplier-db:
         condition: service_healthy
