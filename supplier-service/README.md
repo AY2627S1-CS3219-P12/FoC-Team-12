@@ -7,7 +7,8 @@ Spring Boot service responsible for campus supplier and location data in Friend 
 
 This service provides a runnable Spring Boot application connected to its own PostgreSQL
 database, Flyway-managed baseline data, and Supplier read, create, update, status, and delete
-APIs. Authentication will be added in a later task.
+APIs. It validates User Service JWTs and restricts administrative reads and mutations to the
+`ADMIN` role.
 
 Task boundaries are in [`AGENTS.md`](AGENTS.md) and [`../TASK_SPLIT.md`](../TASK_SPLIT.md).
 
@@ -46,9 +47,9 @@ Optimistic-lock conflicts are never retried automatically: reload the latest sup
 trying the mutation again. The administrative routes remain deliberately absent from public
 navigation.
 
-The administrative route is not an authorization boundary. These pages and the mutation APIs
-are temporarily unauthenticated for development; Supplier Service must independently enforce
-the future User Service `ADMIN` JWT role before production use.
+The administrative page is not itself an authorization boundary. It remains unlinked and its
+frontend login integration is still pending, but Supplier Service independently requires a valid
+User Service `ADMIN` JWT for every administrative API request.
 
 Install dependencies and run frontend checks from `supplier-service/frontend`:
 
@@ -152,10 +153,55 @@ database. Read requests are safe to explore, but POST, PUT, PATCH, and DELETE re
 create, modify, or permanently delete records.
 
 The OpenAPI contract is generated at runtime from the Spring controllers, DTO validation, and
-documentation annotations; generated JSON or YAML is not committed to the repository. The
-mutation endpoints and documentation are currently available without authentication for local
-API-first development. Production documentation exposure and `ADMIN` authorization will be
-decided when JWT security and deployment profiles are introduced.
+documentation annotations; generated JSON or YAML is not committed to the repository. Public
+reads and documentation do not require authentication. Protected operations show a lock icon;
+choose **Authorize** and enter a User Service access token to call them. Swagger UI adds the
+`Bearer` prefix automatically.
+
+## Authentication and authorization
+
+User Service authenticates credentials and issues 15-minute RS256 access tokens. Supplier
+Service does not read the User database or verify passwords. It downloads User Service's public
+keys from `/.well-known/jwks.json`, validates the token signature, issuer, audience, validity
+times, and `role`, then converts `ADMIN` to Spring authority `ROLE_ADMIN`.
+
+The default local JWT settings are:
+
+```text
+JWKS:     http://localhost:8081/.well-known/jwks.json
+Issuer:   friend-on-campus-user-service
+Audience: friend-on-campus-api
+Roles:    USER, ADMIN
+```
+
+Obtain a token by logging in through User Service:
+
+```sh
+curl -i http://localhost:8081/api/users/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@u.nus.edu","password":"your-password"}'
+```
+
+Copy the returned `accessToken` into your shell as `ACCESS_TOKEN`. User Service currently has no
+public role-promotion endpoint, so an administrator account must be provisioned by the User
+Service owner; Supplier Service does not create or modify User accounts.
+
+The public `GET /api/suppliers/**` API, the packaged SPA, Swagger/OpenAPI, and health endpoint
+remain public. `GET /api/admin/suppliers/**` and every `POST`, `PUT`, `PATCH`, or `DELETE` under
+`/api/suppliers` require `ADMIN`.
+
+Send the access token in the standard header:
+
+```sh
+curl http://localhost:8080/api/admin/suppliers \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+A missing, expired, incorrectly signed, or otherwise invalid token returns `401 Unauthorized`.
+A valid `USER` token on an administrator operation returns `403 Forbidden`. Both use
+`application/problem+json`. The React admin page can currently load without a token, but its API
+requests receive `401` until frontend session integration is completed; hiding a route in React
+is never a substitute for these backend checks.
 
 ## Read suppliers
 
@@ -233,7 +279,8 @@ database values.
 List both active and inactive suppliers through the separate administrative route:
 
 ```sh
-curl 'http://localhost:8080/api/admin/suppliers?page=0&size=20&sort=name,asc'
+curl 'http://localhost:8080/api/admin/suppliers?page=0&size=20&sort=name,asc' \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 The administrative list supports the public `search`, `type`, `building`, `page`, `size`,
@@ -241,7 +288,8 @@ and `sort` parameters with the same matching, escaping, defaults, and limits. It
 accepts an optional case-insensitive `status` filter:
 
 ```sh
-curl 'http://localhost:8080/api/admin/suppliers?search=central&status=inactive&sort=status,asc'
+curl 'http://localhost:8080/api/admin/suppliers?search=central&status=inactive&sort=status,asc' \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 Omitting `status`, or providing a blank value, includes both `ACTIVE` and `INACTIVE`
@@ -253,17 +301,15 @@ shape as the public list.
 Retrieve administrative filter values with:
 
 ```sh
-curl http://localhost:8080/api/admin/suppliers/metadata
+curl http://localhost:8080/api/admin/suppliers/metadata \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 Unlike public metadata, administrative metadata includes distinct types and buildings from
 both active and inactive suppliers. This matters when a type or building exists only on an
 inactive record.
 
-> **Development security notice:** both `/api/admin/suppliers` endpoints are temporarily
-> unauthenticated for local API-first development. The future User Service admin-mode toggle
-> may control whether the UI shows administrative navigation, but Supplier Service must still
-> validate the User Service JWT and enforce `ADMIN` on these routes independently.
+Both administrative endpoints require a valid User Service access token with role `ADMIN`.
 
 ## Create a supplier
 
@@ -271,6 +317,7 @@ Create a supplier with `POST /api/suppliers`:
 
 ```sh
 curl -i http://localhost:8080/api/suppliers \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
     "name": "New Campus Cafe",
@@ -298,10 +345,7 @@ header containing `/api/suppliers/{id}`. The server generates the UUID, version,
 timestamps. Invalid fields or malformed JSON return `400 Bad Request` using Problem Details;
 field validation responses include an `errors` object.
 
-> **Development security notice:** `POST /api/suppliers` is temporarily unauthenticated for
-> local API-first testing. It must be restricted to authenticated administrators when the
-> User Service JWT contract is available. Do not treat the current endpoint as production
-> access control.
+This endpoint requires a valid User Service access token with role `ADMIN`.
 
 ## Update a supplier
 
@@ -310,6 +354,7 @@ Replace a supplier's editable details with `PUT /api/suppliers/{id}`:
 ```sh
 curl -i -X PUT \
   http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
     "name": "Updated Campus Cafe",
@@ -358,9 +403,7 @@ After a conflict, retrieve the supplier again, reconcile the latest data with th
 changes, and retry using the new version. Unknown IDs return `404 Not Found`; malformed IDs,
 invalid fields, and malformed JSON return `400 Bad Request` using Problem Details.
 
-> **Development security notice:** `PUT /api/suppliers/{id}` is temporarily unauthenticated
-> for local API-first testing. It must be restricted to authenticated administrators when
-> the User Service JWT contract is available.
+This endpoint requires a valid User Service access token with role `ADMIN`.
 
 ## Change supplier status
 
@@ -370,6 +413,7 @@ Activate or deactivate a supplier without resending its details using
 ```sh
 curl -i -X PATCH \
   http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa/status \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
     "status": "INACTIVE",
@@ -388,9 +432,7 @@ existing status with its current version is a successful no-op and does not chan
 version or timestamp. A stale version returns the same `409 Supplier update conflict`
 Problem Details response documented above; retrieve the latest supplier before retrying.
 
-> **Development security notice:** `PATCH /api/suppliers/{id}/status` is temporarily
-> unauthenticated for local API-first testing. It must be restricted to authenticated
-> administrators when the User Service JWT contract is available.
+This endpoint requires a valid User Service access token with role `ADMIN`.
 
 ## Permanently delete a supplier
 
@@ -398,7 +440,8 @@ Permanently remove either an active or inactive supplier using its latest versio
 
 ```sh
 curl -i -X DELETE \
-  'http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa?version=2'
+  'http://localhost:8080/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa?version=2' \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```
 
 A successful deletion returns `204 No Content`. The record is removed from PostgreSQL and
@@ -421,9 +464,7 @@ The version must be a nonnegative whole number. Missing or invalid versions retu
 `400 Bad Request`, stale versions return the existing `409 Supplier update conflict`
 Problem Details response, and unknown or already-deleted suppliers return `404 Not Found`.
 
-> **Development security notice:** `DELETE /api/suppliers/{id}` is temporarily
-> unauthenticated for local API-first testing. It must be restricted to authenticated
-> administrators when the User Service JWT contract is available.
+This endpoint requires a valid User Service access token with role `ADMIN`.
 
 ## Run with Docker Compose
 
@@ -434,7 +475,19 @@ cp .env.example .env
 ```
 
 The example credentials are for local development only. Change the password in `.env` if
-needed, and never commit that file.
+needed, and never commit that file. User Service also requires a Base64-encoded PKCS#8 RSA
+private key. Generate an ephemeral development key in the current terminal before starting
+Compose:
+
+```sh
+export JWT_PRIVATE_KEY="$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null \
+  | openssl pkcs8 -topk8 -nocrypt -outform DER \
+  | base64 \
+  | tr -d '\n')"
+```
+
+For a persistent environment, generate the key once and store it in the deployment secret
+store. Never commit it to `.env` or source control.
 
 Build the Supplier Service image:
 
@@ -442,10 +495,11 @@ Build the Supplier Service image:
 docker compose build supplier-service
 ```
 
-Start the service in the background:
+Start User Service and Supplier Service in the background so protected Supplier requests can
+resolve the User Service JWKS:
 
 ```sh
-docker compose up -d supplier-service
+docker compose up -d user-service supplier-service
 ```
 
 Check that the container is running and the application is healthy:
@@ -455,8 +509,11 @@ docker compose ps
 curl http://localhost:8080/actuator/health
 ```
 
-The database is stored in the `supplier-db-data` named volume. Spring Boot connects to it
-inside the Compose network at `supplier-db:5432`.
+The Supplier database is stored in the `supplier-db-data` named volume. Spring Boot connects to
+it inside the Compose network at `supplier-db:5432`. Supplier Service validates tokens against
+`http://user-service:8081/.well-known/jwks.json` inside that network. Public Supplier reads can
+still run while User Service is unavailable, but a key must be available to authenticate a new
+or unfamiliar bearer token.
 
 ## Inspect PostgreSQL
 

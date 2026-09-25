@@ -18,13 +18,13 @@ export interface paths {
         get: operations["getSupplier"];
         /**
          * Replace supplier details
-         * @description Fully replaces editable details while preserving status, ID, and creation time. Use the latest version to prevent lost updates. This mutation will later require ADMIN.
+         * @description Fully replaces editable details while preserving status, ID, and creation time. Use the latest version to prevent lost updates. Requires an ADMIN access token.
          */
         put: operations["updateSupplier"];
         post?: never;
         /**
          * Permanently delete a supplier
-         * @description Hard-deletes an active or inactive supplier. Prefer INACTIVE for normal removal from listings. The version prevents deletion of unseen changes. This mutation will later require ADMIN.
+         * @description Hard-deletes an active or inactive supplier. Prefer INACTIVE for normal removal from listings. The version prevents deletion of unseen changes. Requires an ADMIN access token.
          */
         delete: operations["deleteSupplier"];
         options?: never;
@@ -47,7 +47,7 @@ export interface paths {
         put?: never;
         /**
          * Create a supplier
-         * @description Creates an active or inactive supplier. This mutation is temporarily unauthenticated and will later require ADMIN.
+         * @description Creates an active or inactive supplier. Requires an ADMIN access token.
          */
         post: operations["createSupplier"];
         delete?: never;
@@ -71,7 +71,7 @@ export interface paths {
         head?: never;
         /**
          * Change supplier status
-         * @description Activates or deactivates a supplier without resending its details. Use the latest version to prevent lost updates. This mutation will later require ADMIN.
+         * @description Activates or deactivates a supplier without resending its details. Use the latest version to prevent lost updates. Requires an ADMIN access token.
          */
         patch: operations["changeSupplierStatus"];
         trace?: never;
@@ -105,7 +105,7 @@ export interface paths {
         };
         /**
          * List suppliers for administration
-         * @description Searches active and inactive suppliers. An optional status filter narrows the results. This endpoint is temporarily unauthenticated and will later require ADMIN.
+         * @description Searches active and inactive suppliers. An optional status filter narrows the results. Requires an ADMIN access token.
          */
         get: operations["listSuppliersForAdmin"];
         put?: never;
@@ -125,7 +125,7 @@ export interface paths {
         };
         /**
          * Get administrative supplier filter values
-         * @description Returns distinct types and buildings across active and inactive suppliers. This endpoint is temporarily unauthenticated and will later require ADMIN.
+         * @description Returns distinct types and buildings across active and inactive suppliers. Requires an ADMIN access token.
          */
         get: operations["getAdminSupplierMetadata"];
         put?: never;
@@ -379,6 +379,38 @@ export interface components {
              */
             currentVersion?: number | null;
         };
+        /** @description Problem Details response when a valid bearer token is absent */
+        UnauthorizedProblem: {
+            /** @example about:blank */
+            type?: string;
+            /** @example Unauthorized */
+            title?: string;
+            /**
+             * Format: int32
+             * @example 401
+             */
+            status?: number;
+            /** @example A valid bearer token is required */
+            detail?: string;
+            /** @example /api/admin/suppliers */
+            instance?: string;
+        };
+        /** @description Problem Details response when the authenticated user is not an administrator */
+        ForbiddenProblem: {
+            /** @example about:blank */
+            type?: string;
+            /** @example Forbidden */
+            title?: string;
+            /**
+             * Format: int32
+             * @example 403
+             */
+            status?: number;
+            /** @example Administrator access is required */
+            detail?: string;
+            /** @example /api/admin/suppliers */
+            instance?: string;
+        };
         /** @description Details used to create a supplier */
         CreateSupplierRequest: {
             /**
@@ -599,6 +631,24 @@ export interface operations {
                     "application/problem+json": components["schemas"]["InvalidRequestProblem"] | components["schemas"]["InvalidSupplierRequestProblem"];
                 };
             };
+            /** @description Bearer token is missing or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["UnauthorizedProblem"];
+                };
+            };
+            /** @description Authenticated user is not an administrator */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ForbiddenProblem"];
+                };
+            };
             /** @description Supplier not found */
             404: {
                 headers: {
@@ -654,6 +704,24 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["InvalidRequestProblem"];
+                };
+            };
+            /** @description Bearer token is missing or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["UnauthorizedProblem"];
+                };
+            };
+            /** @description Authenticated user is not an administrator */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ForbiddenProblem"];
                 };
             };
             /** @description Supplier not found or already deleted */
@@ -769,6 +837,24 @@ export interface operations {
                     "application/problem+json": components["schemas"]["InvalidSupplierRequestProblem"];
                 };
             };
+            /** @description Bearer token is missing or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["UnauthorizedProblem"];
+                };
+            };
+            /** @description Authenticated user is not an administrator */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ForbiddenProblem"];
+                };
+            };
         };
     };
     changeSupplierStatus: {
@@ -806,6 +892,24 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["InvalidRequestProblem"] | components["schemas"]["InvalidSupplierRequestProblem"];
+                };
+            };
+            /** @description Bearer token is missing or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["UnauthorizedProblem"];
+                };
+            };
+            /** @description Authenticated user is not an administrator */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ForbiddenProblem"];
                 };
             };
             /** @description Supplier not found */
@@ -911,6 +1015,24 @@ export interface operations {
                     "application/problem+json": components["schemas"]["InvalidRequestProblem"];
                 };
             };
+            /** @description Bearer token is missing or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["UnauthorizedProblem"];
+                };
+            };
+            /** @description Authenticated user is not an administrator */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ForbiddenProblem"];
+                };
+            };
         };
     };
     getAdminSupplierMetadata: {
@@ -929,6 +1051,24 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SupplierMetadataResponse"];
+                };
+            };
+            /** @description Bearer token is missing or invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["UnauthorizedProblem"];
+                };
+            };
+            /** @description Authenticated user is not an administrator */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ForbiddenProblem"];
                 };
             };
         };
