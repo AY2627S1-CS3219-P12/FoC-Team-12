@@ -135,6 +135,31 @@ verified, and `403` for a banned account.
 Email verification uses the same `MAIL_PROVIDER`, `SENDGRID_API_KEY`, and `SENDGRID_FROM_EMAIL`
 environment variables documented under Password reset. Never commit these credentials or a code.
 
+## First administrator bootstrap
+
+The first administrator is deployment-only: there is no HTTP endpoint and no default credential.
+For the first deployment only, inject all of these secrets together:
+
+```text
+ADMIN_BOOTSTRAP_EMAIL=first.admin@u.nus.edu
+ADMIN_BOOTSTRAP_USERNAME=First Admin
+ADMIN_BOOTSTRAP_PASSWORD=a-password-with-at-least-15-characters
+MAIL_PROVIDER=sendgrid
+SENDGRID_API_KEY=...
+SENDGRID_FROM_EMAIL=verified-sender@example.com
+```
+
+The bootstrap uses a database-locked singleton state, so concurrent instances and restarts create
+or promote only one administrator. If its configured email or username belongs to an existing
+`USER`, that account is promoted to `ADMIN`; existing profile values and password are unchanged.
+For a new or still-unverified account, the normal verification OTP is sent and the account cannot
+log in until verification succeeds. An already active account needs no new OTP.
+
+Bootstrap is disabled when all `ADMIN_BOOTSTRAP_*` values are blank. Supplying only some of them,
+invalid NUS credentials, incomplete SendGrid configuration, or a SendGrid delivery failure stops
+application startup. After a successful run, remove the three bootstrap secrets from the deployment;
+the persisted completion state also makes later starts no-ops. Never commit these values.
+
 ## Login and JWT verification
 
 `POST /api/users/login` accepts an email and password. It returns a `Bearer` access token valid for

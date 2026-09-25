@@ -25,6 +25,11 @@ public class User {
         user.status = UserStatus.UNVERIFIED; OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC); user.createdAt = now; user.updatedAt = now;
         return user;
     }
+    public static User bootstrapAdmin(String email, String username, String normalizedUsername, String passwordHash) {
+        User user = register(email, username, normalizedUsername, passwordHash);
+        user.role = UserRole.ADMIN;
+        return user;
+    }
     public UUID getId() { return id; } public String getEmail() { return email; } public String getUsername() { return username; }
     public String getPasswordHash() { return passwordHash; }
     public UserRole getRole() { return role; } public UserStatus getStatus() { return status; } public OffsetDateTime getCreatedAt() { return createdAt; }
@@ -36,6 +41,11 @@ public class User {
 
     public void activate() {
         this.status = UserStatus.ACTIVE;
+        this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    }
+
+    public void promoteToAdmin() {
+        this.role = UserRole.ADMIN;
         this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 }
