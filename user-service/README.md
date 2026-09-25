@@ -76,9 +76,24 @@ docker compose build user-service
 docker compose run --rm --service-ports -e JWT_PRIVATE_KEY=$env:JWT_PRIVATE_KEY user-service
 ```
 
-The current shared Compose file does not yet pass `JWT_PRIVATE_KEY` to `user-service`, so use the
-`docker compose run -e` command above for this login iteration. The process stays attached; verify
-health from a second terminal with `Invoke-RestMethod http://localhost:8081/actuator/health`.
+The Compose file passes `JWT_PRIVATE_KEY` to `user-service`. Generate an ephemeral development key
+before starting the stack (or store a persistent Base64-encoded PKCS#8 key in `.env`):
+
+```powershell
+$rsa = [System.Security.Cryptography.RSA]::Create(2048)
+$env:JWT_PRIVATE_KEY = [Convert]::ToBase64String($rsa.ExportPkcs8PrivateKey())
+```
+
+The Vite development frontend then starts automatically alongside the backend:
+
+```powershell
+docker compose up --build user-service user-frontend
+```
+
+Open <http://localhost:5174>. The frontend container runs `npm run dev` and proxies `/api` to the
+`user-service` container. For local frontend-only development, continue to use `npm run dev` from
+`user-service/frontend`. Verify backend health from another terminal with
+`Invoke-RestMethod http://localhost:8081/actuator/health`.
 
 The User database is independent of the Supplier database. It is stored in the
 `user-db-data` Docker volume and is available to local PostgreSQL tools at
