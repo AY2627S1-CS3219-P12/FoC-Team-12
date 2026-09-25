@@ -72,3 +72,66 @@ test('keeps registration failures clear when the API is unavailable', async () =
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Registration could not be completed. Please try again.')
 })
+
+test('requests a password reset with generic success feedback and never exposes an OTP', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 202 }))
+  render(<App />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(within(screen.getByRole('form', { name: 'Request password reset form' })).getByRole('button', { name: 'Send reset code' }))
+
+  expect(fetch).toHaveBeenCalledWith('/api/users/password-reset-requests', expect.objectContaining({ method: 'POST' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('If an eligible active account matches that email, a reset code has been sent.')
+  expect(screen.queryByText(/123456/)).not.toBeInTheDocument()
+})
+
+test('shows an accessible generic failure when a reset request cannot be completed', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({ detail: 'Unavailable' }) }))
+  render(<App />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to request a password reset right now. Please try again.')
+})
+
+test('confirms a reset code and lets the user return to sign in', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 202 })
+    .mockResolvedValueOnce({ ok: true, status: 204 }))
+  render(<App />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+  await user.click(await screen.findByRole('button', { name: 'Enter reset code' }))
+  await user.type(screen.getByLabelText('Reset code'), '123456')
+  await user.type(screen.getByLabelText('New password'), 'new-password-with-15-chars')
+  await user.type(screen.getByLabelText('Confirm new password'), 'new-password-with-15-chars')
+  await user.click(screen.getByRole('button', { name: 'Update password' }))
+
+  expect(fetch).toHaveBeenLastCalledWith('/api/users/password-reset-confirmations', expect.objectContaining({ method: 'POST' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('Your password has been updated. You can now sign in.')
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+  expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+})
+
+test('shows a generic confirmation failure for an invalid or expired code', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 202 })
+    .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ detail: 'Invalid or expired password reset code' }) }))
+  render(<App />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+  await user.click(await screen.findByRole('button', { name: 'Enter reset code' }))
+  await user.type(screen.getByLabelText('Reset code'), '000000')
+  await user.type(screen.getByLabelText('New password'), 'new-password-with-15-chars')
+  await user.type(screen.getByLabelText('Confirm new password'), 'new-password-with-15-chars')
+  await user.click(screen.getByRole('button', { name: 'Update password' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('The code is invalid or expired. Request a new code and try again.')
+})

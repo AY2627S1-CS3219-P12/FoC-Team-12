@@ -141,6 +141,30 @@ Invoke-RestMethod http://localhost:8081/.well-known/jwks.json
 Invoke-RestMethod http://localhost:8081/api/users/me -Headers @{ Authorization = "Bearer $($session.accessToken)" }
 ```
 
+## Password reset
+
+`POST /api/users/password-reset-requests` accepts an email address and always returns `202 Accepted`,
+whether or not that address has an account. For an active account it invalidates any previous reset
+code, sends a new six-digit code, and keeps only a verifier in the database. Codes expire after 10
+minutes, allow five attempts, and cannot be reused after a successful reset. Banned accounts do not
+receive a reset code and remain banned.
+
+`POST /api/users/password-reset-confirmations` accepts `email`, six-digit `code`, and a replacement
+password (15–64 characters). A valid code changes the password and returns `204 No Content`; invalid,
+expired, replayed, and exhausted codes return the same `400` Problem Detail response.
+
+To send real email, configure Twilio SendGrid through environment variables before starting the
+service. Do not put these values in source control:
+
+```powershell
+$env:MAIL_PROVIDER = "sendgrid"
+$env:SENDGRID_API_KEY = "your-sendgrid-api-key"
+$env:SENDGRID_FROM_EMAIL = "noreply@example.com"
+```
+
+Without `MAIL_PROVIDER=sendgrid`, the local mailer is deliberately disabled and never logs or exposes
+reset codes. Tests use a fake mailer instead.
+
 ## Frontend
 
 From `user-service/frontend`:
