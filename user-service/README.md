@@ -199,6 +199,25 @@ Invoke-RestMethod http://localhost:8081/.well-known/jwks.json
 Invoke-RestMethod http://localhost:8081/api/users/me -Headers @{ Authorization = "Bearer $($session.accessToken)" }
 ```
 
+## Administrator role and lifecycle API
+
+This iteration exposes protected API controls only; it does not include an Admin Dashboard. Every
+endpoint below requires an `Authorization: Bearer <access-token>` for an account that is currently
+both `ADMIN` and `ACTIVE` in the User database. A stale token for a demoted or banned account is
+rejected even if its JWT still contains the `ADMIN` role claim.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/users/admin/accounts?query=&page=0&size=20` | Paged account summaries; `query` searches email or username. |
+| `PATCH /api/users/admin/accounts/{id}/role` | Body `{"role":"ADMIN"}` promotes, or `{"role":"USER"}` demotes an active account. |
+| `PATCH /api/users/admin/accounts/{id}/status` | Body `{"status":"BANNED"}` bans an active account, or `{"status":"ACTIVE"}` reactivates a banned account. |
+
+There is deliberately no account-deletion API. Role changes and bans are allowed only for active
+accounts; unverified accounts cannot be banned. Administrators cannot demote, ban, or delete
+themselves. The service serializes role/lifecycle changes and rejects any demotion or ban that
+would remove the final active administrator. Invalid transitions return `409 Conflict`; a missing
+target returns `404`; non-admin callers return `403`.
+
 ## Password reset
 
 `POST /api/users/password-reset-requests` accepts an email address and always returns `202 Accepted`,

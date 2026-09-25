@@ -9,6 +9,7 @@ import com.friendoncampus.user.repository.UserRepository;
 import com.friendoncampus.user.repository.PasswordResetTokenRepository;
 import com.friendoncampus.user.repository.EmailVerificationAttemptRepository;
 import com.friendoncampus.user.repository.AdminBootstrapStateRepository;
+import com.friendoncampus.user.repository.AdminLifecycleStateRepository;
 import com.friendoncampus.user.support.JwtTestProperties;
 
 @SpringBootTest(properties = {
@@ -29,6 +30,9 @@ class UserServiceApplicationTests {
 
     @MockitoBean
     private AdminBootstrapStateRepository adminBootstrapStateRepository;
+
+    @MockitoBean
+    private AdminLifecycleStateRepository adminLifecycleStateRepository;
 
     @DynamicPropertySource
     static void jwtProperties(DynamicPropertyRegistry registry) {

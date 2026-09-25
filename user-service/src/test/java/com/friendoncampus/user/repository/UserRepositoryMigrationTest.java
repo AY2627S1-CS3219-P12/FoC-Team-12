@@ -13,11 +13,13 @@ import com.friendoncampus.user.support.JwtTestProperties;
 class UserRepositoryMigrationTest {
  @Autowired JdbcTemplate jdbc;
  @DynamicPropertySource static void jwtProperties(DynamicPropertyRegistry registry) { JwtTestProperties.register(registry); }
- @Test void flywayCreatesUserPasswordResetEmailVerificationAndAdminBootstrapTables() {
+ @Test void flywayCreatesUserPasswordResetEmailVerificationAndAdminStateTables() {
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'USERS'", Integer.class)).isGreaterThan(0);
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PASSWORD_RESET_TOKENS'", Integer.class)).isGreaterThan(0);
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'EMAIL_VERIFICATION_ATTEMPTS'", Integer.class)).isGreaterThan(0);
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ADMIN_BOOTSTRAP_STATE'", Integer.class)).isGreaterThan(0);
   assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ADMIN_BOOTSTRAP_STATE WHERE ID = 'FIRST_ADMIN'", Integer.class)).isEqualTo(1);
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'ADMIN_LIFECYCLE_STATE'", Integer.class)).isGreaterThan(0);
+  assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM ADMIN_LIFECYCLE_STATE WHERE ID = 'ADMIN_LIFECYCLE'", Integer.class)).isEqualTo(1);
  }
 }
