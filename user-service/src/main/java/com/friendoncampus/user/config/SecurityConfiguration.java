@@ -32,6 +32,7 @@ public class SecurityConfiguration {
                                 "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
                         .requestMatchers("/api/users/me").authenticated()
+                        .requestMatchers("/api/users/admin/**").hasRole("ADMIN")
                 .anyRequest().denyAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt.decoder(jwtDecoder).jwtAuthenticationConverter(jwtAuthenticationConverter())))

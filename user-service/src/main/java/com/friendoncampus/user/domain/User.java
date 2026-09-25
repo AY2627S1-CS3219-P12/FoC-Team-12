@@ -48,4 +48,14 @@ public class User {
         this.role = UserRole.ADMIN;
         this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
+
+    public void demoteToUser() {
+        this.role = UserRole.USER;
+        this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    }
+
+    public void ban() {
+        this.status = UserStatus.BANNED;
+        this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    }
 }
