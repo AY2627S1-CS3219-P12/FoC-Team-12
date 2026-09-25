@@ -55,6 +55,28 @@ jobs:
       - name: Build
         run: npm run build
 
+  user-docker:
+    name: User Docker images
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Validate Compose configuration
+        env:
+          USER_DB_NAME: user_db
+          USER_DB_USER: user_user
+          USER_DB_PASSWORD: ci-user-password
+          JWT_PRIVATE_KEY: ci-placeholder-key
+          SUPPLIER_DB_NAME: supplier_db
+          SUPPLIER_DB_USER: supplier_user
+          SUPPLIER_DB_PASSWORD: ci-supplier-password
+        run: docker compose config --quiet
+      - name: Build user backend image
+        run: docker build -f user-service/Dockerfile -t user-service:ci user-service
+      - name: Build user frontend image
+        run: docker build -f user-service/frontend/Dockerfile -t user-frontend:ci user-service/frontend
+
   supplier-backend:
     name: Supplier backend
     runs-on: ubuntu-24.04
