@@ -19,3 +19,7 @@ Thumbs.db
 
 # Local implementation planning
 user-service/IMPLEMENTATION_CHECKLIST.md
+
+# Claude Code: ignore machine-local config, but keep the shared skills tracked
+.claude/*
+!.claude/skills/
