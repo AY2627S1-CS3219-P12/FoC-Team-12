@@ -1,4 +1,17 @@
 services:
+  gateway:
+    build:
+      context: ./gateway-service
+      dockerfile: Dockerfile
+    environment:
+      USER_SERVICE_URL: http://user-service:8081
+      SUPPLIER_SERVICE_URL: http://supplier-service:8080
+    depends_on:
+      - user-service
+      - supplier-service
+    ports:
+      - "8088:8088"
+
   user-service:
     build:
       context: ./user-service

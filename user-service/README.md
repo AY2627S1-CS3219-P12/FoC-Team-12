@@ -120,10 +120,10 @@ Tokens are signed with RS256 and contain these claims:
 | `aud` | `friend-on-campus-api` |
 | `iat`, `exp` | Issue and 15-minute expiry timestamps |
 
-The public key set is published at `GET /.well-known/jwks.json`. Jun Hui and other service owners
-must verify the `RS256` signature using the key selected by `kid`, and require the issuer, audience,
-and expiry claims above. Consumers must use this endpoint rather than User Service database access;
-they should cache keys and refresh them when an unfamiliar `kid` is received.
+The public key set is published at `GET /.well-known/jwks.json`. Every backend service that accepts
+these tokens must verify the `RS256` signature using the key selected by `kid`, and require the
+issuer, audience, and expiry claims above. Consumers must use this endpoint rather than User Service
+database access; they should cache keys and refresh them when an unfamiliar `kid` is received.
 
 `GET /api/users/me` is a temporary authenticated JWT-validation endpoint. Send the access token as
 `Authorization: Bearer <token>`. It returns only the token identity and will be replaced by the real

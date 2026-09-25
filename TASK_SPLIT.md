@@ -6,7 +6,7 @@ still come from the approved backlog and wireframes.
 | Owner | Mandatory service | Additional responsibility |
 | --- | --- | --- |
 | Darryl | User Service | Admin Dashboard |
-| Jun Hui | Supplier Service | Logging, event-broker reliability, observability |
+| Jun Hui | Supplier Service | API Gateway, Logging, event-broker reliability, observability |
 | XueTing | Order Service | Notifications, event definitions and transitions |
 | Eldridge | Credit Service | Chat and Translation |
 
@@ -42,8 +42,10 @@ Does not own user authentication, supplier data, order transitions, notification
 ## Shared work
 
 Cloud infrastructure, integration, CI/CD, responsive end-to-end flows, demos, and final
-submission are shared. For a shared file, nominate one person to make the change and have all
-affected owners review it; do not have multiple agents edit it independently.
+submission are shared. Jun Hui implemented the initial API Gateway foundation (Task 16B), but the
+gateway remains shared infrastructure with no permanent maintainer. Each later gateway change must
+nominate one implementer and obtain review from every affected service owner. For any shared file,
+do not have multiple agents edit it independently.
 
 ## Rules that prevent overlap
 
