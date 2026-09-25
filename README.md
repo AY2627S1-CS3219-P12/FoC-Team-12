@@ -28,7 +28,8 @@ The detailed task boundaries are in [`TASK_SPLIT.md`](TASK_SPLIT.md).
 
 This repository follows a **one-service-per-folder** structure: each
 microservice (`user-service/`, `supplier-service/`, `order-service/`,
-`credit-service/`) lives in its own top-level folder.
+`credit-service/`) lives in its own top-level folder. The shared, stateless
+`gateway-service/` provides the public API entry point without owning domain data.
 
 ```text
 .
@@ -36,6 +37,7 @@ microservice (`user-service/`, `supplier-service/`, `order-service/`,
 ├── supplier-service/
 ├── order-service/
 ├── credit-service/
+├── gateway-service/
 ├── <n2h-service>/
 └── README.md
 ```
@@ -46,5 +48,21 @@ microservice (`user-service/`, `supplier-service/`, `order-service/`,
 - Files for agentic coding tools (e.g. agent configs, prompts, skills)
   may be added as needed, but must still **respect the
   one-service-per-folder skeleton** for core implementation.
+
+## API Gateway
+
+Run the Docker stack and access current APIs through `http://localhost:8088`. This shared gateway
+origin is the preferred entry point for frontend clients, Postman, and normal local integration:
+
+```text
+/api/users/**                -> User Service
+/api/suppliers/**            -> Supplier Service
+/api/admin/suppliers/**      -> Supplier Service
+```
+
+Gateway Swagger UI is available at `http://localhost:8088/swagger-ui/index.html`. See
+[`gateway-service/README.md`](gateway-service/README.md) for the complete route table, local-run
+instructions, and shared route ownership rules. Direct service ports remain available only for
+service-specific development and troubleshooting.
 
 ---

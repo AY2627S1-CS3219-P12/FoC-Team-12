@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      server:
+        webmvc:
+          routes:
+            - id: user-api
+              uri: ${USER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/users,/api/users/**
+            - id: supplier-admin-api
+              uri: ${SUPPLIER_SERVICE_URL:http://localhost:8080}
+              predicates:
+                - Path=/api/admin/suppliers,/api/admin/suppliers/**
+            - id: supplier-api
+              uri: ${SUPPLIER_SERVICE_URL:http://localhost:8080}
+              predicates:
+                - Path=/api/suppliers,/api/suppliers/**
+            - id: user-jwks
+              uri: ${USER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/.well-known/jwks.json
+                - Method=GET
+            - id: user-openapi-json
+              uri: ${USER_SERVICE_URL:http://localhost:8081}
+              predicates:
+                - Path=/docs/user/openapi.json
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs
+            - id: supplier-openapi-json
+              uri: ${SUPPLIER_SERVICE_URL:http://localhost:8080}
+              predicates:
+                - Path=/docs/supplier/openapi.json
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs
+            - id: supplier-openapi-yaml
+              uri: ${SUPPLIER_SERVICE_URL:http://localhost:8080}
+              predicates:
+                - Path=/docs/supplier/openapi.yaml
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs.yaml
+
+server:
+  port: 8088
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+springdoc:
+  swagger-ui:
+    urls:
+      - name: User Service
+        url: /docs/user/openapi.json
+      - name: Supplier Service
+        url: /docs/supplier/openapi.json
+    urls-primary-name: Supplier Service
