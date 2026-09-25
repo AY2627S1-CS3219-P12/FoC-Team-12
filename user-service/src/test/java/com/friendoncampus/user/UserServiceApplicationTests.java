@@ -8,6 +8,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import com.friendoncampus.user.repository.UserRepository;
 import com.friendoncampus.user.repository.PasswordResetTokenRepository;
 import com.friendoncampus.user.repository.EmailVerificationAttemptRepository;
+import com.friendoncampus.user.repository.AdminBootstrapStateRepository;
 import com.friendoncampus.user.support.JwtTestProperties;
 
 @SpringBootTest(properties = {
@@ -25,6 +26,9 @@ class UserServiceApplicationTests {
 
     @MockitoBean
     private EmailVerificationAttemptRepository emailVerificationAttemptRepository;
+
+    @MockitoBean
+    private AdminBootstrapStateRepository adminBootstrapStateRepository;
 
     @DynamicPropertySource
     static void jwtProperties(DynamicPropertyRegistry registry) {
