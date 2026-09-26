@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent, type RefObject, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { ApiError, api, type UserProfile } from './api/client'
 import { clearSession, readSession, saveSession, type AuthSession } from './auth/session'
@@ -43,6 +43,7 @@ export function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginState, setLoginState] = useState<State>('idle')
   const [loginMessage, setLoginMessage] = useState('')
+  const [loginPasswordFocusVersion, setLoginPasswordFocusVersion] = useState(0)
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -115,6 +116,12 @@ export function App() {
     }, 1000)
     return () => window.clearInterval(timer)
   }, [resendAvailableAt, resetResendAvailableAt])
+
+  useLayoutEffect(() => {
+    if (loginPasswordFocusVersion > 0 && loginState === 'error') {
+      loginPasswordRef.current?.focus()
+    }
+  }, [loginPasswordFocusVersion, loginState])
 
   const resendSecondsRemaining = resendAvailableAt
     ? Math.max(0, Math.ceil((resendAvailableAt - currentTime) / 1000))
@@ -217,7 +224,7 @@ export function App() {
       if (error instanceof ApiError && error.status === 401) {
         const failures = recordLoginFailure(loginEmail)
         setLoginPassword('')
-        window.requestAnimationFrame(() => loginPasswordRef.current?.focus())
+        setLoginPasswordFocusVersion(version => version + 1)
         setLoginMessage(failures >= 2
           ? 'Incorrect email or password. If you’ve made several attempts, wait 30 seconds or reset your password.'
           : 'Incorrect email or password.')
