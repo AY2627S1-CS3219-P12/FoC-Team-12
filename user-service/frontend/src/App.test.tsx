@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { App } from './App'
@@ -41,11 +41,13 @@ test('signs in successfully and stores the browser session', async () => {
   await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
 
   expect(fetch).toHaveBeenCalledWith('/api/users/login', expect.objectContaining({ method: 'POST' }))
-  await screen.findByRole('heading', { name: 'Your profile' })
+  await screen.findByRole('heading', { name: 'Profile' })
   expect(await screen.findByText('Persisted Alice')).toBeInTheDocument()
   expect(fetch).toHaveBeenLastCalledWith('/api/users/me', expect.objectContaining({ method: 'GET' }))
   expect(screen.getByText('alice@u.nus.edu')).toBeInTheDocument()
-  expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+  expect(screen.queryByText('ACTIVE')).not.toBeInTheDocument()
+  expect(screen.queryByText('Account status')).not.toBeInTheDocument()
+  expect(screen.queryByText('Member since')).not.toBeInTheDocument()
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({ accessToken: 'signed.jwt' })
   expect(sessionStorage.getItem('foc.login-failures:alice@u.nus.edu')).toBeNull()
 })
@@ -89,6 +91,7 @@ test('reloads the live profile when restoring a browser session', async () => {
 })
 
 test('updates the displayed username from the live profile screen', async () => {
+  const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
   saveSession({
     accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Old name', role: 'USER',
@@ -117,6 +120,10 @@ test('updates the displayed username from the live profile screen', async () => 
   expect(screen.getByText('New name')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Edit username' })).toBeInTheDocument()
   expect(fetch).toHaveBeenLastCalledWith('/api/users/me/username', expect.objectContaining({ method: 'PATCH' }))
+
+  const dismiss = setTimeoutSpy.mock.calls.find(([, delay]) => delay === 3000)?.[0] as (() => void) | undefined
+  await act(async () => { dismiss?.() })
+  expect(screen.queryByText('Username updated.')).not.toBeInTheDocument()
 })
 
 test('shows duplicate username feedback from the live profile screen', async () => {

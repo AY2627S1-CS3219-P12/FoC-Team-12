@@ -301,8 +301,9 @@ After two generic failures for the same email in one browser session, the fronte
 to wait 30 seconds or reset the password. This is a browser-only usability aid, not a security control,
 and is shown for unknown emails too so it does not reveal whether an account exists.
 
-After login, the profile shows persisted email, username, role, status, and creation time. A user can
-change their username from this screen; email, password, role, and status remain non-editable.
+After login, the profile shows persisted email, username, and role. A user can change their username
+from this screen; password and role remain non-editable. Account status and creation time remain in the
+protected profile API for administration and audit use, but are not shown in the everyday profile UI.
 There is no Admin Dashboard; administrator actions can currently be exercised only through the
 protected API (for example, Swagger UI with an active administrator's bearer token).
 
