@@ -9,11 +9,13 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.repository.UserRepository;
+import com.friendoncampus.user.service.PasswordChangeService;
 import com.friendoncampus.user.service.UsernameChangeService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -27,10 +29,13 @@ import jakarta.validation.constraints.Size;
 public class CurrentUserController {
     private final UserRepository users;
     private final UsernameChangeService usernameChanges;
+    private final PasswordChangeService passwordChanges;
 
-    public CurrentUserController(UserRepository users, UsernameChangeService usernameChanges) {
+    public CurrentUserController(UserRepository users, UsernameChangeService usernameChanges,
+            PasswordChangeService passwordChanges) {
         this.users = users;
         this.usernameChanges = usernameChanges;
+        this.passwordChanges = passwordChanges;
     }
 
     @GetMapping("/me")
@@ -58,12 +63,27 @@ public class CurrentUserController {
         return responseFor(user);
     }
 
+    @PatchMapping("/me/password")
+    @Operation(summary = "Change the authenticated user's password")
+    @ApiResponse(responseCode = "204", description = "Password changed")
+    @ApiResponse(responseCode = "400", description = "Current password is incorrect or replacement password is invalid")
+    @ApiResponse(responseCode = "401", description = "Missing or invalid bearer token")
+    @SecurityRequirement(name = "bearerAuth")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void changePassword(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody PasswordChange request) {
+        passwordChanges.changePassword(UUID.fromString(jwt.getSubject()), request.currentPassword(), request.newPassword());
+    }
+
     private Response responseFor(User user) {
         return new Response(user.getId(), user.getEmail(), user.getUsername(), user.getRole().name(),
                 user.getStatus().name(), user.getCreatedAt());
     }
 
     public record UsernameChange(@NotBlank @Size(max = 20) String username) {
+    }
+
+    public record PasswordChange(@NotBlank String currentPassword,
+            @NotBlank @Size(min = 15, max = 64) String newPassword) {
     }
 
     public record Response(UUID userId, String email, String username, String role, String status,
