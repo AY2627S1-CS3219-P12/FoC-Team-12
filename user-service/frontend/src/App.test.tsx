@@ -170,6 +170,125 @@ test('does not submit an invalid username from the profile screen', async () => 
   expect(fetch).toHaveBeenCalledTimes(1)
 })
 
+test('changes a password from Profile then signs out the browser session', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) })
+    .mockResolvedValueOnce({ ok: true, status: 204 }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('button', { name: 'Change' }))
+  await user.type(screen.getByLabelText('Current password'), 'current-password-with-15-chars')
+  await user.type(screen.getByLabelText('New password'), 'replacement-password-with-15-chars')
+  await user.type(screen.getByLabelText('Confirm new password'), 'replacement-password-with-15-chars')
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(fetch).toHaveBeenLastCalledWith('/api/users/me/password', expect.objectContaining({ method: 'PATCH' }))
+  expect(await screen.findByRole('status')).toHaveTextContent('Password updated. Sign in with your new password.')
+  expect(screen.getByLabelText('Email')).toHaveValue('alice@u.nus.edu')
+  expect(sessionStorage.getItem('foc.user-session')).toBeNull()
+})
+
+test('uses a compact masked password card and clears its draft when cancelled', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+    role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+  }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  expect(await screen.findByLabelText('Password is set')).toHaveTextContent('••••••••')
+  await user.click(screen.getByRole('button', { name: 'Change' }))
+  const current = screen.getByLabelText('Current password')
+  expect(current).toHaveFocus()
+  await user.type(current, 'current-password-with-15-chars{Enter}')
+  expect(screen.getByLabelText('New password')).toHaveFocus()
+  await user.type(screen.getByLabelText('New password'), 'replacement-password-with-15-chars{Enter}')
+  expect(screen.getByLabelText('Confirm new password')).toHaveFocus()
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+  expect(screen.queryByRole('form', { name: 'Change password form' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Password is set')).toBeInTheDocument()
+  expect(screen.queryByDisplayValue('current-password-with-15-chars')).not.toBeInTheDocument()
+})
+
+test('signs out with only the profile email retained and focuses the empty password field', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+    role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+  }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('button', { name: 'Sign out' }))
+
+  expect(screen.getByLabelText('Email')).toHaveValue('alice@u.nus.edu')
+  expect(screen.getByLabelText('Password')).toHaveValue('')
+  expect(screen.getByLabelText('Password')).toHaveFocus()
+  expect(sessionStorage.getItem('foc.user-session')).toBeNull()
+})
+
+test('keeps the password-change form open when the current password is incorrect', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) })
+    .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ detail: 'Current password is incorrect' }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('button', { name: 'Change' }))
+  await user.type(screen.getByLabelText('Current password'), 'wrong-password')
+  await user.type(screen.getByLabelText('New password'), 'replacement-password-with-15-chars')
+  await user.type(screen.getByLabelText('Confirm new password'), 'replacement-password-with-15-chars')
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Current password is incorrect')
+  expect(screen.getByRole('form', { name: 'Change password form' })).toBeInTheDocument()
+  expect(sessionStorage.getItem('foc.user-session')).not.toBeNull()
+})
+
+test('validates a sufficiently long replacement password before calling the API', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+    role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+  }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('button', { name: 'Change' }))
+  await user.type(screen.getByLabelText('Current password'), 'current-password-with-15-chars')
+  await user.type(screen.getByLabelText('New password'), 'short')
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('New password must be 15 to 64 characters.')
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+
 test('shows one generic failure for failed login', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ detail: 'Incorrect email or password' }) }))
   render(<App />)

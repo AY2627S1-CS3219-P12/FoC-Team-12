@@ -118,6 +118,53 @@ class CurrentUserSecurityTest {
     }
 
     @Test
+    void changesThePasswordOnlyWhenTheAuthenticatedUserSuppliesTheCurrentPassword() throws Exception {
+        User user = User.register("password-" + UUID.randomUUID() + "@u.nus.edu", "Alice",
+                "password" + UUID.randomUUID().toString().substring(0, 8), passwords.encode("current-password-with-15-chars"));
+        user.activate();
+        users.save(user);
+        String token = token(ISSUER, List.of(AUDIENCE), Instant.now().plusSeconds(60), user.getId());
+
+        mvc.perform(patch("/api/users/me/password").header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content("{\"currentPassword\":\"current-password-with-15-chars\",\"newPassword\":\"replacement-password-with-15-chars\"}"))
+                .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/users/login").contentType("application/json")
+                        .content("{\"email\":\"" + user.getEmail() + "\",\"password\":\"current-password-with-15-chars\"}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/users/login").contentType("application/json")
+                        .content("{\"email\":\"" + user.getEmail() + "\",\"password\":\"replacement-password-with-15-chars\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void rejectsAnIncorrectCurrentPasswordAndInvalidPayloads() throws Exception {
+        User user = User.register("password-" + UUID.randomUUID() + "@u.nus.edu", "Alice",
+                "password" + UUID.randomUUID().toString().substring(0, 8), passwords.encode("current-password-with-15-chars"));
+        user.activate();
+        users.save(user);
+        String token = token(ISSUER, List.of(AUDIENCE), Instant.now().plusSeconds(60), user.getId());
+
+        mvc.perform(patch("/api/users/me/password").header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content("{\"currentPassword\":\"wrong-password\",\"newPassword\":\"replacement-password-with-15-chars\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Current password is incorrect"));
+        mvc.perform(patch("/api/users/me/password").header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
+                        .content("{\"currentPassword\":\"current-password-with-15-chars\",\"newPassword\":\"short\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void requiresAuthenticationToChangeAPassword() throws Exception {
+        mvc.perform(patch("/api/users/me/password").contentType("application/json")
+                        .content("{\"currentPassword\":\"current-password-with-15-chars\",\"newPassword\":\"replacement-password-with-15-chars\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void returnsSpecificConflictWhenAnotherAccountOwnsTheUsername() throws Exception {
         User user = User.register("rename-" + UUID.randomUUID() + "@u.nus.edu", "Alice",
                 "alice" + UUID.randomUUID().toString().substring(0, 8), passwords.encode("password-with-at-least-15-chars"));

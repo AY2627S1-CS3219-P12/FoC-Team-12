@@ -194,6 +194,13 @@ The live profile reflects a changed username immediately. An already-issued JWT 
 username claim until it expires or the user signs in again; services must use the stable user ID,
 not that display-name claim, as the account identifier.
 
+`PATCH /api/users/me/password` accepts the authenticated user's `currentPassword` and a
+15–64-character `newPassword`. The current password must match before the replacement is
+BCrypt-hashed and stored. A successful browser password change signs that browser session out;
+sign in again with the new password. Existing RS256 access tokens are stateless and can remain
+valid until their normal 15-minute expiry; immediate all-session token revocation is deferred to
+a future token-session design.
+
 With the service running and SendGrid configured, this PowerShell sequence registers an
 account, verifies the code from its NUS inbox, then logs in and reads the profile.
 Use a new email/username for each run; logging in before verification must return the
@@ -302,8 +309,9 @@ to wait 30 seconds or reset the password. This is a browser-only usability aid, 
 and is shown for unknown emails too so it does not reveal whether an account exists.
 
 After login, the profile shows persisted email, username, and role. A user can change their username
-from this screen; password and role remain non-editable. Account status and creation time remain in the
-protected profile API for administration and audit use, but are not shown in the everyday profile UI.
+or password from this screen; password changes require the current password and sign the browser session
+out after success. Role remains non-editable. Account status and creation time remain in the protected
+profile API for administration and audit use, but are not shown in the everyday profile UI.
 There is no Admin Dashboard; administrator actions can currently be exercised only through the
 protected API (for example, Swagger UI with an active administrator's bearer token).
 

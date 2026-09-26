@@ -39,6 +39,11 @@ type UsernameChangeRequest = {
   username: string
 }
 
+type PasswordChangeRequest = {
+  currentPassword: string
+  newPassword: string
+}
+
 export type UserProfile = {
   userId: string
   email: string
@@ -142,6 +147,12 @@ export const api = {
   },
   changeUsername(requestBody: UsernameChangeRequest) {
     return request<UserProfile>('/api/users/me/username', {
+      method: 'PATCH',
+      body: JSON.stringify(requestBody),
+    })
+  },
+  changePassword(requestBody: PasswordChangeRequest) {
+    return request<void>('/api/users/me/password', {
       method: 'PATCH',
       body: JSON.stringify(requestBody),
     })
