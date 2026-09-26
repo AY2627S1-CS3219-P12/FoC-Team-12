@@ -110,6 +110,14 @@ class CurrentUserSecurityTest {
                 .andExpect(jsonPath("$.keys[0].d").doesNotExist());
     }
 
+    @Test
+    void permitsPasswordResetCodeValidationWithoutAnAccessToken() throws Exception {
+        mvc.perform(post("/api/users/password-reset-verifications").contentType("application/json")
+                        .content("{\"email\":\"missing@u.nus.edu\",\"code\":\"123456\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Invalid or expired password reset code"));
+    }
+
     private String token(String issuer, List<String> audience, Instant expiresAt, UUID userId) {
         Instant issuedAt = expiresAt.isBefore(Instant.now()) ? expiresAt.minusSeconds(60) : Instant.now().minusSeconds(1);
         JwtClaimsSet claims = JwtClaimsSet.builder()

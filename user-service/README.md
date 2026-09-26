@@ -164,7 +164,9 @@ the persisted completion state also makes later starts no-ops. Never commit thes
 
 `POST /api/users/login` accepts an email and password. It returns a `Bearer` access token valid for
 15 minutes, its ISO-8601 expiry, stable `userId`, `username`, and `role`. Unknown emails, incorrect
-passwords, and non-active accounts all receive the same `401 Unauthorized` response.
+passwords, and banned accounts all receive the same `401 Unauthorized` response. An unverified
+account receives `403` with Problem Detail code `EMAIL_VERIFICATION_REQUIRED` only after the supplied
+password has matched; clients use this to direct that legitimate user to email verification.
 
 Tokens are signed with RS256 and contain these claims:
 
@@ -230,9 +232,12 @@ code, sends a new six-digit code, and keeps only a verifier in the database. Cod
 minutes, allow five attempts, and cannot be reused after a successful reset. Banned accounts do not
 receive a reset code and remain banned.
 
-`POST /api/users/password-reset-confirmations` accepts `email`, six-digit `code`, and a replacement
-password (15–64 characters). A valid code changes the password and returns `204 No Content`; invalid,
-expired, replayed, and exhausted codes return the same `400` Problem Detail response.
+`POST /api/users/password-reset-verifications` accepts `email` and the six-digit `code`. It validates
+the code without consuming it and returns `204 No Content`, allowing a client to show the password-entry
+screen only after successful validation. The existing `POST /api/users/password-reset-confirmations`
+then accepts `email`, `code`, and a replacement password (15–64 characters); it revalidates and consumes
+the code when changing the password. Invalid, expired, replayed, and exhausted codes return the same
+`400` Problem Detail response from either endpoint.
 
 To send real email, configure Twilio SendGrid through environment variables before starting the
 service. Do not put these values in source control:
@@ -263,8 +268,17 @@ npm run build
 
 The Vite frontend runs at `http://localhost:5174` and proxies `/api` to the User Service on port `8081`.
 It includes registration, email-verification and resend-code screens, login, and password-reset flows.
-After registration, use **Verify email** and enter the six-digit code delivered to the registered NUS email;
-the resend action reflects the server's 90-second cooldown.
+
+Successful registration moves directly to six accessible OTP boxes with the registered email already set;
+entering the sixth digit automatically submits the verification. The resend button displays its 90-second
+cooldown and is disabled until another request is allowed.
+When a user supplies the correct password for an unverified account, login likewise moves to that
+verification screen; incorrect credentials and banned accounts remain a generic login failure.
+Password reset similarly uses six OTP boxes; only a validated code opens the new-password screen.
+The reset OTP screen keeps the user in place when requesting another code, shows a browser-side
+90-second resend countdown, and offers only a successful OTP path or **Back to sign in**. After a
+password update, the frontend shows a completion screen with only **Sign in**.
+
 After login, the view-only profile shows persisted email, username, role, status, and creation time.
 There is no Admin Dashboard; administrator actions can currently be exercised only through the
 protected API (for example, Swagger UI with an active administrator's bearer token).

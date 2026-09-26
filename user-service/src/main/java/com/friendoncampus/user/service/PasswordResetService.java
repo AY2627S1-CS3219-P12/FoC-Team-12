@@ -53,6 +53,23 @@ public class PasswordResetService {
 
     @Transactional
     public void confirm(String email, String code, String newPassword) {
+        ValidatedReset reset = validate(email, code);
+        User user = reset.user();
+        PasswordResetToken token = reset.token();
+        OffsetDateTime now = now();
+
+        user.changePasswordHash(passwordEncoder.encode(newPassword));
+        token.markUsed(now);
+        users.save(user);
+        tokens.save(token);
+    }
+
+    @Transactional
+    public void verify(String email, String code) {
+        validate(email, code);
+    }
+
+    private ValidatedReset validate(String email, String code) {
         User user = users.findByEmail(normalizeEmail(email)).orElse(null);
         if (user == null || user.getStatus() != UserStatus.ACTIVE) {
             throw new InvalidPasswordResetCodeException();
@@ -61,8 +78,7 @@ public class PasswordResetService {
         PasswordResetToken token = tokens
                 .findFirstByUser_IdAndUsedAtIsNullAndInvalidatedAtIsNullOrderByCreatedAtDesc(user.getId())
                 .orElseThrow(InvalidPasswordResetCodeException::new);
-        OffsetDateTime now = now();
-        if (!token.isUsableAt(now)) {
+        if (!token.isUsableAt(now())) {
             throw new InvalidPasswordResetCodeException();
         }
         if (!passwordEncoder.matches(code, token.getVerifier())) {
@@ -70,11 +86,10 @@ public class PasswordResetService {
             tokens.save(token);
             throw new InvalidPasswordResetCodeException();
         }
+        return new ValidatedReset(user, token);
+    }
 
-        user.changePasswordHash(passwordEncoder.encode(newPassword));
-        token.markUsed(now);
-        users.save(user);
-        tokens.save(token);
+    private record ValidatedReset(User user, PasswordResetToken token) {
     }
 
     private String normalizeEmail(String email) {

@@ -55,8 +55,8 @@ class RegistrationEmailVerificationLoginIntegrationTest {
         mvc.perform(post("/api/users/login")
                         .contentType("application/json")
                         .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.detail").value("Invalid email or password"));
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("EMAIL_VERIFICATION_REQUIRED"));
 
         ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
         verify(emailVerificationMailer).sendVerificationCode(eq(email), code.capture());

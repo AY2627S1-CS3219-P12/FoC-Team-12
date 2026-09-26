@@ -7,6 +7,7 @@ import { saveSession } from './auth/session'
 
 afterEach(() => {
   sessionStorage.clear()
+  vi.useRealTimers()
   vi.restoreAllMocks()
 })
 
@@ -96,7 +97,7 @@ test('shows one generic failure for failed login', async () => {
   expect(sessionStorage.getItem('foc.user-session')).toBeNull()
 })
 
-test('preserves registration from the account switcher', async () => {
+test('replaces the registration fields with six OTP boxes after account creation', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
   render(<App />)
   const user = userEvent.setup()
@@ -107,8 +108,13 @@ test('preserves registration from the account switcher', async () => {
   await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
 
   expect(fetch).toHaveBeenCalledWith('/api/users/registrations', expect.objectContaining({ method: 'POST' }))
-  await screen.findByText('Registration successful. Check your email for a verification code before signing in.')
-  expect(screen.getByRole('button', { name: 'Verify email' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Verify your email' })).toBeInTheDocument()
+  expect(screen.getByText(/Verification code sent to/)).toBeInTheDocument()
+  expect(screen.getByText('alice@u.nus.edu')).toBeInTheDocument()
+  expect(screen.queryByRole('textbox', { name: 'Email' })).not.toBeInTheDocument()
+  const digits = screen.getAllByRole('textbox', { name: /Verification code digit/ })
+  expect(digits).toHaveLength(6)
+  expect(digits[0]).toHaveFocus()
 })
 
 test('keeps registration failures clear when the API is unavailable', async () => {
@@ -124,7 +130,7 @@ test('keeps registration failures clear when the API is unavailable', async () =
   expect(await screen.findByRole('alert')).toHaveTextContent('Registration could not be completed. Please try again.')
 })
 
-test('requests a password reset with generic success feedback and never exposes an OTP', async () => {
+test('requests a password reset and opens a six-box code validation screen without exposing an OTP', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 202 }))
   render(<App />)
   const user = userEvent.setup()
@@ -133,7 +139,10 @@ test('requests a password reset with generic success feedback and never exposes 
   await user.click(within(screen.getByRole('form', { name: 'Request password reset form' })).getByRole('button', { name: 'Send reset code' }))
 
   expect(fetch).toHaveBeenCalledWith('/api/users/password-reset-requests', expect.objectContaining({ method: 'POST' }))
-  expect(await screen.findByRole('status')).toHaveTextContent('If an eligible active account matches that email, a reset code has been sent.')
+  expect(await screen.findByRole('heading', { name: 'Verify reset code' })).toBeInTheDocument()
+  expect(screen.getAllByRole('textbox', { name: /Verification code digit/ })).toHaveLength(6)
+  expect(screen.getByRole('button', { name: 'Request another code in 90s' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Back to sign in' })).toBeEnabled()
   expect(screen.queryByText(/123456/)).not.toBeInTheDocument()
 })
 
@@ -159,60 +168,146 @@ test('verifies a registered email with the live verification API', async () => {
   await user.type(screen.getByLabelText('Username'), 'Alice')
   await user.type(screen.getByLabelText('Password'), '123456789012345')
   await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
-  await user.click(await screen.findByRole('button', { name: 'Verify email' }))
-  await user.type(screen.getByLabelText('Verification code'), '123456')
-  await user.click(screen.getByRole('button', { name: 'Verify email' }))
+  const digits = await screen.findAllByRole('textbox', { name: /Verification code digit/ })
+  await user.click(digits[0])
+  await user.paste('123456')
 
-  expect(fetch).toHaveBeenLastCalledWith('/api/users/email-verifications', expect.objectContaining({ method: 'POST' }))
   expect(await screen.findByRole('status')).toHaveTextContent('Email verified. You can now sign in.')
+  expect(fetch).toHaveBeenLastCalledWith('/api/users/email-verifications', expect.objectContaining({ method: 'POST' }))
+  expect(screen.queryByRole('button', { name: 'Verify email' })).not.toBeInTheDocument()
 })
 
-test('shows a clear cooldown error when resending an email verification code', async () => {
+test('clears a rejected verification code and returns focus to its first digit', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })
+    .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ detail: 'The verification code is invalid or expired.' }) }))
+  render(<App />)
+  const user = userEvent.setup()
+  await openVerificationAfterRegistration(user)
+  const digits = screen.getAllByRole('textbox', { name: /Verification code digit/ })
+  await user.paste('000000')
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('The verification code is invalid or expired.')
+  digits.forEach(digit => expect(digit).toHaveValue(''))
+  expect(digits[0]).toHaveFocus()
+})
+
+test('redirects to OTP only when the API confirmed correct credentials require verification', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
     ok: false,
-    status: 429,
-    headers: new Headers({ 'Retry-After': '90' }),
-    json: async () => ({ detail: 'Email verification resend is not available yet' }),
+    status: 403,
+    json: async () => ({ code: 'EMAIL_VERIFICATION_REQUIRED', detail: 'Email verification is required before signing in' }),
   }))
   render(<App />)
-  const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Verify email' }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
-  await user.click(screen.getByRole('button', { name: 'Resend verification code' }))
+  const user = await fillLogin()
 
-  expect(fetch).toHaveBeenCalledWith('/api/users/email-verification-resends', expect.objectContaining({ method: 'POST' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('Please wait 90 seconds before requesting another code.')
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByRole('heading', { name: 'Verify your email' })).toBeInTheDocument()
+  expect(screen.getByText('alice@u.nus.edu')).toBeInTheDocument()
+  expect(screen.getAllByRole('textbox', { name: /Verification code digit/ })).toHaveLength(6)
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })
 
-test('confirms that a resend request was accepted without exposing a code', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 202 }))
+test('keeps the generic login failure when verification was not confirmed', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: false,
+    status: 401,
+    json: async () => ({ detail: 'Invalid email or password' }),
+  }))
+  render(<App />)
+  const user = await fillLogin()
+
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to sign in with those credentials.')
+  expect(screen.queryByRole('heading', { name: 'Verify your email' })).not.toBeInTheDocument()
+})
+
+const openVerificationAfterRegistration = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole('button', { name: 'Create account', pressed: false }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.type(screen.getByLabelText('Username'), 'Alice')
+  await user.type(screen.getByLabelText('Password'), '123456789012345')
+  await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
+  await screen.findByRole('heading', { name: 'Verify your email' })
+}
+
+test('shows a live, disabled resend cooldown after registration', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 201, json: async () => ({}) }))
   render(<App />)
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Verify email' }))
-  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await openVerificationAfterRegistration(user)
+
+  expect(screen.getByRole('button', { name: 'Resend in 90s' })).toBeDisabled()
+})
+
+test('uses a conventional accessible password visibility toggle', async () => {
+  render(<App />)
+  const user = userEvent.setup()
+  const password = screen.getByLabelText('Password')
+
+  expect(password).toHaveAttribute('type', 'password')
+  await user.click(screen.getByRole('button', { name: 'Show password' }))
+  expect(password).toHaveAttribute('type', 'text')
+  await user.click(screen.getByRole('button', { name: 'Hide password' }))
+  expect(password).toHaveAttribute('type', 'password')
+})
+
+test('places focus at the first field and advances through registration fields with Enter', async () => {
+  render(<App />)
+  const user = userEvent.setup()
+  expect(screen.getByLabelText('Email')).toHaveFocus()
+
+  await user.click(screen.getByRole('button', { name: 'Create account', pressed: false }))
+  const email = screen.getByLabelText('Email')
+  expect(email).toHaveFocus()
+  await user.type(email, 'alice@u.nus.edu{Enter}')
+  expect(screen.getByLabelText('Username')).toHaveFocus()
+  await user.type(screen.getByLabelText('Username'), 'Alice{Enter}')
+  expect(screen.getByLabelText('Password')).toHaveFocus()
+})
+
+test('applies a server-provided cooldown when a resend is too early', async () => {
+  sessionStorage.setItem('foc.email-verification-resend:alice@u.nus.edu', String(Date.now() - 1))
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({ code: 'EMAIL_VERIFICATION_REQUIRED', detail: 'Email verification is required before signing in' }) })
+    .mockResolvedValueOnce({ ok: false, status: 429, headers: new Headers({ 'Retry-After': '45' }), json: async () => ({ detail: 'Email verification resend is not available yet' }) }))
+  render(<App />)
+  const user = await fillLogin()
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+  await screen.findByRole('heading', { name: 'Verify your email' })
+  expect(screen.getByRole('button', { name: 'Resend verification code' })).toBeEnabled()
   await user.click(screen.getByRole('button', { name: 'Resend verification code' }))
 
-  expect(await screen.findByRole('status')).toHaveTextContent('A new verification code has been sent.')
-  expect(screen.queryByText(/123456/)).not.toBeInTheDocument()
+  expect(fetch).toHaveBeenLastCalledWith('/api/users/email-verification-resends', expect.objectContaining({ method: 'POST' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Please wait 45 seconds before requesting another code.')
+  expect(screen.getByRole('button', { name: 'Resend in 45s' })).toBeDisabled()
 })
 
 test('confirms a reset code and lets the user return to sign in', async () => {
   vi.stubGlobal('fetch', vi.fn()
     .mockResolvedValueOnce({ ok: true, status: 202 })
+    .mockResolvedValueOnce({ ok: true, status: 204 })
     .mockResolvedValueOnce({ ok: true, status: 204 }))
   render(<App />)
   const user = userEvent.setup()
   await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
   await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
   await user.click(screen.getByRole('button', { name: 'Send reset code' }))
-  await user.click(await screen.findByRole('button', { name: 'Enter reset code' }))
-  await user.type(screen.getByLabelText('Reset code'), '123456')
+  expect(await screen.findByRole('heading', { name: 'Verify reset code' })).toBeInTheDocument()
+  await user.paste('123456')
+  expect(await screen.findByRole('heading', { name: 'Choose a new password' })).toBeInTheDocument()
+  expect(fetch).toHaveBeenLastCalledWith('/api/users/password-reset-verifications', expect.objectContaining({ method: 'POST' }))
   await user.type(screen.getByLabelText('New password'), 'new-password-with-15-chars')
   await user.type(screen.getByLabelText('Confirm new password'), 'new-password-with-15-chars')
   await user.click(screen.getByRole('button', { name: 'Update password' }))
 
   expect(fetch).toHaveBeenLastCalledWith('/api/users/password-reset-confirmations', expect.objectContaining({ method: 'POST' }))
-  expect(await screen.findByRole('status')).toHaveTextContent('Your password has been updated. You can now sign in.')
+  expect(await screen.findByRole('heading', { name: 'Password updated' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('New password')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Confirm new password')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Request another code' })).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Sign in' }))
   expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
 })
@@ -226,11 +321,11 @@ test('shows a generic confirmation failure for an invalid or expired code', asyn
   await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
   await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
   await user.click(screen.getByRole('button', { name: 'Send reset code' }))
-  await user.click(await screen.findByRole('button', { name: 'Enter reset code' }))
-  await user.type(screen.getByLabelText('Reset code'), '000000')
-  await user.type(screen.getByLabelText('New password'), 'new-password-with-15-chars')
-  await user.type(screen.getByLabelText('Confirm new password'), 'new-password-with-15-chars')
-  await user.click(screen.getByRole('button', { name: 'Update password' }))
+  const digits = await screen.findAllByRole('textbox', { name: /Verification code digit/ })
+  await user.paste('000000')
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('The code is invalid or expired. Request a new code and try again.')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Invalid or expired password reset code')
+  digits.forEach(digit => expect(digit).toHaveValue(''))
+  expect(digits[0]).toHaveFocus()
+  expect(screen.queryByRole('heading', { name: 'Choose a new password' })).not.toBeInTheDocument()
 })

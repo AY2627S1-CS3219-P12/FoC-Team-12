@@ -42,11 +42,22 @@ public class PasswordResetController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/password-reset-verifications")
+    @Operation(summary = "Validate a password reset code before choosing a new password")
+    public ResponseEntity<Void> verify(@Valid @RequestBody PasswordResetVerification verification) {
+        passwordResets.verify(verification.email(), verification.code());
+        return ResponseEntity.noContent().build();
+    }
+
     public record PasswordResetRequest(@NotBlank @Email String email) {
     }
 
     public record PasswordResetConfirmation(@NotBlank @Email String email,
             @NotBlank @Pattern(regexp = "\\d{6}") String code,
             @NotBlank @Size(min = 15, max = 64) String password) {
+    }
+
+    public record PasswordResetVerification(@NotBlank @Email String email,
+            @NotBlank @Pattern(regexp = "\\d{6}") String code) {
     }
 }
