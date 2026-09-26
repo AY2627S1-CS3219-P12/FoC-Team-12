@@ -23,6 +23,7 @@ import com.friendoncampus.user.domain.PasswordResetToken;
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.domain.UserStatus;
 import com.friendoncampus.user.repository.PasswordResetTokenRepository;
+import com.friendoncampus.user.repository.PasswordResetRequestCooldownRepository;
 import com.friendoncampus.user.repository.UserRepository;
 import com.friendoncampus.user.support.FakePasswordResetMailer;
 
@@ -32,6 +33,7 @@ class PasswordResetServiceTest {
 
     @Mock UserRepository users;
     @Mock PasswordResetTokenRepository tokens;
+    @Mock PasswordResetRequestCooldownRepository requestCooldowns;
     @Mock PasswordEncoder passwords;
 
     private FakePasswordResetMailer mailer;
@@ -41,7 +43,7 @@ class PasswordResetServiceTest {
     @BeforeEach
     void setUp() {
         mailer = new FakePasswordResetMailer();
-        service = new PasswordResetService(users, tokens, passwords, mailer, Clock.fixed(NOW, ZoneOffset.UTC));
+        service = new PasswordResetService(users, tokens, requestCooldowns, passwords, mailer, Clock.fixed(NOW, ZoneOffset.UTC));
         user = User.register("alice@u.nus.edu", "Alice", "alice", "old-hash");
         user.activate();
     }
@@ -51,7 +53,7 @@ class PasswordResetServiceTest {
         when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
         when(passwords.encode(any())).thenAnswer(invocation -> "hashed-" + invocation.getArgument(0));
 
-        service.request(" Alice@U.NUS.EDU ");
+        assertThat(service.request(" Alice@U.NUS.EDU ").retryAfterSeconds()).isEqualTo(90);
 
         ArgumentCaptor<PasswordResetToken> token = ArgumentCaptor.forClass(PasswordResetToken.class);
         verify(tokens).invalidateActiveForUser(eq(user.getId()), any());
@@ -65,12 +67,12 @@ class PasswordResetServiceTest {
     @Test
     void returnsWithoutCreatingOrSendingAnythingForUnknownOrBannedAccounts() {
         when(users.findByEmail("missing@u.nus.edu")).thenReturn(Optional.empty());
-        service.request("missing@u.nus.edu");
+        assertThat(service.request("missing@u.nus.edu").retryAfterSeconds()).isEqualTo(90);
 
         User banned = mock(User.class);
         when(banned.getStatus()).thenReturn(UserStatus.BANNED);
         when(users.findByEmail("banned@u.nus.edu")).thenReturn(Optional.of(banned));
-        service.request("banned@u.nus.edu");
+        assertThat(service.request("banned@u.nus.edu").retryAfterSeconds()).isEqualTo(90);
 
         verifyNoInteractions(tokens, passwords);
         assertThat(mailer.messages()).isEmpty();
@@ -151,6 +153,35 @@ class PasswordResetServiceTest {
         service.request("alice@u.nus.edu");
 
         verify(tokens).invalidateActiveForUser(eq(user.getId()), any());
+    }
+
+    @Test
+    void suppressesAnotherCodeUntilTheServerSideCooldownExpires() {
+        com.friendoncampus.user.domain.PasswordResetRequestCooldown cooldown =
+                com.friendoncampus.user.domain.PasswordResetRequestCooldown.start("digest",
+                        OffsetDateTime.ofInstant(NOW.plusSeconds(30), ZoneOffset.UTC));
+        when(requestCooldowns.findByEmailDigestForUpdate(any())).thenReturn(Optional.of(cooldown));
+
+        assertThat(service.request("alice@u.nus.edu").retryAfterSeconds()).isEqualTo(30);
+
+        verifyNoInteractions(users, tokens, passwords);
+        assertThat(mailer.messages()).isEmpty();
+    }
+
+    @Test
+    void clearsLoginFailuresWhenThePasswordIsSuccessfullyReset() {
+        user.recordFailedLoginAttempt(OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC));
+        PasswordResetToken token = tokenExpiringAt(NOW.plusSeconds(600));
+        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+        when(tokens.findFirstByUser_IdAndUsedAtIsNullAndInvalidatedAtIsNullOrderByCreatedAtDesc(user.getId()))
+                .thenReturn(Optional.of(token));
+        when(passwords.matches("123456", "verifier")).thenReturn(true);
+        when(passwords.encode("new-password-123")).thenReturn("new-hash");
+
+        service.confirm("alice@u.nus.edu", "123456", "new-password-123");
+
+        assertThat(user.getFailedLoginAttempts()).isZero();
+        assertThat(user.getLoginLockoutUntil()).isNull();
     }
 
     private PasswordResetToken tokenExpiringAt(Instant expiresAt) {

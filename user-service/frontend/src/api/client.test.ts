@@ -38,6 +38,16 @@ test('handles password reset responses with no response body', async () => {
   expect(fetch).toHaveBeenNthCalledWith(3, '/api/users/password-reset-confirmations', expect.objectContaining({ method: 'POST' }))
 })
 
+test('uses the server-provided password reset resend cooldown', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    status: 202,
+    headers: new Headers({ 'Retry-After': '42' }),
+  }))
+
+  await expect(api.requestPasswordReset({ email: 'alice@u.nus.edu' })).resolves.toBe(42)
+})
+
 test('handles email verification and resend responses with no response body', async () => {
   vi.stubGlobal('fetch', vi.fn()
     .mockResolvedValueOnce({ ok: true, status: 204 })

@@ -16,6 +16,8 @@ public class User {
     @Column(name = "password_hash", nullable = false, length = 100) private String passwordHash;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private UserRole role;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private UserStatus status;
+    @Column(name = "failed_login_attempts", nullable = false) private int failedLoginAttempts;
+    @Column(name = "login_lockout_until") private OffsetDateTime loginLockoutUntil;
     @Column(name = "created_at", nullable = false) private OffsetDateTime createdAt;
     @Column(name = "updated_at", nullable = false) private OffsetDateTime updatedAt;
     protected User() { }
@@ -33,10 +35,31 @@ public class User {
     public UUID getId() { return id; } public String getEmail() { return email; } public String getUsername() { return username; }
     public String getPasswordHash() { return passwordHash; }
     public UserRole getRole() { return role; } public UserStatus getStatus() { return status; } public OffsetDateTime getCreatedAt() { return createdAt; }
+    public int getFailedLoginAttempts() { return failedLoginAttempts; }
+    public OffsetDateTime getLoginLockoutUntil() { return loginLockoutUntil; }
 
     public void changePasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
         this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    }
+
+    public boolean isLoginLockedAt(OffsetDateTime now) {
+        return loginLockoutUntil != null && loginLockoutUntil.isAfter(now);
+    }
+
+    public void recordFailedLoginAttempt(OffsetDateTime now) {
+        failedLoginAttempts++;
+        if (failedLoginAttempts == 3) {
+            failedLoginAttempts = 0;
+            loginLockoutUntil = now.plusSeconds(30);
+        }
+        updatedAt = now;
+    }
+
+    public void clearLoginFailures() {
+        failedLoginAttempts = 0;
+        loginLockoutUntil = null;
+        updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 
     public void activate() {

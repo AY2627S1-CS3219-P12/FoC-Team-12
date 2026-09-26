@@ -53,7 +53,7 @@ class LoginControllerTest {
                         .content("{\"email\":\"missing@u.nus.edu\",\"password\":\"wrong\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Authentication failed"))
-                .andExpect(jsonPath("$.detail").value("Invalid email or password"));
+                .andExpect(jsonPath("$.detail").value("Incorrect email or password"));
     }
 
     @Test

@@ -226,18 +226,26 @@ target returns `404`; non-admin callers return `403`.
 
 ## Password reset
 
-`POST /api/users/password-reset-requests` accepts an email address and always returns `202 Accepted`,
-whether or not that address has an account. For an active account it invalidates any previous reset
-code, sends a new six-digit code, and keeps only a verifier in the database. Codes expire after 10
-minutes, allow five attempts, and cannot be reused after a successful reset. Banned accounts do not
-receive a reset code and remain banned.
+`POST /api/users/password-reset-requests` accepts only the registered NUS student domains
+(`@u.nus.edu`, `@u.duke.nus.edu`, or `@u.yale-nus.edu.sg`). An ineligible domain returns `400 Bad
+Request`. For an eligible address, it always returns `202 Accepted` whether or not that address has
+an account. For an active account it invalidates any previous reset code, sends a new six-digit code,
+and keeps only a verifier in the database. Codes expire after 10 minutes, allow five attempts, and
+cannot be reused after a successful reset. Banned accounts do not receive a reset code and remain
+banned.
 
-`POST /api/users/password-reset-verifications` accepts `email` and the six-digit `code`. It validates
-the code without consuming it and returns `204 No Content`, allowing a client to show the password-entry
-screen only after successful validation. The existing `POST /api/users/password-reset-confirmations`
-then accepts `email`, `code`, and a replacement password (15–64 characters); it revalidates and consumes
-the code when changing the password. Invalid, expired, replayed, and exhausted codes return the same
-`400` Problem Detail response from either endpoint.
+Requests are limited to one reset email per address every 90 seconds. The endpoint always returns
+the same `202` response and a `Retry-After` header for both known and unknown **eligible** addresses;
+during the cooldown it does not issue or invalidate another code. This preserves the
+anti-enumeration contract while allowing the frontend to use the server-provided cooldown.
+
+`POST /api/users/password-reset-verifications` accepts an eligible NUS `email` and the six-digit `code`.
+It validates the code without consuming it and returns `204 No Content`, allowing a client to show the
+password-entry screen only after successful validation. The existing
+`POST /api/users/password-reset-confirmations` then accepts an eligible NUS `email`, `code`, and a
+replacement password (15–64 characters); it revalidates and consumes the code when changing the password.
+Invalid, expired, replayed, and exhausted codes return the same `400` Problem Detail response from either
+endpoint.
 
 To send real email, configure Twilio SendGrid through environment variables before starting the
 service. Do not put these values in source control:
@@ -276,8 +284,17 @@ When a user supplies the correct password for an unverified account, login likew
 verification screen; incorrect credentials and banned accounts remain a generic login failure.
 Password reset similarly uses six OTP boxes; only a validated code opens the new-password screen.
 The reset OTP screen keeps the user in place when requesting another code, shows a browser-side
-90-second resend countdown, and offers only a successful OTP path or **Back to sign in**. After a
+server-synchronized resend countdown, and offers only a successful OTP path or **Back to sign in**. After a
 password update, the frontend shows a completion screen with only **Sign in**.
+
+For sign-in protection, three consecutive incorrect passwords temporarily lock a non-banned account
+for 30 seconds. Lockouts, unknown emails, wrong passwords, and banned accounts all return the same
+generic authentication failure. The failed-attempt count clears after the cooldown, successful sign-in,
+or a successful password reset.
+
+After two generic failures for the same email in one browser session, the frontend adds neutral guidance
+to wait 30 seconds or reset the password. This is a browser-only usability aid, not a security control,
+and is shown for unknown emails too so it does not reveal whether an account exists.
 
 After login, the view-only profile shows persisted email, username, role, status, and creation time.
 There is no Admin Dashboard; administrator actions can currently be exercised only through the

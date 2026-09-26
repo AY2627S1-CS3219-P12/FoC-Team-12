@@ -79,6 +79,20 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>
 }
 
+async function requestPasswordResetWithCooldown(requestBody: PasswordResetRequest): Promise<number> {
+  const response = await fetch('/api/users/password-reset-requests', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody),
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new ApiError(response.status, body?.detail ?? 'Request could not be completed.')
+  }
+  const retryAfter = response.headers?.get?.('Retry-After')
+  return retryAfter && /^\d+$/.test(retryAfter) ? Number.parseInt(retryAfter, 10) : 90
+}
+
 export const api = {
   register(requestBody: RegistrationRequest) {
     return request('/api/users/registrations', {
@@ -93,10 +107,7 @@ export const api = {
     })
   },
   requestPasswordReset(requestBody: PasswordResetRequest) {
-    return request<void>('/api/users/password-reset-requests', {
-      method: 'POST',
-      body: JSON.stringify(requestBody),
-    })
+    return requestPasswordResetWithCooldown(requestBody)
   },
   confirmPasswordReset(requestBody: PasswordResetConfirmation) {
     return request<void>('/api/users/password-reset-confirmations', {

@@ -1,4 +1,4 @@
-import { type FormEvent, type KeyboardEvent, type RefObject, useEffect, useRef, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { ApiError, api, type UserProfile } from './api/client'
 import { clearSession, readSession, saveSession, type AuthSession } from './auth/session'
@@ -8,9 +8,9 @@ type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'res
 type State = 'idle' | 'loading' | 'success' | 'error'
 
 const eligibleEmail = /^[^@]+@(u\.nus\.edu|u\.duke\.nus\.edu|u\.yale-nus\.edu\.sg)$/i
-const emailFormat = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const verificationCooldownKey = (email: string) => `foc.email-verification-resend:${email.trim().toLowerCase()}`
 const resetCooldownKey = (email: string) => `foc.password-reset-resend:${email.trim().toLowerCase()}`
+const loginFailureKey = (email: string) => `foc.login-failures:${email.trim().toLowerCase()}`
 
 function PasswordInput({
   value, onChange, disabled, invalid, autoComplete, inputRef, onKeyDown,
@@ -43,6 +43,7 @@ export function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginState, setLoginState] = useState<State>('idle')
   const [loginMessage, setLoginMessage] = useState('')
+  const [loginPasswordFocusVersion, setLoginPasswordFocusVersion] = useState(0)
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -116,6 +117,12 @@ export function App() {
     return () => window.clearInterval(timer)
   }, [resendAvailableAt, resetResendAvailableAt])
 
+  useLayoutEffect(() => {
+    if (loginPasswordFocusVersion > 0 && loginState === 'error') {
+      loginPasswordRef.current?.focus()
+    }
+  }, [loginPasswordFocusVersion, loginState])
+
   const resendSecondsRemaining = resendAvailableAt
     ? Math.max(0, Math.ceil((resendAvailableAt - currentTime) / 1000))
     : 0
@@ -156,8 +163,20 @@ export function App() {
     setCurrentTime(Date.now())
   }
 
-  const startResetResendCooldown = (emailAddress: string) => {
-    const deadline = Date.now() + 90_000
+  const recordLoginFailure = (emailAddress: string) => {
+    const key = loginFailureKey(emailAddress)
+    const previousFailures = Number(sessionStorage.getItem(key))
+    const failures = (Number.isInteger(previousFailures) && previousFailures > 0 ? previousFailures : 0) + 1
+    sessionStorage.setItem(key, String(failures))
+    return failures
+  }
+
+  const clearLoginFailures = (emailAddress: string) => {
+    sessionStorage.removeItem(loginFailureKey(emailAddress))
+  }
+
+  const startResetResendCooldown = (emailAddress: string, seconds = 90) => {
+    const deadline = Date.now() + seconds * 1000
     sessionStorage.setItem(resetCooldownKey(emailAddress), String(deadline))
     setResetResendAvailableAt(deadline)
     setCurrentTime(Date.now())
@@ -188,11 +207,13 @@ export function App() {
     setProfileMessage('')
     try {
       const nextSession = await api.login({ email: loginEmail, password: loginPassword })
+      clearLoginFailures(loginEmail)
       saveSession(nextSession)
       setSession(nextSession)
       setLoginState('success')
     } catch (error) {
       if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        clearLoginFailures(loginEmail)
         show('email-verification')
         setVerificationEmail(loginEmail.trim())
         restoreResendCooldown(loginEmail)
@@ -200,7 +221,16 @@ export function App() {
         return
       }
       setLoginState('error')
-      setLoginMessage('Unable to sign in with those credentials.')
+      if (error instanceof ApiError && error.status === 401) {
+        const failures = recordLoginFailure(loginEmail)
+        setLoginPassword('')
+        setLoginPasswordFocusVersion(version => version + 1)
+        setLoginMessage(failures >= 2
+          ? 'Incorrect email or password. If you’ve made several attempts, wait 30 seconds or reset your password.'
+          : 'Incorrect email or password.')
+      } else {
+        setLoginMessage('Incorrect email or password.')
+      }
     }
   }
 
@@ -303,17 +333,17 @@ export function App() {
 
   const requestPasswordReset = async (event: FormEvent) => {
     event.preventDefault()
-    if (!emailFormat.test(resetEmail)) {
+    if (!eligibleEmail.test(resetEmail)) {
       setResetRequestState('error')
-      setResetRequestMessage('Enter a valid email address.')
+      setResetRequestMessage('Use an eligible NUS student email.')
       return
     }
     setResetRequestState('loading')
     setResetRequestMessage('')
     try {
-      await api.requestPasswordReset({ email: resetEmail })
+      const retryAfterSeconds = await api.requestPasswordReset({ email: resetEmail })
       setResetDigits(Array(6).fill(''))
-      startResetResendCooldown(resetEmail)
+      startResetResendCooldown(resetEmail, retryAfterSeconds)
       show('reset-verification')
     } catch {
       setResetRequestState('error')
@@ -322,17 +352,17 @@ export function App() {
   }
 
   const resendPasswordReset = async () => {
-    if (resetResendSecondsRemaining > 0 || !emailFormat.test(resetEmail)) {
+    if (resetResendSecondsRemaining > 0 || !eligibleEmail.test(resetEmail)) {
       return
     }
     setResetResendState('loading')
     setResetResendMessage('')
     try {
-      await api.requestPasswordReset({ email: resetEmail })
+      const retryAfterSeconds = await api.requestPasswordReset({ email: resetEmail })
       setResetResendState('success')
-      setResetResendMessage('If an eligible active account matches your email, a new reset code has been sent.')
+      setResetResendMessage('If an eligible active account matches your email, a reset code has been sent or remains available.')
       setResetDigits(Array(6).fill(''))
-      startResetResendCooldown(resetEmail)
+      startResetResendCooldown(resetEmail, retryAfterSeconds)
     } catch {
       setResetResendState('error')
       setResetResendMessage('Unable to request another reset code right now. Please try again.')
@@ -344,9 +374,9 @@ export function App() {
       return
     }
     const code = completedCode ?? resetDigits.join('')
-    if (!emailFormat.test(resetEmail)) {
+    if (!eligibleEmail.test(resetEmail)) {
       setResetVerificationState('error')
-      setResetVerificationMessage('Enter a valid email address.')
+      setResetVerificationMessage('Use an eligible NUS student email.')
       return
     }
     if (!/^\d{6}$/.test(code)) {
@@ -375,9 +405,9 @@ export function App() {
 
   const confirmPasswordReset = async (event: FormEvent) => {
     event.preventDefault()
-    if (!emailFormat.test(resetEmail)) {
+    if (!eligibleEmail.test(resetEmail)) {
       setResetConfirmationState('error')
-      setResetConfirmationMessage('Enter a valid email address.')
+      setResetConfirmationMessage('Use an eligible NUS student email.')
       return
     }
     if (!/^\d{6}$/.test(resetCode)) {
@@ -401,6 +431,7 @@ export function App() {
       await api.confirmPasswordReset({ email: resetEmail, code: resetCode, password: newPassword })
       setResetConfirmationState('success')
       setResetConfirmationMessage('Your password has been updated. You can now sign in.')
+      clearLoginFailures(resetEmail)
       setResetCode('')
       setNewPassword('')
       setConfirmPassword('')
