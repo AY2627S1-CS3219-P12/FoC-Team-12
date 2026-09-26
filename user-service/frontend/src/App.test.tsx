@@ -88,6 +88,81 @@ test('reloads the live profile when restoring a browser session', async () => {
   expect((options?.headers as Headers).get('Authorization')).toBe('Bearer restored.jwt')
 })
 
+test('updates the displayed username from the live profile screen', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Old name', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Old name',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'New name',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await screen.findByRole('button', { name: 'Edit username' })
+  await user.click(screen.getByRole('button', { name: 'Edit username' }))
+  const username = screen.getByLabelText('Username')
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  await user.clear(username)
+  await user.type(username, 'New name')
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('status')).toHaveTextContent('Username updated.')
+  expect(screen.getByText('New name')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Edit username' })).toBeInTheDocument()
+  expect(fetch).toHaveBeenLastCalledWith('/api/users/me/username', expect.objectContaining({ method: 'PATCH' }))
+})
+
+test('shows duplicate username feedback from the live profile screen', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) })
+    .mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ detail: 'username is already taken' }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('button', { name: 'Edit username' }))
+  const username = screen.getByLabelText('Username')
+  await user.clear(username)
+  await user.type(username, 'Taken')
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Username is already taken.')
+})
+
+test('does not submit an invalid username from the profile screen', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+    role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+  }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('button', { name: 'Edit username' }))
+  const username = screen.getByLabelText('Username')
+  await user.clear(username)
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Username is required and must be at most 20 characters.')
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+
 test('shows one generic failure for failed login', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ detail: 'Incorrect email or password' }) }))
   render(<App />)

@@ -35,6 +35,10 @@ type EmailVerificationResendRequest = {
   email: string
 }
 
+type UsernameChangeRequest = {
+  username: string
+}
+
 export type UserProfile = {
   userId: string
   email: string
@@ -135,5 +139,11 @@ export const api = {
   },
   getProfile() {
     return request<UserProfile>('/api/users/me', { method: 'GET' })
+  },
+  changeUsername(requestBody: UsernameChangeRequest) {
+    return request<UserProfile>('/api/users/me/username', {
+      method: 'PATCH',
+      body: JSON.stringify(requestBody),
+    })
   },
 }

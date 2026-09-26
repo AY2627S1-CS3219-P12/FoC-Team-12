@@ -39,6 +39,10 @@ export function App() {
   const [session, setSession] = useState<AuthSession | null>(() => readSession())
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileMessage, setProfileMessage] = useState('')
+  const [profileUsername, setProfileUsername] = useState('')
+  const [profileUsernameState, setProfileUsernameState] = useState<State>('idle')
+  const [profileUsernameMessage, setProfileUsernameMessage] = useState('')
+  const [profileUsernameEditing, setProfileUsernameEditing] = useState(false)
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [loginState, setLoginState] = useState<State>('idle')
@@ -91,6 +95,7 @@ export function App() {
       .then(value => {
         if (!cancelled) {
           setProfile(value)
+          setProfileUsername(value.username)
           setProfileMessage('')
         }
       })
@@ -442,6 +447,30 @@ export function App() {
     }
   }
 
+  const changeUsername = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!profileUsername.trim() || profileUsername.length > 20) {
+      setProfileUsernameState('error')
+      setProfileUsernameMessage('Username is required and must be at most 20 characters.')
+      return
+    }
+    setProfileUsernameState('loading')
+    setProfileUsernameMessage('')
+    try {
+      const updatedProfile = await api.changeUsername({ username: profileUsername })
+      setProfile(updatedProfile)
+      setProfileUsername(updatedProfile.username)
+      setProfileUsernameState('success')
+      setProfileUsernameMessage('Username updated.')
+      setProfileUsernameEditing(false)
+    } catch (error) {
+      setProfileUsernameState('error')
+      setProfileUsernameMessage(error instanceof ApiError && error.status === 409
+        ? 'Username is already taken.'
+        : 'Unable to update your username. Please try again.')
+    }
+  }
+
   if (session) {
     const displayedProfile = profile?.userId === session.userId ? profile : null
     return <main><section aria-labelledby="profile-title">
@@ -452,7 +481,30 @@ export function App() {
       {profileMessage && <p role="alert" className="error">{profileMessage}</p>}
       {displayedProfile && <dl className="identity-card">
         <div><dt>Email</dt><dd>{displayedProfile.email}</dd></div>
-        <div><dt>Username</dt><dd>{displayedProfile.username}</dd></div>
+        <div className="profile-username-card"><dt>Username</dt><dd>
+          {!profileUsernameEditing && <div className="profile-username-display">
+            <span>{displayedProfile.username}</span>
+            <button type="button" className="secondary compact-action" aria-label="Edit username" onClick={() => {
+              setProfileUsername(displayedProfile.username)
+              setProfileUsernameState('idle')
+              setProfileUsernameMessage('')
+              setProfileUsernameEditing(true)
+            }}>Edit</button>
+          </div>}
+          {profileUsernameEditing && <form className="profile-username-editor" onSubmit={changeUsername} noValidate aria-busy={profileUsernameState === 'loading'} aria-label="Change username form">
+            <input aria-label="Username" value={profileUsername} maxLength={20} autoFocus onChange={event => setProfileUsername(event.target.value)} disabled={profileUsernameState === 'loading'} aria-invalid={profileUsernameState === 'error'} />
+            <div className="profile-username-actions">
+              <button type="submit" className="secondary compact-action" disabled={profileUsernameState === 'loading' || profileUsername === displayedProfile.username}>{profileUsernameState === 'loading' ? 'Saving…' : 'Save'}</button>
+              <button type="button" className="text-button" disabled={profileUsernameState === 'loading'} onClick={() => {
+                setProfileUsername(displayedProfile.username)
+                setProfileUsernameState('idle')
+                setProfileUsernameMessage('')
+                setProfileUsernameEditing(false)
+              }}>Cancel</button>
+            </div>
+          </form>}
+          {profileUsernameMessage && <p role={profileUsernameState === 'error' ? 'alert' : 'status'} className={profileUsernameState === 'error' ? 'error' : 'success'}>{profileUsernameMessage}</p>}
+        </dd></div>
         <div><dt>Role</dt><dd>{displayedProfile.role}</dd></div>
         <div><dt>Account status</dt><dd>{displayedProfile.status}</dd></div>
         <div><dt>Member since</dt><dd>{new Date(displayedProfile.createdAt).toLocaleString()}</dd></div>

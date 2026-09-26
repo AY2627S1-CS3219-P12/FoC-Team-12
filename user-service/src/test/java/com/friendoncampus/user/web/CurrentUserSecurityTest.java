@@ -1,6 +1,7 @@
 package com.friendoncampus.user.web;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -88,6 +89,50 @@ class CurrentUserSecurityTest {
                 .andExpect(jsonPath("$.role").value("USER"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.createdAt").exists());
+    }
+
+    @Test
+    void changesOnlyTheAuthenticatedUsersUsername() throws Exception {
+        User user = User.register("rename-" + UUID.randomUUID() + "@u.nus.edu", "Old name",
+                "old" + UUID.randomUUID().toString().substring(0, 8), passwords.encode("password-with-at-least-15-chars"));
+        user.activate();
+        users.save(user);
+
+        mvc.perform(patch("/api/users/me/username").header("Authorization", "Bearer " + token(ISSUER, List.of(AUDIENCE),
+                Instant.now().plusSeconds(60), user.getId())).contentType("application/json")
+                        .content("{\"username\":\"New Name\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(user.getId().toString()))
+                .andExpect(jsonPath("$.username").value("New Name"));
+
+        assertThat(users.findById(user.getId())).hasValueSatisfying(updated ->
+                assertThat(updated.getUsername()).isEqualTo("New Name"));
+    }
+
+    @Test
+    void rejectsInvalidUsernameChangePayloadsBeforeChangingTheProfile() throws Exception {
+        mvc.perform(patch("/api/users/me/username").header("Authorization", "Bearer " + token(ISSUER, List.of(AUDIENCE),
+                Instant.now().plusSeconds(60), UUID.randomUUID())).contentType("application/json")
+                        .content("{\"username\":\"\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsSpecificConflictWhenAnotherAccountOwnsTheUsername() throws Exception {
+        User user = User.register("rename-" + UUID.randomUUID() + "@u.nus.edu", "Alice",
+                "alice" + UUID.randomUUID().toString().substring(0, 8), passwords.encode("password-with-at-least-15-chars"));
+        User existing = User.register("existing-" + UUID.randomUUID() + "@u.nus.edu", "Taken",
+                "taken", passwords.encode("password-with-at-least-15-chars"));
+        user.activate();
+        existing.activate();
+        users.save(user);
+        users.save(existing);
+
+        mvc.perform(patch("/api/users/me/username").header("Authorization", "Bearer " + token(ISSUER, List.of(AUDIENCE),
+                Instant.now().plusSeconds(60), user.getId())).contentType("application/json")
+                        .content("{\"username\":\"taken\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("username is already taken"));
     }
 
     @Test

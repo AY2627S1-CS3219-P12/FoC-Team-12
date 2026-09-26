@@ -186,8 +186,13 @@ database access; they should cache keys and refresh them when an unfamiliar `kid
 
 `GET /api/users/me` returns the authenticated user's persisted profile. Send the access token as
 `Authorization: Bearer <token>`. Its response contains the stable user ID, NUS email, username,
-role, account status, and account creation timestamp. It is view-only: the profile API does not
-permit changing email, username, password, role, or status.
+role, account status, and account creation timestamp. `PATCH /api/users/me/username` accepts
+`{"username":"..."}` and returns the updated persisted profile. Usernames are required, at most
+20 characters, and unique case-insensitively; an already-used username returns `409 Conflict`.
+The profile API does not permit changing email, password, role, or status.
+The live profile reflects a changed username immediately. An already-issued JWT keeps its prior
+username claim until it expires or the user signs in again; services must use the stable user ID,
+not that display-name claim, as the account identifier.
 
 With the service running and SendGrid configured, this PowerShell sequence registers an
 account, verifies the code from its NUS inbox, then logs in and reads the profile.
@@ -296,7 +301,8 @@ After two generic failures for the same email in one browser session, the fronte
 to wait 30 seconds or reset the password. This is a browser-only usability aid, not a security control,
 and is shown for unknown emails too so it does not reveal whether an account exists.
 
-After login, the view-only profile shows persisted email, username, role, status, and creation time.
+After login, the profile shows persisted email, username, role, status, and creation time. A user can
+change their username from this screen; email, password, role, and status remain non-editable.
 There is no Admin Dashboard; administrator actions can currently be exercised only through the
 protected API (for example, Swagger UI with an active administrator's bearer token).
 

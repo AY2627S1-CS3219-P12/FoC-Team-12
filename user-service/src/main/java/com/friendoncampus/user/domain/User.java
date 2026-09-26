@@ -43,6 +43,12 @@ public class User {
         this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 
+    public void changeUsername(String username, String normalizedUsername) {
+        this.username = username;
+        this.usernameNormalized = normalizedUsername;
+        this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    }
+
     public boolean isLoginLockedAt(OffsetDateTime now) {
         return loginLockoutUntil != null && loginLockoutUntil.isAfter(now);
     }
