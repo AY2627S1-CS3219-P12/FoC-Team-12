@@ -298,7 +298,10 @@ verification screen; incorrect credentials and banned accounts remain a generic 
 Password reset similarly uses six OTP boxes; only a validated code opens the new-password screen.
 The reset OTP screen keeps the user in place when requesting another code, shows a browser-side
 server-synchronized resend countdown, and offers only a successful OTP path or **Back to sign in**. After a
-password update, the frontend shows a completion screen with only **Sign in**.
+password update, the frontend shows a completion screen with only **Sign in**. If a reset is unfinished,
+returning to **Sign in** and selecting **Forgot password?** in the same browser session returns directly to
+the existing code-entry screen; it never stores the OTP or a password, and a new code is sent only after
+the server-synchronized resend cooldown.
 
 For sign-in protection, three consecutive incorrect passwords temporarily lock a non-banned account
 for 30 seconds. Lockouts, unknown emails, wrong passwords, and banned accounts all return the same

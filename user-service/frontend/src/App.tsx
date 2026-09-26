@@ -10,6 +10,7 @@ type State = 'idle' | 'loading' | 'success' | 'error'
 const eligibleEmail = /^[^@]+@(u\.nus\.edu|u\.duke\.nus\.edu|u\.yale-nus\.edu\.sg)$/i
 const verificationCooldownKey = (email: string) => `foc.email-verification-resend:${email.trim().toLowerCase()}`
 const resetCooldownKey = (email: string) => `foc.password-reset-resend:${email.trim().toLowerCase()}`
+const resetPendingEmailKey = 'foc.password-reset-pending-email'
 const loginFailureKey = (email: string) => `foc.login-failures:${email.trim().toLowerCase()}`
 
 function PasswordInput({
@@ -68,7 +69,7 @@ export function App() {
   const [verificationFocusVersion, setVerificationFocusVersion] = useState(0)
   const [resendState, setResendState] = useState<State>('idle')
   const [resendMessage, setResendMessage] = useState('')
-  const [resetEmail, setResetEmail] = useState('')
+  const [resetEmail, setResetEmail] = useState(() => sessionStorage.getItem(resetPendingEmailKey) ?? '')
   const [resetCode, setResetCode] = useState('')
   const [resetDigits, setResetDigits] = useState<string[]>(() => Array(6).fill(''))
   const [resetFocusVersion, setResetFocusVersion] = useState(0)
@@ -195,6 +196,14 @@ export function App() {
     setResetConfirmationMessage('')
   }
 
+  const returnFromPasswordResetToSignIn = () => {
+    setResetCode('')
+    setResetDigits(Array(6).fill(''))
+    setNewPassword('')
+    setConfirmPassword('')
+    show('login')
+  }
+
   const startResendCooldown = (emailAddress: string, seconds = 90) => {
     const deadline = Date.now() + seconds * 1000
     sessionStorage.setItem(verificationCooldownKey(emailAddress), String(deadline))
@@ -225,6 +234,41 @@ export function App() {
     sessionStorage.setItem(resetCooldownKey(emailAddress), String(deadline))
     setResetResendAvailableAt(deadline)
     setCurrentTime(Date.now())
+  }
+
+  const restoreResetResendCooldown = (emailAddress: string) => {
+    const deadline = Number(sessionStorage.getItem(resetCooldownKey(emailAddress)))
+    setResetResendAvailableAt(Number.isFinite(deadline) && deadline > Date.now() ? deadline : null)
+    setCurrentTime(Date.now())
+  }
+
+  const rememberPendingPasswordReset = (emailAddress: string) => {
+    const normalizedEmail = emailAddress.trim().toLowerCase()
+    sessionStorage.setItem(resetPendingEmailKey, normalizedEmail)
+    setResetEmail(normalizedEmail)
+  }
+
+  const clearPendingPasswordReset = (emailAddress: string) => {
+    sessionStorage.removeItem(resetPendingEmailKey)
+    sessionStorage.removeItem(resetCooldownKey(emailAddress))
+    setResetEmail('')
+    setResetResendAvailableAt(null)
+  }
+
+  const openPasswordReset = () => {
+    const pendingEmail = sessionStorage.getItem(resetPendingEmailKey)
+    if (pendingEmail && eligibleEmail.test(pendingEmail)) {
+      setResetEmail(pendingEmail)
+      setResetCode('')
+      setResetDigits(Array(6).fill(''))
+      restoreResetResendCooldown(pendingEmail)
+      show('reset-verification')
+      return
+    }
+    sessionStorage.removeItem(resetPendingEmailKey)
+    setResetEmail('')
+    setResetResendAvailableAt(null)
+    show('reset-request')
   }
 
   const focusOnEnter = (event: KeyboardEvent<HTMLInputElement>, next: RefObject<HTMLInputElement | null>) => {
@@ -390,6 +434,7 @@ export function App() {
     setResetRequestMessage('')
     try {
       const retryAfterSeconds = await api.requestPasswordReset({ email: resetEmail })
+      rememberPendingPasswordReset(resetEmail)
       setResetDigits(Array(6).fill(''))
       startResetResendCooldown(resetEmail, retryAfterSeconds)
       show('reset-verification')
@@ -407,6 +452,7 @@ export function App() {
     setResetResendMessage('')
     try {
       const retryAfterSeconds = await api.requestPasswordReset({ email: resetEmail })
+      rememberPendingPasswordReset(resetEmail)
       setResetResendState('success')
       setResetResendMessage('If an eligible active account matches your email, a reset code has been sent or remains available.')
       setResetDigits(Array(6).fill(''))
@@ -480,6 +526,7 @@ export function App() {
       setResetConfirmationState('success')
       setResetConfirmationMessage('Your password has been updated. You can now sign in.')
       clearLoginFailures(resetEmail)
+      clearPendingPasswordReset(resetEmail)
       setResetCode('')
       setNewPassword('')
       setConfirmPassword('')
@@ -660,7 +707,7 @@ export function App() {
       <label>Email<input type="email" autoFocus value={loginEmail} onChange={event => setLoginEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, loginPasswordRef)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
       <label>Password<PasswordInput value={loginPassword} onChange={setLoginPassword} inputRef={loginPasswordRef} disabled={busy} invalid={loginState === 'error'} autoComplete="current-password" /></label>
       <button disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
-      <button type="button" className="text-button" onClick={() => show('reset-request')}>Forgot password?</button>
+      <button type="button" className="text-button" onClick={openPasswordReset}>Forgot password?</button>
       {loginMessage && <p role={loginState === 'error' ? 'alert' : 'status'} className={loginState === 'error' ? 'error' : 'success'}>{loginMessage}</p>}
     </form>}
 
@@ -694,18 +741,18 @@ export function App() {
       <label>Email<input type="email" autoFocus autoComplete="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} disabled={busy} aria-invalid={resetRequestState === 'error'} /></label>
       <button disabled={busy}>{resetRequestState === 'loading' ? 'Sending…' : 'Send reset code'}</button>
       {resetRequestMessage && <p role={resetRequestState === 'error' ? 'alert' : 'status'} className={resetRequestState}>{resetRequestMessage}</p>}
-      <button type="button" className="text-button" onClick={() => show('login')}>Back to sign in</button>
+      <button type="button" className="text-button" onClick={returnFromPasswordResetToSignIn}>Back to sign in</button>
     </form>}
 
     {view === 'reset-verification' && <form onSubmit={event => { event.preventDefault(); void verifyPasswordReset() }} noValidate aria-busy={busy} aria-label="Verify password reset code form">
       <h1 id="account-title">Verify reset code</h1>
-      <p className="intro">If an eligible active account matches your email, enter the six-digit code that was sent to it.</p>
+      <p className="intro">Enter the six-digit code already sent to your email.</p>
       <p className="verification-email">Reset code for <strong>{resetEmail}</strong>.</p>
       <label>Reset code<OtpInput value={resetDigits} onChange={setResetDigits} onComplete={code => { void verifyPasswordReset(code) }} focusFirst={resetFocusVersion} disabled={busy} invalid={resetVerificationState === 'error'} /></label>
       {resetVerificationMessage && <p role={resetVerificationState === 'error' ? 'alert' : 'status'} className={resetVerificationState}>{resetVerificationMessage}</p>}
       <button type="button" className="secondary" disabled={busy || resetResendSecondsRemaining > 0} onClick={resendPasswordReset}>{resetResendState === 'loading' ? 'Sending…' : resetResendSecondsRemaining > 0 ? `Request another code in ${resetResendSecondsRemaining}s` : 'Request another code'}</button>
       {resetResendMessage && <p role={resetResendState === 'error' ? 'alert' : 'status'} className={resetResendState}>{resetResendMessage}</p>}
-      <button type="button" className="text-button" onClick={() => show('login')}>Back to sign in</button>
+      <button type="button" className="text-button" onClick={returnFromPasswordResetToSignIn}>Back to sign in</button>
     </form>}
 
     {view === 'reset-confirmation' && <form onSubmit={confirmPasswordReset} noValidate aria-busy={busy} aria-label="Confirm password reset form">
@@ -715,6 +762,7 @@ export function App() {
       <label>Confirm new password<PasswordInput value={confirmPassword} onChange={setConfirmPassword} inputRef={confirmPasswordRef} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
       <button disabled={busy}>{resetConfirmationState === 'loading' ? 'Updating…' : 'Update password'}</button>
       {resetConfirmationMessage && <p role={resetConfirmationState === 'error' ? 'alert' : 'status'} className={resetConfirmationState}>{resetConfirmationMessage}</p>}
+      <button type="button" className="text-button" onClick={returnFromPasswordResetToSignIn}>Back to sign in</button>
     </form>}
     {view === 'reset-complete' && <div aria-labelledby="account-title">
       <h1 id="account-title">Password updated</h1>

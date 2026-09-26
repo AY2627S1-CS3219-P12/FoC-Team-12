@@ -407,6 +407,44 @@ test('requests a password reset and opens a six-box code validation screen witho
   expect(screen.getByRole('button', { name: 'Request another code in 37s' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'Back to sign in' })).toBeEnabled()
   expect(screen.queryByText(/123456/)).not.toBeInTheDocument()
+  expect(sessionStorage.getItem('foc.password-reset-pending-email')).toBe('alice@u.nus.edu')
+})
+
+test('returns directly to an unfinished reset code in the same browser session', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 202, headers: new Headers({ 'Retry-After': '37' }) })
+    .mockResolvedValueOnce({ ok: true, status: 204 }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+  await screen.findByRole('heading', { name: 'Verify reset code' })
+  await user.click(screen.getByRole('button', { name: 'Back to sign in' }))
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+
+  expect(await screen.findByRole('heading', { name: 'Verify reset code' })).toBeInTheDocument()
+  expect(screen.getByText('Enter the six-digit code already sent to your email.')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Request another code in 37s' })).toBeDisabled()
+  expect(fetch).toHaveBeenCalledTimes(1)
+
+  await user.paste('123456')
+  expect(await screen.findByRole('heading', { name: 'Choose a new password' })).toBeInTheDocument()
+})
+
+test('restores an unfinished reset code screen after a browser refresh', async () => {
+  sessionStorage.setItem('foc.password-reset-pending-email', 'alice@u.nus.edu')
+  sessionStorage.setItem('foc.password-reset-resend:alice@u.nus.edu', String(Date.now() + 37_000))
+  const { unmount } = render(<App />)
+  unmount()
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+
+  expect(await screen.findByRole('heading', { name: 'Verify reset code' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Request another code in 37s' })).toBeDisabled()
 })
 
 test('shows an accessible generic failure when a reset request cannot be completed', async () => {
@@ -628,4 +666,56 @@ test('shows a specific same-password error after a valid reset code without leav
 
   expect(await screen.findByRole('alert')).toHaveTextContent('New password must be different from your current password')
   expect(screen.getByRole('heading', { name: 'Choose a new password' })).toBeInTheDocument()
+})
+
+test('returns from the new-password screen to sign in and clears the reset draft', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 202 })
+    .mockResolvedValueOnce({ ok: true, status: 204 })
+    .mockResolvedValueOnce({ ok: true, status: 204 }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+  await user.paste('123456')
+  await screen.findByRole('heading', { name: 'Choose a new password' })
+  await user.type(screen.getByLabelText('New password'), 'replacement-password-with-15-chars')
+  await user.type(screen.getByLabelText('Confirm new password'), 'replacement-password-with-15-chars')
+  await user.click(screen.getByRole('button', { name: 'Back to sign in' }))
+
+  expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('New password')).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  expect(await screen.findByRole('heading', { name: 'Verify reset code' })).toBeInTheDocument()
+  await user.paste('654321')
+  await screen.findByRole('heading', { name: 'Choose a new password' })
+
+  expect(screen.getByLabelText('New password')).toHaveValue('')
+  expect(screen.getByLabelText('Confirm new password')).toHaveValue('')
+})
+
+test('clears the unfinished reset handoff after a successful password update', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 202 })
+    .mockResolvedValueOnce({ ok: true, status: 204 })
+    .mockResolvedValueOnce({ ok: true, status: 204 }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+  await user.paste('123456')
+  await screen.findByRole('heading', { name: 'Choose a new password' })
+  await user.type(screen.getByLabelText('New password'), 'replacement-password-with-15-chars')
+  await user.type(screen.getByLabelText('Confirm new password'), 'replacement-password-with-15-chars')
+  await user.click(screen.getByRole('button', { name: 'Update password' }))
+  await screen.findByRole('heading', { name: 'Password updated' })
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+
+  expect(await screen.findByRole('heading', { name: 'Reset your password' })).toBeInTheDocument()
+  expect(sessionStorage.getItem('foc.password-reset-pending-email')).toBeNull()
 })
