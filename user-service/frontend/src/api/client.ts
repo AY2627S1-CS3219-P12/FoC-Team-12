@@ -21,6 +21,11 @@ type PasswordResetConfirmation = {
   password: string
 }
 
+type PasswordResetVerification = {
+  email: string
+  code: string
+}
+
 type EmailVerificationRequest = {
   email: string
   code: string
@@ -95,6 +100,12 @@ export const api = {
   },
   confirmPasswordReset(requestBody: PasswordResetConfirmation) {
     return request<void>('/api/users/password-reset-confirmations', {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+    })
+  },
+  verifyPasswordReset(requestBody: PasswordResetVerification) {
+    return request<void>('/api/users/password-reset-verifications', {
       method: 'POST',
       body: JSON.stringify(requestBody),
     })

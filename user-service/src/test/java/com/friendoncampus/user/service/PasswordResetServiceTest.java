@@ -93,6 +93,21 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    void validatesAValidCodeWithoutChangingThePasswordOrConsumingTheCode() {
+        PasswordResetToken token = tokenExpiringAt(NOW.plusSeconds(600));
+        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+        when(tokens.findFirstByUser_IdAndUsedAtIsNullAndInvalidatedAtIsNullOrderByCreatedAtDesc(user.getId()))
+                .thenReturn(Optional.of(token));
+        when(passwords.matches("123456", "verifier")).thenReturn(true);
+
+        service.verify("alice@u.nus.edu", "123456");
+
+        assertThat(user.getPasswordHash()).isEqualTo("old-hash");
+        verify(passwords).matches("123456", "verifier");
+        verify(tokens, never()).save(any());
+    }
+
+    @Test
     void rejectsExpiredAndReplayedCodes() {
         PasswordResetToken expired = tokenExpiringAt(NOW.minusSeconds(1));
         when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));

@@ -4,7 +4,7 @@ import { ApiError, api, type UserProfile } from './api/client'
 import { clearSession, readSession, saveSession, type AuthSession } from './auth/session'
 import { OtpInput } from './OtpInput'
 
-type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-confirmation'
+type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-verification' | 'reset-confirmation'
 type State = 'idle' | 'loading' | 'success' | 'error'
 
 const eligibleEmail = /^[^@]+@(u\.nus\.edu|u\.duke\.nus\.edu|u\.yale-nus\.edu\.sg)$/i
@@ -56,19 +56,23 @@ export function App() {
   const [resendMessage, setResendMessage] = useState('')
   const [resetEmail, setResetEmail] = useState('')
   const [resetCode, setResetCode] = useState('')
+  const [resetDigits, setResetDigits] = useState<string[]>(() => Array(6).fill(''))
+  const [resetFocusVersion, setResetFocusVersion] = useState(0)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [resetRequestState, setResetRequestState] = useState<State>('idle')
   const [resetRequestMessage, setResetRequestMessage] = useState('')
+  const [resetVerificationState, setResetVerificationState] = useState<State>('idle')
+  const [resetVerificationMessage, setResetVerificationMessage] = useState('')
   const [resetConfirmationState, setResetConfirmationState] = useState<State>('idle')
   const [resetConfirmationMessage, setResetConfirmationMessage] = useState('')
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
   const verificationInFlight = useRef(false)
+  const resetVerificationInFlight = useRef(false)
   const loginPasswordRef = useRef<HTMLInputElement>(null)
   const registrationUsernameRef = useRef<HTMLInputElement>(null)
   const registrationPasswordRef = useRef<HTMLInputElement>(null)
-  const resetCodeRef = useRef<HTMLInputElement>(null)
   const newPasswordRef = useRef<HTMLInputElement>(null)
   const confirmPasswordRef = useRef<HTMLInputElement>(null)
 
@@ -124,6 +128,8 @@ export function App() {
     setResendMessage('')
     setResetRequestState('idle')
     setResetRequestMessage('')
+    setResetVerificationState('idle')
+    setResetVerificationMessage('')
     setResetConfirmationState('idle')
     setResetConfirmationMessage('')
   }
@@ -290,11 +296,45 @@ export function App() {
     setResetRequestMessage('')
     try {
       await api.requestPasswordReset({ email: resetEmail })
-      setResetRequestState('success')
-      setResetRequestMessage('If an eligible active account matches that email, a reset code has been sent.')
+      setResetDigits(Array(6).fill(''))
+      show('reset-verification')
     } catch {
       setResetRequestState('error')
       setResetRequestMessage('Unable to request a password reset right now. Please try again.')
+    }
+  }
+
+  const verifyPasswordReset = async (completedCode?: string) => {
+    if (resetVerificationInFlight.current) {
+      return
+    }
+    const code = completedCode ?? resetDigits.join('')
+    if (!emailFormat.test(resetEmail)) {
+      setResetVerificationState('error')
+      setResetVerificationMessage('Enter a valid email address.')
+      return
+    }
+    if (!/^\d{6}$/.test(code)) {
+      setResetVerificationState('error')
+      setResetVerificationMessage('Enter the six-digit code from your email.')
+      return
+    }
+    resetVerificationInFlight.current = true
+    setResetVerificationState('loading')
+    setResetVerificationMessage('')
+    try {
+      await api.verifyPasswordReset({ email: resetEmail, code })
+      setResetCode(code)
+      show('reset-confirmation')
+    } catch (error) {
+      setResetVerificationState('error')
+      setResetVerificationMessage(error instanceof ApiError ? error.message : 'Unable to verify the reset code right now. Please try again.')
+      if (error instanceof ApiError) {
+        setResetDigits(Array(6).fill(''))
+        setResetFocusVersion(version => version + 1)
+      }
+    } finally {
+      resetVerificationInFlight.current = false
     }
   }
 
@@ -356,7 +396,7 @@ export function App() {
 
   const busy = loginState === 'loading' || registrationState === 'loading'
     || verificationState === 'loading' || resendState === 'loading'
-    || resetRequestState === 'loading' || resetConfirmationState === 'loading'
+    || resetRequestState === 'loading' || resetVerificationState === 'loading' || resetConfirmationState === 'loading'
 
   return <main><section aria-labelledby="account-title">
     <p className="eyebrow">Friend on Campus</p>
@@ -405,15 +445,21 @@ export function App() {
       <label>Email<input type="email" autoFocus autoComplete="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} disabled={busy} aria-invalid={resetRequestState === 'error'} /></label>
       <button disabled={busy}>{resetRequestState === 'loading' ? 'Sending…' : 'Send reset code'}</button>
       {resetRequestMessage && <p role={resetRequestState === 'error' ? 'alert' : 'status'} className={resetRequestState}>{resetRequestMessage}</p>}
-      {resetRequestState === 'success' && <button type="button" className="secondary" onClick={() => show('reset-confirmation')}>Enter reset code</button>}
       <button type="button" className="text-button" onClick={() => show('login')}>Back to sign in</button>
+    </form>}
+
+    {view === 'reset-verification' && <form onSubmit={event => { event.preventDefault(); void verifyPasswordReset() }} noValidate aria-busy={busy} aria-label="Verify password reset code form">
+      <h1 id="account-title">Verify reset code</h1>
+      <p className="intro">If an eligible active account matches your email, enter the six-digit code that was sent to it.</p>
+      <p className="verification-email">Reset code for <strong>{resetEmail}</strong>.</p>
+      <label>Reset code<OtpInput value={resetDigits} onChange={setResetDigits} onComplete={code => { void verifyPasswordReset(code) }} focusFirst={resetFocusVersion} disabled={busy} invalid={resetVerificationState === 'error'} /></label>
+      {resetVerificationMessage && <p role={resetVerificationState === 'error' ? 'alert' : 'status'} className={resetVerificationState}>{resetVerificationMessage}</p>}
+      <button type="button" className="text-button" onClick={() => show('reset-request')}>Request another code</button>
     </form>}
 
     {view === 'reset-confirmation' && <form onSubmit={confirmPasswordReset} noValidate aria-busy={busy} aria-label="Confirm password reset form">
       <h1 id="account-title">Choose a new password</h1>
-      <p className="intro">Enter the six-digit code sent to your email and choose a new password.</p>
-      <label>Email<input type="email" autoComplete="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, resetCodeRef)} disabled={busy} aria-invalid={resetConfirmationState === 'error'} /></label>
-      <label>Reset code<input ref={resetCodeRef} autoFocus inputMode="numeric" autoComplete="one-time-code" value={resetCode} maxLength={6} onChange={event => setResetCode(event.target.value.replace(/\D/g, ''))} onKeyDown={event => focusOnEnter(event, newPasswordRef)} disabled={busy} aria-invalid={resetConfirmationState === 'error'} /></label>
+      <p className="intro">Your reset code is verified. Choose a new password for <strong>{resetEmail}</strong>.</p>
       <label>New password<PasswordInput value={newPassword} onChange={setNewPassword} inputRef={newPasswordRef} onKeyDown={event => focusOnEnter(event, confirmPasswordRef)} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
       <label>Confirm new password<PasswordInput value={confirmPassword} onChange={setConfirmPassword} inputRef={confirmPasswordRef} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
       <button disabled={busy}>{resetConfirmationState === 'loading' ? 'Updating…' : 'Update password'}</button>

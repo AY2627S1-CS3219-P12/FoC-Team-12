@@ -228,9 +228,12 @@ code, sends a new six-digit code, and keeps only a verifier in the database. Cod
 minutes, allow five attempts, and cannot be reused after a successful reset. Banned accounts do not
 receive a reset code and remain banned.
 
-`POST /api/users/password-reset-confirmations` accepts `email`, six-digit `code`, and a replacement
-password (15–64 characters). A valid code changes the password and returns `204 No Content`; invalid,
-expired, replayed, and exhausted codes return the same `400` Problem Detail response.
+`POST /api/users/password-reset-verifications` accepts `email` and the six-digit `code`. It validates
+the code without consuming it and returns `204 No Content`, allowing a client to show the password-entry
+screen only after successful validation. The existing `POST /api/users/password-reset-confirmations`
+then accepts `email`, `code`, and a replacement password (15–64 characters); it revalidates and consumes
+the code when changing the password. Invalid, expired, replayed, and exhausted codes return the same
+`400` Problem Detail response from either endpoint.
 
 To send real email, configure Twilio SendGrid through environment variables before starting the
 service. Do not put these values in source control:
@@ -264,3 +267,4 @@ entering the sixth digit automatically submits the verification. The resend butt
 cooldown and is disabled until another request is allowed.
 When a user supplies the correct password for an unverified account, login likewise moves to that
 verification screen; incorrect credentials and banned accounts remain a generic login failure.
+Password reset similarly uses six OTP boxes; only a validated code opens the new-password screen.

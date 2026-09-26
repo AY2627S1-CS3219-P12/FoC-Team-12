@@ -49,6 +49,18 @@ class PasswordResetControllerTest {
     }
 
     @Test
+    void validatesAResetCodeBeforeThePasswordIsSubmitted() throws Exception {
+        mvc.perform(post("/api/users/password-reset-verifications").contentType("application/json")
+                        .content("{\"email\":\"alice@u.nus.edu\",\"code\":\"123456\"}"))
+                .andExpect(status().isNoContent());
+        verify(passwordResets).verify("alice@u.nus.edu", "123456");
+
+        mvc.perform(post("/api/users/password-reset-verifications").contentType("application/json")
+                        .content("{\"email\":\"alice@u.nus.edu\",\"code\":\"abcdef\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void returnsOneGenericErrorForInvalidOrExpiredCodes() throws Exception {
         doThrow(new InvalidPasswordResetCodeException()).when(passwordResets)
                 .confirm(anyString(), anyString(), anyString());
@@ -57,6 +69,12 @@ class PasswordResetControllerTest {
                         .content("{\"email\":\"alice@u.nus.edu\",\"code\":\"123456\",\"password\":\"new-password-123\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Password reset failed"))
+                .andExpect(jsonPath("$.detail").value("Invalid or expired password reset code"));
+
+        doThrow(new InvalidPasswordResetCodeException()).when(passwordResets).verify(anyString(), anyString());
+        mvc.perform(post("/api/users/password-reset-verifications").contentType("application/json")
+                        .content("{\"email\":\"alice@u.nus.edu\",\"code\":\"123456\"}"))
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("Invalid or expired password reset code"));
     }
 }
