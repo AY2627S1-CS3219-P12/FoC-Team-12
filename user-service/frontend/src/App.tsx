@@ -4,12 +4,13 @@ import { ApiError, api, type UserProfile } from './api/client'
 import { clearSession, readSession, saveSession, type AuthSession } from './auth/session'
 import { OtpInput } from './OtpInput'
 
-type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-verification' | 'reset-confirmation'
+type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-verification' | 'reset-confirmation' | 'reset-complete'
 type State = 'idle' | 'loading' | 'success' | 'error'
 
 const eligibleEmail = /^[^@]+@(u\.nus\.edu|u\.duke\.nus\.edu|u\.yale-nus\.edu\.sg)$/i
 const emailFormat = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const verificationCooldownKey = (email: string) => `foc.email-verification-resend:${email.trim().toLowerCase()}`
+const resetCooldownKey = (email: string) => `foc.password-reset-resend:${email.trim().toLowerCase()}`
 
 function PasswordInput({
   value, onChange, disabled, invalid, autoComplete, inputRef, onKeyDown,
@@ -67,7 +68,10 @@ export function App() {
   const [resetConfirmationState, setResetConfirmationState] = useState<State>('idle')
   const [resetConfirmationMessage, setResetConfirmationMessage] = useState('')
   const [resendAvailableAt, setResendAvailableAt] = useState<number | null>(null)
+  const [resetResendAvailableAt, setResetResendAvailableAt] = useState<number | null>(null)
   const [currentTime, setCurrentTime] = useState(() => Date.now())
+  const [resetResendState, setResetResendState] = useState<State>('idle')
+  const [resetResendMessage, setResetResendMessage] = useState('')
   const verificationInFlight = useRef(false)
   const resetVerificationInFlight = useRef(false)
   const loginPasswordRef = useRef<HTMLInputElement>(null)
@@ -99,21 +103,24 @@ export function App() {
   }, [session])
 
   useEffect(() => {
-    if (!resendAvailableAt) {
+    if (!resendAvailableAt && !resetResendAvailableAt) {
       return
     }
     const timer = window.setInterval(() => {
       const now = Date.now()
       setCurrentTime(now)
-      if (now >= resendAvailableAt) {
+      if ((!resendAvailableAt || now >= resendAvailableAt) && (!resetResendAvailableAt || now >= resetResendAvailableAt)) {
         window.clearInterval(timer)
       }
     }, 1000)
     return () => window.clearInterval(timer)
-  }, [resendAvailableAt])
+  }, [resendAvailableAt, resetResendAvailableAt])
 
   const resendSecondsRemaining = resendAvailableAt
     ? Math.max(0, Math.ceil((resendAvailableAt - currentTime) / 1000))
+    : 0
+  const resetResendSecondsRemaining = resetResendAvailableAt
+    ? Math.max(0, Math.ceil((resetResendAvailableAt - currentTime) / 1000))
     : 0
 
   const show = (nextView: View) => {
@@ -130,6 +137,8 @@ export function App() {
     setResetRequestMessage('')
     setResetVerificationState('idle')
     setResetVerificationMessage('')
+    setResetResendState('idle')
+    setResetResendMessage('')
     setResetConfirmationState('idle')
     setResetConfirmationMessage('')
   }
@@ -144,6 +153,13 @@ export function App() {
   const restoreResendCooldown = (emailAddress: string) => {
     const deadline = Number(sessionStorage.getItem(verificationCooldownKey(emailAddress)))
     setResendAvailableAt(Number.isFinite(deadline) && deadline > Date.now() ? deadline : null)
+    setCurrentTime(Date.now())
+  }
+
+  const startResetResendCooldown = (emailAddress: string) => {
+    const deadline = Date.now() + 90_000
+    sessionStorage.setItem(resetCooldownKey(emailAddress), String(deadline))
+    setResetResendAvailableAt(deadline)
     setCurrentTime(Date.now())
   }
 
@@ -297,10 +313,29 @@ export function App() {
     try {
       await api.requestPasswordReset({ email: resetEmail })
       setResetDigits(Array(6).fill(''))
+      startResetResendCooldown(resetEmail)
       show('reset-verification')
     } catch {
       setResetRequestState('error')
       setResetRequestMessage('Unable to request a password reset right now. Please try again.')
+    }
+  }
+
+  const resendPasswordReset = async () => {
+    if (resetResendSecondsRemaining > 0 || !emailFormat.test(resetEmail)) {
+      return
+    }
+    setResetResendState('loading')
+    setResetResendMessage('')
+    try {
+      await api.requestPasswordReset({ email: resetEmail })
+      setResetResendState('success')
+      setResetResendMessage('If an eligible active account matches your email, a new reset code has been sent.')
+      setResetDigits(Array(6).fill(''))
+      startResetResendCooldown(resetEmail)
+    } catch {
+      setResetResendState('error')
+      setResetResendMessage('Unable to request another reset code right now. Please try again.')
     }
   }
 
@@ -369,6 +404,7 @@ export function App() {
       setResetCode('')
       setNewPassword('')
       setConfirmPassword('')
+      show('reset-complete')
     } catch {
       setResetConfirmationState('error')
       setResetConfirmationMessage('The code is invalid or expired. Request a new code and try again.')
@@ -396,7 +432,7 @@ export function App() {
 
   const busy = loginState === 'loading' || registrationState === 'loading'
     || verificationState === 'loading' || resendState === 'loading'
-    || resetRequestState === 'loading' || resetVerificationState === 'loading' || resetConfirmationState === 'loading'
+    || resetRequestState === 'loading' || resetVerificationState === 'loading' || resetConfirmationState === 'loading' || resetResendState === 'loading'
 
   return <main><section aria-labelledby="account-title">
     <p className="eyebrow">Friend on Campus</p>
@@ -454,7 +490,9 @@ export function App() {
       <p className="verification-email">Reset code for <strong>{resetEmail}</strong>.</p>
       <label>Reset code<OtpInput value={resetDigits} onChange={setResetDigits} onComplete={code => { void verifyPasswordReset(code) }} focusFirst={resetFocusVersion} disabled={busy} invalid={resetVerificationState === 'error'} /></label>
       {resetVerificationMessage && <p role={resetVerificationState === 'error' ? 'alert' : 'status'} className={resetVerificationState}>{resetVerificationMessage}</p>}
-      <button type="button" className="text-button" onClick={() => show('reset-request')}>Request another code</button>
+      <button type="button" className="secondary" disabled={busy || resetResendSecondsRemaining > 0} onClick={resendPasswordReset}>{resetResendState === 'loading' ? 'Sending…' : resetResendSecondsRemaining > 0 ? `Request another code in ${resetResendSecondsRemaining}s` : 'Request another code'}</button>
+      {resetResendMessage && <p role={resetResendState === 'error' ? 'alert' : 'status'} className={resetResendState}>{resetResendMessage}</p>}
+      <button type="button" className="text-button" onClick={() => show('login')}>Back to sign in</button>
     </form>}
 
     {view === 'reset-confirmation' && <form onSubmit={confirmPasswordReset} noValidate aria-busy={busy} aria-label="Confirm password reset form">
@@ -464,8 +502,11 @@ export function App() {
       <label>Confirm new password<PasswordInput value={confirmPassword} onChange={setConfirmPassword} inputRef={confirmPasswordRef} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
       <button disabled={busy}>{resetConfirmationState === 'loading' ? 'Updating…' : 'Update password'}</button>
       {resetConfirmationMessage && <p role={resetConfirmationState === 'error' ? 'alert' : 'status'} className={resetConfirmationState}>{resetConfirmationMessage}</p>}
-      {resetConfirmationState === 'success' && <button type="button" className="secondary" onClick={() => show('login')}>Sign in</button>}
-      <button type="button" className="text-button" onClick={() => show('reset-request')}>Request another code</button>
     </form>}
+    {view === 'reset-complete' && <div aria-labelledby="account-title">
+      <h1 id="account-title">Password updated</h1>
+      <p role="status" className="success">Your password has been updated. You can now sign in.</p>
+      <button type="button" onClick={() => show('login')}>Sign in</button>
+    </div>}
   </section></main>
 }

@@ -141,6 +141,8 @@ test('requests a password reset and opens a six-box code validation screen witho
   expect(fetch).toHaveBeenCalledWith('/api/users/password-reset-requests', expect.objectContaining({ method: 'POST' }))
   expect(await screen.findByRole('heading', { name: 'Verify reset code' })).toBeInTheDocument()
   expect(screen.getAllByRole('textbox', { name: /Verification code digit/ })).toHaveLength(6)
+  expect(screen.getByRole('button', { name: 'Request another code in 90s' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Back to sign in' })).toBeEnabled()
   expect(screen.queryByText(/123456/)).not.toBeInTheDocument()
 })
 
@@ -302,7 +304,10 @@ test('confirms a reset code and lets the user return to sign in', async () => {
   await user.click(screen.getByRole('button', { name: 'Update password' }))
 
   expect(fetch).toHaveBeenLastCalledWith('/api/users/password-reset-confirmations', expect.objectContaining({ method: 'POST' }))
-  expect(await screen.findByRole('status')).toHaveTextContent('Your password has been updated. You can now sign in.')
+  expect(await screen.findByRole('heading', { name: 'Password updated' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('New password')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Confirm new password')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Request another code' })).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Sign in' }))
   expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
 })

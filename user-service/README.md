@@ -268,3 +268,6 @@ cooldown and is disabled until another request is allowed.
 When a user supplies the correct password for an unverified account, login likewise moves to that
 verification screen; incorrect credentials and banned accounts remain a generic login failure.
 Password reset similarly uses six OTP boxes; only a validated code opens the new-password screen.
+The reset OTP screen keeps the user in place when requesting another code, shows a browser-side
+90-second resend countdown, and offers only a successful OTP path or **Back to sign in**. After a
+password update, the frontend shows a completion screen with only **Sign in**.
