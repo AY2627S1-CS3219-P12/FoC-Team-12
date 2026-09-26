@@ -51,4 +51,18 @@ class PasswordChangeServiceTest {
         verify(passwords, never()).encode(anyString());
         verify(users, never()).save(user);
     }
+
+    @Test
+    void rejectsAReplacementMatchingTheCurrentPasswordWithoutChangingTheHash() {
+        User user = User.register("alice@u.nus.edu", "Alice", "alice", "old-hash");
+        when(users.findById(user.getId())).thenReturn(Optional.of(user));
+        when(passwords.matches("current-password", "old-hash")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.changePassword(user.getId(), "current-password", "current-password"))
+                .isInstanceOf(PasswordReuseException.class)
+                .hasMessage("New password must be different from your current password");
+
+        verify(passwords, never()).encode(anyString());
+        verify(users, never()).save(user);
+    }
 }

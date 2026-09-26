@@ -95,6 +95,25 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    void rejectsAReplacementMatchingTheCurrentPasswordWithoutConsumingTheCode() {
+        PasswordResetToken token = tokenExpiringAt(NOW.plusSeconds(600));
+        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+        when(tokens.findFirstByUser_IdAndUsedAtIsNullAndInvalidatedAtIsNullOrderByCreatedAtDesc(user.getId()))
+                .thenReturn(Optional.of(token));
+        when(passwords.matches("123456", "verifier")).thenReturn(true);
+        when(passwords.matches("old-password-with-15-chars", "old-hash")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.confirm("alice@u.nus.edu", "123456", "old-password-with-15-chars"))
+                .isInstanceOf(PasswordReuseException.class)
+                .hasMessage("New password must be different from your current password");
+
+        assertThat(token.isUsableAt(OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC))).isTrue();
+        verify(passwords, never()).encode(any());
+        verify(users, never()).save(user);
+        verify(tokens, never()).save(token);
+    }
+
+    @Test
     void validatesAValidCodeWithoutChangingThePasswordOrConsumingTheCode() {
         PasswordResetToken token = tokenExpiringAt(NOW.plusSeconds(600));
         when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));

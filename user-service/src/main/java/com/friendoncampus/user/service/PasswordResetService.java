@@ -80,6 +80,10 @@ public class PasswordResetService {
         PasswordResetToken token = reset.token();
         OffsetDateTime now = now();
 
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new PasswordReuseException();
+        }
+
         user.changePasswordHash(passwordEncoder.encode(newPassword));
         user.clearLoginFailures();
         token.markUsed(now);

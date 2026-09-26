@@ -189,14 +189,14 @@ database access; they should cache keys and refresh them when an unfamiliar `kid
 role, account status, and account creation timestamp. `PATCH /api/users/me/username` accepts
 `{"username":"..."}` and returns the updated persisted profile. Usernames are required, at most
 20 characters, and unique case-insensitively; an already-used username returns `409 Conflict`.
-The profile API does not permit changing email, password, role, or status.
+The profile API does not permit changing email, role, or status.
 The live profile reflects a changed username immediately. An already-issued JWT keeps its prior
 username claim until it expires or the user signs in again; services must use the stable user ID,
 not that display-name claim, as the account identifier.
 
 `PATCH /api/users/me/password` accepts the authenticated user's `currentPassword` and a
-15–64-character `newPassword`. The current password must match before the replacement is
-BCrypt-hashed and stored. A successful browser password change signs that browser session out;
+15–64-character `newPassword`. The current password must match and the replacement must differ
+from it before the new value is BCrypt-hashed and stored. A successful browser password change signs that browser session out;
 sign in again with the new password. Existing RS256 access tokens are stateless and can remain
 valid until their normal 15-minute expiry; immediate all-session token revocation is deferred to
 a future token-session design.
@@ -256,6 +256,7 @@ It validates the code without consuming it and returns `204 No Content`, allowin
 password-entry screen only after successful validation. The existing
 `POST /api/users/password-reset-confirmations` then accepts an eligible NUS `email`, `code`, and a
 replacement password (15–64 characters); it revalidates and consumes the code when changing the password.
+The replacement must differ from the stored password; this rule is checked only after a valid code is supplied.
 Invalid, expired, replayed, and exhausted codes return the same `400` Problem Detail response from either
 endpoint.
 

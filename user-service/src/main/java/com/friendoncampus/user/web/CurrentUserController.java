@@ -66,7 +66,7 @@ public class CurrentUserController {
     @PatchMapping("/me/password")
     @Operation(summary = "Change the authenticated user's password")
     @ApiResponse(responseCode = "204", description = "Password changed")
-    @ApiResponse(responseCode = "400", description = "Current password is incorrect or replacement password is invalid")
+    @ApiResponse(responseCode = "400", description = "Current password is incorrect, replacement password is invalid, or replacement matches the current password")
     @ApiResponse(responseCode = "401", description = "Missing or invalid bearer token")
     @SecurityRequirement(name = "bearerAuth")
     @ResponseStatus(HttpStatus.NO_CONTENT)

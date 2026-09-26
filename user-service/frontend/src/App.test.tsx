@@ -289,6 +289,29 @@ test('validates a sufficiently long replacement password before calling the API'
   expect(fetch).toHaveBeenCalledTimes(1)
 })
 
+test('does not submit a Profile password replacement matching the current password', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+    role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+  }) }))
+  render(<App />)
+  const user = userEvent.setup()
+  const password = 'current-password-with-15-chars'
+
+  await user.click(await screen.findByRole('button', { name: 'Change' }))
+  await user.type(screen.getByLabelText('Current password'), password)
+  await user.type(screen.getByLabelText('New password'), password)
+  await user.type(screen.getByLabelText('Confirm new password'), password)
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('New password must be different from your current password.')
+  expect(fetch).toHaveBeenCalledTimes(1)
+})
+
 test('shows one generic failure for failed login', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({ detail: 'Incorrect email or password' }) }))
   render(<App />)
@@ -583,4 +606,26 @@ test('shows a generic confirmation failure for an invalid or expired code', asyn
   digits.forEach(digit => expect(digit).toHaveValue(''))
   expect(digits[0]).toHaveFocus()
   expect(screen.queryByRole('heading', { name: 'Choose a new password' })).not.toBeInTheDocument()
+})
+
+test('shows a specific same-password error after a valid reset code without leaving the password screen', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 202 })
+    .mockResolvedValueOnce({ ok: true, status: 204 })
+    .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({
+      code: 'PASSWORD_REUSE', detail: 'New password must be different from your current password',
+    }) }))
+  render(<App />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
+  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+  await user.paste('123456')
+  await screen.findByRole('heading', { name: 'Choose a new password' })
+  await user.type(screen.getByLabelText('New password'), 'old-password-with-15-chars')
+  await user.type(screen.getByLabelText('Confirm new password'), 'old-password-with-15-chars')
+  await user.click(screen.getByRole('button', { name: 'Update password' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('New password must be different from your current password')
+  expect(screen.getByRole('heading', { name: 'Choose a new password' })).toBeInTheDocument()
 })

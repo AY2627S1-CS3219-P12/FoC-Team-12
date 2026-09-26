@@ -484,9 +484,11 @@ export function App() {
       setNewPassword('')
       setConfirmPassword('')
       show('reset-complete')
-    } catch {
+    } catch (error) {
       setResetConfirmationState('error')
-      setResetConfirmationMessage('The code is invalid or expired. Request a new code and try again.')
+      setResetConfirmationMessage(error instanceof ApiError && error.code === 'PASSWORD_REUSE'
+        ? error.message
+        : 'The code is invalid or expired. Request a new code and try again.')
     }
   }
 
@@ -537,6 +539,11 @@ export function App() {
     if (changedPassword !== changedPasswordConfirmation) {
       setPasswordChangeState('error')
       setPasswordChangeMessage('New passwords do not match.')
+      return
+    }
+    if (changedPassword === currentPassword) {
+      setPasswordChangeState('error')
+      setPasswordChangeMessage('New password must be different from your current password.')
       return
     }
 

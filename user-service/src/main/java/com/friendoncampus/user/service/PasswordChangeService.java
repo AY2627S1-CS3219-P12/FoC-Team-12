@@ -25,6 +25,9 @@ public class PasswordChangeService {
         if (!passwords.matches(currentPassword, user.getPasswordHash())) {
             throw new CurrentPasswordIncorrectException();
         }
+        if (passwords.matches(newPassword, user.getPasswordHash())) {
+            throw new PasswordReuseException();
+        }
 
         user.changePasswordHash(passwords.encode(newPassword));
         user.clearLoginFailures();

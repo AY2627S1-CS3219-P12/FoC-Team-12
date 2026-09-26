@@ -40,7 +40,7 @@ public class PasswordResetController {
     @PostMapping("/password-reset-confirmations")
     @Operation(summary = "Confirm a password reset code and change the password")
     @ApiResponse(responseCode = "204", description = "Password changed; reset code consumed")
-    @ApiResponse(responseCode = "400", description = "Invalid, expired, replayed, or exhausted code or invalid password")
+    @ApiResponse(responseCode = "400", description = "Invalid, expired, replayed, or exhausted code; invalid password; or replacement matching the current password")
     public ResponseEntity<Void> confirm(@Valid @RequestBody PasswordResetConfirmation confirmation) {
         passwordResets.confirm(confirmation.email(), confirmation.code(), confirmation.password());
         return ResponseEntity.noContent().build();

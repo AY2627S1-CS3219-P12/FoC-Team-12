@@ -17,6 +17,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.friendoncampus.user.service.InvalidPasswordResetCodeException;
+import com.friendoncampus.user.service.PasswordReuseException;
 import com.friendoncampus.user.service.PasswordResetService;
 
 @WebMvcTest(PasswordResetController.class)
@@ -95,5 +96,17 @@ class PasswordResetControllerTest {
                         .content("{\"email\":\"alice@u.nus.edu\",\"code\":\"123456\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("Invalid or expired password reset code"));
+    }
+
+    @Test
+    void explainsThatTheReplacementPasswordMustDifferAfterAValidResetCode() throws Exception {
+        doThrow(new PasswordReuseException()).when(passwordResets)
+                .confirm(anyString(), anyString(), anyString());
+
+        mvc.perform(post("/api/users/password-reset-confirmations").contentType("application/json")
+                        .content("{\"email\":\"alice@u.nus.edu\",\"code\":\"123456\",\"password\":\"old-password-with-15-chars\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("New password must be different from your current password"))
+                .andExpect(jsonPath("$.code").value("PASSWORD_REUSE"));
     }
 }

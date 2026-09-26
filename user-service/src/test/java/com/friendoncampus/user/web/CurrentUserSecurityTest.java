@@ -153,6 +153,12 @@ class CurrentUserSecurityTest {
                 .andExpect(jsonPath("$.detail").value("Current password is incorrect"));
         mvc.perform(patch("/api/users/me/password").header("Authorization", "Bearer " + token)
                         .contentType("application/json")
+                        .content("{\"currentPassword\":\"current-password-with-15-chars\",\"newPassword\":\"current-password-with-15-chars\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("New password must be different from your current password"))
+                .andExpect(jsonPath("$.code").value("PASSWORD_REUSE"));
+        mvc.perform(patch("/api/users/me/password").header("Authorization", "Bearer " + token)
+                        .contentType("application/json")
                         .content("{\"currentPassword\":\"current-password-with-15-chars\",\"newPassword\":\"short\"}"))
                 .andExpect(status().isBadRequest());
     }
