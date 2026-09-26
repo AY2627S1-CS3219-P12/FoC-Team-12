@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.friendoncampus.user.service.PasswordResetService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -26,6 +27,7 @@ public class PasswordResetController {
 
     @PostMapping("/password-reset-requests")
     @Operation(summary = "Request a password reset code")
+    @ApiResponse(responseCode = "202", description = "Same response for known and unknown email addresses")
     public ResponseEntity<Void> request(@Valid @RequestBody PasswordResetRequest request) {
         passwordResets.request(request.email());
         return ResponseEntity.accepted().build();
@@ -33,6 +35,8 @@ public class PasswordResetController {
 
     @PostMapping("/password-reset-confirmations")
     @Operation(summary = "Confirm a password reset code and change the password")
+    @ApiResponse(responseCode = "204", description = "Password changed; reset code consumed")
+    @ApiResponse(responseCode = "400", description = "Invalid, expired, replayed, or exhausted code or invalid password")
     public ResponseEntity<Void> confirm(@Valid @RequestBody PasswordResetConfirmation confirmation) {
         passwordResets.confirm(confirmation.email(), confirmation.code(), confirmation.password());
         return ResponseEntity.noContent().build();

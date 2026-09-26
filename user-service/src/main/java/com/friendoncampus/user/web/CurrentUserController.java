@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 
 @RestController
@@ -26,6 +27,8 @@ public class CurrentUserController {
 
     @GetMapping("/me")
     @Operation(summary = "Return the authenticated user's persisted profile")
+    @ApiResponse(responseCode = "200", description = "View-only persisted profile")
+    @ApiResponse(responseCode = "401", description = "Missing or invalid bearer token")
     @SecurityRequirement(name = "bearerAuth")
     public Response currentUser(@AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
