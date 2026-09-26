@@ -1,20 +1,22 @@
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 
 type OtpInputProps = {
   value: string[]
   onChange: (value: string[]) => void
   onComplete?: (code: string) => void
+  focusFirst?: number
   disabled?: boolean
   invalid?: boolean
 }
 
 const digitsOnly = (value: string) => value.replace(/\D/g, '').slice(0, 6)
 
-export function OtpInput({ value, onChange, onComplete, disabled = false, invalid = false }: OtpInputProps) {
+export function OtpInput({ value, onChange, onComplete, focusFirst = 0, disabled = false, invalid = false }: OtpInputProps) {
   const inputs = useRef<Array<HTMLInputElement | null>>([])
   const digits = Array.from({ length: 6 }, (_, index) => value[index] ?? '')
 
   const focus = (index: number) => inputs.current[index]?.focus()
+  useEffect(() => { focus(0) }, [focusFirst])
   const replaceAt = (index: number, digit: string) => {
     const next = digits.slice()
     next[index] = digit

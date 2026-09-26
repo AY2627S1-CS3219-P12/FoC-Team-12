@@ -174,6 +174,21 @@ test('verifies a registered email with the live verification API', async () => {
   expect(screen.queryByRole('button', { name: 'Verify email' })).not.toBeInTheDocument()
 })
 
+test('clears a rejected verification code and returns focus to its first digit', async () => {
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })
+    .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ detail: 'The verification code is invalid or expired.' }) }))
+  render(<App />)
+  const user = userEvent.setup()
+  await openVerificationAfterRegistration(user)
+  const digits = screen.getAllByRole('textbox', { name: /Verification code digit/ })
+  await user.paste('000000')
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('The verification code is invalid or expired.')
+  digits.forEach(digit => expect(digit).toHaveValue(''))
+  expect(digits[0]).toHaveFocus()
+})
+
 test('redirects to OTP only when the API confirmed correct credentials require verification', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
     ok: false,

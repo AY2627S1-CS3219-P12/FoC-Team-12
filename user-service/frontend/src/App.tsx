@@ -51,6 +51,7 @@ export function App() {
   const [verificationDigits, setVerificationDigits] = useState<string[]>(() => Array(6).fill(''))
   const [verificationState, setVerificationState] = useState<State>('idle')
   const [verificationMessage, setVerificationMessage] = useState('')
+  const [verificationFocusVersion, setVerificationFocusVersion] = useState(0)
   const [resendState, setResendState] = useState<State>('idle')
   const [resendMessage, setResendMessage] = useState('')
   const [resetEmail, setResetEmail] = useState('')
@@ -242,6 +243,10 @@ export function App() {
       setVerificationMessage(error instanceof ApiError
         ? error.message
         : 'Unable to verify your email right now. Please try again.')
+      if (error instanceof ApiError) {
+        setVerificationDigits(Array(6).fill(''))
+        setVerificationFocusVersion(version => version + 1)
+      }
     } finally {
       verificationInFlight.current = false
     }
@@ -384,7 +389,7 @@ export function App() {
       <h1 id="account-title">Verify your email</h1>
       <p className="intro">Enter the six-digit code sent to your NUS email. You must verify your email before you can sign in.</p>
       <p className="verification-email">Verification code sent to <strong>{verificationEmail}</strong>.</p>
-      <label>Verification code<OtpInput value={verificationDigits} onChange={setVerificationDigits} onComplete={code => { void verifyEmail(code) }} disabled={busy} invalid={verificationState === 'error'} /></label>
+      <label>Verification code<OtpInput value={verificationDigits} onChange={setVerificationDigits} onComplete={code => { void verifyEmail(code) }} focusFirst={verificationFocusVersion} disabled={busy} invalid={verificationState === 'error'} /></label>
       {verificationMessage && <p role={verificationState === 'error' ? 'alert' : 'status'} className={verificationState}>{verificationMessage}</p>}
       {verificationState === 'success' && <button type="button" className="secondary" onClick={() => show('login')}>Sign in</button>}
       {verificationState !== 'success' && <>
