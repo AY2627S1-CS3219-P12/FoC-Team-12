@@ -19,6 +19,9 @@ public class OpenApiConfiguration {
                 .info(new Info()
                         .title("Friend on Campus User API")
                         .version("v1")
-                        .description("Manages Friend on Campus user accounts and publishes RS256 JWT verification keys."));
+                        .description("D2 User Service: NUS-email registration and verification, login, password reset, "
+                                + "view-only profile, and administrator role/lifecycle controls. First-admin "
+                                + "bootstrap is deployment-only, not an HTTP endpoint. Publishes RS256 public keys "
+                                + "at /.well-known/jwks.json."));
     }
 }

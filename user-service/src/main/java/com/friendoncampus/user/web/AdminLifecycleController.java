@@ -43,6 +43,7 @@ public class AdminLifecycleController {
     @GetMapping
     @Operation(summary = "List accounts for a future administrator client")
     @ApiResponse(responseCode = "200", description = "Paged account summaries")
+    @ApiResponse(responseCode = "401", description = "Missing or invalid bearer token")
     @ApiResponse(responseCode = "403", description = "Administrator access required")
     public PageResponse list(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) String query,
             @ParameterObject @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
@@ -54,7 +55,9 @@ public class AdminLifecycleController {
     @PatchMapping("/{id}/role")
     @Operation(summary = "Promote or demote an active account")
     @ApiResponse(responseCode = "200", description = "Role changed")
+    @ApiResponse(responseCode = "401", description = "Missing or invalid bearer token")
     @ApiResponse(responseCode = "403", description = "Administrator access required")
+    @ApiResponse(responseCode = "404", description = "Target account not found")
     @ApiResponse(responseCode = "409", description = "Invalid role change or protected final administrator")
     public AccountResponse changeRole(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
             @Valid @RequestBody RoleRequest request) {
@@ -65,7 +68,9 @@ public class AdminLifecycleController {
     @PatchMapping("/{id}/status")
     @Operation(summary = "Ban or reactivate an account")
     @ApiResponse(responseCode = "200", description = "Account lifecycle status changed")
+    @ApiResponse(responseCode = "401", description = "Missing or invalid bearer token")
     @ApiResponse(responseCode = "403", description = "Administrator access required")
+    @ApiResponse(responseCode = "404", description = "Target account not found")
     @ApiResponse(responseCode = "409", description = "Invalid lifecycle change or protected final administrator")
     public AccountResponse changeStatus(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
             @Valid @RequestBody StatusRequest request) {
