@@ -590,7 +590,7 @@ export function App() {
             <input aria-label="Username" value={profileUsername} maxLength={20} autoFocus onChange={event => setProfileUsername(event.target.value)} disabled={profileUsernameState === 'loading'} aria-invalid={profileUsernameState === 'error'} />
             <span className="profile-username-actions">
               <button type="submit" className="secondary compact-action" disabled={profileUsernameState === 'loading' || profileUsername === displayedProfile.username}>{profileUsernameState === 'loading' ? 'Saving…' : 'Save'}</button>
-              <button type="button" className="text-button" disabled={profileUsernameState === 'loading'} onClick={() => {
+              <button type="button" className="text-button compact-text-action" disabled={profileUsernameState === 'loading'} onClick={() => {
                 setProfileUsername(displayedProfile.username)
                 clearProfileUsernameSuccess()
                 setProfileUsernameEditing(false)
@@ -615,7 +615,7 @@ export function App() {
             <label>Confirm new password<PasswordInput value={changedPasswordConfirmation} onChange={setChangedPasswordConfirmation} inputRef={confirmPasswordRef} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="new-password" /></label>
             <span className="profile-password-actions">
               <button className="secondary compact-action" disabled={passwordChangeState === 'loading'}>{passwordChangeState === 'loading' ? 'Updating…' : 'Save'}</button>
-              <button type="button" className="text-button" disabled={passwordChangeState === 'loading'} onClick={clearPasswordChange}>Cancel</button>
+              <button type="button" className="text-button compact-text-action" disabled={passwordChangeState === 'loading'} onClick={clearPasswordChange}>Cancel</button>
             </span>
             {passwordChangeMessage && <p role={passwordChangeState === 'error' ? 'alert' : 'status'} className={passwordChangeState}>{passwordChangeMessage}</p>}
           </form>}
