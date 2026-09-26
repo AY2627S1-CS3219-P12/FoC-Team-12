@@ -3,13 +3,14 @@ import { useRef } from 'react'
 type OtpInputProps = {
   value: string[]
   onChange: (value: string[]) => void
+  onComplete?: (code: string) => void
   disabled?: boolean
   invalid?: boolean
 }
 
 const digitsOnly = (value: string) => value.replace(/\D/g, '').slice(0, 6)
 
-export function OtpInput({ value, onChange, disabled = false, invalid = false }: OtpInputProps) {
+export function OtpInput({ value, onChange, onComplete, disabled = false, invalid = false }: OtpInputProps) {
   const inputs = useRef<Array<HTMLInputElement | null>>([])
   const digits = Array.from({ length: 6 }, (_, index) => value[index] ?? '')
 
@@ -18,6 +19,7 @@ export function OtpInput({ value, onChange, disabled = false, invalid = false }:
     const next = digits.slice()
     next[index] = digit
     onChange(next)
+    if (next.every(value => /^\d$/.test(value))) onComplete?.(next.join(''))
   }
   const paste = (index: number, raw: string) => {
     const pasted = digitsOnly(raw)
@@ -28,6 +30,7 @@ export function OtpInput({ value, onChange, disabled = false, invalid = false }:
     })
     onChange(next)
     focus(Math.min(index + pasted.length, 5))
+    if (next.every(value => /^\d$/.test(value))) onComplete?.(next.join(''))
   }
 
   return <div className="otp-group" role="group" aria-label="Verification code">
@@ -36,6 +39,7 @@ export function OtpInput({ value, onChange, disabled = false, invalid = false }:
       ref={element => { inputs.current[index] = element }}
       className="otp-digit"
       inputMode="numeric"
+      autoFocus={index === 0}
       autoComplete={index === 0 ? 'one-time-code' : 'off'}
       aria-label={`Verification code digit ${index + 1} of 6`}
       aria-invalid={invalid}
@@ -53,6 +57,11 @@ export function OtpInput({ value, onChange, disabled = false, invalid = false }:
         if (event.key === 'Backspace' && !digit && index > 0) focus(index - 1)
         if (event.key === 'ArrowLeft' && index > 0) { event.preventDefault(); focus(index - 1) }
         if (event.key === 'ArrowRight' && index < 5) { event.preventDefault(); focus(index + 1) }
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          if (index < 5) focus(index + 1)
+          else onComplete?.(digits.join(''))
+        }
       }}
     />)}
   </div>

@@ -259,8 +259,8 @@ npm run build
 
 The Vite frontend runs at `http://localhost:5174` and proxies `/api` to the User Service on port `8081`.
 It includes registration, email-verification and resend-code screens, login, and password-reset flows.
-After registration, use **Verify email** and enter the six-digit code delivered to the registered NUS email;
-the resend action reflects the server's 90-second cooldown.
-Successful registration moves directly to six accessible OTP boxes with the registered email already set.
+Successful registration moves directly to six accessible OTP boxes with the registered email already set;
+entering the sixth digit automatically submits the verification. The resend button displays its 90-second
+cooldown and is disabled until another request is allowed.
 When a user supplies the correct password for an unverified account, login likewise moves to that
 verification screen; incorrect credentials and banned accounts remain a generic login failure.
