@@ -17,6 +17,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.service.InvalidCredentialsException;
+import com.friendoncampus.user.service.EmailVerificationRequiredException;
 import com.friendoncampus.user.service.JwtTokenService;
 import com.friendoncampus.user.service.LoginService;
 
@@ -53,5 +54,17 @@ class LoginControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.title").value("Authentication failed"))
                 .andExpect(jsonPath("$.detail").value("Invalid email or password"));
+    }
+
+    @Test
+    void reportsVerificationRequiredOnlyAfterTheLoginServiceAcceptedCredentials() throws Exception {
+        when(loginService.login(anyString(), anyString())).thenThrow(new EmailVerificationRequiredException());
+
+        mvc.perform(post("/api/users/login").contentType("application/json")
+                        .content("{\"email\":\"alice@u.nus.edu\",\"password\":\"correct-password\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Email verification required"))
+                .andExpect(jsonPath("$.detail").value("Email verification is required before signing in"))
+                .andExpect(jsonPath("$.code").value("EMAIL_VERIFICATION_REQUIRED"));
     }
 }

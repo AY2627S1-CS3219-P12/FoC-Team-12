@@ -44,6 +44,7 @@ export class ApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly retryAfterSeconds?: number,
+    public readonly code?: string,
   ) {
     super(message)
   }
@@ -65,7 +66,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const body = await response.json().catch(() => null)
     const retryAfter = response.headers?.get?.('Retry-After')
     const retryAfterSeconds = retryAfter && /^\d+$/.test(retryAfter) ? Number.parseInt(retryAfter, 10) : undefined
-    throw new ApiError(response.status, body?.detail ?? 'Request could not be completed.', retryAfterSeconds)
+    throw new ApiError(response.status, body?.detail ?? 'Request could not be completed.', retryAfterSeconds, body?.code)
   }
   if (response.status === 202 || response.status === 204) {
     return undefined as T

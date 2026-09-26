@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.friendoncampus.user.service.LoginService;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 
 @RestController
 @RequestMapping("/api/users")
@@ -24,6 +25,9 @@ public class LoginController {
 
     @PostMapping("/login")
     @Operation(summary = "Log in and receive a 15-minute RS256 access token")
+    @ApiResponse(responseCode = "200", description = "Bearer JWT, expiry, stable user ID, username, and role")
+    @ApiResponse(responseCode = "401", description = "Generic invalid email or password for unknown emails, bad passwords, and banned accounts")
+    @ApiResponse(responseCode = "403", description = "Email verification required; returned only after a correct password for an unverified account")
     public ResponseEntity<Response> login(@RequestBody Request request) {
         LoginService.LoginResult login = loginService.login(request.email(), request.password());
         return ResponseEntity.ok(new Response(login));

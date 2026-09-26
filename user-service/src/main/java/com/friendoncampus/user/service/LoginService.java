@@ -30,8 +30,11 @@ public class LoginService {
         User user = users.findByEmail(email.trim().toLowerCase(Locale.ROOT)).orElse(null);
         boolean passwordMatches = passwordEncoder.matches(password,
                 user == null ? DUMMY_PASSWORD_HASH : user.getPasswordHash());
-        if (user == null || user.getStatus() != UserStatus.ACTIVE || !passwordMatches) {
+        if (user == null || !passwordMatches || user.getStatus() == UserStatus.BANNED) {
             throw new InvalidCredentialsException();
+        }
+        if (user.getStatus() == UserStatus.UNVERIFIED) {
+            throw new EmailVerificationRequiredException();
         }
         return new LoginResult(user, tokens.issue(user));
     }

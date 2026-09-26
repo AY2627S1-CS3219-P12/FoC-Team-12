@@ -96,7 +96,7 @@ test('shows one generic failure for failed login', async () => {
   expect(sessionStorage.getItem('foc.user-session')).toBeNull()
 })
 
-test('preserves registration from the account switcher', async () => {
+test('replaces the registration fields with six OTP boxes after account creation', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }))
   render(<App />)
   const user = userEvent.setup()
@@ -107,8 +107,11 @@ test('preserves registration from the account switcher', async () => {
   await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
 
   expect(fetch).toHaveBeenCalledWith('/api/users/registrations', expect.objectContaining({ method: 'POST' }))
-  await screen.findByText('Registration successful. Check your email for a verification code before signing in.')
-  expect(screen.getByRole('button', { name: 'Verify email' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Verify your email' })).toBeInTheDocument()
+  expect(screen.getByText(/Verification code sent to/)).toBeInTheDocument()
+  expect(screen.getByText('alice@u.nus.edu')).toBeInTheDocument()
+  expect(screen.queryByRole('textbox', { name: 'Email' })).not.toBeInTheDocument()
+  expect(screen.getAllByRole('textbox', { name: /Verification code digit/ })).toHaveLength(6)
 })
 
 test('keeps registration failures clear when the API is unavailable', async () => {
@@ -159,12 +162,45 @@ test('verifies a registered email with the live verification API', async () => {
   await user.type(screen.getByLabelText('Username'), 'Alice')
   await user.type(screen.getByLabelText('Password'), '123456789012345')
   await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
-  await user.click(await screen.findByRole('button', { name: 'Verify email' }))
-  await user.type(screen.getByLabelText('Verification code'), '123456')
+  const digits = await screen.findAllByRole('textbox', { name: /Verification code digit/ })
+  await user.click(digits[0])
+  await user.paste('123456')
   await user.click(screen.getByRole('button', { name: 'Verify email' }))
 
   expect(fetch).toHaveBeenLastCalledWith('/api/users/email-verifications', expect.objectContaining({ method: 'POST' }))
   expect(await screen.findByRole('status')).toHaveTextContent('Email verified. You can now sign in.')
+})
+
+test('redirects to OTP only when the API confirmed correct credentials require verification', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: false,
+    status: 403,
+    json: async () => ({ code: 'EMAIL_VERIFICATION_REQUIRED', detail: 'Email verification is required before signing in' }),
+  }))
+  render(<App />)
+  const user = await fillLogin()
+
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByRole('heading', { name: 'Verify your email' })).toBeInTheDocument()
+  expect(screen.getByText('alice@u.nus.edu')).toBeInTheDocument()
+  expect(screen.getAllByRole('textbox', { name: /Verification code digit/ })).toHaveLength(6)
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+test('keeps the generic login failure when verification was not confirmed', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: false,
+    status: 401,
+    json: async () => ({ detail: 'Invalid email or password' }),
+  }))
+  render(<App />)
+  const user = await fillLogin()
+
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to sign in with those credentials.')
+  expect(screen.queryByRole('heading', { name: 'Verify your email' })).not.toBeInTheDocument()
 })
 
 test('shows a clear cooldown error when resending an email verification code', async () => {

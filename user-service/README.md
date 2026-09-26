@@ -164,7 +164,9 @@ the persisted completion state also makes later starts no-ops. Never commit thes
 
 `POST /api/users/login` accepts an email and password. It returns a `Bearer` access token valid for
 15 minutes, its ISO-8601 expiry, stable `userId`, `username`, and `role`. Unknown emails, incorrect
-passwords, and non-active accounts all receive the same `401 Unauthorized` response.
+passwords, and banned accounts all receive the same `401 Unauthorized` response. An unverified
+account receives `403` with Problem Detail code `EMAIL_VERIFICATION_REQUIRED` only after the supplied
+password has matched; clients use this to direct that legitimate user to email verification.
 
 Tokens are signed with RS256 and contain these claims:
 
@@ -259,3 +261,6 @@ The Vite frontend runs at `http://localhost:5174` and proxies `/api` to the User
 It includes registration, email-verification and resend-code screens, login, and password-reset flows.
 After registration, use **Verify email** and enter the six-digit code delivered to the registered NUS email;
 the resend action reflects the server's 90-second cooldown.
+Successful registration moves directly to six accessible OTP boxes with the registered email already set.
+When a user supplies the correct password for an unverified account, login likewise moves to that
+verification screen; incorrect credentials and banned accounts remain a generic login failure.

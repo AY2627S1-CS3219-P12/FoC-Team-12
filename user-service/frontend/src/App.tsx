@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 
 import { ApiError, api, type UserProfile } from './api/client'
 import { clearSession, readSession, saveSession, type AuthSession } from './auth/session'
+import { OtpInput } from './OtpInput'
 
 type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-confirmation'
 type State = 'idle' | 'loading' | 'success' | 'error'
@@ -24,7 +25,8 @@ export function App() {
   const [registrationState, setRegistrationState] = useState<State>('idle')
   const [registrationMessage, setRegistrationMessage] = useState('')
   const [verificationEmail, setVerificationEmail] = useState('')
-  const [verificationCode, setVerificationCode] = useState('')
+  const [verificationEmailLocked, setVerificationEmailLocked] = useState(false)
+  const [verificationDigits, setVerificationDigits] = useState<string[]>(() => Array(6).fill(''))
   const [verificationState, setVerificationState] = useState<State>('idle')
   const [verificationMessage, setVerificationMessage] = useState('')
   const [resendState, setResendState] = useState<State>('idle')
@@ -76,6 +78,13 @@ export function App() {
     setResetConfirmationMessage('')
   }
 
+  const openManualEmailVerification = () => {
+    setVerificationEmail('')
+    setVerificationEmailLocked(false)
+    setVerificationDigits(Array(6).fill(''))
+    show('email-verification')
+  }
+
   const login = async (event: FormEvent) => {
     event.preventDefault()
     if (!eligibleEmail.test(loginEmail)) {
@@ -97,7 +106,14 @@ export function App() {
       saveSession(nextSession)
       setSession(nextSession)
       setLoginState('success')
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        show('email-verification')
+        setVerificationEmail(loginEmail.trim())
+        setVerificationEmailLocked(true)
+        setLoginPassword('')
+        return
+      }
       setLoginState('error')
       setLoginMessage('Unable to sign in with those credentials.')
     }
@@ -125,8 +141,9 @@ export function App() {
     try {
       await api.register({ email, username, password })
       setVerificationEmail(email)
-      setRegistrationState('success')
-      setRegistrationMessage('Registration successful. Check your email for a verification code before signing in.')
+      setVerificationEmailLocked(true)
+      setVerificationDigits(Array(6).fill(''))
+      show('email-verification')
     } catch (error) {
       setRegistrationState('error')
       setRegistrationMessage(error instanceof ApiError && error.status === 400
@@ -142,6 +159,7 @@ export function App() {
       setVerificationMessage('Use an eligible NUS student email.')
       return
     }
+    const verificationCode = verificationDigits.join('')
     if (!/^\d{6}$/.test(verificationCode)) {
       setVerificationState('error')
       setVerificationMessage('Enter the six-digit code from your email.')
@@ -153,7 +171,7 @@ export function App() {
       await api.verifyEmail({ email: verificationEmail, code: verificationCode })
       setVerificationState('success')
       setVerificationMessage('Email verified. You can now sign in.')
-      setVerificationCode('')
+      setVerificationDigits(Array(6).fill(''))
     } catch (error) {
       setVerificationState('error')
       setVerificationMessage(error instanceof ApiError
@@ -277,7 +295,7 @@ export function App() {
       <label>Password<input type="password" value={loginPassword} onChange={event => setLoginPassword(event.target.value)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
       <button disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
       <button type="button" className="text-button" onClick={() => show('reset-request')}>Forgot password?</button>
-      <button type="button" className="text-button" onClick={() => show('email-verification')}>Verify email</button>
+      <button type="button" className="text-button" onClick={openManualEmailVerification}>Verify email</button>
       {loginMessage && <p role="alert" className="error">{loginMessage}</p>}
     </form>}
 
@@ -289,14 +307,15 @@ export function App() {
       <label>Password<input type="password" value={password} onChange={event => setPassword(event.target.value)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
       <button disabled={busy}>{registrationState === 'loading' ? 'Creating account…' : 'Create account'}</button>
       {registrationMessage && <p role={registrationState === 'error' ? 'alert' : 'status'} className={registrationState}>{registrationMessage}</p>}
-      {registrationState === 'success' && <button type="button" className="secondary" onClick={() => show('email-verification')}>Verify email</button>}
     </form>}
 
     {view === 'email-verification' && <form onSubmit={verifyEmail} noValidate aria-busy={busy} aria-label="Verify email form">
       <h1 id="account-title">Verify your email</h1>
       <p className="intro">Enter the six-digit code sent to your NUS email. You must verify your email before you can sign in.</p>
-      <label>Email<input type="email" autoComplete="email" value={verificationEmail} onChange={event => setVerificationEmail(event.target.value)} disabled={busy} aria-invalid={verificationState === 'error' || resendState === 'error'} /></label>
-      <label>Verification code<input inputMode="numeric" autoComplete="one-time-code" value={verificationCode} maxLength={6} onChange={event => setVerificationCode(event.target.value.replace(/\D/g, ''))} disabled={busy} aria-invalid={verificationState === 'error'} /></label>
+      {verificationEmailLocked
+        ? <p className="verification-email">Verification code sent to <strong>{verificationEmail}</strong>.</p>
+        : <label>Email<input type="email" autoComplete="email" value={verificationEmail} onChange={event => setVerificationEmail(event.target.value)} disabled={busy} aria-invalid={verificationState === 'error' || resendState === 'error'} /></label>}
+      <label>Verification code<OtpInput value={verificationDigits} onChange={setVerificationDigits} disabled={busy} invalid={verificationState === 'error'} /></label>
       <button disabled={busy}>{verificationState === 'loading' ? 'Verifying…' : 'Verify email'}</button>
       {verificationMessage && <p role={verificationState === 'error' ? 'alert' : 'status'} className={verificationState}>{verificationMessage}</p>}
       {verificationState === 'success' && <button type="button" className="secondary" onClick={() => show('login')}>Sign in</button>}

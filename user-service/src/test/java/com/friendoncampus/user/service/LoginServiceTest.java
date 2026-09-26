@@ -71,12 +71,25 @@ class LoginServiceTest {
     }
 
     @Test
-    void rejectsAnUnverifiedAccountEvenWithTheCorrectPassword() {
+    void requiresEmailVerificationOnlyAfterTheCorrectPasswordWasProvided() {
         User unverified = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
         when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(unverified));
         when(passwords.matches("password", "hash")).thenReturn(true);
 
         assertThatThrownBy(() -> service.login("alice@u.nus.edu", "password"))
+                .isInstanceOf(EmailVerificationRequiredException.class)
+                .hasMessage("Email verification is required before signing in");
+        verify(passwords).matches("password", "hash");
+        verifyNoInteractions(tokens);
+    }
+
+    @Test
+    void keepsTheGenericFailureWhenAnUnverifiedAccountsPasswordIsWrong() {
+        User unverified = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
+        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(unverified));
+        when(passwords.matches("wrong", "hash")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.login("alice@u.nus.edu", "wrong"))
                 .isInstanceOf(InvalidCredentialsException.class)
                 .hasMessage("Invalid email or password");
         verifyNoInteractions(tokens);
