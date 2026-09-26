@@ -14,4 +14,5 @@ import org.springframework.http.*; import org.springframework.web.bind.annotatio
  @ExceptionHandler(AdminAccessDeniedException.class) ProblemDetail adminAccessDenied(AdminAccessDeniedException e){ ProblemDetail p=ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN,e.getMessage()); p.setTitle("Administrator access required"); return p; }
  @ExceptionHandler(AdminAccountNotFoundException.class) ProblemDetail adminAccountNotFound(AdminAccountNotFoundException e){ ProblemDetail p=ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND,e.getMessage()); p.setTitle("Account not found"); return p; }
  @ExceptionHandler(AdminLifecycleException.class) ProblemDetail adminLifecycle(AdminLifecycleException e){ ProblemDetail p=ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,e.getMessage()); p.setTitle("Account change unavailable"); return p; }
+ @ExceptionHandler(UsernameChangeService.UsernameAlreadyTakenException.class) ProblemDetail usernameAlreadyTaken(UsernameChangeService.UsernameAlreadyTakenException e){ ProblemDetail p=ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,e.getMessage()); p.setTitle("Username unavailable"); return p; }
 }

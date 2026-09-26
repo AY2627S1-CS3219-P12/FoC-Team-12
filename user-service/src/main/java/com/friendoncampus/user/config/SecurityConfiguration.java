@@ -31,7 +31,7 @@ public class SecurityConfiguration {
                                 "/api/users/email-verification-resends", "/.well-known/jwks.json",
                                 "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
-                        .requestMatchers("/api/users/me").authenticated()
+                        .requestMatchers("/api/users/me", "/api/users/me/**").authenticated()
                         .requestMatchers("/api/users/admin/**").hasRole("ADMIN")
                 .anyRequest().denyAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer

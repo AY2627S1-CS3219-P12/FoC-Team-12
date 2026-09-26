@@ -39,6 +39,11 @@ export function App() {
   const [session, setSession] = useState<AuthSession | null>(() => readSession())
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileMessage, setProfileMessage] = useState('')
+  const [profileUsername, setProfileUsername] = useState('')
+  const [profileUsernameState, setProfileUsernameState] = useState<State>('idle')
+  const [profileUsernameMessage, setProfileUsernameMessage] = useState('')
+  const [profileUsernameEditing, setProfileUsernameEditing] = useState(false)
+  const profileUsernameNoticeTimer = useRef<number | null>(null)
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [loginState, setLoginState] = useState<State>('idle')
@@ -81,6 +86,15 @@ export function App() {
   const newPasswordRef = useRef<HTMLInputElement>(null)
   const confirmPasswordRef = useRef<HTMLInputElement>(null)
 
+  const clearProfileUsernameSuccess = () => {
+    if (profileUsernameNoticeTimer.current !== null) {
+      window.clearTimeout(profileUsernameNoticeTimer.current)
+      profileUsernameNoticeTimer.current = null
+    }
+    setProfileUsernameState(current => current === 'success' ? 'idle' : current)
+    setProfileUsernameMessage(current => current === 'Username updated.' ? '' : current)
+  }
+
   useEffect(() => {
     if (!session) {
       return
@@ -91,6 +105,7 @@ export function App() {
       .then(value => {
         if (!cancelled) {
           setProfile(value)
+          setProfileUsername(value.username)
           setProfileMessage('')
         }
       })
@@ -102,6 +117,12 @@ export function App() {
 
     return () => { cancelled = true }
   }, [session])
+
+  useEffect(() => () => {
+    if (profileUsernameNoticeTimer.current !== null) {
+      window.clearTimeout(profileUsernameNoticeTimer.current)
+    }
+  }, [])
 
   useEffect(() => {
     if (!resendAvailableAt && !resetResendAvailableAt) {
@@ -208,6 +229,7 @@ export function App() {
     try {
       const nextSession = await api.login({ email: loginEmail, password: loginPassword })
       clearLoginFailures(loginEmail)
+      clearProfileUsernameSuccess()
       saveSession(nextSession)
       setSession(nextSession)
       setLoginState('success')
@@ -442,22 +464,76 @@ export function App() {
     }
   }
 
+  const changeUsername = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!profileUsername.trim() || profileUsername.length > 20) {
+      setProfileUsernameState('error')
+      setProfileUsernameMessage('Username is required and must be at most 20 characters.')
+      return
+    }
+    setProfileUsernameState('loading')
+    setProfileUsernameMessage('')
+    try {
+      const updatedProfile = await api.changeUsername({ username: profileUsername })
+      setProfile(updatedProfile)
+      setProfileUsername(updatedProfile.username)
+      setProfileUsernameState('success')
+      setProfileUsernameMessage('Username updated.')
+      setProfileUsernameEditing(false)
+      if (profileUsernameNoticeTimer.current !== null) {
+        window.clearTimeout(profileUsernameNoticeTimer.current)
+      }
+      profileUsernameNoticeTimer.current = window.setTimeout(() => {
+        setProfileUsernameState('idle')
+        setProfileUsernameMessage('')
+        profileUsernameNoticeTimer.current = null
+      }, 3000)
+    } catch (error) {
+      setProfileUsernameState('error')
+      setProfileUsernameMessage(error instanceof ApiError && error.status === 409
+        ? 'Username is already taken.'
+        : 'Unable to update your username. Please try again.')
+    }
+  }
+
   if (session) {
     const displayedProfile = profile?.userId === session.userId ? profile : null
     return <main><section aria-labelledby="profile-title">
       <p className="eyebrow">Friend on Campus</p>
-      <h1 id="profile-title">Your profile</h1>
-      <p className="intro">Your account details are read from Friend on Campus.</p>
+      <h1 id="profile-title">Profile</h1>
+      <p className="intro">Your Friend on Campus account details.</p>
       {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
       {profileMessage && <p role="alert" className="error">{profileMessage}</p>}
       {displayedProfile && <dl className="identity-card">
         <div><dt>Email</dt><dd>{displayedProfile.email}</dd></div>
-        <div><dt>Username</dt><dd>{displayedProfile.username}</dd></div>
+        <div className="profile-username-card"><dt>Username</dt><dd>
+          {!profileUsernameEditing && <span className="profile-username-display">
+            <span>{displayedProfile.username}</span>
+            <span className="profile-username-actions">
+              {profileUsernameState === 'success' && <span role="status" className="profile-username-notice success" style={{ fontSize: '0.75rem', fontWeight: 400 }}>{profileUsernameMessage}</span>}
+              <button type="button" className="secondary compact-action" aria-label="Edit username" onClick={() => {
+                setProfileUsername(displayedProfile.username)
+                clearProfileUsernameSuccess()
+                setProfileUsernameEditing(true)
+              }}>Edit</button>
+            </span>
+          </span>}
+          {profileUsernameEditing && <form className="profile-username-editor" onSubmit={changeUsername} noValidate aria-busy={profileUsernameState === 'loading'} aria-label="Change username form">
+            <input aria-label="Username" value={profileUsername} maxLength={20} autoFocus onChange={event => setProfileUsername(event.target.value)} disabled={profileUsernameState === 'loading'} aria-invalid={profileUsernameState === 'error'} />
+            <span className="profile-username-actions">
+              <button type="submit" className="secondary compact-action" disabled={profileUsernameState === 'loading' || profileUsername === displayedProfile.username}>{profileUsernameState === 'loading' ? 'Saving…' : 'Save'}</button>
+              <button type="button" className="text-button" disabled={profileUsernameState === 'loading'} onClick={() => {
+                setProfileUsername(displayedProfile.username)
+                clearProfileUsernameSuccess()
+                setProfileUsernameEditing(false)
+              }}>Cancel</button>
+            </span>
+          </form>}
+          {profileUsernameState === 'error' && profileUsernameMessage && <p role="alert" className="error">{profileUsernameMessage}</p>}
+        </dd></div>
         <div><dt>Role</dt><dd>{displayedProfile.role}</dd></div>
-        <div><dt>Account status</dt><dd>{displayedProfile.status}</dd></div>
-        <div><dt>Member since</dt><dd>{new Date(displayedProfile.createdAt).toLocaleString()}</dd></div>
       </dl>}
-      <button type="button" className="secondary" onClick={() => { clearSession(); setSession(null); show('login') }}>Sign out</button>
+      <button type="button" className="secondary" onClick={() => { clearProfileUsernameSuccess(); clearSession(); setSession(null); show('login') }}>Sign out</button>
     </section></main>
   }
 

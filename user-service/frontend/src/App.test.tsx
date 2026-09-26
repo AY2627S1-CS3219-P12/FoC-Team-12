@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { App } from './App'
@@ -41,11 +41,13 @@ test('signs in successfully and stores the browser session', async () => {
   await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
 
   expect(fetch).toHaveBeenCalledWith('/api/users/login', expect.objectContaining({ method: 'POST' }))
-  await screen.findByRole('heading', { name: 'Your profile' })
+  await screen.findByRole('heading', { name: 'Profile' })
   expect(await screen.findByText('Persisted Alice')).toBeInTheDocument()
   expect(fetch).toHaveBeenLastCalledWith('/api/users/me', expect.objectContaining({ method: 'GET' }))
   expect(screen.getByText('alice@u.nus.edu')).toBeInTheDocument()
-  expect(screen.getByText('ACTIVE')).toBeInTheDocument()
+  expect(screen.queryByText('ACTIVE')).not.toBeInTheDocument()
+  expect(screen.queryByText('Account status')).not.toBeInTheDocument()
+  expect(screen.queryByText('Member since')).not.toBeInTheDocument()
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({ accessToken: 'signed.jwt' })
   expect(sessionStorage.getItem('foc.login-failures:alice@u.nus.edu')).toBeNull()
 })
@@ -86,6 +88,86 @@ test('reloads the live profile when restoring a browser session', async () => {
   expect(await screen.findByText('Persisted Alice')).toBeInTheDocument()
   const [, options] = vi.mocked(fetch).mock.calls[0]
   expect((options?.headers as Headers).get('Authorization')).toBe('Bearer restored.jwt')
+})
+
+test('updates the displayed username from the live profile screen', async () => {
+  const setTimeoutSpy = vi.spyOn(window, 'setTimeout')
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Old name', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Old name',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'New name',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await screen.findByRole('button', { name: 'Edit username' })
+  await user.click(screen.getByRole('button', { name: 'Edit username' }))
+  const username = screen.getByLabelText('Username')
+  expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  await user.clear(username)
+  await user.type(username, 'New name')
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('status')).toHaveTextContent('Username updated.')
+  expect(screen.getByText('New name')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Edit username' })).toBeInTheDocument()
+  expect(fetch).toHaveBeenLastCalledWith('/api/users/me/username', expect.objectContaining({ method: 'PATCH' }))
+
+  const dismiss = setTimeoutSpy.mock.calls.find(([, delay]) => delay === 3000)?.[0] as (() => void) | undefined
+  await act(async () => { dismiss?.() })
+  expect(screen.queryByText('Username updated.')).not.toBeInTheDocument()
+})
+
+test('shows duplicate username feedback from the live profile screen', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) })
+    .mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ detail: 'username is already taken' }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('button', { name: 'Edit username' }))
+  const username = screen.getByLabelText('Username')
+  await user.clear(username)
+  await user.type(username, 'Taken')
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Username is already taken.')
+})
+
+test('does not submit an invalid username from the profile screen', async () => {
+  saveSession({
+    accessToken: 'restored.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+    role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+  }) }))
+  render(<App />)
+  const user = userEvent.setup()
+
+  await user.click(await screen.findByRole('button', { name: 'Edit username' }))
+  const username = screen.getByLabelText('Username')
+  await user.clear(username)
+  await user.click(screen.getByRole('button', { name: 'Save' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Username is required and must be at most 20 characters.')
+  expect(fetch).toHaveBeenCalledTimes(1)
 })
 
 test('shows one generic failure for failed login', async () => {
