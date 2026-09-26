@@ -216,6 +216,17 @@ test('verifies a registered email with the live verification API', async () => {
   expect(screen.queryByRole('button', { name: 'Verify email' })).not.toBeInTheDocument()
 })
 
+test('requires an eligible NUS email before requesting a password reset', async () => {
+  render(<App />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+  await user.type(screen.getByLabelText('Email'), 'alice@example.com')
+  await user.click(screen.getByRole('button', { name: 'Send reset code' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Use an eligible NUS student email.')
+  expect(fetch).not.toHaveBeenCalled()
+})
+
 test('clears a rejected verification code and returns focus to its first digit', async () => {
   vi.stubGlobal('fetch', vi.fn()
     .mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({}) })

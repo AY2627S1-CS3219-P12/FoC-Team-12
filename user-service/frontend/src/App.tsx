@@ -8,7 +8,6 @@ type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'res
 type State = 'idle' | 'loading' | 'success' | 'error'
 
 const eligibleEmail = /^[^@]+@(u\.nus\.edu|u\.duke\.nus\.edu|u\.yale-nus\.edu\.sg)$/i
-const emailFormat = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const verificationCooldownKey = (email: string) => `foc.email-verification-resend:${email.trim().toLowerCase()}`
 const resetCooldownKey = (email: string) => `foc.password-reset-resend:${email.trim().toLowerCase()}`
 const loginFailureKey = (email: string) => `foc.login-failures:${email.trim().toLowerCase()}`
@@ -327,9 +326,9 @@ export function App() {
 
   const requestPasswordReset = async (event: FormEvent) => {
     event.preventDefault()
-    if (!emailFormat.test(resetEmail)) {
+    if (!eligibleEmail.test(resetEmail)) {
       setResetRequestState('error')
-      setResetRequestMessage('Enter a valid email address.')
+      setResetRequestMessage('Use an eligible NUS student email.')
       return
     }
     setResetRequestState('loading')
@@ -346,7 +345,7 @@ export function App() {
   }
 
   const resendPasswordReset = async () => {
-    if (resetResendSecondsRemaining > 0 || !emailFormat.test(resetEmail)) {
+    if (resetResendSecondsRemaining > 0 || !eligibleEmail.test(resetEmail)) {
       return
     }
     setResetResendState('loading')
@@ -368,9 +367,9 @@ export function App() {
       return
     }
     const code = completedCode ?? resetDigits.join('')
-    if (!emailFormat.test(resetEmail)) {
+    if (!eligibleEmail.test(resetEmail)) {
       setResetVerificationState('error')
-      setResetVerificationMessage('Enter a valid email address.')
+      setResetVerificationMessage('Use an eligible NUS student email.')
       return
     }
     if (!/^\d{6}$/.test(code)) {
@@ -399,9 +398,9 @@ export function App() {
 
   const confirmPasswordReset = async (event: FormEvent) => {
     event.preventDefault()
-    if (!emailFormat.test(resetEmail)) {
+    if (!eligibleEmail.test(resetEmail)) {
       setResetConfirmationState('error')
-      setResetConfirmationMessage('Enter a valid email address.')
+      setResetConfirmationMessage('Use an eligible NUS student email.')
       return
     }
     if (!/^\d{6}$/.test(resetCode)) {

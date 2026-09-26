@@ -55,6 +55,19 @@ class PasswordResetControllerTest {
     }
 
     @Test
+    void rejectsNonNusEmailsForEveryPasswordResetStep() throws Exception {
+        mvc.perform(post("/api/users/password-reset-requests").contentType("application/json")
+                        .content("{\"email\":\"alice@example.com\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/users/password-reset-verifications").contentType("application/json")
+                        .content("{\"email\":\"alice@example.com\",\"code\":\"123456\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/users/password-reset-confirmations").contentType("application/json")
+                        .content("{\"email\":\"alice@example.com\",\"code\":\"123456\",\"password\":\"new-password-123\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void validatesAResetCodeBeforeThePasswordIsSubmitted() throws Exception {
         mvc.perform(post("/api/users/password-reset-verifications").contentType("application/json")
                         .content("{\"email\":\"alice@u.nus.edu\",\"code\":\"123456\"}"))

@@ -20,6 +20,8 @@ import jakarta.validation.constraints.Size;
 @RestController
 @RequestMapping("/api/users")
 public class PasswordResetController {
+    private static final String ELIGIBLE_NUS_EMAIL = "^[^@\\s]+@(u\\.nus\\.edu|u\\.duke\\.nus\\.edu|u\\.yale-nus\\.edu\\.sg)$";
+
     private final PasswordResetService passwordResets;
 
     public PasswordResetController(PasswordResetService passwordResets) {
@@ -29,6 +31,7 @@ public class PasswordResetController {
     @PostMapping("/password-reset-requests")
     @Operation(summary = "Request a password reset code")
     @ApiResponse(responseCode = "202", description = "Same response and Retry-After cooldown for known and unknown email addresses")
+    @ApiResponse(responseCode = "400", description = "Email is not an eligible NUS student email address")
     public ResponseEntity<Void> request(@Valid @RequestBody PasswordResetRequest request) {
         PasswordResetService.PasswordResetRequestResult result = passwordResets.request(request.email());
         return ResponseEntity.accepted().header(HttpHeaders.RETRY_AFTER, Long.toString(result.retryAfterSeconds())).build();
@@ -50,15 +53,21 @@ public class PasswordResetController {
         return ResponseEntity.noContent().build();
     }
 
-    public record PasswordResetRequest(@NotBlank @Email String email) {
+    public record PasswordResetRequest(@NotBlank @Email
+            @Pattern(regexp = ELIGIBLE_NUS_EMAIL, flags = Pattern.Flag.CASE_INSENSITIVE,
+                    message = "email must use an eligible NUS student domain") String email) {
     }
 
-    public record PasswordResetConfirmation(@NotBlank @Email String email,
+    public record PasswordResetConfirmation(@NotBlank @Email
+            @Pattern(regexp = ELIGIBLE_NUS_EMAIL, flags = Pattern.Flag.CASE_INSENSITIVE,
+                    message = "email must use an eligible NUS student domain") String email,
             @NotBlank @Pattern(regexp = "\\d{6}") String code,
             @NotBlank @Size(min = 15, max = 64) String password) {
     }
 
-    public record PasswordResetVerification(@NotBlank @Email String email,
+    public record PasswordResetVerification(@NotBlank @Email
+            @Pattern(regexp = ELIGIBLE_NUS_EMAIL, flags = Pattern.Flag.CASE_INSENSITIVE,
+                    message = "email must use an eligible NUS student domain") String email,
             @NotBlank @Pattern(regexp = "\\d{6}") String code) {
     }
 }
