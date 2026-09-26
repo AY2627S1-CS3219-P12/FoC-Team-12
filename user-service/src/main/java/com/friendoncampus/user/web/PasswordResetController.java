@@ -1,6 +1,7 @@
 package com.friendoncampus.user.web;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,10 +28,10 @@ public class PasswordResetController {
 
     @PostMapping("/password-reset-requests")
     @Operation(summary = "Request a password reset code")
-    @ApiResponse(responseCode = "202", description = "Same response for known and unknown email addresses")
+    @ApiResponse(responseCode = "202", description = "Same response and Retry-After cooldown for known and unknown email addresses")
     public ResponseEntity<Void> request(@Valid @RequestBody PasswordResetRequest request) {
-        passwordResets.request(request.email());
-        return ResponseEntity.accepted().build();
+        PasswordResetService.PasswordResetRequestResult result = passwordResets.request(request.email());
+        return ResponseEntity.accepted().header(HttpHeaders.RETRY_AFTER, Long.toString(result.retryAfterSeconds())).build();
     }
 
     @PostMapping("/password-reset-confirmations")

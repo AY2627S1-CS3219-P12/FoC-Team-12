@@ -11,6 +11,7 @@ const eligibleEmail = /^[^@]+@(u\.nus\.edu|u\.duke\.nus\.edu|u\.yale-nus\.edu\.s
 const emailFormat = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 const verificationCooldownKey = (email: string) => `foc.email-verification-resend:${email.trim().toLowerCase()}`
 const resetCooldownKey = (email: string) => `foc.password-reset-resend:${email.trim().toLowerCase()}`
+const loginFailureKey = (email: string) => `foc.login-failures:${email.trim().toLowerCase()}`
 
 function PasswordInput({
   value, onChange, disabled, invalid, autoComplete, inputRef, onKeyDown,
@@ -156,8 +157,20 @@ export function App() {
     setCurrentTime(Date.now())
   }
 
-  const startResetResendCooldown = (emailAddress: string) => {
-    const deadline = Date.now() + 90_000
+  const recordLoginFailure = (emailAddress: string) => {
+    const key = loginFailureKey(emailAddress)
+    const previousFailures = Number(sessionStorage.getItem(key))
+    const failures = (Number.isInteger(previousFailures) && previousFailures > 0 ? previousFailures : 0) + 1
+    sessionStorage.setItem(key, String(failures))
+    return failures
+  }
+
+  const clearLoginFailures = (emailAddress: string) => {
+    sessionStorage.removeItem(loginFailureKey(emailAddress))
+  }
+
+  const startResetResendCooldown = (emailAddress: string, seconds = 90) => {
+    const deadline = Date.now() + seconds * 1000
     sessionStorage.setItem(resetCooldownKey(emailAddress), String(deadline))
     setResetResendAvailableAt(deadline)
     setCurrentTime(Date.now())
@@ -188,11 +201,13 @@ export function App() {
     setProfileMessage('')
     try {
       const nextSession = await api.login({ email: loginEmail, password: loginPassword })
+      clearLoginFailures(loginEmail)
       saveSession(nextSession)
       setSession(nextSession)
       setLoginState('success')
     } catch (error) {
       if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        clearLoginFailures(loginEmail)
         show('email-verification')
         setVerificationEmail(loginEmail.trim())
         restoreResendCooldown(loginEmail)
@@ -200,7 +215,16 @@ export function App() {
         return
       }
       setLoginState('error')
-      setLoginMessage('Unable to sign in with those credentials.')
+      if (error instanceof ApiError && error.status === 401) {
+        const failures = recordLoginFailure(loginEmail)
+        setLoginPassword('')
+        window.requestAnimationFrame(() => loginPasswordRef.current?.focus())
+        setLoginMessage(failures >= 2
+          ? 'Incorrect email or password. If you’ve made several attempts, wait 30 seconds or reset your password.'
+          : 'Incorrect email or password.')
+      } else {
+        setLoginMessage('Incorrect email or password.')
+      }
     }
   }
 
@@ -311,9 +335,9 @@ export function App() {
     setResetRequestState('loading')
     setResetRequestMessage('')
     try {
-      await api.requestPasswordReset({ email: resetEmail })
+      const retryAfterSeconds = await api.requestPasswordReset({ email: resetEmail })
       setResetDigits(Array(6).fill(''))
-      startResetResendCooldown(resetEmail)
+      startResetResendCooldown(resetEmail, retryAfterSeconds)
       show('reset-verification')
     } catch {
       setResetRequestState('error')
@@ -328,11 +352,11 @@ export function App() {
     setResetResendState('loading')
     setResetResendMessage('')
     try {
-      await api.requestPasswordReset({ email: resetEmail })
+      const retryAfterSeconds = await api.requestPasswordReset({ email: resetEmail })
       setResetResendState('success')
-      setResetResendMessage('If an eligible active account matches your email, a new reset code has been sent.')
+      setResetResendMessage('If an eligible active account matches your email, a reset code has been sent or remains available.')
       setResetDigits(Array(6).fill(''))
-      startResetResendCooldown(resetEmail)
+      startResetResendCooldown(resetEmail, retryAfterSeconds)
     } catch {
       setResetResendState('error')
       setResetResendMessage('Unable to request another reset code right now. Please try again.')
@@ -401,6 +425,7 @@ export function App() {
       await api.confirmPasswordReset({ email: resetEmail, code: resetCode, password: newPassword })
       setResetConfirmationState('success')
       setResetConfirmationMessage('Your password has been updated. You can now sign in.')
+      clearLoginFailures(resetEmail)
       setResetCode('')
       setNewPassword('')
       setConfirmPassword('')

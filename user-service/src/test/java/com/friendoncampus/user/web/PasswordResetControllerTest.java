@@ -3,6 +3,8 @@ package com.friendoncampus.user.web;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -28,10 +30,14 @@ class PasswordResetControllerTest {
         String known = "{\"email\":\"alice@u.nus.edu\"}";
         String unknown = "{\"email\":\"missing@u.nus.edu\"}";
 
+        when(passwordResets.request(anyString())).thenReturn(new PasswordResetService.PasswordResetRequestResult(90));
+
         mvc.perform(post("/api/users/password-reset-requests").contentType("application/json").content(known))
-                .andExpect(status().isAccepted());
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Retry-After", "90"));
         mvc.perform(post("/api/users/password-reset-requests").contentType("application/json").content(unknown))
-                .andExpect(status().isAccepted());
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Retry-After", "90"));
         verify(passwordResets).request("alice@u.nus.edu");
         verify(passwordResets).request("missing@u.nus.edu");
     }
