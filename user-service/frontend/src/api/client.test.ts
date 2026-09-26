@@ -17,9 +17,11 @@ test('attaches the browser session token through the shared API client', async (
 
   await api.register({ email: 'alice@u.nus.edu', username: 'Alice', password: '123456789012345' })
   await api.getProfile()
+  await api.changePassword({ currentPassword: 'current-password', newPassword: 'replacement-password-with-15-chars' })
 
-  const [, options] = vi.mocked(fetch).mock.calls[1]
+  const [, options] = vi.mocked(fetch).mock.calls[2]
   expect(fetch).toHaveBeenNthCalledWith(2, '/api/users/me', expect.objectContaining({ method: 'GET' }))
+  expect(fetch).toHaveBeenNthCalledWith(3, '/api/users/me/password', expect.objectContaining({ method: 'PATCH' }))
   expect((options?.headers as Headers).get('Authorization')).toBe('Bearer signed.jwt')
 })
 

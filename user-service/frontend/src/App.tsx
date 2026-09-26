@@ -13,19 +13,20 @@ const resetCooldownKey = (email: string) => `foc.password-reset-resend:${email.t
 const loginFailureKey = (email: string) => `foc.login-failures:${email.trim().toLowerCase()}`
 
 function PasswordInput({
-  value, onChange, disabled, invalid, autoComplete, inputRef, onKeyDown,
+  value, onChange, disabled, invalid, autoComplete, autoFocus, inputRef, onKeyDown,
 }: {
   value: string
   onChange: (value: string) => void
   disabled: boolean
   invalid: boolean
   autoComplete?: string
+  autoFocus?: boolean
   inputRef?: RefObject<HTMLInputElement | null>
   onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void
 }) {
   const [visible, setVisible] = useState(false)
   return <span className="password-control">
-    <input ref={inputRef} type={visible ? 'text' : 'password'} autoComplete={autoComplete} value={value}
+    <input ref={inputRef} type={visible ? 'text' : 'password'} autoComplete={autoComplete} autoFocus={autoFocus} value={value}
       onChange={event => onChange(event.target.value)} onKeyDown={onKeyDown} disabled={disabled} aria-invalid={invalid} />
     <button type="button" className="password-toggle" aria-label={visible ? 'Hide password' : 'Show password'}
       aria-pressed={visible} onClick={() => setVisible(current => !current)} disabled={disabled}>
@@ -44,6 +45,12 @@ export function App() {
   const [profileUsernameMessage, setProfileUsernameMessage] = useState('')
   const [profileUsernameEditing, setProfileUsernameEditing] = useState(false)
   const profileUsernameNoticeTimer = useRef<number | null>(null)
+  const [passwordChangeEditing, setPasswordChangeEditing] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [changedPassword, setChangedPassword] = useState('')
+  const [changedPasswordConfirmation, setChangedPasswordConfirmation] = useState('')
+  const [passwordChangeState, setPasswordChangeState] = useState<State>('idle')
+  const [passwordChangeMessage, setPasswordChangeMessage] = useState('')
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [loginState, setLoginState] = useState<State>('idle')
@@ -85,6 +92,8 @@ export function App() {
   const registrationPasswordRef = useRef<HTMLInputElement>(null)
   const newPasswordRef = useRef<HTMLInputElement>(null)
   const confirmPasswordRef = useRef<HTMLInputElement>(null)
+  const currentPasswordRef = useRef<HTMLInputElement>(null)
+  const changedPasswordRef = useRef<HTMLInputElement>(null)
 
   const clearProfileUsernameSuccess = () => {
     if (profileUsernameNoticeTimer.current !== null) {
@@ -93,6 +102,15 @@ export function App() {
     }
     setProfileUsernameState(current => current === 'success' ? 'idle' : current)
     setProfileUsernameMessage(current => current === 'Username updated.' ? '' : current)
+  }
+
+  const clearPasswordChange = () => {
+    setPasswordChangeEditing(false)
+    setCurrentPassword('')
+    setChangedPassword('')
+    setChangedPasswordConfirmation('')
+    setPasswordChangeState('idle')
+    setPasswordChangeMessage('')
   }
 
   useEffect(() => {
@@ -139,10 +157,16 @@ export function App() {
   }, [resendAvailableAt, resetResendAvailableAt])
 
   useLayoutEffect(() => {
-    if (loginPasswordFocusVersion > 0 && loginState === 'error') {
+    if (loginPasswordFocusVersion > 0) {
       loginPasswordRef.current?.focus()
     }
-  }, [loginPasswordFocusVersion, loginState])
+  }, [loginPasswordFocusVersion])
+
+  useLayoutEffect(() => {
+    if (passwordChangeEditing) {
+      currentPasswordRef.current?.focus()
+    }
+  }, [passwordChangeEditing])
 
   const resendSecondsRemaining = resendAvailableAt
     ? Math.max(0, Math.ceil((resendAvailableAt - currentTime) / 1000))
@@ -230,6 +254,8 @@ export function App() {
       const nextSession = await api.login({ email: loginEmail, password: loginPassword })
       clearLoginFailures(loginEmail)
       clearProfileUsernameSuccess()
+      clearPasswordChange()
+      setLoginPassword('')
       saveSession(nextSession)
       setSession(nextSession)
       setLoginState('success')
@@ -496,6 +522,48 @@ export function App() {
     }
   }
 
+  const changePassword = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!currentPassword) {
+      setPasswordChangeState('error')
+      setPasswordChangeMessage('Enter your current password.')
+      return
+    }
+    if (changedPassword.length < 15 || changedPassword.length > 64) {
+      setPasswordChangeState('error')
+      setPasswordChangeMessage('New password must be 15 to 64 characters.')
+      return
+    }
+    if (changedPassword !== changedPasswordConfirmation) {
+      setPasswordChangeState('error')
+      setPasswordChangeMessage('New passwords do not match.')
+      return
+    }
+
+    setPasswordChangeState('loading')
+    setPasswordChangeMessage('')
+    try {
+      await api.changePassword({ currentPassword, newPassword: changedPassword })
+      const emailAddress = profile?.email ?? ''
+      clearProfileUsernameSuccess()
+      clearSession()
+      setSession(null)
+      setProfile(null)
+      clearPasswordChange()
+      show('login')
+      setLoginEmail(emailAddress)
+      setLoginPassword('')
+      setLoginPasswordFocusVersion(version => version + 1)
+      setLoginState('success')
+      setLoginMessage('Password updated. Sign in with your new password.')
+    } catch (error) {
+      setPasswordChangeState('error')
+      setPasswordChangeMessage(error instanceof ApiError && error.status === 400
+        ? error.message
+        : 'Unable to change your password right now. Please try again.')
+    }
+  }
+
   if (session) {
     const displayedProfile = profile?.userId === session.userId ? profile : null
     return <main><section aria-labelledby="profile-title">
@@ -532,8 +600,39 @@ export function App() {
           {profileUsernameState === 'error' && profileUsernameMessage && <p role="alert" className="error">{profileUsernameMessage}</p>}
         </dd></div>
         <div><dt>Role</dt><dd>{displayedProfile.role}</dd></div>
+        <div className="profile-password-card"><dt>Password</dt><dd>
+          {!passwordChangeEditing && <span className="profile-password-display">
+            <span aria-label="Password is set">••••••••</span>
+            <button type="button" className="secondary compact-action" onClick={() => {
+              setPasswordChangeEditing(true)
+              setPasswordChangeState('idle')
+              setPasswordChangeMessage('')
+            }}>Change</button>
+          </span>}
+          {passwordChangeEditing && <form className="profile-password-editor" onSubmit={changePassword} noValidate aria-busy={passwordChangeState === 'loading'} aria-label="Change password form">
+            <label>Current password<PasswordInput value={currentPassword} onChange={setCurrentPassword} inputRef={currentPasswordRef} onKeyDown={event => focusOnEnter(event, changedPasswordRef)} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="current-password" /></label>
+            <label>New password<PasswordInput value={changedPassword} onChange={setChangedPassword} inputRef={changedPasswordRef} onKeyDown={event => focusOnEnter(event, confirmPasswordRef)} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="new-password" /></label>
+            <label>Confirm new password<PasswordInput value={changedPasswordConfirmation} onChange={setChangedPasswordConfirmation} inputRef={confirmPasswordRef} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="new-password" /></label>
+            <span className="profile-password-actions">
+              <button className="secondary compact-action" disabled={passwordChangeState === 'loading'}>{passwordChangeState === 'loading' ? 'Updating…' : 'Save'}</button>
+              <button type="button" className="text-button" disabled={passwordChangeState === 'loading'} onClick={clearPasswordChange}>Cancel</button>
+            </span>
+            {passwordChangeMessage && <p role={passwordChangeState === 'error' ? 'alert' : 'status'} className={passwordChangeState}>{passwordChangeMessage}</p>}
+          </form>}
+        </dd></div>
       </dl>}
-      <button type="button" className="secondary" onClick={() => { clearProfileUsernameSuccess(); clearSession(); setSession(null); show('login') }}>Sign out</button>
+      <button type="button" className="secondary" onClick={() => {
+        const emailAddress = displayedProfile?.email ?? ''
+        clearProfileUsernameSuccess()
+        clearPasswordChange()
+        clearSession()
+        setProfile(null)
+        setSession(null)
+        show('login')
+        setLoginEmail(emailAddress)
+        setLoginPassword('')
+        setLoginPasswordFocusVersion(version => version + 1)
+      }}>Sign out</button>
     </section></main>
   }
 
@@ -555,7 +654,7 @@ export function App() {
       <label>Password<PasswordInput value={loginPassword} onChange={setLoginPassword} inputRef={loginPasswordRef} disabled={busy} invalid={loginState === 'error'} autoComplete="current-password" /></label>
       <button disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
       <button type="button" className="text-button" onClick={() => show('reset-request')}>Forgot password?</button>
-      {loginMessage && <p role="alert" className="error">{loginMessage}</p>}
+      {loginMessage && <p role={loginState === 'error' ? 'alert' : 'status'} className={loginState === 'error' ? 'error' : 'success'}>{loginMessage}</p>}
     </form>}
 
     {view === 'register' && <form onSubmit={register} noValidate aria-busy={busy} aria-label="Create account form">
