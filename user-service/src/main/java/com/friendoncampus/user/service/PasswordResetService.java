@@ -73,7 +73,7 @@ public class PasswordResetService {
         return new PasswordResetRequestResult(REQUEST_COOLDOWN_SECONDS);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = InvalidPasswordResetCodeException.class)
     public void confirm(String email, String code, String newPassword) {
         ValidatedReset reset = validate(email, code);
         User user = reset.user();
@@ -91,7 +91,7 @@ public class PasswordResetService {
         tokens.save(token);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = InvalidPasswordResetCodeException.class)
     public void verify(String email, String code) {
         validate(email, code);
     }

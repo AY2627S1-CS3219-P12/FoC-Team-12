@@ -17,7 +17,10 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.friendoncampus.user.domain.User;
+import com.friendoncampus.user.repository.UserRepository;
 import com.friendoncampus.user.service.EmailVerificationMailer;
+import com.friendoncampus.user.service.PasswordResetMailer;
 import com.friendoncampus.user.support.JwtTestProperties;
 
 @SpringBootTest(
@@ -33,8 +36,14 @@ class RegistrationEmailVerificationLoginIntegrationTest {
     @Autowired
     private MockMvc mvc;
 
+    @Autowired
+    private UserRepository users;
+
     @MockitoBean
     private EmailVerificationMailer emailVerificationMailer;
+
+    @MockitoBean
+    private PasswordResetMailer passwordResetMailer;
 
     @DynamicPropertySource
     static void jwtProperties(DynamicPropertyRegistry registry) {
@@ -71,5 +80,59 @@ class RegistrationEmailVerificationLoginIntegrationTest {
                         .content("{\"email\":\"" + email + "\",\"password\":\"" + password + "\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accessToken").isNotEmpty());
+    }
+
+    @Test
+    void emailVerificationCodeIsExhaustedAfterFiveRejectedAttempts() throws Exception {
+        String email = "email-attempt-limit@u.nus.edu";
+        String password = "password-with-at-least-15-chars";
+
+        mvc.perform(post("/api/users/registrations")
+                        .contentType("application/json")
+                        .content("{\"email\":\"" + email + "\",\"username\":\"Email Attempt Limit\",\"password\":\"" + password + "\"}"))
+                .andExpect(status().isCreated());
+
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(emailVerificationMailer).sendVerificationCode(eq(email), code.capture());
+        String incorrectCode = code.getValue().equals("000000") ? "000001" : "000000";
+        for (int attempt = 0; attempt < 5; attempt++) {
+            mvc.perform(post("/api/users/email-verifications")
+                            .contentType("application/json")
+                            .content("{\"email\":\"" + email + "\",\"code\":\"" + incorrectCode + "\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        mvc.perform(post("/api/users/email-verifications")
+                        .contentType("application/json")
+                        .content("{\"email\":\"" + email + "\",\"code\":\"" + code.getValue() + "\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void passwordResetCodeIsExhaustedAfterFiveRejectedAttempts() throws Exception {
+        String email = "reset-attempt-limit@u.nus.edu";
+        User user = User.register(email, "Reset Attempt Limit", "reset attempt limit", "hash");
+        user.activate();
+        users.save(user);
+
+        mvc.perform(post("/api/users/password-reset-requests")
+                        .contentType("application/json")
+                        .content("{\"email\":\"" + email + "\"}"))
+                .andExpect(status().isAccepted());
+
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(passwordResetMailer).sendPasswordResetCode(eq(email), code.capture());
+        String incorrectCode = code.getValue().equals("000000") ? "000001" : "000000";
+        for (int attempt = 0; attempt < 5; attempt++) {
+            mvc.perform(post("/api/users/password-reset-verifications")
+                            .contentType("application/json")
+                            .content("{\"email\":\"" + email + "\",\"code\":\"" + incorrectCode + "\"}"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        mvc.perform(post("/api/users/password-reset-verifications")
+                        .contentType("application/json")
+                        .content("{\"email\":\"" + email + "\",\"code\":\"" + code.getValue() + "\"}"))
+                .andExpect(status().isBadRequest());
     }
 }

@@ -29,7 +29,7 @@ public class EmailVerificationService {
         issue(user, now);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = InvalidEmailVerificationCodeException.class)
     public void verify(String email, String code) {
         User user = users.findByEmail(normalizeEmail(email)).orElseThrow(InvalidEmailVerificationCodeException::new);
         if (user.getStatus() != UserStatus.UNVERIFIED) throw new InvalidEmailVerificationCodeException();
