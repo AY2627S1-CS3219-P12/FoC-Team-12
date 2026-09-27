@@ -32,7 +32,9 @@ On macOS or Linux:
 ## Run locally
 
 From the repository root, create a local environment file before the first run if one
-does not already exist. Fill in `USER_DB_*` and the User Service values described below;
+does not already exist. Fill in `USER_DB_*` and `JWT_PRIVATE_KEY` before running any
+`docker compose` command (even when starting only `user-db`, Compose checks required
+variables for the whole file). The local service credentials below must match `.env`;
 `.env` is local-only and must never be committed:
 
 ```powershell
@@ -204,8 +206,8 @@ a future token-session design.
 
 With the service running and SendGrid configured, this PowerShell sequence registers an
 account, verifies the code from its NUS inbox, then logs in and reads the profile.
-Use a new email/username for each run; logging in before verification must return the
-generic `401` response:
+Use a new email/username for each run. Before verification, the correct password returns
+`403` with `EMAIL_VERIFICATION_REQUIRED`; an incorrect password returns the generic `401`:
 
 ```powershell
 $registration = @{ email = "alice@u.nus.edu"; username = "Alice"; password = "password-with-at-least-15-chars" } | ConvertTo-Json
