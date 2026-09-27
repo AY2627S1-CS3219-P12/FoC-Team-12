@@ -51,18 +51,25 @@ microservice (`user-service/`, `supplier-service/`, `order-service/`,
 
 ## API Gateway
 
-Run the Docker stack and access current APIs through `http://localhost:8088`. This shared gateway
-origin is the preferred entry point for frontend clients, Postman, and normal local integration:
+Run the Docker stack and use `http://localhost:8088` as the normal browser and API origin. The
+gateway serves the packaged User application at `/`, the Supplier application under `/suppliers`,
+and the current APIs from the same origin:
 
 ```text
+/                             -> User login and profile
+/suppliers/**                 -> Supplier public UI
+/admin/suppliers/**           -> Supplier administration UI
 /api/users/**                -> User Service
 /api/suppliers/**            -> Supplier Service
 /api/admin/suppliers/**      -> Supplier Service
 ```
 
+Keeping both applications on `8088` lets their browser code share the validated
+`sessionStorage["foc.user-session"]` login session. Direct ports `8080` and `8081` remain exposed
+for service-owner debugging, but they are not the normal presentation flow.
+
 Gateway Swagger UI is available at `http://localhost:8088/swagger-ui/index.html`. See
 [`gateway-service/README.md`](gateway-service/README.md) for the complete route table, local-run
-instructions, and shared route ownership rules. Direct service ports remain available only for
-service-specific development and troubleshooting.
+instructions, bundle paths, and shared route ownership rules.
 
 ---

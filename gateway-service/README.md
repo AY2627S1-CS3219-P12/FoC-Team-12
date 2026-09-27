@@ -8,6 +8,11 @@ issue tokens, or replace downstream authorization.
 
 | Gateway path | Downstream service | Downstream path |
 | --- | --- | --- |
+| `GET /` | User Service | unchanged |
+| `GET /user-assets/**` | User Service | unchanged |
+| `GET /suppliers` and `GET /suppliers/**` | Supplier Service | unchanged |
+| `GET /admin/suppliers` and `GET /admin/suppliers/**` | Supplier Service | unchanged |
+| `GET /supplier-assets/**` | Supplier Service | unchanged |
 | `/api/users` and `/api/users/**` | User Service | unchanged |
 | `/api/suppliers` and `/api/suppliers/**` | Supplier Service | unchanged |
 | `/api/admin/suppliers` and `/api/admin/suppliers/**` | Supplier Service | unchanged |
@@ -17,7 +22,8 @@ issue tokens, or replace downstream authorization.
 | `GET /docs/supplier/openapi.json` | Supplier Service | `/v3/api-docs` |
 | `GET /docs/supplier/openapi.yaml` | Supplier Service | `/v3/api-docs.yaml` |
 
-Unrecognised paths return `404`. Order and Credit routes will be added only after those service
+The UI routes are explicit; the gateway has no catch-all route. Unrecognised paths return `404`.
+Order and Credit routes will be added only after those service
 owners publish their ports and API paths.
 
 ## Run locally
@@ -44,8 +50,12 @@ including `JWT_PRIVATE_KEY`, and then run:
 docker compose up -d --build gateway
 ```
 
-Compose routes internally through `user-service:8081` and `supplier-service:8080`. Use the shared
-`http://localhost:8088` origin by default for frontend clients, Postman, and cross-service testing.
+Compose routes internally through `user-service:8081` and `supplier-service:8080`. Open
+`http://localhost:8088` for the packaged login and Profile experience, then use its Supplier links.
+The SPAs share the validated `sessionStorage["foc.user-session"]` value while production assets
+remain collision-free under `/user-assets/**` and `/supplier-assets/**`.
+
+Use the shared `8088` origin by default for frontend clients, Postman, and cross-service testing.
 Direct ports `8080` and `8081` remain available only for service-specific development and
 troubleshooting during this phase.
 
@@ -64,6 +74,10 @@ gateway origin. Direct service Swagger remains available for debugging until UI/
 integration is completed.
 
 ## Authentication boundary
+
+The User frontend saves the login response in session storage for the current `8088` browser tab.
+The Supplier frontend validates that session and forwards its access token. Client-side role checks
+improve navigation only and are not a security boundary.
 
 The gateway forwards bearer tokens but does not validate them. User Service remains the token
 issuer, and each backend remains responsible for validating JWTs and enforcing its own roles.
@@ -84,3 +98,5 @@ services.
 Gateway ownership is shared. For each route change, nominate one implementer and request review
 from every affected service owner. The producing service owns its paths and payload contract; the
 gateway must not invent or compensate for unpublished service behavior.
+
+Shared UI changes must be reviewed by the User and Supplier service owners before merging.

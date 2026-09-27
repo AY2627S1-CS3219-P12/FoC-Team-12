@@ -3,12 +3,17 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { App } from './App'
-import { saveSession } from './auth/session'
+import { safeReturnTo, saveSession } from './auth/session'
+import { navigateTo } from './navigation'
+
+vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 
 afterEach(() => {
   sessionStorage.clear()
+  window.history.replaceState(null, '', '/')
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.clearAllMocks()
 })
 
 const fillLogin = async () => {
@@ -50,6 +55,87 @@ test('signs in successfully and stores the browser session', async () => {
   expect(screen.queryByText('Member since')).not.toBeInTheDocument()
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({ accessToken: 'signed.jwt' })
   expect(sessionStorage.getItem('foc.login-failures:alice@u.nus.edu')).toBeNull()
+  expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
+  expect(screen.queryByRole('link', { name: /Manage suppliers/ })).not.toBeInTheDocument()
+})
+
+test('shows Supplier management beside the current profile only for administrators', async () => {
+  saveSession({
+    accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
+  })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'admin@u.nus.edu', username: 'Admin',
+      role: 'ADMIN', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }),
+  }))
+
+  render(<App />)
+
+  expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
+  expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
+  expect(screen.getByRole('button', { name: 'Edit username' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument()
+})
+
+test('clears malformed and expired sessions instead of restoring Profile', () => {
+  sessionStorage.setItem('foc.user-session', JSON.stringify({ accessToken: 'expired', expiresAt: '2020-01-01T00:00:00Z' }))
+
+  render(<App />)
+
+  expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+  expect(sessionStorage.getItem('foc.user-session')).toBeNull()
+  expect(screen.getByRole('link', { name: 'Browse suppliers without signing in' })).toHaveAttribute('href', '/suppliers')
+})
+
+test('accepts only relative Supplier return destinations', () => {
+  expect(safeReturnTo('?returnTo=%2Fsuppliers%3Fsearch%3Dcoffee')).toBe('/suppliers?search=coffee')
+  expect(safeReturnTo('?returnTo=%2Fadmin%2Fsuppliers%2Fnew')).toBe('/admin/suppliers/new')
+  expect(safeReturnTo('?returnTo=https%3A%2F%2Fevil.example')).toBeNull()
+  expect(safeReturnTo('?returnTo=%2F%2Fevil.example')).toBeNull()
+  expect(safeReturnTo('?returnTo=%2Fapi%2Fusers')).toBeNull()
+})
+
+test('returns an administrator to a safe requested Supplier route after login', async () => {
+  window.history.replaceState(null, '', '/?returnTo=%2Fadmin%2Fsuppliers%2Fnew')
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'admin@u.nus.edu', username: 'Admin',
+      role: 'ADMIN', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) }))
+  render(<App />)
+  const user = await fillLogin()
+
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers/new')
+})
+
+test('keeps an ordinary user on Profile when an admin return destination was requested', async () => {
+  window.history.replaceState(null, '', '/?returnTo=%2Fadmin%2Fsuppliers')
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      accessToken: 'user.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) }))
+  render(<App />)
+  const user = await fillLogin()
+
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Administrator access is required')
+  expect(navigateTo).not.toHaveBeenCalled()
 })
 
 test('shows an accessible error when the live profile cannot be loaded', async () => {
