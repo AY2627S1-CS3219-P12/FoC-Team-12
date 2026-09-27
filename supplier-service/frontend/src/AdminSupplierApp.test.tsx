@@ -99,6 +99,17 @@ function LocationProbe() {
 }
 
 function renderRoute(route: string) {
+  sessionStorage.setItem(
+    'foc.user-session',
+    JSON.stringify({
+      accessToken: 'admin.jwt',
+      tokenType: 'Bearer',
+      expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+      username: 'Admin',
+      role: 'ADMIN',
+    }),
+  )
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },

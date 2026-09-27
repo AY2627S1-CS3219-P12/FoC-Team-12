@@ -169,9 +169,9 @@ export function AdminSupplierListPage() {
       </header>
 
       <aside className={styles.securityNote}>
-        <strong>Development access:</strong> this page is not linked publicly,
-        but it is not secure until Supplier Service enforces the future ADMIN
-        JWT role.
+        <strong>Administrator access:</strong> Supplier Service verifies your
+        signed User Service token before allowing administrative reads or
+        changes.
       </aside>
 
       {notice && (

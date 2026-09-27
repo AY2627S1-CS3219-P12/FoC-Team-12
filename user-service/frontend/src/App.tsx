@@ -1,7 +1,15 @@
 import { type FormEvent, type KeyboardEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { ApiError, api, type UserProfile } from './api/client'
-import { clearSession, readSession, saveSession, type AuthSession } from './auth/session'
+import {
+  clearSession,
+  isAdminDestination,
+  readSession,
+  safeReturnTo,
+  saveSession,
+  type AuthSession,
+} from './auth/session'
+import { navigateTo } from './navigation'
 import { OtpInput } from './OtpInput'
 
 type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-verification' | 'reset-confirmation' | 'reset-complete'
@@ -56,6 +64,7 @@ export function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginState, setLoginState] = useState<State>('idle')
   const [loginMessage, setLoginMessage] = useState('')
+  const [accessMessage, setAccessMessage] = useState('')
   const [loginPasswordFocusVersion, setLoginPasswordFocusVersion] = useState(0)
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
@@ -180,6 +189,7 @@ export function App() {
     setView(nextView)
     setLoginState('idle')
     setLoginMessage('')
+    setAccessMessage('')
     setRegistrationState('idle')
     setRegistrationMessage('')
     setVerificationState('idle')
@@ -303,6 +313,14 @@ export function App() {
       saveSession(nextSession)
       setSession(nextSession)
       setLoginState('success')
+      const returnTo = safeReturnTo()
+      if (returnTo) {
+        if (isAdminDestination(returnTo) && nextSession.role !== 'ADMIN') {
+          setAccessMessage('Administrator access is required for that destination. You can still browse public campus locations.')
+        } else {
+          navigateTo(returnTo)
+        }
+      }
     } catch (error) {
       if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {
         clearLoginFailures(loginEmail)
@@ -624,6 +642,17 @@ export function App() {
       <p className="eyebrow">Friend on Campus</p>
       <h1 id="profile-title">Profile</h1>
       <p className="intro">Your Friend on Campus account details.</p>
+      {accessMessage && <p className="access-message" role="alert">{accessMessage}</p>}
+      <nav className="service-grid" aria-label="Friend on Campus services">
+        <a className="service-card" href="/suppliers">
+          <strong>Browse suppliers</strong>
+          <span>Find active food, coffee, printing, and shopping locations across campus.</span>
+        </a>
+        {session.role === 'ADMIN' && <a className="service-card admin-card" href="/admin/suppliers">
+          <strong>Manage suppliers</strong>
+          <span>Create, update, activate, deactivate, and remove campus locations.</span>
+        </a>}
+      </nav>
       {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
       {profileMessage && <p role="alert" className="error">{profileMessage}</p>}
       {displayedProfile && <dl className="identity-card">
@@ -708,6 +737,7 @@ export function App() {
       <label>Password<PasswordInput value={loginPassword} onChange={setLoginPassword} inputRef={loginPasswordRef} disabled={busy} invalid={loginState === 'error'} autoComplete="current-password" /></label>
       <button disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
       <button type="button" className="text-button" onClick={openPasswordReset}>Forgot password?</button>
+      <a className="guest-link" href="/suppliers">Browse suppliers without signing in</a>
       {loginMessage && <p role={loginState === 'error' ? 'alert' : 'status'} className={loginState === 'error' ? 'error' : 'success'}>{loginMessage}</p>}
     </form>}
 

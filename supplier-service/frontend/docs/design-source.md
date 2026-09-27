@@ -18,11 +18,11 @@ The shared-components link currently targets the section heading. When implement
 
 ## API references
 
-With Supplier Service running:
+With the complete stack running through the gateway:
 
-- Swagger UI: <http://localhost:8080/swagger-ui/index.html>
-- OpenAPI JSON: <http://localhost:8080/v3/api-docs>
-- Supplier API: <http://localhost:8080/api/suppliers>
+- Swagger UI: <http://localhost:8088/swagger-ui/index.html>
+- OpenAPI JSON: <http://localhost:8088/docs/supplier/openapi.json>
+- Supplier API: <http://localhost:8088/api/suppliers>
 
 The backend contract takes precedence over example data and incomplete form fields in Figma. In particular, the real Supplier model includes building information, optional location details, operating hours, image URL, status, timestamps, and optimistic-lock versioning.
 
@@ -73,5 +73,13 @@ the complete API and a safer responsive workflow:
   and makes cancellation unambiguous.
 - Deletion explicitly recommends `INACTIVE` for ordinary removal. `409` conflicts require a
   deliberate latest-record reload and are never silently retried.
-- The route remains absent from public navigation and carries an unauthenticated-development
-  warning until backend `ADMIN` JWT enforcement exists.
+- The route remains absent from ordinary-user navigation. The shared User session controls the
+  frontend experience, while Supplier Service's `ADMIN` JWT checks remain authoritative.
+
+## Shared-origin integration
+
+Production User and Supplier pages are presented through gateway port `8088`. Supplier assets use
+`/supplier-assets/**`, preventing collisions with User assets under `/user-assets/**`. The Supplier
+SPA may read the validated shared User session for navigation and bearer forwarding, but this is a
+user-experience aid only; designs must never imply that hiding an admin control replaces backend
+authorization.

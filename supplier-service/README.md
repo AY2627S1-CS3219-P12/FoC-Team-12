@@ -47,8 +47,9 @@ Optimistic-lock conflicts are never retried automatically: reload the latest sup
 trying the mutation again. The administrative routes remain deliberately absent from public
 navigation.
 
-The administrative page is not itself an authorization boundary. It remains unlinked and its
-frontend login integration is still pending, but Supplier Service independently requires a valid
+The administrative page is not itself an authorization boundary. The Supplier SPA reads the shared
+User session, redirects guests to login, and shows access-denied feedback to ordinary users. Valid
+administrators receive the management experience. Supplier Service independently requires a valid
 User Service `ADMIN` JWT for every administrative API request.
 
 Install dependencies and run frontend checks from `supplier-service/frontend`:
@@ -62,8 +63,8 @@ npm run build
 ```
 
 The generated API types in `src/api/schema.d.ts` come from the running Spring Boot OpenAPI
-contract. Regenerate them after an API contract change by starting Supplier Service on port
-`8080` and running:
+contract. Regenerate them after an API contract change with the stack available through the
+gateway on port `8088` and run:
 
 ```sh
 npm run api:generate
@@ -77,13 +78,14 @@ cd supplier-service/frontend
 npm run dev
 ```
 
-Open <http://localhost:5173/suppliers>. Vite proxies `/api` and `/actuator` to Spring Boot on
-port `8080`, so no development CORS configuration is required.
+Open <http://localhost:5173/suppliers>. Vite proxies `/api` and `/actuator` through the gateway on
+port `8088`, so local development follows the same public routing contract without CORS changes.
 
 The production frontend is built into the Spring Boot JAR and served from the same origin.
 The Docker build performs both the Node and Maven builds; it does not create a separate
 frontend container. After `docker compose up --build`, open
-<http://localhost:8080/suppliers>.
+<http://localhost:8088/suppliers>. Its assets are isolated under `/supplier-assets/**`. Direct
+port `8080` remains available for Supplier Service debugging, not the normal presentation flow.
 
 Figma references and implementation rules for future frontend work are documented in
 `frontend/docs/design-source.md` and `frontend/AGENTS.md`.
@@ -174,17 +176,16 @@ Audience: friend-on-campus-api
 Roles:    USER, ADMIN
 ```
 
-Obtain a token by logging in through User Service:
+Obtain a token by logging in through the gateway:
 
 ```sh
-curl -i http://localhost:8081/api/users/login \
+curl -i http://localhost:8088/api/users/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@u.nus.edu","password":"your-password"}'
 ```
 
-Copy the returned `accessToken` into your shell as `ACCESS_TOKEN`. User Service currently has no
-public role-promotion endpoint, so an administrator account must be provisioned by the User
-Service owner; Supplier Service does not create or modify User accounts.
+Copy the returned `accessToken` into your shell as `ACCESS_TOKEN`. User Service owns administrator
+bootstrap and account lifecycle operations; Supplier Service never creates or modifies User accounts.
 
 The public `GET /api/suppliers/**` API, the packaged SPA, Swagger/OpenAPI, and health endpoint
 remain public. `GET /api/admin/suppliers/**` and every `POST`, `PUT`, `PATCH`, or `DELETE` under
@@ -199,9 +200,9 @@ curl http://localhost:8080/api/admin/suppliers \
 
 A missing, expired, incorrectly signed, or otherwise invalid token returns `401 Unauthorized`.
 A valid `USER` token on an administrator operation returns `403 Forbidden`. Both use
-`application/problem+json`. The React admin page can currently load without a token, but its API
-requests receive `401` until frontend session integration is completed; hiding a route in React
-is never a substitute for these backend checks.
+`application/problem+json`. The React route uses the shared User session to improve navigation:
+guests return to login, `USER` sessions see access-denied feedback, and `ADMIN` sessions send their
+bearer token. Hiding a route in React is never a substitute for these backend checks.
 
 ## Read suppliers
 

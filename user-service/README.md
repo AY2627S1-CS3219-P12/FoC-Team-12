@@ -82,18 +82,19 @@ $rsa = [System.Security.Cryptography.RSA]::Create(2048)
 ```
 
 Copy the output into `JWT_PRIVATE_KEY` in `.env` without quotes. Keep a stable key across
-restarts in any persistent deployment; changing it invalidates outstanding JWTs. Start
-only the User components (the Supplier database is untouched):
+restarts in any persistent deployment; changing it invalidates outstanding JWTs. Start the
+complete shared-origin stack:
 
 ```powershell
-docker compose up --build user-service user-frontend
+docker compose up --build
 ```
 
-Open <http://localhost:5174>. The frontend container runs `npm run dev` and proxies
-`/api` to the `user-service` container. The API is at `http://localhost:8081`; these
-are separate processes. From another terminal, check `docker compose ps` and
-`Invoke-RestMethod http://localhost:8081/actuator/health`. For local frontend-only
-development, run `npm run dev` from `user-service/frontend` while the API is running.
+Open <http://localhost:8088>. The production React bundle is built into the User Service JAR,
+served under `/user-assets/**`, and reached through the gateway. There is no separate production
+frontend container. Port `8081` remains available for User Service debugging. From another
+terminal, check `docker compose ps` and `Invoke-RestMethod http://localhost:8081/actuator/health`.
+For local frontend-only development, run `npm run dev` from `user-service/frontend`; Vite remains
+on port `5174` and proxies API requests through the gateway on port `8088`.
 
 The User database is independent of the Supplier database. It is stored in the
 `user-db-data` Docker volume and is available to local PostgreSQL tools at
@@ -287,8 +288,10 @@ npm test
 npm run build
 ```
 
-The Vite frontend runs at `http://localhost:5174` and proxies `/api` to the User Service on port `8081`.
-It includes registration, email-verification and resend-code screens, login, and password-reset flows.
+The Vite development server runs at `http://localhost:5174` and proxies `/api` through the gateway
+on port `8088`. Production assets use `/user-assets/**` and are packaged inside the User Service.
+The frontend includes registration, email-verification and resend-code screens, login, and
+password-reset flows.
 
 Successful registration moves directly to six accessible OTP boxes with the registered email already set;
 entering the sixth digit automatically submits the verification. The resend button displays its 90-second
@@ -316,10 +319,21 @@ After login, the profile shows persisted email, username, and role. A user can c
 or password from this screen; password changes require the current password and sign the browser session
 out after success. Role remains non-editable. Account status and creation time remain in the protected
 profile API for administration and audit use, but are not shown in the everyday profile UI.
+The Profile also links every signed-in user to the public Supplier directory and shows **Manage
+suppliers** only when the effective JWT role is `ADMIN`. Signed-out users can browse Suppliers without
+signing in. These links do not replace or alter the existing Profile controls.
+
+The production User and Supplier SPAs share `sessionStorage["foc.user-session"]` because both are
+presented from `http://localhost:8088`. The stored session is rejected and cleared when malformed or
+expired. A `returnTo` value is accepted only for relative Supplier UI paths; absolute, external, API,
+and malformed destinations are rejected. A normal user requesting an admin destination remains on the
+Profile with an access-denied explanation. Backend authorization remains authoritative.
+
 There is no Admin Dashboard; administrator actions can currently be exercised only through the
 protected API (for example, Swagger UI with an active administrator's bearer token).
 
-For a live browser smoke test: register a fresh NUS address at `http://localhost:5174`,
+For the complete presentation flow, use `http://localhost:8088`. For a standalone frontend smoke
+test, use `http://localhost:5174`. Register a fresh NUS address,
 confirm that login is refused until the delivered OTP is entered, verify the email,
 log in and inspect the profile, then sign out. Request a password reset, enter the
 new OTP and password, and confirm that the old password fails while the new one works.
