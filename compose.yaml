@@ -7,8 +7,10 @@ services:
       USER_SERVICE_URL: http://user-service:8081
       SUPPLIER_SERVICE_URL: http://supplier-service:8080
     depends_on:
-      - user-service
-      - supplier-service
+      user-service:
+        condition: service_healthy
+      supplier-service:
+        condition: service_started
     ports:
       - "8088:8088"
 

@@ -91,6 +91,10 @@ complete shared-origin stack:
 docker compose up --build
 ```
 
+The User Service container reports healthy only after its Actuator endpoint responds;
+Compose waits for this check before starting the gateway. Supplier Service startup is
+checked independently.
+
 Open <http://localhost:8088>. The production React bundle is built into the User Service JAR,
 served under `/user-assets/**`, and reached through the gateway. There is no separate production
 frontend container. Port `8081` remains available for User Service debugging. From another

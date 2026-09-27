@@ -2,6 +2,7 @@ package com.friendoncampus.user.web;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -35,6 +36,13 @@ import com.friendoncampus.user.support.JwtTestProperties;
 class RegistrationEmailVerificationLoginIntegrationTest {
     @Autowired
     private MockMvc mvc;
+
+    @Test
+    void healthEndpointReportsReadyAfterApplicationAndMigrationsStart() throws Exception {
+        mvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"));
+    }
 
     @Autowired
     private UserRepository users;
