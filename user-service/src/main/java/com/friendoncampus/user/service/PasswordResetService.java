@@ -11,6 +11,8 @@ import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.friendoncampus.user.domain.PasswordResetToken;
 import com.friendoncampus.user.domain.User;
@@ -23,6 +25,7 @@ import com.friendoncampus.user.repository.UserRepository;
 
 @Service
 public class PasswordResetService {
+    private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
     private static final int CODE_BOUND = 1_000_000;
     private static final int CODE_LENGTH = 6;
     private static final long REQUEST_COOLDOWN_SECONDS = 90;
@@ -74,7 +77,12 @@ public class PasswordResetService {
         String code = generateCode();
         tokens.invalidateActiveForUser(user.getId(), now);
         tokens.save(PasswordResetToken.issue(user, passwordEncoder.encode(code), now, now.plusMinutes(10)));
-        mailer.sendPasswordResetCode(user.getEmail(), code);
+        try {
+            mailer.sendPasswordResetCode(user.getEmail(), code);
+        } catch (RuntimeException exception) {
+            // Do not reveal account existence or include an address, code, or provider response in logs.
+            log.warn("Password reset email delivery failed");
+        }
         return new PasswordResetRequestResult(REQUEST_COOLDOWN_SECONDS);
     }
 

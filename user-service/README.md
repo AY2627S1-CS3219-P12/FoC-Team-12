@@ -251,7 +251,8 @@ banned.
 
 Requests are limited to one reset email per address every 90 seconds. The endpoint always returns
 the same `202` response and a `Retry-After` header for both known and unknown **eligible** addresses;
-during the cooldown it does not issue or invalidate another code. This preserves the
+during the cooldown it does not issue or invalidate another code. Email-provider failures are
+also masked by that response; if no message arrives, retry after the cooldown. This preserves the
 anti-enumeration contract while allowing the frontend to use the server-provided cooldown.
 Concurrent requests for the same account are serialized for login, email verification, and reset-code
 validation; a database guard also serializes the first reset request before its per-email cooldown exists.

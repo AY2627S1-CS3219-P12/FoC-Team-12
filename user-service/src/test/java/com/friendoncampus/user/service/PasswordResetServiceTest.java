@@ -83,6 +83,21 @@ class PasswordResetServiceTest {
     }
 
     @Test
+    void masksMailerFailureForAnExistingAccountWithoutExposingTheCode() {
+        PasswordResetMailer failingMailer = mock(PasswordResetMailer.class);
+        doThrow(new IllegalStateException("provider unavailable"))
+                .when(failingMailer).sendPasswordResetCode(eq(user.getEmail()), any());
+        PasswordResetService failingService = new PasswordResetService(users, tokens, requestCooldowns,
+                requestGuard, passwords, failingMailer, Clock.fixed(NOW, ZoneOffset.UTC));
+        when(users.findByEmailForUpdate(user.getEmail())).thenReturn(Optional.of(user));
+        when(passwords.encode(any())).thenReturn("verifier");
+
+        assertThat(failingService.request(user.getEmail()).retryAfterSeconds()).isEqualTo(90);
+        verify(tokens).invalidateActiveForUser(eq(user.getId()), any());
+        verify(tokens).save(any(PasswordResetToken.class));
+    }
+
+    @Test
     void confirmsAValidCodeAndChangesThePassword() {
         PasswordResetToken token = tokenExpiringAt(NOW.plusSeconds(600));
         when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(user));
