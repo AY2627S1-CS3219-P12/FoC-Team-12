@@ -18,7 +18,7 @@ public class EmailVerificationService {
 
     @Transactional(noRollbackFor = EmailVerificationDeliveryException.class)
     public void resend(String email) {
-        User user = users.findByEmail(normalizeEmail(email)).orElseThrow(EmailVerificationNotFoundException::new);
+        User user = users.findByEmailForUpdate(normalizeEmail(email)).orElseThrow(EmailVerificationNotFoundException::new);
         if (user.getStatus() == UserStatus.ACTIVE) throw new EmailAlreadyVerifiedException();
         if (user.getStatus() == UserStatus.BANNED) throw new EmailVerificationForbiddenException();
         OffsetDateTime now = now();
@@ -31,7 +31,7 @@ public class EmailVerificationService {
 
     @Transactional(noRollbackFor = InvalidEmailVerificationCodeException.class)
     public void verify(String email, String code) {
-        User user = users.findByEmail(normalizeEmail(email)).orElseThrow(InvalidEmailVerificationCodeException::new);
+        User user = users.findByEmailForUpdate(normalizeEmail(email)).orElseThrow(InvalidEmailVerificationCodeException::new);
         if (user.getStatus() != UserStatus.UNVERIFIED) throw new InvalidEmailVerificationCodeException();
         EmailVerificationAttempt attempt = attempts.findFirstByUser_IdAndSentAtIsNotNullAndUsedAtIsNullAndInvalidatedAtIsNullOrderByCreatedAtDesc(user.getId()).orElseThrow(InvalidEmailVerificationCodeException::new);
         if (!attempt.isUsableAt(now())) throw new InvalidEmailVerificationCodeException();

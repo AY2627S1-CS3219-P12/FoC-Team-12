@@ -6,11 +6,17 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.repository.query.Param;
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.domain.UserRole;
+import jakarta.persistence.LockModeType;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select user from User user where user.email = :email")
+    Optional<User> findByEmailForUpdate(@Param("email") String email);
     Optional<User> findByUsernameNormalized(String usernameNormalized);
     Optional<User> findFirstByRole(UserRole role);
     long countByRoleAndStatus(UserRole role, com.friendoncampus.user.domain.UserStatus status);

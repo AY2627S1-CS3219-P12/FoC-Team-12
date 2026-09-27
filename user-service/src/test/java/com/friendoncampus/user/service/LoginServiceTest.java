@@ -38,7 +38,7 @@ class LoginServiceTest {
         User user = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
         user.activate();
         JwtTokenService.IssuedToken token = new JwtTokenService.IssuedToken("signed.jwt", Instant.now().plusSeconds(900));
-        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+        when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(user));
         when(passwords.matches("password", "hash")).thenReturn(true);
         when(tokens.issue(user)).thenReturn(token);
 
@@ -50,13 +50,13 @@ class LoginServiceTest {
 
     @Test
     void givesTheSameFailureForUnknownEmailAndBadPassword() {
-        when(users.findByEmail("missing@u.nus.edu")).thenReturn(Optional.empty());
+        when(users.findByEmailForUpdate("missing@u.nus.edu")).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.login("missing@u.nus.edu", "password"))
                 .isInstanceOf(InvalidCredentialsException.class)
                 .hasMessage("Incorrect email or password");
 
         User user = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
-        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+        when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(user));
         when(passwords.matches("wrong", "hash")).thenReturn(false);
         assertThatThrownBy(() -> service.login("alice@u.nus.edu", "wrong"))
                 .isInstanceOf(InvalidCredentialsException.class)
@@ -68,7 +68,7 @@ class LoginServiceTest {
         User banned = mock(User.class);
         when(banned.getStatus()).thenReturn(UserStatus.BANNED);
         when(banned.getPasswordHash()).thenReturn("hash");
-        when(users.findByEmail("banned@u.nus.edu")).thenReturn(Optional.of(banned));
+        when(users.findByEmailForUpdate("banned@u.nus.edu")).thenReturn(Optional.of(banned));
         when(passwords.matches("password", "hash")).thenReturn(true);
 
         assertThatThrownBy(() -> service.login("banned@u.nus.edu", "password"))
@@ -81,7 +81,7 @@ class LoginServiceTest {
     @Test
     void requiresEmailVerificationOnlyAfterTheCorrectPasswordWasProvided() {
         User unverified = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
-        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(unverified));
+        when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(unverified));
         when(passwords.matches("password", "hash")).thenReturn(true);
 
         assertThatThrownBy(() -> service.login("alice@u.nus.edu", "password"))
@@ -94,7 +94,7 @@ class LoginServiceTest {
     @Test
     void keepsTheGenericFailureWhenAnUnverifiedAccountsPasswordIsWrong() {
         User unverified = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
-        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(unverified));
+        when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(unverified));
         when(passwords.matches("wrong", "hash")).thenReturn(false);
 
         assertThatThrownBy(() -> service.login("alice@u.nus.edu", "wrong"))
@@ -107,7 +107,7 @@ class LoginServiceTest {
     void locksAnAccountForThirtySecondsAfterThreeWrongPasswordsThenAllowsThreeFreshAttempts() {
         User user = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
         user.activate();
-        when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+        when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(user));
         when(passwords.matches("wrong", "hash")).thenReturn(false);
 
         for (int attempt = 0; attempt < 3; attempt++) {

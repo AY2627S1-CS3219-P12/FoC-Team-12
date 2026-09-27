@@ -8,6 +8,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import com.friendoncampus.user.repository.UserRepository;
 import com.friendoncampus.user.repository.PasswordResetTokenRepository;
 import com.friendoncampus.user.repository.PasswordResetRequestCooldownRepository;
+import com.friendoncampus.user.repository.PasswordResetRequestGuardRepository;
 import com.friendoncampus.user.repository.EmailVerificationAttemptRepository;
 import com.friendoncampus.user.repository.AdminBootstrapStateRepository;
 import com.friendoncampus.user.repository.AdminLifecycleStateRepository;
@@ -28,6 +29,9 @@ class UserServiceApplicationTests {
 
     @MockitoBean
     private PasswordResetRequestCooldownRepository passwordResetRequestCooldownRepository;
+
+    @MockitoBean
+    private PasswordResetRequestGuardRepository passwordResetRequestGuardRepository;
 
     @MockitoBean
     private EmailVerificationAttemptRepository emailVerificationAttemptRepository;

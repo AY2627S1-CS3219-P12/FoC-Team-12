@@ -33,7 +33,7 @@ class EmailVerificationServiceTest {
 
  @Test void verifiesOneUsableCodeAndActivatesTheAccount() {
   EmailVerificationAttempt attempt = attempt(NOW.plusSeconds(600));
-  when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+  when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(user));
   when(attempts.findFirstByUser_IdAndSentAtIsNotNullAndUsedAtIsNullAndInvalidatedAtIsNullOrderByCreatedAtDesc(user.getId())).thenReturn(Optional.of(attempt));
   when(passwords.matches("123456", "verifier")).thenReturn(true);
   service.verify("alice@u.nus.edu", "123456");
@@ -42,7 +42,7 @@ class EmailVerificationServiceTest {
 
  @Test void rejectsExpiredReplayAndFiveIncorrectAttempts() {
   EmailVerificationAttempt expired = attempt(NOW.minusSeconds(1));
-  when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+  when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(user));
   when(attempts.findFirstByUser_IdAndSentAtIsNotNullAndUsedAtIsNullAndInvalidatedAtIsNullOrderByCreatedAtDesc(user.getId())).thenReturn(Optional.of(expired));
   assertThatThrownBy(() -> service.verify("alice@u.nus.edu", "123456")).isInstanceOf(InvalidEmailVerificationCodeException.class);
   EmailVerificationAttempt wrong = attempt(NOW.plusSeconds(600));
@@ -55,7 +55,7 @@ class EmailVerificationServiceTest {
  @Test void resendsAfterCooldownAndInvalidatesEarlierAttempts() {
   EmailVerificationAttempt previous = attempt(NOW.minusSeconds(91));
   previous.markSent(OffsetDateTime.ofInstant(NOW.minusSeconds(91), ZoneOffset.UTC));
-  when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+  when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(user));
   when(attempts.findFirstByUser_IdAndSentAtIsNotNullOrderBySentAtDesc(user.getId())).thenReturn(Optional.of(previous));
  when(passwords.encode(anyString())).thenReturn("verifier");
   when(attempts.save(any())).thenAnswer(i -> i.getArgument(0));
@@ -65,12 +65,12 @@ class EmailVerificationServiceTest {
 
  @Test void rejectsResendDuringCooldownAndReturnsSpecificStatusConditions() {
   EmailVerificationAttempt previous = attempt(NOW);
-  when(users.findByEmail("alice@u.nus.edu")).thenReturn(Optional.of(user));
+  when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(user));
   when(attempts.findFirstByUser_IdAndSentAtIsNotNullOrderBySentAtDesc(user.getId())).thenReturn(Optional.of(previous));
   assertThatThrownBy(() -> service.resend("alice@u.nus.edu")).isInstanceOf(EmailVerificationCooldownException.class);
-  when(users.findByEmail("missing@u.nus.edu")).thenReturn(Optional.empty());
+  when(users.findByEmailForUpdate("missing@u.nus.edu")).thenReturn(Optional.empty());
   assertThatThrownBy(() -> service.resend("missing@u.nus.edu")).isInstanceOf(EmailVerificationNotFoundException.class);
-  User active = User.register("active@u.nus.edu", "Active", "active", "hash"); active.activate(); when(users.findByEmail("active@u.nus.edu")).thenReturn(Optional.of(active));
+  User active = User.register("active@u.nus.edu", "Active", "active", "hash"); active.activate(); when(users.findByEmailForUpdate("active@u.nus.edu")).thenReturn(Optional.of(active));
   assertThatThrownBy(() -> service.resend("active@u.nus.edu")).isInstanceOf(EmailAlreadyVerifiedException.class);
  }
 

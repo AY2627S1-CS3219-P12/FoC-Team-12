@@ -253,6 +253,8 @@ Requests are limited to one reset email per address every 90 seconds. The endpoi
 the same `202` response and a `Retry-After` header for both known and unknown **eligible** addresses;
 during the cooldown it does not issue or invalidate another code. This preserves the
 anti-enumeration contract while allowing the frontend to use the server-provided cooldown.
+Concurrent requests for the same account are serialized for login, email verification, and reset-code
+validation; a database guard also serializes the first reset request before its per-email cooldown exists.
 
 `POST /api/users/password-reset-verifications` accepts an eligible NUS `email` and the six-digit `code`.
 It validates the code without consuming it and returns `204 No Content`, allowing a client to show the
