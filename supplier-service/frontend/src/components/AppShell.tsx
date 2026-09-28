@@ -44,6 +44,7 @@ export function AppShell() {
             )}
             {session ? (
               <>
+                <a href="/">Profile</a>
                 <span className={styles.sessionName}>{session.username}</span>
                 <button
                   onClick={() => {

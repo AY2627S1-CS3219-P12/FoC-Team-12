@@ -84,7 +84,7 @@ test('shows an administrator the ordinary user experience plus a mode switch', a
   expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument()
 })
 
-test('switches an administrator to the dedicated Admin landing', async () => {
+test('keeps an administrator on Profile while changing modes', async () => {
   saveSession({
     accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
@@ -102,7 +102,18 @@ test('switches an administrator to the dedicated Admin landing', async () => {
   await user.click(await screen.findByRole('switch', { name: 'Admin mode' }))
 
   expect(sessionStorage.getItem('foc.ui-mode')).toBe('admin')
-  expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers')
+  expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+  expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute('aria-checked', 'true')
+  expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
+  expect(screen.queryByRole('link', { name: /Browse suppliers/ })).not.toBeInTheDocument()
+  expect(navigateTo).not.toHaveBeenCalled()
+
+  await user.click(screen.getByRole('switch', { name: 'Admin mode' }))
+
+  expect(sessionStorage.getItem('foc.ui-mode')).toBe('user')
+  expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
+  expect(screen.queryByRole('link', { name: /Manage suppliers/ })).not.toBeInTheDocument()
 })
 
 test('clears malformed and expired sessions instead of restoring Profile', () => {
@@ -147,16 +158,26 @@ test('requires an explicit mode switch for an administrator deep link after logi
   expect(sessionStorage.getItem('foc.ui-mode')).toBe('user')
 })
 
-test('restores Admin mode across same-origin navigation', () => {
+test('restores Admin mode on Profile without automatic Supplier navigation', async () => {
   saveSession({
     accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
   })
   sessionStorage.setItem('foc.ui-mode', 'admin')
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'admin@u.nus.edu', username: 'Admin',
+      role: 'ADMIN', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }),
+  }))
 
   render(<App />)
 
-  expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers')
+  expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+  expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute('aria-checked', 'true')
+  expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
+  expect(navigateTo).not.toHaveBeenCalled()
 })
 
 test('keeps an ordinary user on Profile when an admin return destination was requested', async () => {

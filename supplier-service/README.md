@@ -51,10 +51,12 @@ The administrative page is not itself an authorization boundary. The Supplier SP
 User session, redirects guests to login, and shows access-denied feedback to ordinary users. A valid
 administrator also has a persistent User/Admin mode switch across public, detail, and administrative
 screens. User mode exposes only the ordinary-user experience; Admin mode exposes only Supplier
-administration, with mode changes navigating to the corresponding landing. The mode is stored for the
-current gateway-origin browser tab in `sessionStorage["foc.ui-mode"]` and resets on sign-out, expiry,
-or a new login. It is a navigation preference, not an authorization grant: Supplier Service still
-requires a valid User Service `ADMIN` JWT for every administrative API request.
+administration, with mode changes within Supplier screens navigating to the corresponding landing.
+The mode is stored for the current gateway-origin browser tab in `sessionStorage["foc.ui-mode"]` and
+resets on sign-out, expiry, or a new login. It is a navigation preference, not an authorization grant:
+Supplier Service still requires a valid User Service `ADMIN` JWT for every administrative API request.
+Every signed-in Supplier screen also provides a Profile link back to the User Service UI through the
+gateway.
 
 Install dependencies and run frontend checks from `supplier-service/frontend`:
 

@@ -48,6 +48,7 @@ function PasswordInput({
 export function App() {
   const [view, setView] = useState<View>('login')
   const [session, setSession] = useState<AuthSession | null>(() => readSession())
+  const [uiMode, setUiMode] = useState(() => readUiMode(session?.role))
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileMessage, setProfileMessage] = useState('')
   const [profileUsername, setProfileUsername] = useState('')
@@ -126,11 +127,6 @@ export function App() {
 
   useEffect(() => {
     if (!session) {
-      return
-    }
-
-    if (session.role === 'ADMIN' && readUiMode(session.role) === 'admin') {
-      navigateTo('/admin/suppliers')
       return
     }
 
@@ -318,6 +314,7 @@ export function App() {
       setLoginPassword('')
       saveSession(nextSession)
       setSession(nextSession)
+      setUiMode('user')
       setLoginState('success')
       const returnTo = safeReturnTo()
       if (returnTo) {
@@ -646,23 +643,30 @@ export function App() {
 
   if (session) {
     const displayedProfile = profile?.userId === session.userId ? profile : null
+    const adminMode = session.role === 'ADMIN' && uiMode === 'admin'
     return <main><section aria-labelledby="profile-title">
       <p className="eyebrow">Friend on Campus</p>
       <h1 id="profile-title">Profile</h1>
       <p className="intro">Your Friend on Campus account details.</p>
       {session.role === 'ADMIN' && <div className="mode-control">
-        <span>User mode</span>
-        <button type="button" className="mode-switch" role="switch" aria-label="Admin mode" aria-checked="false" onClick={() => {
-          saveUiMode('admin', session.role)
-          navigateTo('/admin/suppliers')
+        <span>{adminMode ? 'Admin mode' : 'User mode'}</span>
+        <button type="button" className="mode-switch" role="switch" aria-label="Admin mode" aria-checked={adminMode} onClick={() => {
+          const nextMode = adminMode ? 'user' : 'admin'
+          saveUiMode(nextMode, session.role)
+          setUiMode(nextMode)
         }}><span aria-hidden="true" /></button>
       </div>}
       {accessMessage && <p className="access-message" role="alert">{accessMessage}</p>}
       <nav className="service-grid" aria-label="Friend on Campus services">
-        <a className="service-card" href="/suppliers">
+        {!adminMode && <a className="service-card" href="/suppliers">
           <strong>Browse suppliers</strong>
           <span>Find active food, coffee, printing, and shopping locations across campus.</span>
         </a>
+        }
+        {adminMode && <a className="service-card admin-card" href="/admin/suppliers">
+          <strong>Manage suppliers</strong>
+          <span>Create, update, activate, deactivate, and remove campus locations.</span>
+        </a>}
       </nav>
       {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
       {profileMessage && <p role="alert" className="error">{profileMessage}</p>}

@@ -321,7 +321,8 @@ out after success. Role remains non-editable. Account status and creation time r
 profile API for administration and audit use, but are not shown in the everyday profile UI.
 The Profile links every signed-in user to the public Supplier directory. An administrator starts in
 the same User mode and sees the same user capabilities, plus an accessible mode switch. Switching to
-Admin mode opens the Supplier administration landing; switching back opens the public directory.
+Admin mode keeps the administrator on Profile and replaces the public Supplier action with an explicit
+**Manage suppliers** link. Switching back restores the public Supplier action.
 Signed-out users can browse Suppliers without signing in.
 
 The production User and Supplier SPAs share `sessionStorage["foc.user-session"]` because both are

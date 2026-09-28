@@ -472,6 +472,10 @@ describe('Other frontend routes', () => {
     renderRoute('/suppliers')
 
     expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute(
+      'href',
+      '/',
+    )
     expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute(
       'aria-checked',
       'false',
@@ -533,6 +537,10 @@ describe('Other frontend routes', () => {
     expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute(
       'aria-checked',
       'false',
+    )
+    expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute(
+      'href',
+      '/',
     )
   })
 
