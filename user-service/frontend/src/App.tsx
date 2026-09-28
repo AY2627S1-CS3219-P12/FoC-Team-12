@@ -316,10 +316,8 @@ export function App() {
       setUiMode('user')
       setLoginState('success')
       const returnTo = safeReturnTo()
-      if (returnTo && isAdminDestination(returnTo)) {
-        setAccessMessage(nextSession.role === 'ADMIN'
-          ? 'Switch to Admin mode to open administrator tools.'
-          : 'Administrator access is required for that destination. You can still browse public campus locations.')
+      if (returnTo && isAdminDestination(returnTo) && nextSession.role !== 'ADMIN') {
+        setAccessMessage('Administrator access is required for that destination. You can still browse public campus locations.')
       }
     } catch (error) {
       if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {

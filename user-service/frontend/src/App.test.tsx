@@ -157,7 +157,7 @@ test('accepts only relative Supplier return destinations', () => {
   expect(safeReturnTo('?returnTo=%2Fapi%2Fusers')).toBeNull()
 })
 
-test('requires an explicit mode switch for an administrator deep link after login', async () => {
+test('keeps an administrator on Profile after an admin deep link without a mode instruction', async () => {
   window.history.replaceState(null, '', '/?returnTo=%2Fadmin%2Fsuppliers%2Fnew')
   vi.stubGlobal('fetch', vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({
@@ -173,7 +173,8 @@ test('requires an explicit mode switch for an administrator deep link after logi
 
   await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Switch to Admin mode')
+  expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute('aria-checked', 'false')
   expect(navigateTo).not.toHaveBeenCalled()
   expect(sessionStorage.getItem('foc.ui-mode')).toBe('user')
