@@ -23,6 +23,9 @@ FROM eclipse-temurin:17-jre-jammy AS runtime
 
 WORKDIR /app
 
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system spring && useradd --system --gid spring --no-create-home spring
 
 COPY --from=builder --chown=spring:spring /workspace/target/user-service-*.jar app.jar
@@ -30,5 +33,8 @@ COPY --from=builder --chown=spring:spring /workspace/target/user-service-*.jar a
 USER spring:spring
 
 EXPOSE 8081
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=5 \
+    CMD curl --fail --silent --output /dev/null http://127.0.0.1:8081/actuator/health || exit 1
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

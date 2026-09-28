@@ -76,26 +76,48 @@ jobs:
         run: npm run build
 
   user-docker:
-    name: User Docker images
+    name: User stack smoke test
     runs-on: ubuntu-24.04
+    env:
+      USER_DB_NAME: user_db
+      USER_DB_USER: user_user
+      USER_DB_PASSWORD: ci-user-password
+      SUPPLIER_DB_NAME: supplier_db
+      SUPPLIER_DB_USER: supplier_user
+      SUPPLIER_DB_PASSWORD: ci-supplier-password
+      MAIL_PROVIDER: noop
     steps:
       - uses: actions/checkout@v7
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      - name: Generate a throwaway JWT signing key
+        run: |
+          key=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null \
+            | openssl pkcs8 -topk8 -nocrypt -outform DER | base64 -w 0)
+          echo "JWT_PRIVATE_KEY=$key" >> "$GITHUB_ENV"
       - name: Validate Compose configuration
-        env:
-          USER_DB_NAME: user_db
-          USER_DB_USER: user_user
-          USER_DB_PASSWORD: ci-user-password
-          JWT_PRIVATE_KEY: ci-placeholder-key
-          SUPPLIER_DB_NAME: supplier_db
-          SUPPLIER_DB_USER: supplier_user
-          SUPPLIER_DB_PASSWORD: ci-supplier-password
         run: docker compose config --quiet
-      - name: Build user backend image
-        run: docker build -f user-service/Dockerfile -t user-service:ci user-service
-      - name: Build user frontend image
-        run: docker build -f user-service/frontend/Dockerfile -t user-frontend:ci user-service/frontend
+      - name: Build and start the gateway-backed User stack
+        run: docker compose up -d --build gateway
+      - name: Check live UI, JWKS, and protected API routing
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --output /dev/null http://localhost:8088/actuator/health; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent --output /dev/null http://localhost:8088/actuator/health
+          curl --fail --silent --output /dev/null http://localhost:8088/
+          curl --fail --silent --output /dev/null http://localhost:8088/.well-known/jwks.json
+          status=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:8088/api/users/me)
+          test "$status" = 401
+      - name: Show container status on failure
+        if: failure()
+        run: docker compose ps && docker compose logs --no-color --tail=100 gateway user-service
+      - name: Stop test stack
+        if: always()
+        run: docker compose down --remove-orphans
 
   supplier-backend:
     name: Supplier backend

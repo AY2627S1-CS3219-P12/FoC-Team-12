@@ -7,6 +7,7 @@ import java.util.Locale;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.domain.UserStatus;
@@ -28,11 +29,12 @@ public class LoginService {
         this.clock = clock;
     }
 
+    @Transactional(noRollbackFor = InvalidCredentialsException.class)
     public LoginResult login(String email, String password) {
         if (email == null || password == null) {
             throw new InvalidCredentialsException();
         }
-        User user = users.findByEmail(email.trim().toLowerCase(Locale.ROOT)).orElse(null);
+        User user = users.findByEmailForUpdate(email.trim().toLowerCase(Locale.ROOT)).orElse(null);
         boolean passwordMatches = passwordEncoder.matches(password,
                 user == null ? DUMMY_PASSWORD_HASH : user.getPasswordHash());
         if (user == null || user.getStatus() == UserStatus.BANNED) {

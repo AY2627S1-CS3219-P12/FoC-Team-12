@@ -11,17 +11,21 @@ import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.friendoncampus.user.domain.PasswordResetToken;
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.domain.UserStatus;
 import com.friendoncampus.user.repository.PasswordResetTokenRepository;
 import com.friendoncampus.user.repository.PasswordResetRequestCooldownRepository;
+import com.friendoncampus.user.repository.PasswordResetRequestGuardRepository;
 import com.friendoncampus.user.domain.PasswordResetRequestCooldown;
 import com.friendoncampus.user.repository.UserRepository;
 
 @Service
 public class PasswordResetService {
+    private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
     private static final int CODE_BOUND = 1_000_000;
     private static final int CODE_LENGTH = 6;
     private static final long REQUEST_COOLDOWN_SECONDS = 90;
@@ -29,17 +33,20 @@ public class PasswordResetService {
     private final UserRepository users;
     private final PasswordResetTokenRepository tokens;
     private final PasswordResetRequestCooldownRepository requestCooldowns;
+    private final PasswordResetRequestGuardRepository requestGuard;
     private final PasswordEncoder passwordEncoder;
     private final PasswordResetMailer mailer;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
     public PasswordResetService(UserRepository users, PasswordResetTokenRepository tokens,
-            PasswordResetRequestCooldownRepository requestCooldowns, PasswordEncoder passwordEncoder,
+            PasswordResetRequestCooldownRepository requestCooldowns, PasswordResetRequestGuardRepository requestGuard,
+            PasswordEncoder passwordEncoder,
             PasswordResetMailer mailer, Clock clock) {
         this.users = users;
         this.tokens = tokens;
         this.requestCooldowns = requestCooldowns;
+        this.requestGuard = requestGuard;
         this.passwordEncoder = passwordEncoder;
         this.mailer = mailer;
         this.clock = clock;
@@ -47,6 +54,7 @@ public class PasswordResetService {
 
     @Transactional
     public PasswordResetRequestResult request(String email) {
+        requestGuard.lockForRequest(1).orElseThrow(() -> new IllegalStateException("Password reset request guard is missing"));
         String normalizedEmail = normalizeEmail(email);
         OffsetDateTime now = now();
         PasswordResetRequestCooldown cooldown = requestCooldowns.findByEmailDigestForUpdate(emailDigest(normalizedEmail)).orElse(null);
@@ -61,7 +69,7 @@ public class PasswordResetService {
             requestCooldowns.save(cooldown);
         }
 
-        User user = users.findByEmail(normalizedEmail).orElse(null);
+        User user = users.findByEmailForUpdate(normalizedEmail).orElse(null);
         if (user == null || user.getStatus() != UserStatus.ACTIVE) {
             return new PasswordResetRequestResult(REQUEST_COOLDOWN_SECONDS);
         }
@@ -69,7 +77,12 @@ public class PasswordResetService {
         String code = generateCode();
         tokens.invalidateActiveForUser(user.getId(), now);
         tokens.save(PasswordResetToken.issue(user, passwordEncoder.encode(code), now, now.plusMinutes(10)));
-        mailer.sendPasswordResetCode(user.getEmail(), code);
+        try {
+            mailer.sendPasswordResetCode(user.getEmail(), code);
+        } catch (RuntimeException exception) {
+            // Do not reveal account existence or include an address, code, or provider response in logs.
+            log.warn("Password reset email delivery failed");
+        }
         return new PasswordResetRequestResult(REQUEST_COOLDOWN_SECONDS);
     }
 
@@ -97,7 +110,7 @@ public class PasswordResetService {
     }
 
     private ValidatedReset validate(String email, String code) {
-        User user = users.findByEmail(normalizeEmail(email)).orElse(null);
+        User user = users.findByEmailForUpdate(normalizeEmail(email)).orElse(null);
         if (user == null || user.getStatus() != UserStatus.ACTIVE) {
             throw new InvalidPasswordResetCodeException();
         }

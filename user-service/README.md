@@ -32,7 +32,9 @@ On macOS or Linux:
 ## Run locally
 
 From the repository root, create a local environment file before the first run if one
-does not already exist. Fill in `USER_DB_*` and the User Service values described below;
+does not already exist. Fill in `USER_DB_*` and `JWT_PRIVATE_KEY` before running any
+`docker compose` command (even when starting only `user-db`, Compose checks required
+variables for the whole file). The local service credentials below must match `.env`;
 `.env` is local-only and must never be committed:
 
 ```powershell
@@ -88,6 +90,10 @@ complete shared-origin stack:
 ```powershell
 docker compose up --build
 ```
+
+The User Service container reports healthy only after its Actuator endpoint responds;
+Compose waits for this check before starting the gateway. Supplier Service startup is
+checked independently.
 
 Open <http://localhost:8088>. The production React bundle is built into the User Service JAR,
 served under `/user-assets/**`, and reached through the gateway. There is no separate production
@@ -204,8 +210,8 @@ a future token-session design.
 
 With the service running and SendGrid configured, this PowerShell sequence registers an
 account, verifies the code from its NUS inbox, then logs in and reads the profile.
-Use a new email/username for each run; logging in before verification must return the
-generic `401` response:
+Use a new email/username for each run. Before verification, the correct password returns
+`403` with `EMAIL_VERIFICATION_REQUIRED`; an incorrect password returns the generic `401`:
 
 ```powershell
 $registration = @{ email = "alice@u.nus.edu"; username = "Alice"; password = "password-with-at-least-15-chars" } | ConvertTo-Json
@@ -249,8 +255,11 @@ banned.
 
 Requests are limited to one reset email per address every 90 seconds. The endpoint always returns
 the same `202` response and a `Retry-After` header for both known and unknown **eligible** addresses;
-during the cooldown it does not issue or invalidate another code. This preserves the
+during the cooldown it does not issue or invalidate another code. Email-provider failures are
+also masked by that response; if no message arrives, retry after the cooldown. This preserves the
 anti-enumeration contract while allowing the frontend to use the server-provided cooldown.
+Concurrent requests for the same account are serialized for login, email verification, and reset-code
+validation; a database guard also serializes the first reset request before its per-email cooldown exists.
 
 `POST /api/users/password-reset-verifications` accepts an eligible NUS `email` and the six-digit `code`.
 It validates the code without consuming it and returns `204 No Content`, allowing a client to show the
