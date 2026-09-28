@@ -307,6 +307,30 @@ describe('Public supplier details', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps the Admin mode switch available on supplier details', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    mockApi()
+    renderRoute(`/suppliers/${supplierId}`)
+
+    expect(
+      await screen.findByRole('heading', { name: "Anna's x Soup Union" }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    )
+  })
+
   it('loads an active supplier image over the branded placeholder', async () => {
     mockApi()
     renderRoute(`/suppliers/${supplierId}`)
@@ -432,6 +456,182 @@ describe('Public supplier details', () => {
 })
 
 describe('Other frontend routes', () => {
+  it('shows an administrator the public experience in User mode', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    mockApi()
+    renderRoute('/suppliers')
+
+    expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute(
+      'href',
+      '/',
+    )
+    expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    )
+    expect(
+      screen.queryByRole('link', { name: 'Add supplier' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('switches between dedicated User and Admin landings', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    mockApi()
+    const user = userEvent.setup()
+    const rendered = renderRoute('/suppliers')
+
+    await user.click(screen.getByRole('switch', { name: 'Admin mode' }))
+    expect(sessionStorage.getItem('foc.ui-mode')).toBe('admin')
+    expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers')
+
+    rendered.unmount()
+    vi.mocked(navigateTo).mockClear()
+    renderRoute('/admin/suppliers')
+    await user.click(screen.getByRole('switch', { name: 'Admin mode' }))
+    expect(sessionStorage.getItem('foc.ui-mode')).toBe('user')
+    expect(navigateTo).toHaveBeenCalledWith('/suppliers')
+  })
+
+  it('requires an explicit switch before rendering a direct Admin route', () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    mockApi()
+    renderRoute('/admin/suppliers')
+
+    expect(
+      screen.getByRole('heading', { name: 'Switch to Admin mode' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Add supplier' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    )
+    expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute(
+      'href',
+      '/',
+    )
+  })
+
+  it('redirects public routes to the Admin landing while Admin mode is active', () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'admin')
+    mockApi()
+    renderRoute('/suppliers')
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/suppliers')
+  })
+
+  it('keeps developer authorization detail out of the administrator page', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'admin')
+    mockApi()
+    renderRoute('/admin/suppliers')
+
+    expect(await screen.findByRole('heading', { name: 'Campus locations' })).toBeInTheDocument()
+    expect(screen.queryByText(/Supplier Service verifies your signed User Service token/)).not.toBeInTheDocument()
+  })
+
+  it('clears the selected mode when an administrator signs out', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'user')
+    mockApi()
+    const user = userEvent.setup()
+    renderRoute('/suppliers')
+
+    expect(screen.getByRole('button', { name: 'Sign out' }).className).toMatch(/signOutButton/)
+
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+
+    expect(sessionStorage.getItem('foc.user-session')).toBeNull()
+    expect(sessionStorage.getItem('foc.ui-mode')).toBeNull()
+    expect(navigateTo).toHaveBeenCalledWith('/')
+  })
+
+  it('clears a saved mode when the shared session is invalid', () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'expired.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2020-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'admin')
+    mockApi()
+    renderRoute('/suppliers')
+
+    expect(sessionStorage.getItem('foc.user-session')).toBeNull()
+    expect(sessionStorage.getItem('foc.ui-mode')).toBeNull()
+    expect(
+      screen.queryByRole('switch', { name: 'Admin mode' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('sends unauthenticated administrators to login without rendering CRUD', () => {
     mockApi()
     renderRoute('/admin/suppliers')
@@ -463,6 +663,9 @@ describe('Other frontend routes', () => {
     expect(
       screen.queryByRole('link', { name: 'Add supplier' }),
     ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('switch', { name: 'Admin mode' }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows access denied when Supplier Service rejects an admin session', async () => {
@@ -477,6 +680,7 @@ describe('Other frontend routes', () => {
         role: 'ADMIN',
       }),
     )
+    sessionStorage.setItem('foc.ui-mode', 'admin')
     mockApi()
     renderRoute('/admin/suppliers')
     window.dispatchEvent(new Event('foc:access-denied'))

@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './auth/AuthContext'
 import { RequireAdmin } from './auth/RequireAdmin'
+import { RequireUserMode } from './auth/RequireUserMode'
 import { AppShell } from './components/AppShell'
 import {
   CreateSupplierPage,
@@ -17,8 +18,10 @@ export function App() {
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<Navigate replace to="/suppliers" />} />
-          <Route path="suppliers" element={<SupplierDirectoryPage />} />
-          <Route path="suppliers/:id" element={<SupplierDetailPage />} />
+          <Route element={<RequireUserMode />}>
+            <Route path="suppliers" element={<SupplierDirectoryPage />} />
+            <Route path="suppliers/:id" element={<SupplierDetailPage />} />
+          </Route>
           <Route element={<RequireAdmin />}>
             <Route path="admin/suppliers" element={<AdminSupplierListPage />} />
             <Route

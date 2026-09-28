@@ -48,9 +48,15 @@ trying the mutation again. The administrative routes remain deliberately absent 
 navigation.
 
 The administrative page is not itself an authorization boundary. The Supplier SPA reads the shared
-User session, redirects guests to login, and shows access-denied feedback to ordinary users. Valid
-administrators receive the management experience. Supplier Service independently requires a valid
-User Service `ADMIN` JWT for every administrative API request.
+User session, redirects guests to login, and shows access-denied feedback to ordinary users. A valid
+administrator also has a persistent User/Admin mode switch across public, detail, and administrative
+screens. User mode exposes only the ordinary-user experience; Admin mode exposes only Supplier
+administration, with mode changes within Supplier screens navigating to the corresponding landing.
+The mode is stored for the current gateway-origin browser tab in `sessionStorage["foc.ui-mode"]` and
+resets on sign-out, expiry, or a new login. It is a navigation preference, not an authorization grant:
+Supplier Service still requires a valid User Service `ADMIN` JWT for every administrative API request.
+Every signed-in Supplier screen links the displayed username back to the User Service Profile through the
+gateway.
 
 Install dependencies and run frontend checks from `supplier-service/frontend`:
 
@@ -89,6 +95,8 @@ port `8080` remains available for Supplier Service debugging, not the normal pre
 
 Figma references and implementation rules for future frontend work are documented in
 `frontend/docs/design-source.md` and `frontend/AGENTS.md`.
+The Figma source was not accessible while the User/Admin mode switch was implemented, so that
+control uses the Supplier frontend's committed tokens, responsive shell, and interaction patterns.
 
 ## Run the tests
 

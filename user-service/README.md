@@ -319,18 +319,25 @@ After login, the profile shows persisted email, username, and role. A user can c
 or password from this screen; password changes require the current password and sign the browser session
 out after success. Role remains non-editable. Account status and creation time remain in the protected
 profile API for administration and audit use, but are not shown in the everyday profile UI.
-The Profile also links every signed-in user to the public Supplier directory and shows **Manage
-suppliers** only when the effective JWT role is `ADMIN`. Signed-out users can browse Suppliers without
-signing in. These links do not replace or alter the existing Profile controls.
+The Profile links every signed-in user to the public Supplier directory. An administrator starts in
+the same User mode and sees the same user capabilities, plus an accessible mode switch. Switching to
+Admin mode keeps the administrator on Profile and replaces the public Supplier action with an explicit
+**Manage suppliers** link. Switching back restores the public Supplier action.
+Signed-out users can browse Suppliers without signing in.
 
 The production User and Supplier SPAs share `sessionStorage["foc.user-session"]` because both are
 presented from `http://localhost:8088`. The stored session is rejected and cleared when malformed or
-expired. A `returnTo` value is accepted only for relative Supplier UI paths; absolute, external, API,
-and malformed destinations are rejected. A normal user requesting an admin destination remains on the
-Profile with an access-denied explanation. Backend authorization remains authoritative.
+expired. They also share `sessionStorage["foc.ui-mode"]`, whose only valid values are `user` and
+`admin`. Mode lasts only for the current browser tab and resets to User mode after sign-out, expiry,
+or a new login. Every successful login opens Profile, including when a public Supplier `returnTo`
+destination was requested. A `returnTo` value is validated only to identify an attempted relative
+Supplier admin destination; absolute, external, API, and malformed destinations are rejected. An admin
+destination never silently activates Admin mode: the administrator must use the switch. This mode controls presentation and navigation only;
+backend authorization continues to use the signed JWT role.
 
-There is no Admin Dashboard; administrator actions can currently be exercised only through the
-protected API (for example, Swagger UI with an active administrator's bearer token).
+There is no User lifecycle Admin Dashboard; those administrator actions can currently be exercised
+only through the protected API (for example, Swagger UI with an active administrator's bearer token).
+Supplier administration remains available through the Supplier frontend in Admin mode.
 
 For the complete presentation flow, use `http://localhost:8088`. For a standalone frontend smoke
 test, use `http://localhost:5174`. Register a fresh NUS address,

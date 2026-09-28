@@ -5,7 +5,7 @@ import styles from './RequireAdmin.module.css'
 import { useAuth } from './useAuth'
 
 export function RequireAdmin() {
-  const { accessDenied, session } = useAuth()
+  const { accessDenied, session, uiMode } = useAuth()
   const location = useLocation()
   const returnTo = `${location.pathname}${location.search}${location.hash}`
 
@@ -37,6 +37,19 @@ export function RequireAdmin() {
           <Link to="/suppliers">Browse suppliers</Link>
           <a href="/">Back to service home</a>
         </div>
+      </section>
+    )
+  }
+
+  if (uiMode !== 'admin') {
+    return (
+      <section className={styles.panel} role="status">
+        <p className={styles.eyebrow}>User mode active</p>
+        <h1>Switch to Admin mode</h1>
+        <p>
+          Administrator tools stay hidden while you are using Friend on Campus
+          as a user. Use the Admin mode switch in the header to continue.
+        </p>
       </section>
     )
   }

@@ -110,6 +110,7 @@ function renderRoute(route: string) {
       role: 'ADMIN',
     }),
   )
+  sessionStorage.setItem('foc.ui-mode', 'admin')
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },

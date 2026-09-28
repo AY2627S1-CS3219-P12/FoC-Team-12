@@ -1,3 +1,5 @@
+import { clearUiMode, saveUiMode } from "./uiMode";
+
 export type AuthSession = {
   accessToken: string;
   tokenType: string;
@@ -30,7 +32,10 @@ function isAuthSession(value: unknown): value is AuthSession {
 export function readSession(): AuthSession | null {
   try {
     const value = sessionStorage.getItem(sessionKey);
-    if (!value) return null;
+    if (!value) {
+      clearUiMode();
+      return null;
+    }
     const session: unknown = JSON.parse(value);
     if (isAuthSession(session)) return session;
   } catch {
@@ -42,10 +47,12 @@ export function readSession(): AuthSession | null {
 
 export function saveSession(session: AuthSession) {
   sessionStorage.setItem(sessionKey, JSON.stringify(session));
+  saveUiMode("user", session.role);
 }
 
 export function clearSession() {
   sessionStorage.removeItem(sessionKey);
+  clearUiMode();
 }
 
 export function safeReturnTo(search = window.location.search): string | null {

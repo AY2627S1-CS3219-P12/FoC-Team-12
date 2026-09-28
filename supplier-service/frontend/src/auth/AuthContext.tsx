@@ -8,18 +8,26 @@ import {
   sessionKey,
   type AuthSession,
 } from './session'
+import { readUiMode, saveUiMode, uiModeKey, type UiMode } from './uiMode'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessDenied, setAccessDenied] = useState(false)
   const [session, setSession] = useState<AuthSession | null>(() =>
     readSession(),
   )
+  const [uiMode, setUiModeState] = useState<UiMode>(() =>
+    readUiMode(session?.role),
+  )
 
   useEffect(() => {
-    const refresh = () => setSession(readSession())
+    const refresh = () => {
+      const nextSession = readSession()
+      setSession(nextSession)
+      setUiModeState(readUiMode(nextSession?.role))
+    }
     const denyAccess = () => setAccessDenied(true)
     const refreshFromStorage = (event: StorageEvent) => {
-      if (event.key === sessionKey) refresh()
+      if (event.key === sessionKey || event.key === uiModeKey) refresh()
     }
     window.addEventListener(sessionExpiredEvent, refresh)
     window.addEventListener(accessDeniedEvent, denyAccess)
@@ -35,13 +43,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       accessDenied,
       session,
+      uiMode,
+      setUiMode: (mode: UiMode) => {
+        setUiModeState(saveUiMode(mode, session?.role))
+      },
       signOut: () => {
         clearSession()
         setAccessDenied(false)
         setSession(null)
       },
     }),
-    [accessDenied, session],
+    [accessDenied, session, uiMode],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
