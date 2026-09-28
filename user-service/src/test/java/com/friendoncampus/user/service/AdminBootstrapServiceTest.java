@@ -52,7 +52,7 @@ class AdminBootstrapServiceTest {
     @Test
     void createsAnUnverifiedAdminAndSendsTheExistingVerificationCode() {
         lockState();
-        when(users.findFirstByRole(UserRole.ADMIN)).thenReturn(Optional.empty());
+        when(users.findFirstByRolesContaining(UserRole.ADMIN)).thenReturn(Optional.empty());
         when(users.findByEmail("admin@u.nus.edu")).thenReturn(Optional.empty());
         when(users.findByUsernameNormalized("first admin")).thenReturn(Optional.empty());
         when(passwords.encode(anyString())).thenReturn("hash");
@@ -62,7 +62,7 @@ class AdminBootstrapServiceTest {
 
         ArgumentCaptor<User> created = ArgumentCaptor.forClass(User.class);
         verify(users).save(created.capture());
-        assertThat(created.getValue().getRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(created.getValue().getRoles()).containsExactlyInAnyOrder(UserRole.REQUESTER, UserRole.ADMIN);
         assertThat(created.getValue().getStatus()).isEqualTo(UserStatus.UNVERIFIED);
         verify(verifications).issueInitial(created.getValue());
         assertThat(state.isCompleted()).isTrue();
@@ -72,14 +72,14 @@ class AdminBootstrapServiceTest {
     @Test
     void promotesTheConfiguredExistingUserAndVerifiesItWhenStillUnverified() {
         lockState();
-        when(users.findFirstByRole(UserRole.ADMIN)).thenReturn(Optional.empty());
+        when(users.findFirstByRolesContaining(UserRole.ADMIN)).thenReturn(Optional.empty());
         User existing = User.register("admin@u.nus.edu", "First Admin", "first admin", "existing-hash");
         when(users.findByEmail("admin@u.nus.edu")).thenReturn(Optional.of(existing));
         when(users.findByUsernameNormalized("first admin")).thenReturn(Optional.of(existing));
 
         service.bootstrap();
 
-        assertThat(existing.getRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(existing.getRoles()).containsExactlyInAnyOrder(UserRole.REQUESTER, UserRole.ADMIN);
         verify(users).save(existing);
         verify(verifications).issueInitial(existing);
         verifyNoInteractions(passwords);
@@ -100,7 +100,7 @@ class AdminBootstrapServiceTest {
     void recordsCompletionWithoutCreatingAnotherAccountWhenAnAdminAlreadyExists() {
         lockState();
         User existingAdmin = User.bootstrapAdmin("other@u.nus.edu", "Other", "other", "hash");
-        when(users.findFirstByRole(UserRole.ADMIN)).thenReturn(Optional.of(existingAdmin));
+        when(users.findFirstByRolesContaining(UserRole.ADMIN)).thenReturn(Optional.of(existingAdmin));
 
         service.bootstrap();
 
@@ -114,7 +114,7 @@ class AdminBootstrapServiceTest {
         assertThatThrownBy(() -> service(new AdminBootstrapProperties("admin@u.nus.edu", "", "password-with-at-least-15-chars")).bootstrap())
                 .hasMessageContaining("must be set together");
         lockState();
-        when(users.findFirstByRole(UserRole.ADMIN)).thenReturn(Optional.empty());
+        when(users.findFirstByRolesContaining(UserRole.ADMIN)).thenReturn(Optional.empty());
         AdminBootstrapService noMailer = new AdminBootstrapService(
                 new AdminBootstrapProperties("admin@u.nus.edu", "First Admin", "password-with-at-least-15-chars"), states,
                 users, passwords, verifications, new MailProperties("noop", "", ""), Clock.systemUTC());
@@ -124,7 +124,7 @@ class AdminBootstrapServiceTest {
     @Test
     void propagatesDeliveryFailureSoTheApplicationStartupFails() {
         lockState();
-        when(users.findFirstByRole(UserRole.ADMIN)).thenReturn(Optional.empty());
+        when(users.findFirstByRolesContaining(UserRole.ADMIN)).thenReturn(Optional.empty());
         when(users.findByEmail("admin@u.nus.edu")).thenReturn(Optional.empty());
         when(users.findByUsernameNormalized("first admin")).thenReturn(Optional.empty());
         when(passwords.encode(anyString())).thenReturn("hash");

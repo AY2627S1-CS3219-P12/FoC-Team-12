@@ -3,6 +3,8 @@ package com.friendoncampus.user.domain;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
+import java.util.EnumSet;
+import java.util.Set;
 
 import jakarta.persistence.*;
 
@@ -14,7 +16,11 @@ public class User {
     @Column(nullable = false, length = 20) private String username;
     @Column(name = "username_normalized", nullable = false, unique = true, length = 20) private String usernameNormalized;
     @Column(name = "password_hash", nullable = false, length = 100) private String passwordHash;
-    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private UserRole role;
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_roles", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "role", nullable = false, length = 16)
+    @Enumerated(EnumType.STRING)
+    private Set<UserRole> roles = EnumSet.noneOf(UserRole.class);
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private UserStatus status;
     @Column(name = "failed_login_attempts", nullable = false) private int failedLoginAttempts;
     @Column(name = "login_lockout_until") private OffsetDateTime loginLockoutUntil;
@@ -23,18 +29,20 @@ public class User {
     protected User() { }
     public static User register(String email, String username, String normalizedUsername, String passwordHash) {
         User user = new User(); user.id = UUID.randomUUID(); user.email = email; user.username = username;
-        user.usernameNormalized = normalizedUsername; user.passwordHash = passwordHash; user.role = UserRole.USER;
+        user.usernameNormalized = normalizedUsername; user.passwordHash = passwordHash; user.roles.add(UserRole.REQUESTER);
         user.status = UserStatus.UNVERIFIED; OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC); user.createdAt = now; user.updatedAt = now;
         return user;
     }
     public static User bootstrapAdmin(String email, String username, String normalizedUsername, String passwordHash) {
         User user = register(email, username, normalizedUsername, passwordHash);
-        user.role = UserRole.ADMIN;
+        user.roles.add(UserRole.ADMIN);
         return user;
     }
     public UUID getId() { return id; } public String getEmail() { return email; } public String getUsername() { return username; }
     public String getPasswordHash() { return passwordHash; }
-    public UserRole getRole() { return role; } public UserStatus getStatus() { return status; } public OffsetDateTime getCreatedAt() { return createdAt; }
+    public Set<UserRole> getRoles() { return Set.copyOf(roles); }
+    public boolean hasRole(UserRole role) { return roles.contains(role); }
+    public UserStatus getStatus() { return status; } public OffsetDateTime getCreatedAt() { return createdAt; }
     public int getFailedLoginAttempts() { return failedLoginAttempts; }
     public OffsetDateTime getLoginLockoutUntil() { return loginLockoutUntil; }
 
@@ -74,12 +82,17 @@ public class User {
     }
 
     public void promoteToAdmin() {
-        this.role = UserRole.ADMIN;
+        this.roles.add(UserRole.ADMIN);
         this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 
     public void demoteToUser() {
-        this.role = UserRole.USER;
+        this.roles.remove(UserRole.ADMIN);
+        this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    }
+
+    public void enableRole(UserRole role) {
+        this.roles.add(role);
         this.updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
     }
 

@@ -41,14 +41,14 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--foc-space-12);
+  gap: var(--foc-space-24);
 }
 
 .modeControl {
   display: inline-flex;
   align-items: center;
   gap: var(--foc-space-12);
-  margin-right: var(--foc-space-12);
+  margin: 0;
   color: var(--foc-muted);
   font-size: var(--foc-text-small);
   font-weight: 600;
@@ -104,19 +104,68 @@
   text-decoration: underline;
 }
 
-.actions .profileLink {
+.userMenu {
+  position: relative;
   min-width: 0;
   max-width: 10rem;
-  margin-right: var(--foc-space-8);
+}
+
+.userMenu summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  max-width: 10rem;
+  color: var(--foc-action);
+  cursor: pointer;
+  font-size: var(--foc-text-small);
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   text-decoration: none;
   white-space: nowrap;
 }
 
-.actions .profileLink:hover,
-.actions .profileLink:focus-visible {
+.userMenu summary:hover,
+.userMenu summary:focus-visible {
   text-decoration: underline;
+}
+
+.userMenuItems {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% - var(--foc-space-4));
+  right: 0;
+  display: grid;
+  min-width: 9rem;
+  padding: var(--foc-space-8);
+  border: 1px solid var(--foc-line);
+  border-radius: var(--foc-radius-8);
+  background: var(--foc-surface);
+  box-shadow: 0 8px 20px rgb(23 32 51 / 14%);
+}
+
+.userMenuItems a,
+.userMenuItems button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0 var(--foc-space-8);
+  color: var(--foc-action);
+  text-decoration: none;
+}
+
+.userMenuItems button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.userMenuItems a:hover,
+.userMenuItems a:focus-visible,
+.userMenuItems button:hover,
+.userMenuItems button:focus-visible {
+  background: var(--foc-action-soft);
+  text-decoration: none;
 }
 
 .actions .signOutButton {
@@ -126,6 +175,13 @@
   border-radius: var(--foc-radius-8);
   background: var(--foc-surface);
   text-decoration: none;
+}
+
+.workspaceError {
+  width: min(100% - 2rem, 80rem);
+  margin: var(--foc-space-8) auto 0;
+  color: var(--foc-danger, #b42318);
+  font-size: var(--foc-text-small);
 }
 
 .actions .signOutButton:hover {
@@ -138,9 +194,9 @@
     margin-right: 0;
   }
 
-  .actions .profileLink {
+  .userMenu,
+  .userMenu summary {
     max-width: 5.5rem;
-    margin-right: 0;
   }
   .actions {
     gap: var(--foc-space-8);

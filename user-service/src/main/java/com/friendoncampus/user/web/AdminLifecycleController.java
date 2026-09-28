@@ -53,15 +53,15 @@ public class AdminLifecycleController {
     }
 
     @PatchMapping("/{id}/role")
-    @Operation(summary = "Promote or demote an active account")
-    @ApiResponse(responseCode = "200", description = "Role changed")
+    @Operation(summary = "Grant or revoke the Administrator assignment for an active account")
+    @ApiResponse(responseCode = "200", description = "Administrator assignment changed")
     @ApiResponse(responseCode = "401", description = "Missing or invalid bearer token")
     @ApiResponse(responseCode = "403", description = "Administrator access required")
     @ApiResponse(responseCode = "404", description = "Target account not found")
     @ApiResponse(responseCode = "409", description = "Invalid role change or protected final administrator")
     public AccountResponse changeRole(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id,
             @Valid @RequestBody RoleRequest request) {
-        User user = request.role() == UserRole.ADMIN ? lifecycle.promote(actorId(jwt), id) : lifecycle.demote(actorId(jwt), id);
+        User user = request.administrator() ? lifecycle.promote(actorId(jwt), id) : lifecycle.demote(actorId(jwt), id);
         return AccountResponse.from(user);
     }
 
@@ -86,16 +86,16 @@ public class AdminLifecycleController {
         return UUID.fromString(jwt.getSubject());
     }
 
-    public record RoleRequest(@NotNull UserRole role) {
+    public record RoleRequest(@NotNull Boolean administrator) {
     }
 
     public record StatusRequest(@NotNull UserStatus status) {
     }
 
-    public record AccountResponse(UUID userId, String email, String username, String role, String status,
+    public record AccountResponse(UUID userId, String email, String username, java.util.Set<UserRole> roles, String status,
             OffsetDateTime createdAt) {
         static AccountResponse from(User user) {
-            return new AccountResponse(user.getId(), user.getEmail(), user.getUsername(), user.getRole().name(),
+            return new AccountResponse(user.getId(), user.getEmail(), user.getUsername(), user.getRoles(),
                     user.getStatus().name(), user.getCreatedAt());
         }
     }

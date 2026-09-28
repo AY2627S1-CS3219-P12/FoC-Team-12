@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -307,16 +307,17 @@ describe('Public supplier details', () => {
     vi.unstubAllGlobals()
   })
 
-  it('keeps the Admin mode switch available on supplier details', async () => {
+  it('keeps the Courier switch available on supplier details', async () => {
     sessionStorage.setItem(
       'foc.user-session',
       JSON.stringify({
-        accessToken: 'admin.jwt',
+        accessToken: 'requester.jwt',
         tokenType: 'Bearer',
         expiresAt: '2030-01-01T00:15:00Z',
         userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
-        username: 'Admin',
-        role: 'ADMIN',
+        username: 'Requester',
+        role: 'REQUESTER',
+        availableRoles: ['REQUESTER'],
       }),
     )
     mockApi()
@@ -325,7 +326,7 @@ describe('Public supplier details', () => {
     expect(
       await screen.findByRole('heading', { name: "Anna's x Soup Union" }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute(
+    expect(screen.getByRole('switch', { name: 'Courier mode' })).toHaveAttribute(
       'aria-checked',
       'false',
     )
@@ -456,27 +457,24 @@ describe('Public supplier details', () => {
 })
 
 describe('Other frontend routes', () => {
-  it('shows an administrator the public experience in User mode', async () => {
+  it('shows an administrator the public experience in Requester mode', async () => {
     sessionStorage.setItem(
       'foc.user-session',
       JSON.stringify({
-        accessToken: 'admin.jwt',
+        accessToken: 'requester.jwt',
         tokenType: 'Bearer',
         expiresAt: '2030-01-01T00:15:00Z',
         userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
         username: 'Admin',
-        role: 'ADMIN',
+        role: 'REQUESTER',
+        availableRoles: ['REQUESTER', 'ADMIN'],
       }),
     )
     mockApi()
     renderRoute('/suppliers')
 
     expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute(
-      'href',
-      '/',
-    )
-    expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute(
+    expect(screen.getByRole('switch', { name: 'Courier mode' })).toHaveAttribute(
       'aria-checked',
       'false',
     )
@@ -485,7 +483,52 @@ describe('Other frontend routes', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('switches between dedicated User and Admin landings', async () => {
+  it('exchanges an eligible administrator session before opening Admin mode', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'requester.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'REQUESTER',
+        availableRoles: ['REQUESTER', 'ADMIN'],
+      }),
+    )
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      accessToken: 'admin.jwt',
+      tokenType: 'Bearer',
+      expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+      username: 'Admin',
+      role: 'ADMIN',
+      availableRoles: ['REQUESTER', 'ADMIN'],
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    mockApi()
+    const user = userEvent.setup()
+    renderRoute('/suppliers')
+
+    await screen.findByText("Anna's x Soup Union")
+    await user.click(screen.getByText('Admin', { selector: 'summary' }))
+    await user.click(screen.getByRole('button', { name: 'Admin mode' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/users/me/session-role',
+        expect.objectContaining({ method: 'PATCH' }),
+      )
+    })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ role: 'ADMIN' })
+    expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers')
+    expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({
+      accessToken: 'admin.jwt',
+      role: 'ADMIN',
+    })
+  })
+
+  it('keeps administrator landing separate from ordinary supplier routes', async () => {
     sessionStorage.setItem(
       'foc.user-session',
       JSON.stringify({
@@ -498,50 +541,32 @@ describe('Other frontend routes', () => {
       }),
     )
     mockApi()
-    const user = userEvent.setup()
-    const rendered = renderRoute('/suppliers')
-
-    await user.click(screen.getByRole('switch', { name: 'Admin mode' }))
-    expect(sessionStorage.getItem('foc.ui-mode')).toBe('admin')
-    expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers')
-
-    rendered.unmount()
-    vi.mocked(navigateTo).mockClear()
     renderRoute('/admin/suppliers')
-    await user.click(screen.getByRole('switch', { name: 'Admin mode' }))
-    expect(sessionStorage.getItem('foc.ui-mode')).toBe('user')
-    expect(navigateTo).toHaveBeenCalledWith('/suppliers')
+    expect(await screen.findByRole('heading', { name: 'Campus locations' })).toBeInTheDocument()
   })
 
-  it('requires an explicit switch before rendering a direct Admin route', () => {
+  it('does not allow a Requester token to render a direct Admin route', () => {
     sessionStorage.setItem(
       'foc.user-session',
       JSON.stringify({
-        accessToken: 'admin.jwt',
+        accessToken: 'requester.jwt',
         tokenType: 'Bearer',
         expiresAt: '2030-01-01T00:15:00Z',
         userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
         username: 'Admin',
-        role: 'ADMIN',
+        role: 'REQUESTER',
+        availableRoles: ['REQUESTER', 'ADMIN'],
       }),
     )
     mockApi()
     renderRoute('/admin/suppliers')
 
     expect(
-      screen.getByRole('heading', { name: 'Switch to Admin mode' }),
+      screen.getByRole('heading', { name: 'You cannot manage suppliers' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('link', { name: 'Add supplier' }),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute(
-      'aria-checked',
-      'false',
-    )
-    expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute(
-      'href',
-      '/',
-    )
   })
 
   it('redirects public routes to the Admin landing while Admin mode is active', () => {

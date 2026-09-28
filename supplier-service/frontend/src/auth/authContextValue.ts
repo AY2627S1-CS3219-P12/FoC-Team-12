@@ -1,12 +1,12 @@
 import { createContext } from 'react'
-import type { AuthSession } from './session'
-import type { UiMode } from './uiMode'
+import type { AuthSession, WorkspaceRole } from './session'
 
 export interface AuthContextValue {
   accessDenied: boolean
   session: AuthSession | null
-  uiMode: UiMode
-  setUiMode: (mode: UiMode) => void
+  workspaceBusy: boolean
+  workspaceError: string
+  selectWorkspaceRole: (role: WorkspaceRole) => Promise<boolean>
   signOut: () => void
 }
 

@@ -18,8 +18,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select user from User user where user.email = :email")
     Optional<User> findByEmailForUpdate(@Param("email") String email);
     Optional<User> findByUsernameNormalized(String usernameNormalized);
-    Optional<User> findFirstByRole(UserRole role);
-    long countByRoleAndStatus(UserRole role, com.friendoncampus.user.domain.UserStatus status);
+    Optional<User> findFirstByRolesContaining(UserRole role);
+    long countByRolesContainingAndStatus(UserRole role, com.friendoncampus.user.domain.UserStatus status);
     @Query("select user from User user where lower(user.email) like lower(concat('%', :query, '%')) or lower(user.username) like lower(concat('%', :query, '%'))")
     Page<User> searchByEmailOrUsername(@org.springframework.data.repository.query.Param("query") String query, Pageable pageable);
 }

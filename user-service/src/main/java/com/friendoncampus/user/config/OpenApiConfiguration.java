@@ -20,7 +20,7 @@ public class OpenApiConfiguration {
                         .title("Friend on Campus User API")
                         .version("v1")
                         .description("D2 User Service: NUS-email registration and verification, login, password reset, "
-                                + "view-only profile, and administrator role/lifecycle controls. First-admin "
+                                + "profile management, Requester/Courier/Admin session-role selection, and administrator role/lifecycle controls. First-admin "
                                 + "bootstrap is deployment-only, not an HTTP endpoint. Publishes RS256 public keys "
                                 + "at /.well-known/jwks.json."));
     }

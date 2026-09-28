@@ -46,14 +46,15 @@ class AdminLifecycleSecurityTest {
         users.save(admin);
         users.save(member);
 
-        mvc.perform(get("/api/users/admin/accounts").header("Authorization", "Bearer " + token(member, "USER")))
+        mvc.perform(get("/api/users/admin/accounts").header("Authorization", "Bearer " + token(member, "REQUESTER")))
                 .andExpect(status().isForbidden());
         mvc.perform(patch("/api/users/admin/accounts/{id}/role", member.getId())
                         .header("Authorization", "Bearer " + token(admin, "ADMIN"))
-                        .contentType("application/json").content("{\"role\":\"ADMIN\"}"))
+                        .contentType("application/json").content("{\"administrator\":true}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.userId").value(member.getId().toString()))
-                .andExpect(jsonPath("$.role").value("ADMIN"));
+                .andExpect(jsonPath("$.roles").isArray())
+                .andExpect(jsonPath("$.roles[?(@ == 'ADMIN')]").exists());
     }
 
     @Test
@@ -65,7 +66,7 @@ class AdminLifecycleSecurityTest {
 
         mvc.perform(patch("/api/users/admin/accounts/{id}/role", member.getId())
                         .header("Authorization", "Bearer " + token(formerAdmin, "ADMIN"))
-                        .contentType("application/json").content("{\"role\":\"ADMIN\"}"))
+                        .contentType("application/json").content("{\"administrator\":true}"))
                 .andExpect(status().isForbidden());
     }
 

@@ -2,8 +2,9 @@
 
 The D2 Friend on Campus User Service uses Spring Boot, Java 17, PostgreSQL, Flyway,
 Actuator, and OpenAPI. It provides NUS-email registration and verification, login,
-password reset, a view-only profile, first-administrator bootstrap, and protected
-administrator role/lifecycle APIs. The browser UI does not yet include an Admin Dashboard.
+password reset, protected profile management, first-administrator bootstrap, and protected
+administrator role/lifecycle APIs. Supplier administration remains owned by the Supplier
+frontend; this service provides the role and token contract it consumes.
 
 Owned by Darryl. See [`AGENTS.md`](AGENTS.md) for the coding boundary and
 [`../TASK_SPLIT.md`](../TASK_SPLIT.md) for team responsibilities.
@@ -123,7 +124,7 @@ Future schema changes must be introduced through forward-only Flyway migrations 
 
 `POST /api/users/registrations` accepts an email from `@u.nus.edu`, `@u.duke.nus.edu`, or
 `@u.yale-nus.edu.sg`, a case-insensitively unique username of at most 20 characters, and a
-15–64-character password. New accounts are `UNVERIFIED` with the `USER` role and cannot log in
+15–64-character password. New accounts are `UNVERIFIED` with the persisted `REQUESTER` role and cannot log in
 until their NUS email is verified.
 
 ## Email verification
@@ -158,7 +159,7 @@ SENDGRID_FROM_EMAIL=verified-sender@example.com
 
 The bootstrap uses a database-locked singleton state, so concurrent instances and restarts create
 or promote only one administrator. If its configured email or username belongs to an existing
-`USER`, that account is promoted to `ADMIN`; existing profile values and password are unchanged.
+account, that account retains its `REQUESTER` assignment and is additionally assigned `ADMIN`; existing profile values and password are unchanged.
 For a new or still-unverified account, the normal verification OTP is sent and the account cannot
 log in until verification succeeds. An already active account needs no new OTP.
 
@@ -170,7 +171,8 @@ the persisted completion state also makes later starts no-ops. Never commit thes
 ## Login and JWT verification
 
 `POST /api/users/login` accepts an email and password. It returns a `Bearer` access token valid for
-15 minutes, its ISO-8601 expiry, stable `userId`, `username`, and `role`. Unknown emails, incorrect
+15 minutes, its ISO-8601 expiry, stable `userId`, `username`, effective `role`, and persisted
+`availableRoles`. Unknown emails, incorrect
 passwords, and banned accounts all receive the same `401 Unauthorized` response. An unverified
 account receives `403` with Problem Detail code `EMAIL_VERIFICATION_REQUIRED` only after the supplied
 password has matched; clients use this to direct that legitimate user to email verification.
@@ -181,7 +183,7 @@ Tokens are signed with RS256 and contain these claims:
 | --- | --- |
 | `sub` | Stable User UUID |
 | `username` | User's display username |
-| `role` | `USER` or `ADMIN` |
+| `role` | The single effective session role: `REQUESTER`, `COURIER`, or `ADMIN` |
 | `iss` | `friend-on-campus-user-service` |
 | `aud` | `friend-on-campus-api` |
 | `iat`, `exp` | Issue and 15-minute expiry timestamps |
@@ -193,13 +195,31 @@ database access; they should cache keys and refresh them when an unfamiliar `kid
 
 `GET /api/users/me` returns the authenticated user's persisted profile. Send the access token as
 `Authorization: Bearer <token>`. Its response contains the stable user ID, NUS email, username,
-role, account status, and account creation timestamp. `PATCH /api/users/me/username` accepts
+persisted `roles`, account status, and account creation timestamp. `PATCH /api/users/me/username` accepts
 `{"username":"..."}` and returns the updated persisted profile. Usernames are required, at most
 20 characters, and unique case-insensitively; an already-used username returns `409 Conflict`.
 The profile API does not permit changing email, role, or status.
 The live profile reflects a changed username immediately. An already-issued JWT keeps its prior
 username claim until it expires or the user signs in again; services must use the stable user ID,
 not that display-name claim, as the account identifier.
+
+### Role assignments and session role selection
+
+Each account has one or more persisted assignments: every existing and newly registered account is
+assigned `REQUESTER`; selecting Courier adds the `COURIER` assignment; and the protected
+administrator lifecycle API grants or removes the additional `ADMIN` assignment. An account may
+hold `REQUESTER` plus `COURIER` and/or `ADMIN`, but each JWT deliberately carries only one
+effective role so downstream services can authorize the active workspace without interpreting a
+list of roles. Login always starts a new session as `REQUESTER`.
+
+`PATCH /api/users/me/session-role` accepts `{"role":"REQUESTER"}`, `{"role":"COURIER"}`, or
+`{"role":"ADMIN"}` and returns a replacement Bearer token, expiry, stable user ID, username,
+effective `role`, and `availableRoles`. The caller must be authenticated and active. Any active
+Requester may select Courier (which persists the Courier assignment); only an account with the
+persisted Administrator assignment may select Admin. A caller cannot manufacture an Admin token by
+changing a browser value or request body. Replace the browser's stored access token with the
+returned token immediately. The prior stateless token remains valid until its normal 15-minute
+expiry; immediate cross-service token revocation is future work.
 
 `PATCH /api/users/me/password` accepts the authenticated user's `currentPassword` and a
 15–64-character `newPassword`. The current password must match and the replacement must differ
@@ -234,7 +254,7 @@ rejected even if its JWT still contains the `ADMIN` role claim.
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /api/users/admin/accounts?query=&page=0&size=20` | Paged account summaries; `query` searches email or username. |
-| `PATCH /api/users/admin/accounts/{id}/role` | Body `{"role":"ADMIN"}` promotes, or `{"role":"USER"}` demotes an active account. |
+| `PATCH /api/users/admin/accounts/{id}/role` | Body `{"administrator":true}` grants, or `{"administrator":false}` removes, the additional `ADMIN` assignment for an active account. |
 | `PATCH /api/users/admin/accounts/{id}/status` | Body `{"status":"BANNED"}` bans an active account, or `{"status":"ACTIVE"}` reactivates a banned account. |
 
 There is deliberately no account-deletion API. Role changes and bans are allowed only for active
@@ -324,29 +344,35 @@ After two generic failures for the same email in one browser session, the fronte
 to wait 30 seconds or reset the password. This is a browser-only usability aid, not a security control,
 and is shown for unknown emails too so it does not reveal whether an account exists.
 
-After login, the profile shows persisted email, username, and role. A user can change their username
-or password from this screen; password changes require the current password and sign the browser session
-out after success. Role remains non-editable. Account status and creation time remain in the protected
-profile API for administration and audit use, but are not shown in the everyday profile UI.
-The Profile links every signed-in user to the public Supplier directory. An administrator starts in
-the same User mode and sees the same user capabilities, plus an accessible mode switch. Switching to
-Admin mode keeps the administrator on Profile and replaces the public Supplier action with an explicit
-**Manage suppliers** link. Switching back restores the public Supplier action.
-Signed-out users can browse Suppliers without signing in.
+After login, the profile shows persisted email, username, and the current effective role. A user can
+change their username or password from this screen; password changes require the current password and
+sign the browser session out after success. Role assignments, account status, and creation time remain
+protected API data; account status and creation time are not shown in the everyday profile UI.
 
-The production User and Supplier SPAs share `sessionStorage["foc.user-session"]` because both are
-presented from `http://localhost:8088`. The stored session is rejected and cleared when malformed or
-expired. They also share `sessionStorage["foc.ui-mode"]`, whose only valid values are `user` and
-`admin`. Mode lasts only for the current browser tab and resets to User mode after sign-out, expiry,
-or a new login. Every successful login opens Profile, including when a public Supplier `returnTo`
-destination was requested. A `returnTo` value is validated only to identify an attempted relative
-Supplier admin destination; absolute, external, API, and malformed destinations are rejected. An admin
-destination never silently activates Admin mode: the administrator must use the switch. This mode controls presentation and navigation only;
-backend authorization continues to use the signed JWT role.
+Every new login starts in Requester mode. The profile exposes an accessible Requester/Courier switch;
+selecting Courier exchanges the current token for a Courier token and records that extra assignment.
+An account that also has the persisted Administrator assignment can select **Admin mode** without
+leaving Profile; this likewise exchanges the token, rather than changing only browser state. In the
+Supplier frontend's shared header, the same Requester/Courier control is present on ordinary Supplier
+screens and the account menu links to Profile and offers Admin mode when eligible. An Admin token
+opens Supplier administration; returning to Requester exchanges the token again before public Supplier
+routing. Signed-out users can browse Suppliers without signing in.
+
+The production User and Supplier SPAs share the API-issued session object in
+`sessionStorage["foc.user-session"]` because both are presented from `http://localhost:8088`. The
+stored session is rejected and cleared when malformed or expired. It contains the short-lived access
+token, its single effective role, and the account's available assignments; it contains no password.
+Each role selection replaces this object with the response from
+`PATCH /api/users/me/session-role`. There is no `foc.ui-mode` authorization or presentation flag.
+Every successful login opens Profile, including when a public Supplier `returnTo` destination was
+requested. A `returnTo` value is validated only to identify an attempted relative Supplier admin
+destination; absolute, external, API, and malformed destinations are rejected. An Admin destination
+never silently elevates a Requester or Courier token: the administrator must explicitly select Admin
+mode. Backend authorization always uses the signed JWT's effective role.
 
 There is no User lifecycle Admin Dashboard; those administrator actions can currently be exercised
 only through the protected API (for example, Swagger UI with an active administrator's bearer token).
-Supplier administration remains available through the Supplier frontend in Admin mode.
+Supplier administration remains available through the Supplier frontend with an effective Admin token.
 
 For the complete presentation flow, use `http://localhost:8088`. For a standalone frontend smoke
 test, use `http://localhost:5174`. Register a fresh NUS address,

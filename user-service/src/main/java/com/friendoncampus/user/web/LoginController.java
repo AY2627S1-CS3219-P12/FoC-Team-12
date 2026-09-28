@@ -1,6 +1,7 @@
 package com.friendoncampus.user.web;
 
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.http.ResponseEntity;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.friendoncampus.user.service.LoginService;
+import com.friendoncampus.user.domain.UserRole;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -37,10 +39,10 @@ public class LoginController {
     }
 
     public record Response(String accessToken, String tokenType, Instant expiresAt, UUID userId, String username,
-            String role) {
+            String role, Set<UserRole> availableRoles) {
         Response(LoginService.LoginResult login) {
             this(login.token().value(), "Bearer", login.token().expiresAt(), login.user().getId(),
-                    login.user().getUsername(), login.user().getRole().name());
+                    login.user().getUsername(), login.effectiveRole().name(), login.user().getRoles());
         }
     }
 }

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import com.friendoncampus.user.config.JwtProperties;
 import com.friendoncampus.user.domain.User;
+import com.friendoncampus.user.domain.UserRole;
 
 @Service
 public class JwtTokenService {
@@ -23,7 +24,7 @@ public class JwtTokenService {
         this.properties = properties;
     }
 
-    public IssuedToken issue(User user) {
+    public IssuedToken issue(User user, UserRole effectiveRole) {
         Instant issuedAt = Instant.now();
         Instant expiresAt = issuedAt.plus(properties.accessTokenTtl());
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -33,7 +34,7 @@ public class JwtTokenService {
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
                 .claim("username", user.getUsername())
-                .claim("role", user.getRole().name())
+                .claim("role", effectiveRole.name())
                 .build();
         String value = encoder.encode(JwtEncoderParameters.from(
                 JwsHeader.with(SignatureAlgorithm.RS256).keyId(properties.keyId()).build(), claims)).getTokenValue();

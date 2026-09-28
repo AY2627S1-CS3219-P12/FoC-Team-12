@@ -81,60 +81,70 @@ test('keeps Profile open after a public Supplier return destination was requeste
   expect(navigateTo).not.toHaveBeenCalled()
 })
 
-test('shows an administrator the ordinary user experience plus a mode switch', async () => {
+test('uses a live Courier switch to replace a Requester session token', async () => {
   saveSession({
-    accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
-    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
+    accessToken: 'requester.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'REQUESTER',
+    availableRoles: ['REQUESTER'],
   })
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'admin@u.nus.edu', username: 'Admin',
-      role: 'ADMIN', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
-    }),
-  }))
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+      roles: ['REQUESTER'], status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      accessToken: 'courier.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'COURIER',
+      availableRoles: ['REQUESTER', 'COURIER'],
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+      roles: ['REQUESTER', 'COURIER'], status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) }))
 
   render(<App />)
+  const user = userEvent.setup()
 
   expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
-  expect(screen.queryByRole('link', { name: /Manage suppliers/ })).not.toBeInTheDocument()
-  expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute('aria-checked', 'false')
-  expect(screen.getByText('ADMIN')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Edit username' })).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Change' })).toBeInTheDocument()
+  await user.click(screen.getByRole('switch', { name: 'Courier mode' }))
+
+  expect(await screen.findByText('Courier mode')).toBeInTheDocument()
+  expect(screen.getByRole('switch', { name: 'Courier mode' })).toHaveAttribute('aria-checked', 'true')
+  expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({
+    accessToken: 'courier.jwt', role: 'COURIER',
+  })
+  expect(fetch).toHaveBeenCalledWith('/api/users/me/session-role', expect.objectContaining({ method: 'PATCH' }))
 })
 
-test('keeps an administrator on Profile while changing modes', async () => {
+test('lets an administrator select Admin mode without leaving Profile', async () => {
   saveSession({
-    accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
-    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
+    accessToken: 'requester.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'REQUESTER',
+    availableRoles: ['REQUESTER', 'ADMIN'],
   })
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
       userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'admin@u.nus.edu', username: 'Admin',
-      role: 'ADMIN', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
-    }),
-  }))
-  const user = userEvent.setup()
+      roles: ['REQUESTER', 'ADMIN'], status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
+      availableRoles: ['REQUESTER', 'ADMIN'],
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'admin@u.nus.edu', username: 'Admin',
+      roles: ['REQUESTER', 'ADMIN'], status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) }))
   render(<App />)
+  const user = userEvent.setup()
 
-  await user.click(await screen.findByRole('switch', { name: 'Admin mode' }))
+  await user.click(await screen.findByRole('button', { name: 'Admin mode' }))
 
-  expect(sessionStorage.getItem('foc.ui-mode')).toBe('admin')
   expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
-  expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute('aria-checked', 'true')
   expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
-  expect(screen.queryByRole('link', { name: /Browse suppliers/ })).not.toBeInTheDocument()
   expect(navigateTo).not.toHaveBeenCalled()
-
-  await user.click(screen.getByRole('switch', { name: 'Admin mode' }))
-
-  expect(sessionStorage.getItem('foc.ui-mode')).toBe('user')
-  expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
-  expect(screen.queryByRole('link', { name: /Manage suppliers/ })).not.toBeInTheDocument()
 })
 
 test('clears malformed and expired sessions instead of restoring Profile', () => {
@@ -155,71 +165,6 @@ test('accepts only relative Supplier return destinations', () => {
   expect(safeReturnTo('?returnTo=https%3A%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2Fapi%2Fusers')).toBeNull()
-})
-
-test('keeps an administrator on Profile after an admin deep link without a mode instruction', async () => {
-  window.history.replaceState(null, '', '/?returnTo=%2Fadmin%2Fsuppliers%2Fnew')
-  vi.stubGlobal('fetch', vi.fn()
-    .mockResolvedValueOnce({ ok: true, json: async () => ({
-      accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
-      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
-    }) })
-    .mockResolvedValueOnce({ ok: true, json: async () => ({
-      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'admin@u.nus.edu', username: 'Admin',
-      role: 'ADMIN', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
-    }) }))
-  render(<App />)
-  const user = await fillLogin()
-
-  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
-
-  expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
-  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute('aria-checked', 'false')
-  expect(navigateTo).not.toHaveBeenCalled()
-  expect(sessionStorage.getItem('foc.ui-mode')).toBe('user')
-})
-
-test('restores Admin mode on Profile without automatic Supplier navigation', async () => {
-  saveSession({
-    accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
-    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
-  })
-  sessionStorage.setItem('foc.ui-mode', 'admin')
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-    ok: true,
-    json: async () => ({
-      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'admin@u.nus.edu', username: 'Admin',
-      role: 'ADMIN', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
-    }),
-  }))
-
-  render(<App />)
-
-  expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
-  expect(screen.getByRole('switch', { name: 'Admin mode' })).toHaveAttribute('aria-checked', 'true')
-  expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
-  expect(navigateTo).not.toHaveBeenCalled()
-})
-
-test('keeps an ordinary user on Profile when an admin return destination was requested', async () => {
-  window.history.replaceState(null, '', '/?returnTo=%2Fadmin%2Fsuppliers')
-  vi.stubGlobal('fetch', vi.fn()
-    .mockResolvedValueOnce({ ok: true, json: async () => ({
-      accessToken: 'user.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
-      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
-    }) })
-    .mockResolvedValueOnce({ ok: true, json: async () => ({
-      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
-      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
-    }) }))
-  render(<App />)
-  const user = await fillLogin()
-
-  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
-
-  expect(await screen.findByRole('alert')).toHaveTextContent('Administrator access is required')
-  expect(navigateTo).not.toHaveBeenCalled()
 })
 
 test('shows an accessible error when the live profile cannot be loaded', async () => {

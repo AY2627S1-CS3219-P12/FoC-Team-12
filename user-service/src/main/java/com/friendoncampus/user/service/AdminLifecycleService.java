@@ -35,7 +35,7 @@ public class AdminLifecycleService {
     public User promote(UUID actorId, UUID targetId) {
         User target = beginChange(actorId, targetId);
         requireActive(target);
-        if (target.getRole() != UserRole.USER) {
+        if (target.hasRole(UserRole.ADMIN)) {
             throw new AdminLifecycleException("Account is already an administrator");
         }
         target.promoteToAdmin();
@@ -46,7 +46,7 @@ public class AdminLifecycleService {
     public User demote(UUID actorId, UUID targetId) {
         User target = beginChange(actorId, targetId);
         requireActive(target);
-        if (target.getRole() != UserRole.ADMIN) {
+        if (!target.hasRole(UserRole.ADMIN)) {
             throw new AdminLifecycleException("Account is not an administrator");
         }
         requireAnotherActiveAdmin();
@@ -58,7 +58,7 @@ public class AdminLifecycleService {
     public User ban(UUID actorId, UUID targetId) {
         User target = beginChange(actorId, targetId);
         requireActive(target);
-        if (target.getRole() == UserRole.ADMIN) {
+        if (target.hasRole(UserRole.ADMIN)) {
             requireAnotherActiveAdmin();
         }
         target.ban();
@@ -88,7 +88,7 @@ public class AdminLifecycleService {
 
     private User requireActiveAdmin(UUID actorId) {
         User actor = users.findById(actorId).orElseThrow(() -> new AdminAccessDeniedException("Administrator access is required"));
-        if (actor.getRole() != UserRole.ADMIN || actor.getStatus() != UserStatus.ACTIVE) {
+        if (!actor.hasRole(UserRole.ADMIN) || actor.getStatus() != UserStatus.ACTIVE) {
             throw new AdminAccessDeniedException("Administrator access is required");
         }
         return actor;
@@ -101,7 +101,7 @@ public class AdminLifecycleService {
     }
 
     private void requireAnotherActiveAdmin() {
-        if (users.countByRoleAndStatus(UserRole.ADMIN, UserStatus.ACTIVE) <= 1) {
+        if (users.countByRolesContainingAndStatus(UserRole.ADMIN, UserStatus.ACTIVE) <= 1) {
             throw new AdminLifecycleException("The final active administrator cannot be changed");
         }
     }

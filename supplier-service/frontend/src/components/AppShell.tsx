@@ -5,14 +5,21 @@ import { navigateTo } from '../navigation'
 import styles from './AppShell.module.css'
 
 export function AppShell() {
-  const { session, signOut, uiMode, setUiMode } = useAuth()
+  const { session, signOut, workspaceBusy, workspaceError, selectWorkspaceRole } = useAuth()
   const location = useLocation()
   const returnTo = `${location.pathname}${location.search}`
 
-  const toggleMode = () => {
-    const nextMode = uiMode === 'admin' ? 'user' : 'admin'
-    setUiMode(nextMode)
-    navigateTo(nextMode === 'admin' ? '/admin/suppliers' : '/suppliers')
+  const switchCourierWorkspace = async () => {
+    if (!session) return
+    await selectWorkspaceRole(session.role === 'COURIER' ? 'REQUESTER' : 'COURIER')
+  }
+
+  const openAdminWorkspace = async () => {
+    if (await selectWorkspaceRole('ADMIN')) navigateTo('/admin/suppliers')
+  }
+
+  const returnToRequesterWorkspace = async () => {
+    if (await selectWorkspaceRole('REQUESTER')) navigateTo('/suppliers')
   }
 
   return (
@@ -27,14 +34,15 @@ export function AppShell() {
             aria-label="Account and supplier views"
             className={styles.actions}
           >
-            {session?.role === 'ADMIN' && (
+            {session && session.role !== 'ADMIN' && (
               <div className={styles.modeControl}>
-                <span>{uiMode === 'admin' ? 'Admin mode' : 'User mode'}</span>
+                <span>{session.role === 'COURIER' ? 'Courier mode' : 'Requester mode'}</span>
                 <button
-                  aria-checked={uiMode === 'admin'}
-                  aria-label="Admin mode"
+                  aria-checked={session.role === 'COURIER'}
+                  aria-label="Courier mode"
                   className={styles.modeSwitch}
-                  onClick={toggleMode}
+                  disabled={workspaceBusy}
+                  onClick={() => { void switchCourierWorkspace() }}
                   role="switch"
                   type="button"
                 >
@@ -44,7 +52,22 @@ export function AppShell() {
             )}
             {session ? (
               <>
-                <a className={styles.profileLink} href="/">{session.username}</a>
+                <details className={styles.userMenu}>
+                  <summary>{session.username}</summary>
+                  <div className={styles.userMenuItems}>
+                    <a href="/">Profile</a>
+                    {session.availableRoles?.includes('ADMIN') && session.role !== 'ADMIN' && (
+                      <button disabled={workspaceBusy} onClick={() => { void openAdminWorkspace() }} type="button">
+                        Admin mode
+                      </button>
+                    )}
+                    {session.role === 'ADMIN' && (
+                      <button disabled={workspaceBusy} onClick={() => { void returnToRequesterWorkspace() }} type="button">
+                        <span aria-hidden="true">✓ </span>Admin mode
+                      </button>
+                    )}
+                  </div>
+                </details>
                 <button
                   className={styles.signOutButton}
                   onClick={() => {
@@ -62,6 +85,7 @@ export function AppShell() {
           </nav>
         </div>
       </header>
+      {workspaceError && <p className={styles.workspaceError} role="alert">{workspaceError}</p>}
       <main className={styles.main}>
         <Outlet />
       </main>

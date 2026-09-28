@@ -48,15 +48,15 @@ trying the mutation again. The administrative routes remain deliberately absent 
 navigation.
 
 The administrative page is not itself an authorization boundary. The Supplier SPA reads the shared
-User session, redirects guests to login, and shows access-denied feedback to ordinary users. A valid
-administrator also has a persistent User/Admin mode switch across public, detail, and administrative
-screens. User mode exposes only the ordinary-user experience; Admin mode exposes only Supplier
-administration, with mode changes within Supplier screens navigating to the corresponding landing.
-The mode is stored for the current gateway-origin browser tab in `sessionStorage["foc.ui-mode"]` and
-resets on sign-out, expiry, or a new login. It is a navigation preference, not an authorization grant:
-Supplier Service still requires a valid User Service `ADMIN` JWT for every administrative API request.
-Every signed-in Supplier screen links the displayed username back to the User Service Profile through the
-gateway.
+User session, redirects guests to login, and shows access-denied feedback to non-Admin sessions. Every
+new login starts with a User Service-issued `REQUESTER` token. Signed-in ordinary Supplier screens show
+an accessible Requester/Courier switch; selecting Courier makes an authenticated
+`PATCH /api/users/me/session-role` request and stores only its replacement short-lived token. The
+account menu links the displayed username to Profile and, for accounts with an `ADMIN` assignment,
+offers Admin mode. Selecting it exchanges the token and opens Supplier administration. Returning to
+Requester mode exchanges the token again and opens the public directory. The session is cleared on
+sign-out, expiry, or malformed storage. Supplier Service still requires an effective `ADMIN` JWT for
+every administrative API request; frontend navigation never grants authority.
 
 Install dependencies and run frontend checks from `supplier-service/frontend`:
 
@@ -95,8 +95,8 @@ port `8080` remains available for Supplier Service debugging, not the normal pre
 
 Figma references and implementation rules for future frontend work are documented in
 `frontend/docs/design-source.md` and `frontend/AGENTS.md`.
-The Figma source was not accessible while the User/Admin mode switch was implemented, so that
-control uses the Supplier frontend's committed tokens, responsive shell, and interaction patterns.
+The Figma source was not accessible while the shared role-workspace controls were implemented, so
+they use the Supplier frontend's committed tokens, responsive shell, and interaction patterns.
 
 ## Run the tests
 
@@ -173,7 +173,8 @@ choose **Authorize** and enter a User Service access token to call them. Swagger
 User Service authenticates credentials and issues 15-minute RS256 access tokens. Supplier
 Service does not read the User database or verify passwords. It downloads User Service's public
 keys from `/.well-known/jwks.json`, validates the token signature, issuer, audience, validity
-times, and `role`, then converts `ADMIN` to Spring authority `ROLE_ADMIN`.
+times, and `role`, then converts an effective `ADMIN` claim to Spring authority `ROLE_ADMIN`.
+`REQUESTER` and `COURIER` claims are valid authenticated roles but do not receive administrator authority.
 
 The default local JWT settings are:
 
@@ -181,7 +182,7 @@ The default local JWT settings are:
 JWKS:     http://localhost:8081/.well-known/jwks.json
 Issuer:   friend-on-campus-user-service
 Audience: friend-on-campus-api
-Roles:    USER, ADMIN
+Roles:    REQUESTER, COURIER, ADMIN
 ```
 
 Obtain a token by logging in through the gateway:
@@ -207,10 +208,10 @@ curl http://localhost:8080/api/admin/suppliers \
 ```
 
 A missing, expired, incorrectly signed, or otherwise invalid token returns `401 Unauthorized`.
-A valid `USER` token on an administrator operation returns `403 Forbidden`. Both use
-`application/problem+json`. The React route uses the shared User session to improve navigation:
-guests return to login, `USER` sessions see access-denied feedback, and `ADMIN` sessions send their
-bearer token. Hiding a route in React is never a substitute for these backend checks.
+A valid `REQUESTER` or `COURIER` token on an administrator operation returns `403 Forbidden`. Both
+use `application/problem+json`. The React route uses the shared User session to improve navigation:
+guests return to login, non-Admin sessions see access-denied feedback, and Admin sessions send their
+Bearer token. Hiding a route in React is never a substitute for these backend checks.
 
 ## Read suppliers
 

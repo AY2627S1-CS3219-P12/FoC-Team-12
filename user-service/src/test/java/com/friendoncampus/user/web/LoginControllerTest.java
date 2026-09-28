@@ -16,6 +16,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.friendoncampus.user.domain.User;
+import com.friendoncampus.user.domain.UserRole;
 import com.friendoncampus.user.service.InvalidCredentialsException;
 import com.friendoncampus.user.service.EmailVerificationRequiredException;
 import com.friendoncampus.user.service.JwtTokenService;
@@ -32,7 +33,7 @@ class LoginControllerTest {
         User user = User.register("alice@u.nus.edu", "Alice", "alice", "hash");
         Instant expiry = Instant.parse("2030-01-01T00:15:00Z");
         when(loginService.login(anyString(), anyString()))
-                .thenReturn(new LoginService.LoginResult(user, new JwtTokenService.IssuedToken("signed.jwt", expiry)));
+                .thenReturn(new LoginService.LoginResult(user, UserRole.REQUESTER, new JwtTokenService.IssuedToken("signed.jwt", expiry)));
 
         mvc.perform(post("/api/users/login").contentType("application/json")
                         .content("{\"email\":\"alice@u.nus.edu\",\"password\":\"password\"}"))
@@ -42,7 +43,8 @@ class LoginControllerTest {
                 .andExpect(jsonPath("$.expiresAt").value("2030-01-01T00:15:00Z"))
                 .andExpect(jsonPath("$.userId").value(user.getId().toString()))
                 .andExpect(jsonPath("$.username").value("Alice"))
-                .andExpect(jsonPath("$.role").value("USER"));
+                .andExpect(jsonPath("$.role").value("REQUESTER"))
+                .andExpect(jsonPath("$.availableRoles[0]").value("REQUESTER"));
     }
 
     @Test
