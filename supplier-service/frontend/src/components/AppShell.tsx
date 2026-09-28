@@ -5,10 +5,15 @@ import { navigateTo } from '../navigation'
 import styles from './AppShell.module.css'
 
 export function AppShell() {
-  const { session, signOut } = useAuth()
+  const { session, signOut, uiMode, setUiMode } = useAuth()
   const location = useLocation()
   const returnTo = `${location.pathname}${location.search}`
-  const managing = location.pathname.startsWith('/admin/suppliers')
+
+  const toggleMode = () => {
+    const nextMode = uiMode === 'admin' ? 'user' : 'admin'
+    setUiMode(nextMode)
+    navigateTo(nextMode === 'admin' ? '/admin/suppliers' : '/suppliers')
+  }
 
   return (
     <div className={styles.app}>
@@ -22,12 +27,21 @@ export function AppShell() {
             aria-label="Account and supplier views"
             className={styles.actions}
           >
-            {session?.role === 'ADMIN' &&
-              (managing ? (
-                <Link to="/suppliers">Public supplier view</Link>
-              ) : (
-                <Link to="/admin/suppliers">Manage suppliers</Link>
-              ))}
+            {session?.role === 'ADMIN' && (
+              <div className={styles.modeControl}>
+                <span>{uiMode === 'admin' ? 'Admin mode' : 'User mode'}</span>
+                <button
+                  aria-checked={uiMode === 'admin'}
+                  aria-label="Admin mode"
+                  className={styles.modeSwitch}
+                  onClick={toggleMode}
+                  role="switch"
+                  type="button"
+                >
+                  <span aria-hidden="true" />
+                </button>
+              </div>
+            )}
             {session ? (
               <>
                 <span className={styles.sessionName}>{session.username}</span>
