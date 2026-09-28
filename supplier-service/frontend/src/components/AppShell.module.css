@@ -31,8 +31,7 @@
   text-decoration: none;
 }
 
-.sectionName,
-.sessionName {
+.sectionName {
   color: var(--foc-muted);
   font-size: var(--foc-text-small);
   font-weight: 600;
@@ -48,7 +47,8 @@
 .modeControl {
   display: inline-flex;
   align-items: center;
-  gap: var(--foc-space-8);
+  gap: var(--foc-space-12);
+  margin-right: var(--foc-space-12);
   color: var(--foc-muted);
   font-size: var(--foc-text-small);
   font-weight: 600;
@@ -104,9 +104,43 @@
   text-decoration: underline;
 }
 
+.actions .profileLink {
+  min-width: 0;
+  max-width: 10rem;
+  margin-right: var(--foc-space-8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.actions .profileLink:hover,
+.actions .profileLink:focus-visible {
+  text-decoration: underline;
+}
+
+.actions .signOutButton {
+  min-height: 2.75rem;
+  padding: 0 var(--foc-space-12);
+  border: 1px solid var(--foc-action);
+  border-radius: var(--foc-radius-8);
+  background: var(--foc-surface);
+  text-decoration: none;
+}
+
+.actions .signOutButton:hover {
+  background: var(--foc-action-soft);
+}
+
 @media (max-width: 35rem) {
-  .sessionName {
-    display: none;
+  .modeControl {
+    gap: var(--foc-space-8);
+    margin-right: 0;
+  }
+
+  .actions .profileLink {
+    max-width: 5.5rem;
+    margin-right: 0;
   }
   .actions {
     gap: var(--foc-space-8);

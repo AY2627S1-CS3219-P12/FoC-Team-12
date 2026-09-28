@@ -44,9 +44,9 @@ export function AppShell() {
             )}
             {session ? (
               <>
-                <a href="/">Profile</a>
-                <span className={styles.sessionName}>{session.username}</span>
+                <a className={styles.profileLink} href="/">{session.username}</a>
                 <button
+                  className={styles.signOutButton}
                   onClick={() => {
                     signOut()
                     navigateTo('/')

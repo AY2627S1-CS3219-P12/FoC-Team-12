@@ -45,7 +45,6 @@
   text-decoration: none;
 }
 
-.securityNote,
 .successNotice {
   padding: var(--foc-space-16);
   border: 1px solid color-mix(in srgb, var(--foc-info) 25%, white);

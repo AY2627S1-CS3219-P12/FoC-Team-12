@@ -55,7 +55,7 @@ administration, with mode changes within Supplier screens navigating to the corr
 The mode is stored for the current gateway-origin browser tab in `sessionStorage["foc.ui-mode"]` and
 resets on sign-out, expiry, or a new login. It is a navigation preference, not an authorization grant:
 Supplier Service still requires a valid User Service `ADMIN` JWT for every administrative API request.
-Every signed-in Supplier screen also provides a Profile link back to the User Service UI through the
+Every signed-in Supplier screen links the displayed username back to the User Service Profile through the
 gateway.
 
 Install dependencies and run frontend checks from `supplier-service/frontend`:

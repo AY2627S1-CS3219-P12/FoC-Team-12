@@ -472,7 +472,7 @@ describe('Other frontend routes', () => {
     renderRoute('/suppliers')
 
     expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute(
       'href',
       '/',
     )
@@ -538,7 +538,7 @@ describe('Other frontend routes', () => {
       'aria-checked',
       'false',
     )
-    expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute(
       'href',
       '/',
     )
@@ -563,6 +563,26 @@ describe('Other frontend routes', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/admin/suppliers')
   })
 
+  it('keeps developer authorization detail out of the administrator page', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'admin')
+    mockApi()
+    renderRoute('/admin/suppliers')
+
+    expect(await screen.findByRole('heading', { name: 'Campus locations' })).toBeInTheDocument()
+    expect(screen.queryByText(/Supplier Service verifies your signed User Service token/)).not.toBeInTheDocument()
+  })
+
   it('clears the selected mode when an administrator signs out', async () => {
     sessionStorage.setItem(
       'foc.user-session',
@@ -579,6 +599,8 @@ describe('Other frontend routes', () => {
     mockApi()
     const user = userEvent.setup()
     renderRoute('/suppliers')
+
+    expect(screen.getByRole('button', { name: 'Sign out' }).className).toMatch(/signOutButton/)
 
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
 

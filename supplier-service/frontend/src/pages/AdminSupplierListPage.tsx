@@ -168,12 +168,6 @@ export function AdminSupplierListPage() {
         </Link>
       </header>
 
-      <aside className={styles.securityNote}>
-        <strong>Administrator access:</strong> Supplier Service verifies your
-        signed User Service token before allowing administrative reads or
-        changes.
-      </aside>
-
       {notice && (
         <div aria-live="polite" className={styles.successNotice} role="status">
           {notice}
