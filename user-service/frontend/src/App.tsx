@@ -10,7 +10,6 @@ import {
   type AuthSession,
 } from './auth/session'
 import { readUiMode, saveUiMode } from './auth/uiMode'
-import { navigateTo } from './navigation'
 import { OtpInput } from './OtpInput'
 
 type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-verification' | 'reset-confirmation' | 'reset-complete'
@@ -317,14 +316,10 @@ export function App() {
       setUiMode('user')
       setLoginState('success')
       const returnTo = safeReturnTo()
-      if (returnTo) {
-        if (isAdminDestination(returnTo)) {
-          setAccessMessage(nextSession.role === 'ADMIN'
-            ? 'Switch to Admin mode to open administrator tools.'
-            : 'Administrator access is required for that destination. You can still browse public campus locations.')
-        } else {
-          navigateTo(returnTo)
-        }
+      if (returnTo && isAdminDestination(returnTo)) {
+        setAccessMessage(nextSession.role === 'ADMIN'
+          ? 'Switch to Admin mode to open administrator tools.'
+          : 'Administrator access is required for that destination. You can still browse public campus locations.')
       }
     } catch (error) {
       if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {

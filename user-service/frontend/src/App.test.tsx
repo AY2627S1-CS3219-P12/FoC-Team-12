@@ -60,6 +60,27 @@ test('signs in successfully and stores the browser session', async () => {
   expect(screen.queryByRole('switch', { name: 'Admin mode' })).not.toBeInTheDocument()
 })
 
+test('keeps Profile open after a public Supplier return destination was requested', async () => {
+  window.history.replaceState(null, '', '/?returnTo=%2Fsuppliers')
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      accessToken: 'signed.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
+      role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
+    }) }))
+  render(<App />)
+  const user = await fillLogin()
+
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
+  expect(navigateTo).not.toHaveBeenCalled()
+})
+
 test('shows an administrator the ordinary user experience plus a mode switch', async () => {
   saveSession({
     accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',

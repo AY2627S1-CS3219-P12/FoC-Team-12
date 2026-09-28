@@ -329,9 +329,10 @@ The production User and Supplier SPAs share `sessionStorage["foc.user-session"]`
 presented from `http://localhost:8088`. The stored session is rejected and cleared when malformed or
 expired. They also share `sessionStorage["foc.ui-mode"]`, whose only valid values are `user` and
 `admin`. Mode lasts only for the current browser tab and resets to User mode after sign-out, expiry,
-or a new login. A `returnTo` value is accepted only for relative Supplier UI paths; absolute, external,
-API, and malformed destinations are rejected. An admin destination never silently activates Admin
-mode: the administrator must use the switch. This mode controls presentation and navigation only;
+or a new login. Every successful login opens Profile, including when a public Supplier `returnTo`
+destination was requested. A `returnTo` value is validated only to identify an attempted relative
+Supplier admin destination; absolute, external, API, and malformed destinations are rejected. An admin
+destination never silently activates Admin mode: the administrator must use the switch. This mode controls presentation and navigation only;
 backend authorization continues to use the signed JWT role.
 
 There is no User lifecycle Admin Dashboard; those administrator actions can currently be exercised
