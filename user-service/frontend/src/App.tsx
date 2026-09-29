@@ -9,6 +9,7 @@ import {
   type WorkspaceRole,
 } from './auth/session'
 import { OtpInput } from './OtpInput'
+import { AdminUserManagement } from './AdminUserManagement'
 
 type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-verification' | 'reset-confirmation' | 'reset-complete'
 type State = 'idle' | 'loading' | 'success' | 'error'
@@ -651,6 +652,7 @@ export function App() {
   if (session) {
     const displayedProfile = profile?.userId === session.userId ? profile : null
     const adminMode = session.role === 'ADMIN'
+    const adminUsersPage = adminMode && new URLSearchParams(window.location.search).get('view') === 'users'
     const canUseAdmin = session.availableRoles?.includes('ADMIN') ?? false
     const accountInitial = session.username.trim().charAt(0).toUpperCase()
     const signOut = () => {
@@ -686,7 +688,8 @@ export function App() {
                 <span aria-hidden="true" className="account-menu-chevron" />
               </summary>
               <div className="profile-account-menu-items">
-                <a aria-current="page" href="/">Profile</a>
+                <a aria-current={adminUsersPage ? undefined : 'page'} href="/">Profile</a>
+                {adminMode && <a aria-current={adminUsersPage ? 'page' : undefined} href="/?view=users">Manage users</a>}
                 {canUseAdmin && !adminMode && <button type="button" disabled={workspaceState === 'loading'}
                   onClick={() => { void selectWorkspaceRole('ADMIN') }}>Switch to Admin</button>}
                 {adminMode && <button type="button" disabled={workspaceState === 'loading'}
@@ -699,7 +702,9 @@ export function App() {
         </div>
       </header>
       {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
-      <main><section aria-labelledby="profile-title">
+      {adminUsersPage
+        ? <main className="admin-users-main"><AdminUserManagement currentUserId={session.userId} /></main>
+        : <main><section aria-labelledby="profile-title">
       <p className="eyebrow">Friend on Campus</p>
       <h1 id="profile-title">Profile</h1>
       <p className="intro">Your Friend on Campus account details.</p>
@@ -712,6 +717,10 @@ export function App() {
         {adminMode && <a className="service-card admin-card" href="/admin/suppliers">
           <strong>Manage suppliers</strong>
           <span>Create, update, activate, deactivate, and remove campus locations.</span>
+        </a>}
+        {adminMode && <a className="service-card admin-card" href="/?view=users">
+          <strong>Manage users</strong>
+          <span>Search accounts, grant or remove Admin access, and manage account status.</span>
         </a>}
       </nav>
       {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
@@ -765,7 +774,7 @@ export function App() {
           </form>}
         </dd></div>
       </dl>}
-    </section></main>
+    </section></main>}
     </div>
   }
 

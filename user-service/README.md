@@ -371,9 +371,13 @@ destination; absolute, external, API, and malformed destinations are rejected. A
 never silently elevates a Requester or Courier token: the administrator must explicitly select Admin
 mode. Backend authorization always uses the signed JWT's effective role.
 
-There is no User lifecycle Admin Dashboard; those administrator actions can currently be exercised
-only through the protected API (for example, Swagger UI with an active administrator's bearer token).
-Supplier administration remains available through the Supplier frontend with an effective Admin token.
+Admin mode exposes a **Manage users** dashboard from Profile and the account menu. It lists and searches
+accounts through the protected lifecycle API and lets an administrator grant or remove the additional
+Administrator assignment, ban active accounts, and reactivate banned accounts. Destructive changes use
+an explicit confirmation and display backend conflict messages. The current administrator is labelled
+and has no self-demotion or self-ban controls; the backend remains authoritative and also protects the
+final active administrator. Supplier administration remains available through the Supplier frontend
+with an effective Admin token.
 
 For the complete presentation flow, use `http://localhost:8088`. For a standalone frontend smoke
 test, use `http://localhost:5174`. Register a fresh NUS address,
@@ -383,5 +387,6 @@ new OTP and password, and confirm that the old password fails while the new one 
 The first-admin bootstrap must be tested with a dedicated, empty User database or a
 previously unused deployment; it is one-shot and should not be retriggered by deleting
 the existing database volume. Role/lifecycle API checks require an already verified
-administrator and at least one additional active test account. Do not delete production
-data for a manual test.
+administrator and at least one additional active test account. In Admin mode, open **Manage users**,
+search for that account, promote it, then sign in as that account and confirm Admin mode is available.
+Do not delete production data for a manual test.

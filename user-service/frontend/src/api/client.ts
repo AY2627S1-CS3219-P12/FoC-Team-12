@@ -57,6 +57,23 @@ export type UserProfile = {
   createdAt: string
 }
 
+export type AdminAccount = {
+  userId: string
+  email: string
+  username: string
+  roles: WorkspaceRole[]
+  status: 'UNVERIFIED' | 'ACTIVE' | 'BANNED'
+  createdAt: string
+}
+
+export type AdminAccountPage = {
+  content: AdminAccount[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -165,6 +182,23 @@ export const api = {
     return request<AuthSession>('/api/users/me/session-role', {
       method: 'PATCH',
       body: JSON.stringify(requestBody),
+    })
+  },
+  listAdminAccounts(query = '', page = 0, size = 20) {
+    const parameters = new URLSearchParams({ page: String(page), size: String(size) })
+    if (query.trim()) parameters.set('query', query.trim())
+    return request<AdminAccountPage>(`/api/users/admin/accounts?${parameters.toString()}`, { method: 'GET' })
+  },
+  setAdministrator(userId: string, administrator: boolean) {
+    return request<AdminAccount>(`/api/users/admin/accounts/${encodeURIComponent(userId)}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ administrator }),
+    })
+  },
+  setAccountStatus(userId: string, status: 'ACTIVE' | 'BANNED') {
+    return request<AdminAccount>(`/api/users/admin/accounts/${encodeURIComponent(userId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
     })
   },
 }

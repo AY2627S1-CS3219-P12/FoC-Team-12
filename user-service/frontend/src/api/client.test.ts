@@ -75,3 +75,23 @@ test('handles email verification and resend responses with no response body', as
   expect(fetch).toHaveBeenNthCalledWith(1, '/api/users/email-verifications', expect.objectContaining({ method: 'POST' }))
   expect(fetch).toHaveBeenNthCalledWith(2, '/api/users/email-verification-resends', expect.objectContaining({ method: 'POST' }))
 })
+
+test('uses the protected administrator account APIs', async () => {
+  saveSession({
+    accessToken: 'admin.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'ADMIN',
+    availableRoles: ['REQUESTER', 'ADMIN'],
+  })
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ content: [] }) }))
+
+  await api.listAdminAccounts('alice', 1, 10)
+  await api.setAdministrator('target-id', true)
+  await api.setAccountStatus('target-id', 'BANNED')
+
+  expect(fetch).toHaveBeenNthCalledWith(1, '/api/users/admin/accounts?page=1&size=10&query=alice', expect.objectContaining({ method: 'GET' }))
+  expect(fetch).toHaveBeenNthCalledWith(2, '/api/users/admin/accounts/target-id/role', expect.objectContaining({ method: 'PATCH' }))
+  expect(fetch).toHaveBeenNthCalledWith(3, '/api/users/admin/accounts/target-id/status', expect.objectContaining({ method: 'PATCH' }))
+  for (const [, options] of vi.mocked(fetch).mock.calls) {
+    expect((options?.headers as Headers).get('Authorization')).toBe('Bearer admin.jwt')
+  }
+})
