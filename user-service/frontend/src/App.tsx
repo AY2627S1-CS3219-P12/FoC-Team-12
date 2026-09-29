@@ -652,6 +652,7 @@ export function App() {
     const displayedProfile = profile?.userId === session.userId ? profile : null
     const adminMode = session.role === 'ADMIN'
     const canUseAdmin = session.availableRoles?.includes('ADMIN') ?? false
+    const accountInitial = session.username.trim().charAt(0).toUpperCase()
     const signOut = () => {
       const emailAddress = displayedProfile?.email ?? ''
       clearProfileUsernameSuccess()
@@ -680,17 +681,20 @@ export function App() {
             </div>}
             <details className="profile-account-menu">
               <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
-                <span>{session.username}</span><span aria-hidden="true" className="account-menu-chevron" />
+                <span aria-hidden="true" className="profile-account-avatar">{accountInitial}</span>
+                <span className="profile-account-name">{session.username}</span>
+                <span aria-hidden="true" className="account-menu-chevron" />
               </summary>
               <div className="profile-account-menu-items">
                 <a aria-current="page" href="/">Profile</a>
                 {canUseAdmin && !adminMode && <button type="button" disabled={workspaceState === 'loading'}
-                  onClick={() => { void selectWorkspaceRole('ADMIN') }}>Admin mode</button>}
+                  onClick={() => { void selectWorkspaceRole('ADMIN') }}>Switch to Admin</button>}
                 {adminMode && <button type="button" disabled={workspaceState === 'loading'}
-                  onClick={() => { void selectWorkspaceRole('REQUESTER') }}><span aria-hidden="true">✓ </span>Admin mode</button>}
+                  onClick={() => { void selectWorkspaceRole('REQUESTER') }}><span aria-hidden="true">✓ </span>Admin</button>}
+                <span aria-hidden="true" className="profile-account-menu-divider" />
+                <button type="button" className="profile-account-menu-sign-out" onClick={signOut}>Sign out</button>
               </div>
             </details>
-            <button type="button" className="secondary profile-sign-out" onClick={signOut}>Sign out</button>
           </nav>
         </div>
       </header>
