@@ -143,7 +143,7 @@ test('lets an administrator select Admin mode without leaving Profile', async ()
   const user = userEvent.setup()
 
   await user.click(await screen.findByLabelText('Open account menu for Admin'))
-  await user.click(screen.getByRole('button', { name: 'Admin mode' }))
+  await user.click(screen.getByRole('button', { name: 'Switch to Admin' }))
 
   expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
@@ -356,7 +356,8 @@ test('signs out with only the profile email retained and focuses the empty passw
   render(<App />)
   const user = userEvent.setup()
 
-  await user.click(await screen.findByRole('button', { name: 'Sign out' }))
+  await user.click(await screen.findByLabelText('Open account menu for Alice'))
+  await user.click(screen.getByRole('button', { name: 'Sign out' }))
 
   expect(screen.getByLabelText('Email')).toHaveValue('alice@u.nus.edu')
   expect(screen.getByLabelText('Password')).toHaveValue('')

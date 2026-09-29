@@ -17,6 +17,8 @@ export function AppShell() {
     if (await selectWorkspaceRole('REQUESTER')) navigateTo('/suppliers')
   }
 
+  const accountInitial = session?.username.trim().charAt(0).toUpperCase()
+
   return (
     <div className={styles.app}>
       <header className={styles.header}>
@@ -56,33 +58,35 @@ export function AppShell() {
               <>
                 <details className={styles.userMenu}>
                   <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
-                    <span>{session.username}</span>
+                    <span aria-hidden="true" className={styles.accountAvatar}>{accountInitial}</span>
+                    <span className={styles.accountName}>{session.username}</span>
                     <span aria-hidden="true" className={styles.menuChevron} />
                   </summary>
                   <div className={styles.userMenuItems}>
                     <a href="/">Profile</a>
                     {session.availableRoles?.includes('ADMIN') && session.role !== 'ADMIN' && (
                       <button disabled={workspaceBusy} onClick={() => { void openAdminWorkspace() }} type="button">
-                        Admin mode
+                        Switch to Admin
                       </button>
                     )}
                     {session.role === 'ADMIN' && (
                       <button disabled={workspaceBusy} onClick={() => { void returnToRequesterWorkspace() }} type="button">
-                        <span aria-hidden="true">✓ </span>Admin mode
+                        <span aria-hidden="true">✓ </span>Admin
                       </button>
                     )}
+                    <span aria-hidden="true" className={styles.menuDivider} />
+                    <button
+                      className={styles.menuSignOut}
+                      onClick={() => {
+                        signOut()
+                        navigateTo('/')
+                      }}
+                      type="button"
+                    >
+                      Sign out
+                    </button>
                   </div>
                 </details>
-                <button
-                  className={styles.signOutButton}
-                  onClick={() => {
-                    signOut()
-                    navigateTo('/')
-                  }}
-                  type="button"
-                >
-                  Sign out
-                </button>
               </>
             ) : (
               <a href={`/?returnTo=${encodeURIComponent(returnTo)}`}>Sign in</a>

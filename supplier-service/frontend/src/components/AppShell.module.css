@@ -72,8 +72,9 @@
 }
 
 .actions .workspaceSelectorOptions button[aria-pressed='true'] {
-  background: var(--foc-action-soft);
-  color: var(--foc-action);
+  background: var(--foc-action);
+  color: var(--foc-surface);
+  box-shadow: 0 1px 2px rgb(23 32 51 / 18%);
 }
 
 .actions .workspaceSelectorOptions button:disabled {
@@ -101,14 +102,14 @@
 .userMenu {
   position: relative;
   min-width: 0;
-  max-width: 10rem;
+  max-width: 12rem;
 }
 
 .userMenu summary {
   display: inline-flex;
   align-items: center;
   min-height: 2.75rem;
-  max-width: 10rem;
+  max-width: 12rem;
   color: var(--foc-action);
   cursor: pointer;
   font-size: var(--foc-text-small);
@@ -118,6 +119,25 @@
   list-style: none;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.accountAvatar {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 1.625rem;
+  height: 1.625rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--foc-action-soft);
+  color: var(--foc-action);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.accountName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .userMenu summary::-webkit-details-marker {
@@ -150,12 +170,22 @@
   top: calc(100% - var(--foc-space-4));
   right: 0;
   display: grid;
-  min-width: 9rem;
+  min-width: 11.5rem;
   padding: var(--foc-space-8);
   border: 1px solid var(--foc-line);
   border-radius: var(--foc-radius-8);
   background: var(--foc-surface);
   box-shadow: 0 8px 20px rgb(23 32 51 / 14%);
+}
+
+.menuDivider {
+  height: 1px;
+  margin: var(--foc-space-4) 0;
+  background: var(--foc-line);
+}
+
+.userMenuItems .menuSignOut {
+  color: var(--foc-ink);
 }
 
 .userMenuItems a,
@@ -182,15 +212,6 @@
   text-decoration: none;
 }
 
-.actions .signOutButton {
-  min-height: 2.75rem;
-  padding: 0 var(--foc-space-12);
-  border: 1px solid var(--foc-action);
-  border-radius: var(--foc-radius-8);
-  background: var(--foc-surface);
-  text-decoration: none;
-}
-
 .workspaceError {
   width: min(100% - 2rem, 80rem);
   margin: var(--foc-space-8) auto 0;
@@ -198,14 +219,10 @@
   font-size: var(--foc-text-small);
 }
 
-.actions .signOutButton:hover {
-  background: var(--foc-action-soft);
-}
-
 @media (max-width: 35rem) {
   .userMenu,
   .userMenu summary {
-    max-width: 5.5rem;
+    max-width: 7.25rem;
   }
   .actions {
     gap: var(--foc-space-8);

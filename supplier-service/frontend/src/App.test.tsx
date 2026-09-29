@@ -508,7 +508,7 @@ describe('Other frontend routes', () => {
 
     await screen.findByText("Anna's x Soup Union")
     await user.click(screen.getByLabelText('Open account menu for Admin'))
-    await user.click(screen.getByRole('button', { name: 'Admin mode' }))
+    await user.click(screen.getByRole('button', { name: 'Switch to Admin' }))
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -621,8 +621,7 @@ describe('Other frontend routes', () => {
     const user = userEvent.setup()
     renderRoute('/suppliers')
 
-    expect(screen.getByRole('button', { name: 'Sign out' }).className).toMatch(/signOutButton/)
-
+    await user.click(screen.getByLabelText('Open account menu for Admin'))
     await user.click(screen.getByRole('button', { name: 'Sign out' }))
 
     expect(sessionStorage.getItem('foc.user-session')).toBeNull()
