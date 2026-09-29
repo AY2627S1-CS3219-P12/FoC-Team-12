@@ -9,11 +9,6 @@ export function AppShell() {
   const location = useLocation()
   const returnTo = `${location.pathname}${location.search}`
 
-  const switchCourierWorkspace = async () => {
-    if (!session) return
-    await selectWorkspaceRole(session.role === 'COURIER' ? 'REQUESTER' : 'COURIER')
-  }
-
   const openAdminWorkspace = async () => {
     if (await selectWorkspaceRole('ADMIN')) navigateTo('/admin/suppliers')
   }
@@ -35,25 +30,35 @@ export function AppShell() {
             className={styles.actions}
           >
             {session && session.role !== 'ADMIN' && (
-              <div className={styles.modeControl}>
-                <span>{session.role === 'COURIER' ? 'Courier mode' : 'Requester mode'}</span>
-                <button
-                  aria-checked={session.role === 'COURIER'}
-                  aria-label="Courier mode"
-                  className={styles.modeSwitch}
-                  disabled={workspaceBusy}
-                  onClick={() => { void switchCourierWorkspace() }}
-                  role="switch"
-                  type="button"
-                >
-                  <span aria-hidden="true" />
-                </button>
+              <div aria-label="Choose your current role" className={styles.workspaceSelector} role="group">
+                <span className={styles.workspaceSelectorLabel}>Acting as</span>
+                <span className={styles.workspaceSelectorOptions}>
+                  <button
+                    aria-pressed={session.role === 'REQUESTER'}
+                    disabled={workspaceBusy}
+                    onClick={() => { void selectWorkspaceRole('REQUESTER') }}
+                    type="button"
+                  >
+                    Requester
+                  </button>
+                  <button
+                    aria-pressed={session.role === 'COURIER'}
+                    disabled={workspaceBusy}
+                    onClick={() => { void selectWorkspaceRole('COURIER') }}
+                    type="button"
+                  >
+                    Courier
+                  </button>
+                </span>
               </div>
             )}
             {session ? (
               <>
                 <details className={styles.userMenu}>
-                  <summary>{session.username}</summary>
+                  <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
+                    <span>{session.username}</span>
+                    <span aria-hidden="true" className={styles.menuChevron} />
+                  </summary>
                   <div className={styles.userMenuItems}>
                     <a href="/">Profile</a>
                     {session.availableRoles?.includes('ADMIN') && session.role !== 'ADMIN' && (

@@ -50,7 +50,7 @@ navigation.
 The administrative page is not itself an authorization boundary. The Supplier SPA reads the shared
 User session, redirects guests to login, and shows access-denied feedback to non-Admin sessions. Every
 new login starts with a User Service-issued `REQUESTER` token. Signed-in ordinary Supplier screens show
-an accessible Requester/Courier switch; selecting Courier makes an authenticated
+an accessible **Acting as** selector with `Requester` and `Courier`; selecting Courier makes an authenticated
 `PATCH /api/users/me/session-role` request and stores only its replacement short-lived token. The
 account menu links the displayed username to Profile and, for accounts with an `ADMIN` assignment,
 offers Admin mode. Selecting it exchanges the token and opens Supplier administration. Returning to

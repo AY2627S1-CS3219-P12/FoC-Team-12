@@ -53,6 +53,8 @@ test('signs in successfully and stores the browser session', async () => {
   expect(screen.queryByText('ACTIVE')).not.toBeInTheDocument()
   expect(screen.queryByText('Account status')).not.toBeInTheDocument()
   expect(screen.queryByText('Member since')).not.toBeInTheDocument()
+  expect(screen.getByText('Account access')).toBeInTheDocument()
+  expect(screen.getByText('User')).toBeInTheDocument()
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({ accessToken: 'signed.jwt' })
   expect(sessionStorage.getItem('foc.login-failures:alice@u.nus.edu')).toBeNull()
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
@@ -81,7 +83,7 @@ test('keeps Profile open after a public Supplier return destination was requeste
   expect(navigateTo).not.toHaveBeenCalled()
 })
 
-test('uses a live Courier switch to replace a Requester session token', async () => {
+test('uses the Requester and Courier selector to replace a session token', async () => {
   saveSession({
     accessToken: 'requester.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'REQUESTER',
@@ -107,10 +109,10 @@ test('uses a live Courier switch to replace a Requester session token', async ()
 
   expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
-  await user.click(screen.getByRole('switch', { name: 'Courier mode' }))
+  await user.click(screen.getByRole('button', { name: 'Courier' }))
 
-  expect(await screen.findByText('Courier mode')).toBeInTheDocument()
-  expect(screen.getByRole('switch', { name: 'Courier mode' })).toHaveAttribute('aria-checked', 'true')
+  expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute('aria-pressed', 'true')
+  expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute('aria-pressed', 'false')
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({
     accessToken: 'courier.jwt', role: 'COURIER',
   })
@@ -140,10 +142,14 @@ test('lets an administrator select Admin mode without leaving Profile', async ()
   render(<App />)
   const user = userEvent.setup()
 
-  await user.click(await screen.findByRole('button', { name: 'Admin mode' }))
+  await user.click(await screen.findByLabelText('Open account menu for Admin'))
+  await user.click(screen.getByRole('button', { name: 'Admin mode' }))
 
   expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
+  const accountAccess = screen.getByText('Account access').parentElement
+  expect(accountAccess).not.toBeNull()
+  expect(within(accountAccess!).getByText('Admin')).toBeInTheDocument()
   expect(navigateTo).not.toHaveBeenCalled()
 })
 

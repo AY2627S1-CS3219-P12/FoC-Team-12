@@ -307,7 +307,7 @@ describe('Public supplier details', () => {
     vi.unstubAllGlobals()
   })
 
-  it('keeps the Courier switch available on supplier details', async () => {
+  it('keeps the Requester and Courier selector available on supplier details', async () => {
     sessionStorage.setItem(
       'foc.user-session',
       JSON.stringify({
@@ -326,10 +326,8 @@ describe('Public supplier details', () => {
     expect(
       await screen.findByRole('heading', { name: "Anna's x Soup Union" }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: 'Courier mode' })).toHaveAttribute(
-      'aria-checked',
-      'false',
-    )
+    expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('loads an active supplier image over the branded placeholder', async () => {
@@ -474,10 +472,8 @@ describe('Other frontend routes', () => {
     renderRoute('/suppliers')
 
     expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: 'Courier mode' })).toHaveAttribute(
-      'aria-checked',
-      'false',
-    )
+    expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute('aria-pressed', 'false')
     expect(
       screen.queryByRole('link', { name: 'Add supplier' }),
     ).not.toBeInTheDocument()
@@ -511,7 +507,7 @@ describe('Other frontend routes', () => {
     renderRoute('/suppliers')
 
     await screen.findByText("Anna's x Soup Union")
-    await user.click(screen.getByText('Admin', { selector: 'summary' }))
+    await user.click(screen.getByLabelText('Open account menu for Admin'))
     await user.click(screen.getByRole('button', { name: 'Admin mode' }))
 
     await waitFor(() => {

@@ -349,14 +349,15 @@ change their username or password from this screen; password changes require the
 sign the browser session out after success. Role assignments, account status, and creation time remain
 protected API data; account status and creation time are not shown in the everyday profile UI.
 
-Every new login starts in Requester mode. The profile exposes an accessible Requester/Courier switch;
-selecting Courier exchanges the current token for a Courier token and records that extra assignment.
-An account that also has the persisted Administrator assignment can select **Admin mode** without
-leaving Profile; this likewise exchanges the token, rather than changing only browser state. In the
-Supplier frontend's shared header, the same Requester/Courier control is present on ordinary Supplier
-screens and the account menu links to Profile and offers Admin mode when eligible. An Admin token
-opens Supplier administration; returning to Requester exchanges the token again before public Supplier
-routing. Signed-out users can browse Suppliers without signing in.
+Every new login starts as Requester. The persistent Profile and Supplier headers use an accessible
+**Acting as** segmented selector with `Requester` and `Courier` choices; selecting Courier exchanges
+the current token for a Courier token and records that extra assignment. The username is an account-menu
+trigger that links to Profile and offers **Admin mode** to accounts with the persisted Administrator
+assignment. Selecting Admin likewise exchanges the token, rather than changing only browser state. On
+Profile, it keeps the user on Profile; in Supplier, it opens Supplier administration. Returning to
+Requester exchanges the token again before public Supplier routing. Profile displays `Account access`
+as `Admin` or `User`, which describes the persistent entitlement rather than the current workspace.
+Signed-out users can browse Suppliers without signing in.
 
 The production User and Supplier SPAs share the API-issued session object in
 `sessionStorage["foc.user-session"]` because both are presented from `http://localhost:8088`. The

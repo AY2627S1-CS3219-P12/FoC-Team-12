@@ -650,23 +650,55 @@ export function App() {
 
   if (session) {
     const displayedProfile = profile?.userId === session.userId ? profile : null
-    const courierMode = session.role === 'COURIER'
     const adminMode = session.role === 'ADMIN'
     const canUseAdmin = session.availableRoles?.includes('ADMIN') ?? false
-    return <main><section aria-labelledby="profile-title">
+    const signOut = () => {
+      const emailAddress = displayedProfile?.email ?? ''
+      clearProfileUsernameSuccess()
+      clearPasswordChange()
+      clearSession()
+      setProfile(null)
+      setSession(null)
+      show('login')
+      setLoginEmail(emailAddress)
+      setLoginPassword('')
+      setLoginPasswordFocusVersion(version => version + 1)
+    }
+    return <div className="profile-shell">
+      <header className="profile-app-header">
+        <div className="profile-app-header-content">
+          <span className="profile-brand">Friend on Campus</span>
+          <nav className="profile-app-actions" aria-label="Account and workspace">
+            {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">
+              <span className="workspace-selector-label">Acting as</span>
+              <span className="workspace-selector-options">
+                <button type="button" aria-pressed={session.role === 'REQUESTER'} disabled={workspaceState === 'loading'}
+                  onClick={() => { void selectWorkspaceRole('REQUESTER') }}>Requester</button>
+                <button type="button" aria-pressed={session.role === 'COURIER'} disabled={workspaceState === 'loading'}
+                  onClick={() => { void selectWorkspaceRole('COURIER') }}>Courier</button>
+              </span>
+            </div>}
+            <details className="profile-account-menu">
+              <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
+                <span>{session.username}</span><span aria-hidden="true" className="account-menu-chevron" />
+              </summary>
+              <div className="profile-account-menu-items">
+                <a aria-current="page" href="/">Profile</a>
+                {canUseAdmin && !adminMode && <button type="button" disabled={workspaceState === 'loading'}
+                  onClick={() => { void selectWorkspaceRole('ADMIN') }}>Admin mode</button>}
+                {adminMode && <button type="button" disabled={workspaceState === 'loading'}
+                  onClick={() => { void selectWorkspaceRole('REQUESTER') }}><span aria-hidden="true">✓ </span>Admin mode</button>}
+              </div>
+            </details>
+            <button type="button" className="secondary profile-sign-out" onClick={signOut}>Sign out</button>
+          </nav>
+        </div>
+      </header>
+      {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
+      <main><section aria-labelledby="profile-title">
       <p className="eyebrow">Friend on Campus</p>
       <h1 id="profile-title">Profile</h1>
       <p className="intro">Your Friend on Campus account details.</p>
-      {!adminMode && <div className="mode-control">
-        <span>{courierMode ? 'Courier mode' : 'Requester mode'}</span>
-        <button type="button" className="mode-switch" role="switch" aria-label="Courier mode" aria-checked={courierMode}
-          disabled={workspaceState === 'loading'} onClick={() => { void selectWorkspaceRole(courierMode ? 'REQUESTER' : 'COURIER') }}><span aria-hidden="true" /></button>
-      </div>}
-      {canUseAdmin && <button type="button" className="text-button workspace-admin-action" disabled={workspaceState === 'loading'}
-        onClick={() => { void selectWorkspaceRole(adminMode ? 'REQUESTER' : 'ADMIN') }}>
-        {adminMode ? 'Return to requester mode' : 'Admin mode'}
-      </button>}
-      {workspaceMessage && <p className="access-message" role="alert">{workspaceMessage}</p>}
       <nav className="service-grid" aria-label="Friend on Campus services">
         {!adminMode && <a className="service-card" href="/suppliers">
           <strong>Browse suppliers</strong>
@@ -707,7 +739,7 @@ export function App() {
           </form>}
           {profileUsernameState === 'error' && profileUsernameMessage && <p role="alert" className="error">{profileUsernameMessage}</p>}
         </dd></div>
-        <div><dt>Current role</dt><dd>{session.role}</dd></div>
+        <div><dt>Account access</dt><dd>{canUseAdmin ? 'Admin' : 'User'}</dd></div>
         <div className="profile-password-card"><dt>Password</dt><dd>
           {!passwordChangeEditing && <span className="profile-password-display">
             <span aria-label="Password is set">••••••••</span>
@@ -729,19 +761,8 @@ export function App() {
           </form>}
         </dd></div>
       </dl>}
-      <button type="button" className="secondary" onClick={() => {
-        const emailAddress = displayedProfile?.email ?? ''
-        clearProfileUsernameSuccess()
-        clearPasswordChange()
-        clearSession()
-        setProfile(null)
-        setSession(null)
-        show('login')
-        setLoginEmail(emailAddress)
-        setLoginPassword('')
-        setLoginPasswordFocusVersion(version => version + 1)
-      }}>Sign out</button>
     </section></main>
+    </div>
   }
 
   const busy = loginState === 'loading' || registrationState === 'loading'
