@@ -168,6 +168,33 @@ reads and documentation do not require authentication. Protected operations show
 choose **Authorize** and enter a User Service access token to call them. Swagger UI adds the
 `Bearer` prefix automatically.
 
+## Postman presentation collection
+
+Import [`postman/Friend-on-Campus-Supplier-API.postman_collection.json`](postman/Friend-on-Campus-Supplier-API.postman_collection.json)
+into Postman to exercise the complete Supplier API without using the React UI. The collection
+uses the preferred gateway origin, `http://localhost:8088`, and includes public search, filters,
+sorting, pagination, metadata, administrative reads, authentication failures, validation errors,
+and the complete create/update/status/delete lifecycle.
+
+Before running protected requests:
+
+1. Start the stack with `docker compose up --build` from the repository root.
+2. Open the imported collection's **Variables** tab.
+3. Set `adminEmail` and `adminPassword` to an account with an `ADMIN` assignment.
+4. Run **Login — saves REQUESTER token**, followed by
+   **Switch session to ADMIN — saves accessToken**.
+
+Every login deliberately begins with a `REQUESTER` token. The second request exchanges it for an
+`ADMIN` token and saves that token automatically for protected Supplier requests. The original
+Requester token is retained so the collection can also demonstrate `403 Forbidden`. The numbered
+CRUD requests create a dedicated presentation supplier and automatically carry its generated UUID
+and latest optimistic-lock version between requests. Run that folder in order; its final requests
+delete only the record created by the collection.
+
+User Service tokens expire after 15 minutes. Run the relevant login request again if a protected
+request begins returning `401 Unauthorized`. Password and token collection variables are local
+Postman values and are intentionally empty in the committed file.
+
 ## Authentication and authorization
 
 User Service authenticates credentials and issues 15-minute RS256 access tokens. Supplier
