@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.domain.UserStatus;
+import com.friendoncampus.user.domain.UserRole;
 import com.friendoncampus.user.repository.UserRepository;
 
 @Service
@@ -54,13 +55,13 @@ public class LoginService {
         }
         user.clearLoginFailures();
         users.save(user);
-        return new LoginResult(user, tokens.issue(user));
+        return new LoginResult(user, UserRole.REQUESTER, tokens.issue(user, UserRole.REQUESTER));
     }
 
     private OffsetDateTime now() {
         return OffsetDateTime.now(clock).withOffsetSameInstant(ZoneOffset.UTC);
     }
 
-    public record LoginResult(User user, JwtTokenService.IssuedToken token) {
+    public record LoginResult(User user, UserRole effectiveRole, JwtTokenService.IssuedToken token) {
     }
 }

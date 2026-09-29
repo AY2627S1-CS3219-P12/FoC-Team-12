@@ -1,4 +1,4 @@
-import { clearUiMode, saveUiMode } from "./uiMode";
+export type WorkspaceRole = "REQUESTER" | "COURIER" | "ADMIN";
 
 export type AuthSession = {
   accessToken: string;
@@ -6,38 +6,42 @@ export type AuthSession = {
   expiresAt: string;
   userId: string;
   username: string;
-  role: "USER" | "ADMIN";
+  role: WorkspaceRole | "USER";
+  availableRoles?: WorkspaceRole[];
 };
 
 export const sessionKey = "foc.user-session";
 
-function isAuthSession(value: unknown): value is AuthSession {
-  if (!value || typeof value !== "object") return false;
+function asWorkspaceRole(value: unknown): WorkspaceRole | null {
+  if (value === "USER") return "REQUESTER";
+  return value === "REQUESTER" || value === "COURIER" || value === "ADMIN" ? value : null;
+}
+
+function normalizeSession(value: unknown): AuthSession | null {
+  if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<AuthSession>;
-  return (
-    typeof candidate.accessToken === "string" &&
-    candidate.accessToken.length > 0 &&
-    candidate.tokenType === "Bearer" &&
-    typeof candidate.expiresAt === "string" &&
-    Number.isFinite(Date.parse(candidate.expiresAt)) &&
-    Date.parse(candidate.expiresAt) > Date.now() &&
-    typeof candidate.userId === "string" &&
-    candidate.userId.length > 0 &&
-    typeof candidate.username === "string" &&
-    candidate.username.length > 0 &&
-    (candidate.role === "USER" || candidate.role === "ADMIN")
-  );
+  const role = asWorkspaceRole(candidate.role);
+  const availableRoles = Array.isArray(candidate.availableRoles)
+    ? candidate.availableRoles.map(asWorkspaceRole).filter((item): item is WorkspaceRole => item !== null)
+    : role ? [role] : [];
+  if (typeof candidate.accessToken !== "string" || candidate.accessToken.length === 0 ||
+      candidate.tokenType !== "Bearer" || typeof candidate.expiresAt !== "string" ||
+      !Number.isFinite(Date.parse(candidate.expiresAt)) || Date.parse(candidate.expiresAt) <= Date.now() ||
+      typeof candidate.userId !== "string" || candidate.userId.length === 0 ||
+      typeof candidate.username !== "string" || candidate.username.length === 0 ||
+      role === null || availableRoles.length === 0) return null;
+  return { ...candidate, role, availableRoles } as AuthSession;
 }
 
 export function readSession(): AuthSession | null {
   try {
     const value = sessionStorage.getItem(sessionKey);
     if (!value) {
-      clearUiMode();
       return null;
     }
     const session: unknown = JSON.parse(value);
-    if (isAuthSession(session)) return session;
+    const normalized = normalizeSession(session);
+    if (normalized) return normalized;
   } catch {
     // Invalid browser state is cleared below.
   }
@@ -45,14 +49,16 @@ export function readSession(): AuthSession | null {
   return null;
 }
 
-export function saveSession(session: AuthSession) {
-  sessionStorage.setItem(sessionKey, JSON.stringify(session));
-  saveUiMode("user", session.role);
+export function saveSession(session: AuthSession): AuthSession {
+  const normalized = normalizeSession(session);
+  if (!normalized) throw new Error("Cannot store an invalid authenticated session");
+  sessionStorage.setItem(sessionKey, JSON.stringify(normalized));
+  return normalized;
 }
 
 export function clearSession() {
   sessionStorage.removeItem(sessionKey);
-  clearUiMode();
+  sessionStorage.removeItem("foc.ui-mode");
 }
 
 export function safeReturnTo(search = window.location.search): string | null {

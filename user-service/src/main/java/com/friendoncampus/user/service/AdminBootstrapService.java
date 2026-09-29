@@ -55,7 +55,7 @@ public class AdminBootstrapService {
             return;
         }
 
-        Optional<User> existingAdmin = users.findFirstByRole(UserRole.ADMIN);
+        Optional<User> existingAdmin = users.findFirstByRolesContaining(UserRole.ADMIN);
         if (existingAdmin.isPresent()) {
             state.complete(existingAdmin.get().getId(), now());
             states.save(state);
@@ -79,7 +79,7 @@ public class AdminBootstrapService {
         }
         User admin = configuredUser.orElseGet(() -> users.save(User.bootstrapAdmin(email, username,
                 normalizedUsername, passwords.encode(properties.password()))));
-        if (admin.getRole() != UserRole.ADMIN) {
+        if (!admin.hasRole(UserRole.ADMIN)) {
             admin.promoteToAdmin();
             users.save(admin);
         }

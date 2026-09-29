@@ -11,7 +11,7 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 
 public final class JwtContractValidator implements OAuth2TokenValidator<Jwt> {
 
-    private static final Set<String> SUPPORTED_ROLES = Set.of("USER", "ADMIN");
+    private static final Set<String> SUPPORTED_ROLES = Set.of("REQUESTER", "COURIER", "ADMIN");
 
     private final OAuth2TokenValidator<Jwt> delegate;
 

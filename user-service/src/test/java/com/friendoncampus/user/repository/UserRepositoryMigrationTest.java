@@ -14,8 +14,9 @@ class UserRepositoryMigrationTest {
     @Autowired JdbcTemplate jdbc;
     @DynamicPropertySource static void jwtProperties(DynamicPropertyRegistry registry) { JwtTestProperties.register(registry); }
 
-    @Test void flywayCreatesUserPasswordResetEmailVerificationAndAdminStateTables() {
+    @Test void flywayCreatesUserRolesPasswordResetEmailVerificationAndAdminStateTables() {
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'USERS'", Integer.class)).isGreaterThan(0);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'USER_ROLES'", Integer.class)).isGreaterThan(0);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PASSWORD_RESET_TOKENS'", Integer.class)).isGreaterThan(0);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PASSWORD_RESET_REQUEST_COOLDOWNS'", Integer.class)).isGreaterThan(0);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'EMAIL_VERIFICATION_ATTEMPTS'", Integer.class)).isGreaterThan(0);

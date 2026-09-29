@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.domain.UserStatus;
+import com.friendoncampus.user.domain.UserRole;
 import com.friendoncampus.user.repository.UserRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,12 +41,13 @@ class LoginServiceTest {
         JwtTokenService.IssuedToken token = new JwtTokenService.IssuedToken("signed.jwt", Instant.now().plusSeconds(900));
         when(users.findByEmailForUpdate("alice@u.nus.edu")).thenReturn(Optional.of(user));
         when(passwords.matches("password", "hash")).thenReturn(true);
-        when(tokens.issue(user)).thenReturn(token);
+        when(tokens.issue(user, UserRole.REQUESTER)).thenReturn(token);
 
         LoginService.LoginResult result = service.login(" Alice@U.NUS.EDU ", "password");
 
         assertThat(result.user()).isSameAs(user);
         assertThat(result.token()).isEqualTo(token);
+        assertThat(result.effectiveRole()).isEqualTo(UserRole.REQUESTER);
     }
 
     @Test
@@ -125,7 +127,7 @@ class LoginServiceTest {
         LoginService afterCooldown = new LoginService(users, passwords, tokens,
                 Clock.fixed(Instant.parse("2030-01-01T00:00:31Z"), ZoneOffset.UTC));
         JwtTokenService.IssuedToken token = new JwtTokenService.IssuedToken("signed.jwt", Instant.parse("2030-01-01T00:15:31Z"));
-        when(tokens.issue(user)).thenReturn(token);
+        when(tokens.issue(user, UserRole.REQUESTER)).thenReturn(token);
 
         assertThat(afterCooldown.login("alice@u.nus.edu", "correct").token()).isEqualTo(token);
         assertThat(user.getFailedLoginAttempts()).isZero();

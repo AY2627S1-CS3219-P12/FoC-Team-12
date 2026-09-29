@@ -5,14 +5,16 @@ import { navigateTo } from '../navigation'
 import styles from './AppShell.module.css'
 
 export function AppShell() {
-  const { session, signOut, uiMode, setUiMode } = useAuth()
+  const { session, signOut, workspaceBusy, workspaceError, selectWorkspaceRole } = useAuth()
   const location = useLocation()
   const returnTo = `${location.pathname}${location.search}`
 
-  const toggleMode = () => {
-    const nextMode = uiMode === 'admin' ? 'user' : 'admin'
-    setUiMode(nextMode)
-    navigateTo(nextMode === 'admin' ? '/admin/suppliers' : '/suppliers')
+  const openAdminWorkspace = async () => {
+    if (await selectWorkspaceRole('ADMIN')) navigateTo('/admin/suppliers')
+  }
+
+  const returnToRequesterWorkspace = async () => {
+    if (await selectWorkspaceRole('REQUESTER')) navigateTo('/suppliers')
   }
 
   return (
@@ -27,24 +29,50 @@ export function AppShell() {
             aria-label="Account and supplier views"
             className={styles.actions}
           >
-            {session?.role === 'ADMIN' && (
-              <div className={styles.modeControl}>
-                <span>{uiMode === 'admin' ? 'Admin mode' : 'User mode'}</span>
-                <button
-                  aria-checked={uiMode === 'admin'}
-                  aria-label="Admin mode"
-                  className={styles.modeSwitch}
-                  onClick={toggleMode}
-                  role="switch"
-                  type="button"
-                >
-                  <span aria-hidden="true" />
-                </button>
+            {session && session.role !== 'ADMIN' && (
+              <div aria-label="Choose your current role" className={styles.workspaceSelector} role="group">
+                <span className={styles.workspaceSelectorLabel}>Acting as</span>
+                <span className={styles.workspaceSelectorOptions}>
+                  <button
+                    aria-pressed={session.role === 'REQUESTER'}
+                    disabled={workspaceBusy}
+                    onClick={() => { void selectWorkspaceRole('REQUESTER') }}
+                    type="button"
+                  >
+                    Requester
+                  </button>
+                  <button
+                    aria-pressed={session.role === 'COURIER'}
+                    disabled={workspaceBusy}
+                    onClick={() => { void selectWorkspaceRole('COURIER') }}
+                    type="button"
+                  >
+                    Courier
+                  </button>
+                </span>
               </div>
             )}
             {session ? (
               <>
-                <a className={styles.profileLink} href="/">{session.username}</a>
+                <details className={styles.userMenu}>
+                  <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
+                    <span>{session.username}</span>
+                    <span aria-hidden="true" className={styles.menuChevron} />
+                  </summary>
+                  <div className={styles.userMenuItems}>
+                    <a href="/">Profile</a>
+                    {session.availableRoles?.includes('ADMIN') && session.role !== 'ADMIN' && (
+                      <button disabled={workspaceBusy} onClick={() => { void openAdminWorkspace() }} type="button">
+                        Admin mode
+                      </button>
+                    )}
+                    {session.role === 'ADMIN' && (
+                      <button disabled={workspaceBusy} onClick={() => { void returnToRequesterWorkspace() }} type="button">
+                        <span aria-hidden="true">✓ </span>Admin mode
+                      </button>
+                    )}
+                  </div>
+                </details>
                 <button
                   className={styles.signOutButton}
                   onClick={() => {
@@ -62,6 +90,7 @@ export function AppShell() {
           </nav>
         </div>
       </header>
+      {workspaceError && <p className={styles.workspaceError} role="alert">{workspaceError}</p>}
       <main className={styles.main}>
         <Outlet />
       </main>

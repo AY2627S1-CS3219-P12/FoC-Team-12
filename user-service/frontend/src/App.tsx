@@ -3,13 +3,11 @@ import { type FormEvent, type KeyboardEvent, type RefObject, useEffect, useLayou
 import { ApiError, api, type UserProfile } from './api/client'
 import {
   clearSession,
-  isAdminDestination,
   readSession,
-  safeReturnTo,
   saveSession,
   type AuthSession,
+  type WorkspaceRole,
 } from './auth/session'
-import { readUiMode, saveUiMode } from './auth/uiMode'
 import { OtpInput } from './OtpInput'
 
 type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-verification' | 'reset-confirmation' | 'reset-complete'
@@ -47,7 +45,6 @@ function PasswordInput({
 export function App() {
   const [view, setView] = useState<View>('login')
   const [session, setSession] = useState<AuthSession | null>(() => readSession())
-  const [uiMode, setUiMode] = useState(() => readUiMode(session?.role))
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileMessage, setProfileMessage] = useState('')
   const [profileUsername, setProfileUsername] = useState('')
@@ -65,7 +62,8 @@ export function App() {
   const [loginPassword, setLoginPassword] = useState('')
   const [loginState, setLoginState] = useState<State>('idle')
   const [loginMessage, setLoginMessage] = useState('')
-  const [accessMessage, setAccessMessage] = useState('')
+  const [workspaceState, setWorkspaceState] = useState<State>('idle')
+  const [workspaceMessage, setWorkspaceMessage] = useState('')
   const [loginPasswordFocusVersion, setLoginPasswordFocusVersion] = useState(0)
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
@@ -190,7 +188,7 @@ export function App() {
     setView(nextView)
     setLoginState('idle')
     setLoginMessage('')
-    setAccessMessage('')
+    setWorkspaceMessage('')
     setRegistrationState('idle')
     setRegistrationMessage('')
     setVerificationState('idle')
@@ -311,14 +309,8 @@ export function App() {
       clearProfileUsernameSuccess()
       clearPasswordChange()
       setLoginPassword('')
-      saveSession(nextSession)
-      setSession(nextSession)
-      setUiMode('user')
+      setSession(saveSession(nextSession))
       setLoginState('success')
-      const returnTo = safeReturnTo()
-      if (returnTo && isAdminDestination(returnTo) && nextSession.role !== 'ADMIN') {
-        setAccessMessage('Administrator access is required for that destination. You can still browse public campus locations.')
-      }
     } catch (error) {
       if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {
         clearLoginFailures(loginEmail)
@@ -634,22 +626,79 @@ export function App() {
     }
   }
 
+  const selectWorkspaceRole = async (role: WorkspaceRole) => {
+    if (!session || role === session.role) {
+      return
+    }
+    setWorkspaceState('loading')
+    setWorkspaceMessage('')
+    try {
+      const replacement = await api.changeSessionRole({ role })
+      const savedReplacement = saveSession(replacement)
+      setSession(savedReplacement)
+      setProfile(current => current && current.userId === replacement.userId
+        ? { ...current, roles: savedReplacement.availableRoles ?? [] }
+        : current)
+      setWorkspaceState('success')
+    } catch (error) {
+      setWorkspaceState('error')
+      setWorkspaceMessage(error instanceof ApiError
+        ? error.message
+        : 'Unable to change your workspace right now. Please try again.')
+    }
+  }
+
   if (session) {
     const displayedProfile = profile?.userId === session.userId ? profile : null
-    const adminMode = session.role === 'ADMIN' && uiMode === 'admin'
-    return <main><section aria-labelledby="profile-title">
+    const adminMode = session.role === 'ADMIN'
+    const canUseAdmin = session.availableRoles?.includes('ADMIN') ?? false
+    const signOut = () => {
+      const emailAddress = displayedProfile?.email ?? ''
+      clearProfileUsernameSuccess()
+      clearPasswordChange()
+      clearSession()
+      setProfile(null)
+      setSession(null)
+      show('login')
+      setLoginEmail(emailAddress)
+      setLoginPassword('')
+      setLoginPasswordFocusVersion(version => version + 1)
+    }
+    return <div className="profile-shell">
+      <header className="profile-app-header">
+        <div className="profile-app-header-content">
+          <span className="profile-brand">Friend on Campus</span>
+          <nav className="profile-app-actions" aria-label="Account and workspace">
+            {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">
+              <span className="workspace-selector-label">Acting as</span>
+              <span className="workspace-selector-options">
+                <button type="button" aria-pressed={session.role === 'REQUESTER'} disabled={workspaceState === 'loading'}
+                  onClick={() => { void selectWorkspaceRole('REQUESTER') }}>Requester</button>
+                <button type="button" aria-pressed={session.role === 'COURIER'} disabled={workspaceState === 'loading'}
+                  onClick={() => { void selectWorkspaceRole('COURIER') }}>Courier</button>
+              </span>
+            </div>}
+            <details className="profile-account-menu">
+              <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
+                <span>{session.username}</span><span aria-hidden="true" className="account-menu-chevron" />
+              </summary>
+              <div className="profile-account-menu-items">
+                <a aria-current="page" href="/">Profile</a>
+                {canUseAdmin && !adminMode && <button type="button" disabled={workspaceState === 'loading'}
+                  onClick={() => { void selectWorkspaceRole('ADMIN') }}>Admin mode</button>}
+                {adminMode && <button type="button" disabled={workspaceState === 'loading'}
+                  onClick={() => { void selectWorkspaceRole('REQUESTER') }}><span aria-hidden="true">✓ </span>Admin mode</button>}
+              </div>
+            </details>
+            <button type="button" className="secondary profile-sign-out" onClick={signOut}>Sign out</button>
+          </nav>
+        </div>
+      </header>
+      {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
+      <main><section aria-labelledby="profile-title">
       <p className="eyebrow">Friend on Campus</p>
       <h1 id="profile-title">Profile</h1>
       <p className="intro">Your Friend on Campus account details.</p>
-      {session.role === 'ADMIN' && <div className="mode-control">
-        <span>{adminMode ? 'Admin mode' : 'User mode'}</span>
-        <button type="button" className="mode-switch" role="switch" aria-label="Admin mode" aria-checked={adminMode} onClick={() => {
-          const nextMode = adminMode ? 'user' : 'admin'
-          saveUiMode(nextMode, session.role)
-          setUiMode(nextMode)
-        }}><span aria-hidden="true" /></button>
-      </div>}
-      {accessMessage && <p className="access-message" role="alert">{accessMessage}</p>}
       <nav className="service-grid" aria-label="Friend on Campus services">
         {!adminMode && <a className="service-card" href="/suppliers">
           <strong>Browse suppliers</strong>
@@ -690,7 +739,7 @@ export function App() {
           </form>}
           {profileUsernameState === 'error' && profileUsernameMessage && <p role="alert" className="error">{profileUsernameMessage}</p>}
         </dd></div>
-        <div><dt>Role</dt><dd>{displayedProfile.role}</dd></div>
+        <div><dt>Account access</dt><dd>{canUseAdmin ? 'Admin' : 'User'}</dd></div>
         <div className="profile-password-card"><dt>Password</dt><dd>
           {!passwordChangeEditing && <span className="profile-password-display">
             <span aria-label="Password is set">••••••••</span>
@@ -712,19 +761,8 @@ export function App() {
           </form>}
         </dd></div>
       </dl>}
-      <button type="button" className="secondary" onClick={() => {
-        const emailAddress = displayedProfile?.email ?? ''
-        clearProfileUsernameSuccess()
-        clearPasswordChange()
-        clearSession()
-        setProfile(null)
-        setSession(null)
-        show('login')
-        setLoginEmail(emailAddress)
-        setLoginPassword('')
-        setLoginPasswordFocusVersion(version => version + 1)
-      }}>Sign out</button>
     </section></main>
+    </div>
   }
 
   const busy = loginState === 'loading' || registrationState === 'loading'

@@ -24,6 +24,10 @@ class JwtContractValidatorTest {
     void acceptsThePublishedUserServiceContract() {
         assertThat(validator.validate(token(ISSUER, List.of(AUDIENCE), "ADMIN", validTimes())).hasErrors())
                 .isFalse();
+        assertThat(validator.validate(token(ISSUER, List.of(AUDIENCE), "REQUESTER", validTimes())).hasErrors())
+                .isFalse();
+        assertThat(validator.validate(token(ISSUER, List.of(AUDIENCE), "COURIER", validTimes())).hasErrors())
+                .isFalse();
     }
 
     @Test

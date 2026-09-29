@@ -22,5 +22,5 @@ public class RegistrationController {
   return ResponseEntity.created(URI.create("/api/users/"+user.getId())).body(new Response(user));
  }
  public record Request(@NotBlank @Email String email, @NotBlank @Size(max=20) String username, @NotBlank @Size(min=15,max=64) String password) {}
- public record Response(java.util.UUID id,String email,String username,String role,String status,java.time.OffsetDateTime createdAt) { Response(User u){this(u.getId(),u.getEmail(),u.getUsername(),u.getRole().name(),u.getStatus().name(),u.getCreatedAt());} }
+ public record Response(java.util.UUID id,String email,String username,java.util.Set<com.friendoncampus.user.domain.UserRole> roles,String status,java.time.OffsetDateTime createdAt) { Response(User u){this(u.getId(),u.getEmail(),u.getUsername(),u.getRoles(),u.getStatus().name(),u.getCreatedAt());} }
 }

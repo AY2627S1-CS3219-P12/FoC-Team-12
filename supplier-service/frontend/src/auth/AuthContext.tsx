@@ -5,29 +5,28 @@ import {
   clearSession,
   readSession,
   sessionExpiredEvent,
+  replaceSessionRole,
   sessionKey,
   type AuthSession,
+  type WorkspaceRole,
 } from './session'
-import { readUiMode, saveUiMode, uiModeKey, type UiMode } from './uiMode'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessDenied, setAccessDenied] = useState(false)
   const [session, setSession] = useState<AuthSession | null>(() =>
     readSession(),
   )
-  const [uiMode, setUiModeState] = useState<UiMode>(() =>
-    readUiMode(session?.role),
-  )
+  const [workspaceBusy, setWorkspaceBusy] = useState(false)
+  const [workspaceError, setWorkspaceError] = useState('')
 
   useEffect(() => {
     const refresh = () => {
       const nextSession = readSession()
       setSession(nextSession)
-      setUiModeState(readUiMode(nextSession?.role))
     }
     const denyAccess = () => setAccessDenied(true)
     const refreshFromStorage = (event: StorageEvent) => {
-      if (event.key === sessionKey || event.key === uiModeKey) refresh()
+      if (event.key === sessionKey) refresh()
     }
     window.addEventListener(sessionExpiredEvent, refresh)
     window.addEventListener(accessDeniedEvent, denyAccess)
@@ -43,9 +42,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       accessDenied,
       session,
-      uiMode,
-      setUiMode: (mode: UiMode) => {
-        setUiModeState(saveUiMode(mode, session?.role))
+      workspaceBusy,
+      workspaceError,
+      selectWorkspaceRole: async (role: WorkspaceRole) => {
+        setWorkspaceBusy(true)
+        setWorkspaceError('')
+        try {
+          const replacement = await replaceSessionRole(role)
+          setSession(replacement)
+          return true
+        } catch (error) {
+          setWorkspaceError(error instanceof Error ? error.message : 'Unable to change workspace right now. Please try again.')
+          return false
+        } finally {
+          setWorkspaceBusy(false)
+        }
       },
       signOut: () => {
         clearSession()
@@ -53,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(null)
       },
     }),
-    [accessDenied, session, uiMode],
+    [accessDenied, session, workspaceBusy, workspaceError],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

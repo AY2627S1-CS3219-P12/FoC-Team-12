@@ -42,11 +42,12 @@ class AdminLifecycleServiceTest {
     @Test
     void promotesAndDemotesAnActiveAccount() {
         User promoted = service.promote(actor.getId(), target.getId());
-        assertThat(promoted.getRole()).isEqualTo(UserRole.ADMIN);
+        assertThat(promoted.hasRole(UserRole.ADMIN)).isTrue();
 
-        when(users.countByRoleAndStatus(UserRole.ADMIN, UserStatus.ACTIVE)).thenReturn(2L);
+        when(users.countByRolesContainingAndStatus(UserRole.ADMIN, UserStatus.ACTIVE)).thenReturn(2L);
         User demoted = service.demote(actor.getId(), target.getId());
-        assertThat(demoted.getRole()).isEqualTo(UserRole.USER);
+        assertThat(demoted.hasRole(UserRole.ADMIN)).isFalse();
+        assertThat(demoted.hasRole(UserRole.REQUESTER)).isTrue();
     }
 
     @Test
@@ -73,7 +74,7 @@ class AdminLifecycleServiceTest {
     @Test
     void protectsTheFinalActiveAdministratorFromDemotionAndBan() {
         target.promoteToAdmin();
-        when(users.countByRoleAndStatus(UserRole.ADMIN, UserStatus.ACTIVE)).thenReturn(1L);
+        when(users.countByRolesContainingAndStatus(UserRole.ADMIN, UserStatus.ACTIVE)).thenReturn(1L);
 
         assertThatThrownBy(() -> service.demote(actor.getId(), target.getId()))
                 .isInstanceOf(AdminLifecycleException.class).hasMessageContaining("final active administrator");

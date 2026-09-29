@@ -61,7 +61,7 @@ class AdminLifecycleConcurrencyIntegrationTest {
             pool.shutdownNow();
         }
 
-        assertThat(users.countByRoleAndStatus(UserRole.ADMIN, UserStatus.ACTIVE)).isEqualTo(1);
+        assertThat(users.countByRolesContainingAndStatus(UserRole.ADMIN, UserStatus.ACTIVE)).isEqualTo(1);
     }
 
     private boolean attemptDemotion(User actor, User target) {

@@ -17,6 +17,8 @@ import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.repository.UserRepository;
 import com.friendoncampus.user.service.PasswordChangeService;
 import com.friendoncampus.user.service.UsernameChangeService;
+import com.friendoncampus.user.service.RoleSessionService;
+import com.friendoncampus.user.domain.UserRole;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -30,12 +32,14 @@ public class CurrentUserController {
     private final UserRepository users;
     private final UsernameChangeService usernameChanges;
     private final PasswordChangeService passwordChanges;
+    private final RoleSessionService roleSessions;
 
     public CurrentUserController(UserRepository users, UsernameChangeService usernameChanges,
-            PasswordChangeService passwordChanges) {
+            PasswordChangeService passwordChanges, RoleSessionService roleSessions) {
         this.users = users;
         this.usernameChanges = usernameChanges;
         this.passwordChanges = passwordChanges;
+        this.roleSessions = roleSessions;
     }
 
     @GetMapping("/me")
@@ -47,7 +51,7 @@ public class CurrentUserController {
         UUID userId = UUID.fromString(jwt.getSubject());
         User user = users.findById(userId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Profile not found"));
-        return new Response(user.getId(), user.getEmail(), user.getUsername(), user.getRole().name(),
+        return new Response(user.getId(), user.getEmail(), user.getUsername(), user.getRoles(),
                 user.getStatus().name(), user.getCreatedAt());
     }
 
@@ -74,8 +78,21 @@ public class CurrentUserController {
         passwordChanges.changePassword(UUID.fromString(jwt.getSubject()), request.currentPassword(), request.newPassword());
     }
 
+    @PatchMapping("/me/session-role")
+    @Operation(summary = "Replace the current session token with a selected Requester, Courier, or Administrator role")
+    @ApiResponse(responseCode = "200", description = "Replacement Bearer token scoped to the selected role")
+    @ApiResponse(responseCode = "400", description = "Missing or unsupported role")
+    @ApiResponse(responseCode = "401", description = "Missing or invalid bearer token")
+    @ApiResponse(responseCode = "403", description = "Account is inactive or is not assigned the selected role")
+    @SecurityRequirement(name = "bearerAuth")
+    public RoleSessionResponse switchSessionRole(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SessionRoleChange request) {
+        RoleSessionService.RoleSession session = roleSessions.switchRole(UUID.fromString(jwt.getSubject()), request.role());
+        return new RoleSessionResponse(session.token().value(), "Bearer", session.token().expiresAt(), session.user().getId(),
+                session.user().getUsername(), session.effectiveRole().name(), session.user().getRoles());
+    }
+
     private Response responseFor(User user) {
-        return new Response(user.getId(), user.getEmail(), user.getUsername(), user.getRole().name(),
+        return new Response(user.getId(), user.getEmail(), user.getUsername(), user.getRoles(),
                 user.getStatus().name(), user.getCreatedAt());
     }
 
@@ -86,7 +103,12 @@ public class CurrentUserController {
             @NotBlank @Size(min = 15, max = 64) String newPassword) {
     }
 
-    public record Response(UUID userId, String email, String username, String role, String status,
+    public record SessionRoleChange(@jakarta.validation.constraints.NotNull UserRole role) { }
+
+    public record RoleSessionResponse(String accessToken, String tokenType, java.time.Instant expiresAt, UUID userId,
+            String username, String role, java.util.Set<UserRole> availableRoles) { }
+
+    public record Response(UUID userId, String email, String username, java.util.Set<UserRole> roles, String status,
             java.time.OffsetDateTime createdAt) {
     }
 }

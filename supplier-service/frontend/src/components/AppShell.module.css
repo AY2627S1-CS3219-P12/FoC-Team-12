@@ -41,49 +41,43 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--foc-space-12);
+  gap: var(--foc-space-24);
 }
 
-.modeControl {
+.workspaceSelector {
   display: inline-flex;
   align-items: center;
-  gap: var(--foc-space-12);
-  margin-right: var(--foc-space-12);
+  gap: var(--foc-space-8);
   color: var(--foc-muted);
   font-size: var(--foc-text-small);
   font-weight: 600;
 }
 
-.actions .modeSwitch {
-  position: relative;
-  width: 2.75rem;
-  min-height: 1.5rem;
-  padding: 0.125rem;
+.workspaceSelectorOptions {
+  display: inline-flex;
+  padding: 0.1875rem;
   border: 1px solid var(--foc-line);
-  border-radius: var(--foc-radius-pill);
+  border-radius: var(--foc-radius-8);
   background: var(--foc-surface);
+}
+
+.actions .workspaceSelectorOptions button {
+  min-height: 2rem;
+  padding: 0 var(--foc-space-8);
+  border: 0;
+  border-radius: calc(var(--foc-radius-8) - 0.125rem);
+  background: transparent;
+  color: var(--foc-muted);
   text-decoration: none;
 }
 
-.modeSwitch span {
-  display: block;
-  width: 1.125rem;
-  height: 1.125rem;
-  border-radius: 50%;
-  background: var(--foc-muted);
-  transition:
-    transform 150ms ease,
-    background 150ms ease;
-}
-
-.actions .modeSwitch[aria-checked='true'] {
-  border-color: var(--foc-action);
+.actions .workspaceSelectorOptions button[aria-pressed='true'] {
   background: var(--foc-action-soft);
+  color: var(--foc-action);
 }
 
-.modeSwitch[aria-checked='true'] span {
-  background: var(--foc-action);
-  transform: translateX(1.25rem);
+.actions .workspaceSelectorOptions button:disabled {
+  cursor: wait;
 }
 
 .actions a,
@@ -104,19 +98,88 @@
   text-decoration: underline;
 }
 
-.actions .profileLink {
+.userMenu {
+  position: relative;
   min-width: 0;
   max-width: 10rem;
-  margin-right: var(--foc-space-8);
+}
+
+.userMenu summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  max-width: 10rem;
+  color: var(--foc-action);
+  cursor: pointer;
+  font-size: var(--foc-text-small);
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
+  list-style: none;
   text-decoration: none;
   white-space: nowrap;
 }
 
-.actions .profileLink:hover,
-.actions .profileLink:focus-visible {
+.userMenu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menuChevron {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  margin: -0.25rem 0.125rem 0 0.125rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 150ms ease;
+}
+
+.userMenu[open] .menuChevron {
+  margin-top: 0.25rem;
+  transform: rotate(225deg);
+}
+
+.userMenu summary:hover,
+.userMenu summary:focus-visible {
   text-decoration: underline;
+}
+
+.userMenuItems {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% - var(--foc-space-4));
+  right: 0;
+  display: grid;
+  min-width: 9rem;
+  padding: var(--foc-space-8);
+  border: 1px solid var(--foc-line);
+  border-radius: var(--foc-radius-8);
+  background: var(--foc-surface);
+  box-shadow: 0 8px 20px rgb(23 32 51 / 14%);
+}
+
+.userMenuItems a,
+.userMenuItems button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0 var(--foc-space-8);
+  color: var(--foc-action);
+  text-decoration: none;
+}
+
+.userMenuItems button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.userMenuItems a:hover,
+.userMenuItems a:focus-visible,
+.userMenuItems button:hover,
+.userMenuItems button:focus-visible {
+  background: var(--foc-action-soft);
+  text-decoration: none;
 }
 
 .actions .signOutButton {
@@ -128,24 +191,26 @@
   text-decoration: none;
 }
 
+.workspaceError {
+  width: min(100% - 2rem, 80rem);
+  margin: var(--foc-space-8) auto 0;
+  color: var(--foc-danger, #b42318);
+  font-size: var(--foc-text-small);
+}
+
 .actions .signOutButton:hover {
   background: var(--foc-action-soft);
 }
 
 @media (max-width: 35rem) {
-  .modeControl {
-    gap: var(--foc-space-8);
-    margin-right: 0;
-  }
-
-  .actions .profileLink {
+  .userMenu,
+  .userMenu summary {
     max-width: 5.5rem;
-    margin-right: 0;
   }
   .actions {
     gap: var(--foc-space-8);
   }
-  .modeControl > span {
+  .workspaceSelectorLabel {
     position: absolute;
     width: 1px;
     height: 1px;

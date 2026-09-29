@@ -62,7 +62,7 @@ class SupplierSecurityTest {
 
     @BeforeEach
     void setUp() {
-        when(jwtDecoder.decode("user-token")).thenReturn(jwt("user-token", "USER"));
+        when(jwtDecoder.decode("user-token")).thenReturn(jwt("user-token", "REQUESTER"));
         when(jwtDecoder.decode("admin-token")).thenReturn(jwt("admin-token", "ADMIN"));
         when(jwtDecoder.decode("invalid-token")).thenThrow(new BadJwtException("Invalid signature"));
         when(supplierService.listActiveSuppliers(any(SupplierQuery.class)))

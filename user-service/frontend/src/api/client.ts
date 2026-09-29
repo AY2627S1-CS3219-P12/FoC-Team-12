@@ -1,4 +1,4 @@
-import { type AuthSession, readSession } from '../auth/session'
+import { type AuthSession, type WorkspaceRole, readSession } from '../auth/session'
 
 type RegistrationRequest = {
   email: string
@@ -44,11 +44,15 @@ type PasswordChangeRequest = {
   newPassword: string
 }
 
+type SessionRoleChangeRequest = {
+  role: WorkspaceRole
+}
+
 export type UserProfile = {
   userId: string
   email: string
   username: string
-  role: 'USER' | 'ADMIN'
+  roles: WorkspaceRole[]
   status: 'UNVERIFIED' | 'ACTIVE' | 'BANNED'
   createdAt: string
 }
@@ -153,6 +157,12 @@ export const api = {
   },
   changePassword(requestBody: PasswordChangeRequest) {
     return request<void>('/api/users/me/password', {
+      method: 'PATCH',
+      body: JSON.stringify(requestBody),
+    })
+  },
+  changeSessionRole(requestBody: SessionRoleChangeRequest) {
+    return request<AuthSession>('/api/users/me/session-role', {
       method: 'PATCH',
       body: JSON.stringify(requestBody),
     })

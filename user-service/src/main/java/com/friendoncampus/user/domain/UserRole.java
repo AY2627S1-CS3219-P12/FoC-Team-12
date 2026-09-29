@@ -1,3 +1,3 @@
 package com.friendoncampus.user.domain;
 
-public enum UserRole { USER, ADMIN }
+public enum UserRole { REQUESTER, COURIER, ADMIN }

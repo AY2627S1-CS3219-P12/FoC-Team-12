@@ -86,9 +86,53 @@ class CurrentUserSecurityTest {
                 .andExpect(jsonPath("$.userId").value(user.getId().toString()))
                 .andExpect(jsonPath("$.email").value(user.getEmail()))
                 .andExpect(jsonPath("$.username").value("Persisted Alice"))
-                .andExpect(jsonPath("$.role").value("USER"))
+                .andExpect(jsonPath("$.roles").isArray())
+                .andExpect(jsonPath("$.roles[0]").value("REQUESTER"))
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.createdAt").exists());
+    }
+
+    @Test
+    void replacesTheSessionTokenWhenAnActiveUserSelectsCourier() throws Exception {
+        User user = User.register("workspace-" + UUID.randomUUID() + "@u.nus.edu", "Workspace user",
+                "workspace" + UUID.randomUUID().toString().substring(0, 8),
+                passwords.encode("password-with-at-least-15-chars"));
+        user.activate();
+        users.save(user);
+
+        MvcResult result = mvc.perform(patch("/api/users/me/session-role")
+                        .header("Authorization", "Bearer " + token(ISSUER, List.of(AUDIENCE),
+                                Instant.now().plusSeconds(60), user.getId()))
+                        .contentType("application/json").content("{\"role\":\"COURIER\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("COURIER"))
+                .andExpect(jsonPath("$.availableRoles[?(@ == 'REQUESTER')]").exists())
+                .andExpect(jsonPath("$.availableRoles[?(@ == 'COURIER')]").exists())
+                .andReturn();
+
+        String replacement = result.getResponse().getContentAsString()
+                .replaceFirst(".*\\\"accessToken\\\":\\\"([^\\\"]+)\\\".*", "$1");
+        assertThat(decoder.decode(replacement).getClaimAsString("role")).isEqualTo("COURIER");
+        assertThat(users.findById(user.getId())).hasValueSatisfying(updated ->
+                assertThat(updated.getRoles()).containsExactlyInAnyOrder(
+                        com.friendoncampus.user.domain.UserRole.REQUESTER,
+                        com.friendoncampus.user.domain.UserRole.COURIER));
+    }
+
+    @Test
+    void doesNotLetARequesterSelectAdministrator() throws Exception {
+        User user = User.register("not-admin-" + UUID.randomUUID() + "@u.nus.edu", "Requester",
+                "requester" + UUID.randomUUID().toString().substring(0, 8),
+                passwords.encode("password-with-at-least-15-chars"));
+        user.activate();
+        users.save(user);
+
+        mvc.perform(patch("/api/users/me/session-role")
+                        .header("Authorization", "Bearer " + token(ISSUER, List.of(AUDIENCE),
+                                Instant.now().plusSeconds(60), user.getId()))
+                        .contentType("application/json").content("{\"role\":\"ADMIN\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Role selection unavailable"));
     }
 
     @Test
@@ -225,7 +269,7 @@ class CurrentUserSecurityTest {
                 .issuedAt(issuedAt)
                 .expiresAt(expiresAt)
                 .claim("username", "Alice")
-                .claim("role", "USER")
+                .claim("role", "REQUESTER")
                 .build();
         return encoder.encode(JwtEncoderParameters.from(
                 JwsHeader.with(SignatureAlgorithm.RS256).keyId("user-service-rs256-1").build(), claims)).getTokenValue();
