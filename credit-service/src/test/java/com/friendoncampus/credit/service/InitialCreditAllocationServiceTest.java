@@ -51,7 +51,7 @@ class InitialCreditAllocationServiceTest {
         assertThat(result.availableBalance()).isEqualTo(10);
         assertThat(result.reservedBalance()).isZero();
         verify(accounts).insertEmptyIfAbsent(userId);
-        verify(operations).save(any(CreditOperation.class));
+        verify(operations).saveAndFlush(any(CreditOperation.class));
         verify(ledger).save(any());
     }
 

@@ -54,7 +54,7 @@ public class InitialCreditAllocationService {
                 .orElseThrow(() -> new IllegalStateException("Credit account could not be created"));
 
         boolean allocated = account.grantInitialAllocation(INITIAL_CREDITS);
-        operations.save(CreditOperation.completed(
+        operations.saveAndFlush(CreditOperation.completed(
                 operationId,
                 CreditOperationType.INITIAL_ALLOCATION,
                 null,

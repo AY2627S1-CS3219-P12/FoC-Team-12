@@ -60,6 +60,25 @@ public class CreditReservation {
         return reservation;
     }
 
+    public void adjustAmount(int newAmount) {
+        requireActive();
+        if (newAmount <= 0) {
+            throw new IllegalArgumentException("Reservation amount must be positive");
+        }
+        amount = newAmount;
+    }
+
+    public void release() {
+        requireActive();
+        status = ReservationStatus.RELEASED;
+    }
+
+    private void requireActive() {
+        if (status != ReservationStatus.ACTIVE) {
+            throw new IllegalStateException("Reservation is not active");
+        }
+    }
+
     @PrePersist
     void prepareForCreate() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);

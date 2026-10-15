@@ -51,6 +51,15 @@ Replaying the same operation returns the existing balance; a different operation
 allocated user records `ALREADY_ALLOCATED` without increasing the economy. User activation event
 consumption remains pending the User-owned contract and broker integration.
 
+## Reservation lifecycle
+
+Transport-neutral operations reserve a positive whole-credit reward by locking the requester's
+account, moving the amount from available to reserved, creating one reservation per Order UUID and
+writing the operation plus ledger entry in one transaction. Reward increases reserve only the
+difference when affordable; decreases release the difference. Cancellation or expiry releases the
+entire active reservation. Replayed operation UUIDs return the persisted outcome, while reuse with
+different inputs is rejected as an idempotency conflict.
+
 ## Verification
 
 From this directory:

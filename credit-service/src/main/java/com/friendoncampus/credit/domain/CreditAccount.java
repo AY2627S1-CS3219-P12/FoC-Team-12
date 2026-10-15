@@ -60,6 +60,30 @@ public class CreditAccount {
         return true;
     }
 
+    public void reserve(int amount) {
+        requirePositive(amount);
+        if (availableBalance < amount) {
+            throw new IllegalStateException("Insufficient available credits");
+        }
+        availableBalance -= amount;
+        reservedBalance += amount;
+    }
+
+    public void release(int amount) {
+        requirePositive(amount);
+        if (reservedBalance < amount) {
+            throw new IllegalStateException("Reserved balance is lower than the release amount");
+        }
+        reservedBalance -= amount;
+        availableBalance += amount;
+    }
+
+    private static void requirePositive(int amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Credit amount must be positive");
+        }
+    }
+
     @PrePersist
     void prepareForCreate() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
