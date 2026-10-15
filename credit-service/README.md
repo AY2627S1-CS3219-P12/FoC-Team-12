@@ -5,8 +5,10 @@ Credit owns accounts, reservations and ledger effects. Scope and invariants live
 
 ## Current state
 
-Only documentation and an empty Dockerfile exist. Application code, schema, APIs/events, tests
-and Compose integration are planned. No runnable service or published Credit contract exists yet.
+The Spring Boot foundation runs on port `8083` with PostgreSQL/Flyway configuration, User Service
+RS256/JWKS validation, Actuator health, OpenAPI and a non-root multi-stage Docker image. Credit
+domain operations and APIs are added in the following bounded iterations. Shared Compose, gateway,
+CI and broker integration remain coordinated follow-up work.
 
 ## Architecture
 
@@ -29,7 +31,7 @@ separate approved privacy, retention and participant-authorization decisions.
 
 ## Verification
 
-After the scaffold implements Maven Wrapper, run from this directory:
+From this directory:
 
 ```powershell
 .\mvnw.cmd --batch-mode --no-transfer-progress verify
@@ -37,5 +39,4 @@ After the scaffold implements Maven Wrapper, run from this directory:
 
 On Unix use `./mvnw --batch-mode --no-transfer-progress verify`. Focused tests may be used during
 iteration; completion requires the affected verification suite. Runtime changes additionally
-need the approved Compose startup and health checks. Until scaffold/dependencies exist, report
-these checks as unavailable.
+need the approved database startup and health checks.
