@@ -12,6 +12,7 @@ import {
 import { OtpInput } from './OtpInput'
 import { AdminUserManagement } from './AdminUserManagement'
 import { navigateTo } from './navigation'
+import bagIcon from './assets/foc-bag.svg'
 
 type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-verification' | 'reset-confirmation' | 'reset-complete'
 type State = 'idle' | 'loading' | 'success' | 'error'
@@ -47,6 +48,7 @@ function PasswordInput({
 export function App() {
   const [view, setView] = useState<View>('login')
   const [session, setSession] = useState<AuthSession | null>(() => readSession())
+  const accountMenuRef = useRef<HTMLDetailsElement>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [profileMessage, setProfileMessage] = useState('')
   const [profileUsername, setProfileUsername] = useState('')
@@ -313,6 +315,7 @@ export function App() {
       setLoginPassword('')
       setSession(saveSession(nextSession))
       setLoginState('success')
+      void api.activateCreditAccount().catch(() => undefined)
       const destination = safeReturnTo()
       if (destination && (destination === '/credits' || destination.startsWith('/credits/'))) {
         navigateTo(destination)
@@ -634,7 +637,7 @@ export function App() {
 
   const selectWorkspaceRole = async (role: WorkspaceRole) => {
     if (!session || role === session.role) {
-      return
+      return true
     }
     setWorkspaceState('loading')
     setWorkspaceMessage('')
@@ -646,11 +649,13 @@ export function App() {
         ? { ...current, roles: savedReplacement.availableRoles ?? [] }
         : current)
       setWorkspaceState('success')
+      return true
     } catch (error) {
       setWorkspaceState('error')
       setWorkspaceMessage(error instanceof ApiError
         ? error.message
         : 'Unable to change your workspace right now. Please try again.')
+      return false
     }
   }
 
@@ -658,6 +663,7 @@ export function App() {
     const displayedProfile = profile?.userId === session.userId ? profile : null
     const adminMode = session.role === 'ADMIN'
     const adminUsersPage = adminMode && new URLSearchParams(window.location.search).get('view') === 'users'
+    const suppliersPath = adminMode ? '/admin/suppliers' : '/suppliers'
     const canUseAdmin = session.availableRoles?.includes('ADMIN') ?? false
     const accountInitial = session.username.trim().charAt(0).toUpperCase()
     const signOut = () => {
@@ -675,14 +681,17 @@ export function App() {
     return <div className="profile-shell">
       <header className="profile-app-header">
         <div className="profile-app-header-content">
-          <a className="profile-brand" href="/">Friend on Campus</a>
+          <a className="profile-brand" href="/">
+            <img alt="" height="24" src={bagIcon} width="24" />
+            <span>Friend on Campus</span>
+          </a>
           <nav className="profile-service-nav" aria-label="Main navigation">
-            <a href="/suppliers">Locations</a>
+            <a aria-current={adminUsersPage ? undefined : 'page'} href="/">Profile</a>
+            <a href={suppliersPath}>Suppliers</a>
             <a href="/credits">Credits</a>
           </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">
             {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">
-              <span className="workspace-selector-label">Acting as</span>
               <span className="workspace-selector-options">
                 <button type="button" aria-pressed={session.role === 'REQUESTER'} disabled={workspaceState === 'loading'}
                   onClick={() => { void selectWorkspaceRole('REQUESTER') }}>Requester</button>
@@ -690,7 +699,7 @@ export function App() {
                   onClick={() => { void selectWorkspaceRole('COURIER') }}>Courier</button>
               </span>
             </div>}
-            <details className="profile-account-menu">
+            <details className="profile-account-menu" ref={accountMenuRef}>
               <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
                 <span aria-hidden="true" className="profile-account-avatar">{accountInitial}</span>
                 <span className="profile-account-name">{session.username}</span>
@@ -700,9 +709,15 @@ export function App() {
                 <a aria-current={adminUsersPage ? undefined : 'page'} href="/">Profile</a>
                 {adminMode && <a aria-current={adminUsersPage ? 'page' : undefined} href="/?view=users">Manage users</a>}
                 {canUseAdmin && !adminMode && <button type="button" disabled={workspaceState === 'loading'}
-                  onClick={() => { void selectWorkspaceRole('ADMIN') }}>Switch to Admin</button>}
+                  onClick={() => { void selectWorkspaceRole('ADMIN').then(changed => {
+                    if (changed && accountMenuRef.current) accountMenuRef.current.open = false
+                  }) }}>Switch to Admin</button>}
                 {adminMode && <button type="button" disabled={workspaceState === 'loading'}
-                  onClick={() => { void selectWorkspaceRole('REQUESTER') }}><span aria-hidden="true">✓ </span>Admin</button>}
+                  onClick={() => { void selectWorkspaceRole('REQUESTER').then(changed => {
+                    if (!changed) return
+                    if (accountMenuRef.current) accountMenuRef.current.open = false
+                    navigateTo('/')
+                  }) }}>Switch to User</button>}
                 <span aria-hidden="true" className="profile-account-menu-divider" />
                 <button type="button" className="profile-account-menu-sign-out" onClick={signOut}>Sign out</button>
               </div>
@@ -713,7 +728,7 @@ export function App() {
       {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
       {adminUsersPage
         ? <main className="admin-users-main"><AdminUserManagement currentUserId={session.userId} /></main>
-        : <main><section aria-labelledby="profile-title">
+        : <main className="profile-main"><section aria-labelledby="profile-title">
       <p className="eyebrow">Friend on Campus</p>
       <h1 id="profile-title">Profile</h1>
       <p className="intro">Your Friend on Campus account details.</p>
@@ -795,8 +810,11 @@ export function App() {
     || verificationState === 'loading' || resendState === 'loading'
     || resetRequestState === 'loading' || resetVerificationState === 'loading' || resetConfirmationState === 'loading' || resetResendState === 'loading'
 
-  return <main><section aria-labelledby="account-title">
-    <p className="eyebrow">Friend on Campus</p>
+  return <main className="auth-page"><section aria-labelledby="account-title">
+    <a className="auth-brand" href="/suppliers">
+      <img alt="" height="28" src={bagIcon} width="28" />
+      <span>Friend on Campus</span>
+    </a>
     {(view === 'login' || view === 'register') && <nav className="tabs" aria-label="Account actions">
       <button type="button" aria-pressed={view === 'login'} className={view === 'login' ? 'tab active' : 'tab'} onClick={() => show('login')}>Sign in</button>
       <button type="button" aria-pressed={view === 'register'} className={view === 'register' ? 'tab active' : 'tab'} onClick={() => show('register')}>Create account</button>

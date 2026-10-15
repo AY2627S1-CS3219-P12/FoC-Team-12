@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import {
   clearSession,
   readSession,
@@ -7,13 +7,16 @@ import {
   type WorkspaceRole,
 } from '../auth/session'
 import { navigateTo } from '../navigation'
-import coinMark from '../assets/coin-mark.svg'
+import bagIcon from '../assets/foc-bag.svg'
 
 export function CreditShell({ children }: { children: ReactNode }) {
+  const accountMenuRef = useRef<HTMLDetailsElement>(null)
   const [session, setSession] = useState(readSession)
   const [workspaceBusy, setWorkspaceBusy] = useState(false)
   const [workspaceError, setWorkspaceError] = useState('')
   const initial = session?.username.trim().charAt(0).toUpperCase() || 'F'
+  const suppliersPath =
+    session?.role === 'ADMIN' ? '/admin/suppliers' : '/suppliers'
 
   useEffect(() => {
     const refreshSession = () => setSession(readSession())
@@ -22,20 +25,28 @@ export function CreditShell({ children }: { children: ReactNode }) {
   }, [])
 
   const selectWorkspaceRole = async (role: WorkspaceRole) => {
-    if (!session || role === session.role) return
+    if (!session) return false
+    if (role === session.role) return true
     setWorkspaceBusy(true)
     setWorkspaceError('')
     try {
       setSession(await replaceSessionRole(role))
+      return true
     } catch (error) {
       setWorkspaceError(
         error instanceof Error
           ? error.message
           : 'Unable to change workspace right now. Please try again.',
       )
+      return false
     } finally {
       setWorkspaceBusy(false)
     }
+  }
+
+  const selectWorkspaceRoleFromMenu = async (role: WorkspaceRole) => {
+    if (!(await selectWorkspaceRole(role))) return
+    if (accountMenuRef.current) accountMenuRef.current.open = false
   }
 
   return (
@@ -43,90 +54,95 @@ export function CreditShell({ children }: { children: ReactNode }) {
       <header className="site-header">
         <div className="header-inner">
           <a className="brand" href="/">
-            <span className="brand-mark" aria-hidden="true">
-              <img alt="" src={coinMark} />
-            </span>
+            <img alt="" height="24" src={bagIcon} width="24" />
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className="main-nav">
-            <a href="/suppliers">Locations</a>
+            <a href="/">Profile</a>
+            <a href={suppliersPath}>Suppliers</a>
             <a aria-current="page" href="/credits">
               Credits
             </a>
           </nav>
-          {session && session.role !== 'ADMIN' && (
-            <div
-              aria-label="Choose your current role"
-              className="workspace-selector"
-              role="group"
-            >
-              <span className="workspace-selector-label">Acting as</span>
-              <span className="workspace-selector-options">
-                <button
-                  aria-pressed={session.role === 'REQUESTER'}
-                  disabled={workspaceBusy}
-                  onClick={() => void selectWorkspaceRole('REQUESTER')}
-                  type="button"
-                >
-                  Requester
-                </button>
-                <button
-                  aria-pressed={session.role === 'COURIER'}
-                  disabled={workspaceBusy}
-                  onClick={() => void selectWorkspaceRole('COURIER')}
-                  type="button"
-                >
-                  Courier
-                </button>
-              </span>
-            </div>
-          )}
-          {session ? (
-            <details className="account-menu">
-              <summary aria-label={`Open account menu for ${session.username}`}>
-                <span className="avatar" aria-hidden="true">
-                  {initial}
-                </span>
-                <span className="account-name">{session.username}</span>
-                <span aria-hidden="true" className="chevron" />
-              </summary>
-              <div className="account-menu-items">
-                <a href="/">Profile</a>
-                {session.availableRoles?.includes('ADMIN') &&
-                  session.role !== 'ADMIN' && (
-                    <button
-                      disabled={workspaceBusy}
-                      onClick={() => void selectWorkspaceRole('ADMIN')}
-                      type="button"
-                    >
-                      Switch to Admin
-                    </button>
-                  )}
-                {session.role === 'ADMIN' && (
+          <nav aria-label="Account and workspace" className="header-actions">
+            {session && session.role !== 'ADMIN' && (
+              <div
+                aria-label="Choose your current role"
+                className="workspace-selector"
+                role="group"
+              >
+                <span className="workspace-selector-options">
                   <button
+                    aria-pressed={session.role === 'REQUESTER'}
                     disabled={workspaceBusy}
                     onClick={() => void selectWorkspaceRole('REQUESTER')}
                     type="button"
                   >
-                    <span aria-hidden="true">✓ </span>Admin
+                    Requester
                   </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    clearSession()
-                    navigateTo('/')
-                  }}
-                >
-                  Sign out
-                </button>
+                  <button
+                    aria-pressed={session.role === 'COURIER'}
+                    disabled={workspaceBusy}
+                    onClick={() => void selectWorkspaceRole('COURIER')}
+                    type="button"
+                  >
+                    Courier
+                  </button>
+                </span>
               </div>
-            </details>
-          ) : (
-            <a className="sign-in-link" href="/?returnTo=%2Fcredits">
-              Sign in
-            </a>
-          )}
+            )}
+            {session ? (
+              <details className="account-menu" ref={accountMenuRef}>
+                <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
+                  <span className="avatar" aria-hidden="true">
+                    {initial}
+                  </span>
+                  <span className="account-name">{session.username}</span>
+                  <span aria-hidden="true" className="chevron" />
+                </summary>
+                <div className="account-menu-items">
+                  <a href="/">Profile</a>
+                  {session.role === 'ADMIN' && (
+                    <a href="/?view=users">Manage users</a>
+                  )}
+                  {session.availableRoles?.includes('ADMIN') &&
+                    session.role !== 'ADMIN' && (
+                      <button
+                        disabled={workspaceBusy}
+                        onClick={() => void selectWorkspaceRoleFromMenu('ADMIN')}
+                        type="button"
+                      >
+                        Switch to Admin
+                      </button>
+                    )}
+                  {session.role === 'ADMIN' && (
+                    <button
+                      disabled={workspaceBusy}
+                      onClick={() => void selectWorkspaceRoleFromMenu('REQUESTER')}
+                      type="button"
+                    >
+                      Switch to User
+                    </button>
+                  )}
+                  <span aria-hidden="true" className="account-menu-divider" />
+                  <button
+                    className="account-menu-sign-out"
+                    type="button"
+                    onClick={() => {
+                      clearSession()
+                      navigateTo('/')
+                    }}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </details>
+            ) : (
+              <a className="sign-in-link" href="/?returnTo=%2Fcredits">
+                Sign in
+              </a>
+            )}
+          </nav>
         </div>
       </header>
       {workspaceError && (

@@ -51,7 +51,6 @@ export function TransactionHistory({
     <section aria-labelledby="history-heading" className="history-panel">
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Ledger activity</p>
           <h2 id="history-heading">Transaction history</h2>
         </div>
         <span className="record-count">

@@ -367,6 +367,9 @@ token, its single effective role, and the account's available assignments; it co
 Each role selection replaces this object with the response from
 `PATCH /api/users/me/session-role`. There is no `foc.ui-mode` authorization or presentation flag.
 The authenticated Profile header and service cards link to Locations and the user's Credit dashboard.
+After successful login, the shared frontend starts the Credit Service's authenticated, idempotent
+account activation in the background; login still succeeds if Credit is temporarily unavailable,
+and the Credit dashboard retries activation when opened.
 Every successful login opens Profile except when authentication was requested by the protected Credit
 page, which returns to that validated same-origin route. Supplier `returnTo` destinations continue to
 open Profile. A `returnTo` value accepts only approved relative Supplier and Credit UI routes; absolute,

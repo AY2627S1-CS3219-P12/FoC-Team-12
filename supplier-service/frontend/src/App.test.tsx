@@ -531,7 +531,10 @@ describe('Other frontend routes', () => {
     renderRoute('/suppliers')
 
     await screen.findByText("Anna's x Soup Union")
-    await user.click(screen.getByLabelText('Open account menu for Admin'))
+    const accountMenuButton = screen.getByLabelText('Open account menu for Admin')
+    const accountMenu = accountMenuButton.closest('details')
+    await user.click(accountMenuButton)
+    expect(accountMenu).toHaveAttribute('open')
     await user.click(screen.getByRole('button', { name: 'Switch to Admin' }))
 
     await waitFor(() => {
@@ -544,6 +547,7 @@ describe('Other frontend routes', () => {
       role: 'ADMIN',
     })
     expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers')
+    expect(accountMenu).not.toHaveAttribute('open')
     expect(
       JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}'),
     ).toMatchObject({
@@ -552,7 +556,7 @@ describe('Other frontend routes', () => {
     })
   })
 
-  it('keeps administrator landing separate from ordinary supplier routes', async () => {
+  it('keeps administrator navigation and account actions consistent', async () => {
     sessionStorage.setItem(
       'foc.user-session',
       JSON.stringify({
@@ -565,9 +569,22 @@ describe('Other frontend routes', () => {
       }),
     )
     mockApi()
+    const user = userEvent.setup()
     renderRoute('/admin/suppliers')
     expect(
       await screen.findByRole('heading', { name: 'Campus locations' }),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('navigation', { name: 'Main navigation' }))
+        .getByRole('link', { name: 'Suppliers' }),
+    ).toHaveAttribute('href', '/admin/suppliers')
+    await user.click(screen.getByLabelText('Open account menu for Admin'))
+    expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute(
+      'href',
+      '/?view=users',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Switch to User' }),
     ).toBeInTheDocument()
   })
 

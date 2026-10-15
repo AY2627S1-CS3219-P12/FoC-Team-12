@@ -50,6 +50,21 @@ function signedIn() {
   )
 }
 
+function signedInAdmin() {
+  sessionStorage.setItem(
+    sessionKey,
+    JSON.stringify({
+      accessToken: 'admin-token',
+      tokenType: 'Bearer',
+      expiresAt: new Date(Date.now() + 300_000).toISOString(),
+      userId: balance.userId,
+      username: 'admin',
+      role: 'ADMIN',
+      availableRoles: ['REQUESTER', 'ADMIN'],
+    }),
+  )
+}
+
 function renderApp() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -62,7 +77,8 @@ function renderApp() {
 }
 
 function mockSuccessfulApi(totalPages = 1) {
-  return vi.fn(async (input: RequestInfo | URL) => {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    void init
     const url = String(input)
     if (url === '/api/credits/me') return response(balance)
     if (url.includes('/api/credits/me/transactions')) {
@@ -127,10 +143,15 @@ describe('Credit dashboard', () => {
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/credits/me',
       expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer valid-token',
-        }),
+        method: 'POST',
+        headers: expect.any(Headers),
       }),
+    )
+    const activationRequest = fetchMock.mock.calls.find(
+      ([url]) => String(url) === '/api/credits/me',
+    )
+    expect((activationRequest?.[1]?.headers as Headers).get('Authorization')).toBe(
+      'Bearer valid-token',
     )
   })
 
@@ -195,22 +216,64 @@ describe('Credit dashboard', () => {
     })
   })
 
-  it('shows a recoverable pending-account state for a 404', async () => {
+  it('keeps administrator navigation and account actions consistent', async () => {
+    signedInAdmin()
+    const creditApi = mockSuccessfulApi()
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/users/me/session-role') {
+        return response({
+          accessToken: 'requester-token',
+          tokenType: 'Bearer',
+          expiresAt: new Date(Date.now() + 300_000).toISOString(),
+          userId: balance.userId,
+          username: 'admin',
+          role: 'REQUESTER',
+          availableRoles: ['REQUESTER', 'ADMIN'],
+        })
+      }
+      return creditApi(input, init)
+    }))
+    const user = userEvent.setup()
+    renderApp()
+
+    await screen.findByRole('heading', { name: /4 available/i })
+    expect(
+      screen.getByRole('navigation', { name: 'Account and workspace' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Suppliers' }),
+    ).toHaveAttribute('href', '/admin/suppliers')
+    const accountMenuButton = screen.getByLabelText('Open account menu for admin')
+    const accountMenu = accountMenuButton.closest('details')
+    await user.click(accountMenuButton)
+    expect(accountMenu).toHaveAttribute('open')
+    expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute(
+      'href',
+      '/?view=users',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Switch to User' }),
+    ).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Switch to User' }))
+    await waitFor(() => expect(accountMenu).not.toHaveAttribute('open'))
+  })
+
+  it('shows a recoverable connection state if automatic setup is unavailable', async () => {
     signedIn()
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => response({ detail: 'Credit account not found' }, 404)),
+      vi.fn(async () => response({ detail: 'Credit Service unavailable' }, 503)),
     )
 
     renderApp()
 
     expect(
       await screen.findByRole('heading', {
-        name: 'Your credits are being prepared',
+        name: 'We could not load your credits',
       }),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Check again' }),
+      screen.getByRole('button', { name: 'Try again' }),
     ).toBeInTheDocument()
   })
 

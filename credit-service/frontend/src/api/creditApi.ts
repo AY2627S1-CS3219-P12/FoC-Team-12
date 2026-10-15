@@ -48,15 +48,13 @@ export class CreditApiError extends Error {
   }
 }
 
-async function authenticatedGet<T>(path: string): Promise<T> {
+async function authenticatedRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = readSession()
   if (!session) throw new CreditApiError(401, 'Sign in is required')
-  const response = await fetch(path, {
-    headers: {
-      Accept: 'application/json',
-      Authorization: `${session.tokenType} ${session.accessToken}`,
-    },
-  })
+  const headers = new Headers(init.headers)
+  headers.set('Accept', 'application/json')
+  headers.set('Authorization', `${session.tokenType} ${session.accessToken}`)
+  const response = await fetch(path, { ...init, headers })
   if (response.status === 401) expireSession()
   if (!response.ok) {
     let detail = 'Unable to load credit information'
@@ -72,12 +70,18 @@ async function authenticatedGet<T>(path: string): Promise<T> {
 }
 
 export function getBalance() {
-  return authenticatedGet<CreditBalance>('/api/credits/me')
+  return authenticatedRequest<CreditBalance>('/api/credits/me')
+}
+
+export function ensureCreditAccount() {
+  return authenticatedRequest<CreditBalance>('/api/credits/me', {
+    method: 'POST',
+  })
 }
 
 export function getTransactions(page: number, size = 8) {
   const query = new URLSearchParams({ page: String(page), size: String(size) })
-  return authenticatedGet<TransactionPage>(
+  return authenticatedRequest<TransactionPage>(
     `/api/credits/me/transactions?${query.toString()}`,
   )
 }

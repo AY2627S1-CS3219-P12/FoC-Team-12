@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { CreditApiError, getBalance, getTransactions } from './api/creditApi'
+import {
+  CreditApiError,
+  ensureCreditAccount,
+  getTransactions,
+} from './api/creditApi'
 import { readSession, sessionChangedEvent } from './auth/session'
 import { BalanceOverview } from './components/BalanceOverview'
 import { CreditShell } from './components/CreditShell'
@@ -59,13 +63,13 @@ export function App() {
   }, [])
   const balance = useQuery({
     queryKey: ['credit-balance'],
-    queryFn: getBalance,
+    queryFn: ensureCreditAccount,
     enabled: session !== null,
   })
   const history = useQuery({
     queryKey: ['credit-transactions', page],
     queryFn: () => getTransactions(page),
-    enabled: session !== null,
+    enabled: session !== null && balance.isSuccess,
     placeholderData: (previous) => previous,
   })
 
@@ -101,27 +105,6 @@ export function App() {
         >
           Your session has ended, so we stopped loading your private credit
           information.
-        </MessageState>
-      </CreditShell>
-    )
-  }
-
-  if (error instanceof CreditApiError && error.status === 404) {
-    return (
-      <CreditShell>
-        <MessageState
-          action={{
-            label: 'Check again',
-            onClick: () => {
-              void balance.refetch()
-              void history.refetch()
-            },
-          }}
-          eyebrow="Account pending"
-          title="Your credits are being prepared"
-        >
-          Your FoC account is active, but its credit account has not been
-          created yet. Try again shortly.
         </MessageState>
       </CreditShell>
     )
