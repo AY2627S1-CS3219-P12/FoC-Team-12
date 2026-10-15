@@ -246,8 +246,9 @@ Invoke-RestMethod http://localhost:8081/api/users/me -Headers @{ Authorization =
 
 ## Administrator role and lifecycle API
 
-This iteration exposes protected API controls only; it does not include an Admin Dashboard. Every
-endpoint below requires an `Authorization: Bearer <access-token>` for an account that is currently
+The User frontend provides account administration at `/?view=users` through **Manage users**
+in Admin mode. The broader dispute/case dashboard remains future N2H work. Every endpoint below
+requires an `Authorization: Bearer <access-token>` for an account that is currently
 both `ADMIN` and `ACTIVE` in the User database. A stale token for a demoted or banned account is
 rejected even if its JWT still contains the `ADMIN` role claim.
 

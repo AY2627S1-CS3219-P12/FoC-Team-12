@@ -1,53 +1,21 @@
-# Order Service D3 implementation checklist
+# Order D3 roadmap
 
-Use this tracked checklist with `$foc-iterate-feature`; it is not a substitute for an approved
-feature brief. Complete one numbered outcome at a time.
+Select one bounded outcome per approved feature brief. Apply [service invariants](AGENTS.md);
+use [README](README.md) for architecture, lifecycle and verification.
 
-## 1. Service foundation
+```text
+$foc-iterate-feature order-service-scaffold: Create the backend scaffold and its verification.
+```
 
-- Create the Java 17 Spring Boot/Gradle-or-Maven project following the established repository
-  backend conventions, with PostgreSQL, Flyway, validation, Actuator, OpenAPI, and test setup.
-- Add a private Order database, forward-only initial migration, health endpoint, documented local
-  run instructions, and a passing backend verification command.
-- Add User Service JWKS-based JWT validation using the existing issuer/audience/role contract.
-  Do not duplicate token issuing or store user credentials.
+| Stage | Deliverable | Acceptance evidence |
+| --- | --- | --- |
+| Foundation | Maven scaffold, private persistence/migration, JWT validation, health, OpenAPI and local setup | Clean build/verification; database startup; protected requests reject missing/invalid tokens |
+| Local APIs | Published fields/limits/errors, creation, OPEN editing/cancellation, discovery/detail/history, pagination/filter/sort | Validation, ownership and no-mutation-on-error tests; Supplier snapshot contract approved before live lookup |
+| Lifecycle | Acceptance, withdrawal, pickup/delivery/completion, expiry and transition history | Self-acceptance/actor checks; acceptance/acceptance, acceptance/cancellation and acceptance/expiry races; duplicate retries; withdrawal after deadline |
+| Integration | Approved Supplier/Credit contracts and shared deployment | Authenticated order flow with Credit balances before/after; incomplete reservation/creation and completion/settlement recovery |
+| Async demonstration | At least one meaningful team workflow with producer/consumer ownership | Duplicate handling; ordering analysis; persisted-change/publish-failure recovery; retry/failure observability |
+| D3 deployment | Coordinated gateway/Compose/CI/environment changes | All four services and supporting components start reproducibly, report readiness and retain data through restarts |
 
-Acceptance: a clean checkout can build/test the service, start against its private database, and
-report health; missing/invalid tokens are rejected on protected endpoints.
-
-## 2. Local order model and API
-
-- Agree and document the Order API before publishing it: resource fields, validation limits,
-  lifecycle responses, pagination/filtering/sorting, Problem Details, and OpenAPI.
-- Implement request creation, OPEN-only editing, requester cancellation, open-list discovery,
-  order detail, and requester/courier history using only locally owned data.
-- Capture the required supplier/location details at creation through an approved Supplier lookup;
-  do not join another service database.
-
-Acceptance: tests cover valid and invalid input, requester ownership, self-acceptance rejection,
-and no mutation on invalid requests.
-
-## 3. Lifecycle safety
-
-- Implement acceptance, courier withdrawal, pickup, delivery, completion, and OPEN expiry against
-  the approved state table.
-- Prove with automated concurrency tests that acceptance, cancellation, and expiry cannot all win.
-- Add transition idempotency and record enough transition history/operation identity to prevent
-  duplicate Order events or Credit requests.
-
-Acceptance: tests cover competing acceptance, acceptance-versus-expiry, duplicate transition,
-withdrawal after deadline, invalid transition, and unauthorized actor cases.
-
-## 4. Approved integration and D3 evidence
-
-- Jointly publish the Order-Credit contract before implementation. Include operation/event ID,
-  caller authentication, exact inputs/outputs, duplicate behavior, failure/retry policy, and the
-  reconciliation owner.
-- Implement one meaningful asynchronous workflow only after its producer/consumer schema,
-  duplicate handling, ordering, persistence-before-publish strategy, failure record, and
-  observability are approved.
-- Coordinate gateway, Compose, CI, and environment changes as shared work; do not add routes or
-  services speculatively.
-
-Acceptance: demonstrate authenticated create/accept/complete or cancellation flow, resulting
-Credit effect, duplicate/failure handling, and container health once the shared stack is approved.
+Integration contracts and shared edits follow [root review rules](../AGENTS.md). Coordinate the
+async demonstration with Credit and the broker owner; these rows do not require duplicate brokers
+or separate async workflows for each service. Scope Notifications and other N2H work separately.

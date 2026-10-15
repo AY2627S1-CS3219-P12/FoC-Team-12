@@ -1,35 +1,16 @@
 ---
 name: foc-feature-implementation
-description: Implement an approved Friend on Campus feature and tests within its owning service and contract boundaries.
+description: Implement an approved FoC feature and its tests within the owning service.
 ---
 
 # FoC Feature Implementation
 
-Implement only an approved FoC brief and its test plan. Work within the owning
-service; cross-service APIs, events, and shared files require explicit approval.
-Preserve service data ownership and do not make another service's database or
-internal code a dependency.
+Implement the approved brief/test plan using applicable instructions from the
+[root reading path](../../../AGENTS.md), service invariants and published contracts.
 
-For Supplier backend work, preserve the web/domain/service/repository layering,
-DTO validation, Problem Details, and optimistic-locking semantics. Treat the
-OpenAPI document and README as contract evidence. Add a new Flyway migration for
-shared schema/data changes; never alter an applied migration. Regenerate frontend
-OpenAPI types only after an actual running-contract change.
+Add the focused tests and affected behavior/contract documentation with the change.
+For interactive work, apply `$foc-ui-iteration`. Return changed behavior and verification needs
+to the review and verification stages.
 
-For interactive work, coordinate with `$foc-ui-iteration`; use the existing
-typed client and server-state conventions rather than duplicating contracts or
-business rules in the UI. Add the approved automated tests and return changed
-behavior evidence to `$foc-quality-review` and `$foc-verify-feature`.
-
-For Order work, enforce the approved state machine transactionally, authorize from the JWT and
-Order relationship in backend code, and test transition races/retries where affected. Preserve
-historical pickup/drop-off snapshots and do not make credit arithmetic or another service's
-database a dependency.
-
-For Credit work, keep balance, reservation, and ledger changes atomic; make every externally
-triggered credit operation idempotent; and enforce non-negative available balance. Do not make
-Order-state decisions, give users a direct transfer capability, or create a User/Order integration
-without its approved contract.
-
-Do not commit, push, merge, deploy, alter CI, or broaden scope unless separately
-authorized.
+Repair failures within approved scope. A material scope or contract change returns to analysis.
+Do not commit, push, merge, deploy or add unrelated automation unless requested.
