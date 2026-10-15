@@ -1,26 +1,57 @@
 # Order Service
 
-Order owns errand lifecycle facts. Scope and invariants live in [AGENTS.md](AGENTS.md);
-the D3 roadmap is [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
+Owned by XueTing. See [`AGENTS.md`](AGENTS.md) for the coding boundary and
+[`../TASK_SPLIT.md`](../TASK_SPLIT.md) for team responsibilities. The D3 roadmap is
+[`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md).
 
-## Current state
+Spring Boot service (Java 17) that owns the order aggregate, its lifecycle, and
+the order database. Runs on port `8082`.
 
-Only documentation and an empty Dockerfile exist. Application code, schema, APIs, tests and
-Compose integration are planned. No runnable service or published Order contract exists yet.
+## Create order
 
-## Architecture
+`POST /api/orders`
 
-Use the stack specified in AGENTS.md with a private PostgreSQL database. Store requester/courier
-UUID references, location snapshots, title/description, reward, pickup deadline, state and
-transition history. Resolve User identity through the
-[User JWT contract](../user-service/README.md#login-and-jwt-verification) and locations through
-the [Supplier API](../supplier-service/README.md).
+- **Header:** `X-User-Id` — requester's user UUID. Auth-based identity replaces
+  this header later; supplier mutations use the same temporary pattern.
+- **Body fields (client-supplied):**
 
-Choose and document the concurrency mechanism before acceptance is implemented. Order records
-lifecycle decisions; Credit applies ledger effects. User activation, Order-Credit transport,
-service authentication, broker selection, message schemas and reconciliation remain pending
-approved contracts under the root rules. A successful local transaction alone does not prove
-cross-service completion.
+  | Field | Rules |
+  | --- | --- |
+  | `title` | required, 1–120 chars (trimmed) |
+  | `description` | required, 1–2000 chars (trimmed) |
+  | `pickupLocationId` | required UUID (Supplier-owned) |
+  | `dropoffLocationId` | required UUID, must differ from pickup |
+  | `creditReward` | required integer, > 0 |
+  | `pickupDeadline` | required, must be in the future (ISO-8601) |
+
+- **Success:** `201 Created`, `Location: /api/orders/{id}`, body is the created
+  order in state `PENDING_CREDIT`.
+- **Validation failure:** `400` RFC-7807 `application/problem+json`. Field
+  violations are collected under an `errors` map; a missing/malformed
+  `X-User-Id` returns a problem without the `errors` map.
+
+Location **name snapshots** are not sent on create. Orders carry only location
+IDs; the Supplier-owned names arrive asynchronously via an event and populate
+the (nullable) snapshot columns — hence the one divergence from the reference
+DDL, where those two columns are `NOT NULL`.
+
+## Order events (contract)
+
+Order Service events share a common envelope (`eventId`, `eventType`,
+`eventVersion`, `aggregateType`, `aggregateId`, `aggregateVersion`, `occurredAt`,
+`producer`, `correlationId`, `causationId`, `actor`, `data`). `aggregateVersion`
+equals the order's `version` after the change so consumers can detect
+missing/out-of-order events.
+
+| Event | When |
+| --- | --- |
+| `OrderSubmitted` | after a valid order is stored as `PENDING_CREDIT` (Credit Service reserves the reward) |
+| `OrderOpened` | after `CreditReserved`, `PENDING_CREDIT` → `OPEN` |
+| `OrderReservationFailed` | after Credit Service rejects the reservation |
+| `OrderUpdated` | when the requester edits an `OPEN` order without changing its reward |
+
+Event **publishing** is not yet wired (no broker in `compose.yaml`); this
+iteration persists to `PENDING_CREDIT` only.
 
 ## Lifecycle
 
@@ -39,15 +70,13 @@ cross-service completion.
 COMPLETED, CANCELLED and EXPIRED are terminal. Cancellation is forbidden after pickup.
 The approved backlog governs unresolved boundary cases such as the exact deadline instant.
 
-## Verification
+## Build and test
 
-After the scaffold implements Maven Wrapper, run from this directory:
-
-```powershell
-.\mvnw.cmd --batch-mode --no-transfer-progress verify
+```bash
+./mvnw test          # unit + web-slice validation tests (no database required)
+./mvnw verify        # full build
 ```
 
-On Unix use `./mvnw --batch-mode --no-transfer-progress verify`. Focused tests may be used during
-iteration; completion requires the affected verification suite. Runtime changes additionally
-need the approved Compose startup and health checks. Until scaffold/dependencies exist, report
-these checks as unavailable.
+Running the service needs a PostgreSQL database (`DB_HOST`/`DB_PORT`/`DB_NAME`/
+`DB_USER`/`DB_PASSWORD`) and Compose wiring, which are shared root files added in
+a follow-up.

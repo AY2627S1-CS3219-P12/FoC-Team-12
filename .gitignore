@@ -19,3 +19,6 @@ Thumbs.db
 
 # Local implementation planning
 user-service/IMPLEMENTATION_CHECKLIST.md
+
+# Claude Code: local config and skills (skills mirror .codex/skills)
+.claude/
