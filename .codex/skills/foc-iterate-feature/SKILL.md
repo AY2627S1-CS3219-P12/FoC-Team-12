@@ -43,7 +43,7 @@ the user has explicitly approved its contract and ownership boundaries.
    acceptance, summarize behavior, checks, manual result, limitations, and the
    next independently valuable iteration.
 
-## Supplier-specific routing
+## Service-specific routing
 
 For backend changes, inspect the Supplier OpenAPI contract, README behavior, and
 affected DTO, controller, service, repository, and migration tests. Preserve
@@ -55,12 +55,27 @@ For an OpenAPI contract change, start the Supplier service and regenerate
 diff and include it with the contract change. If the required running service or
 environment is unavailable, report this as a verification limitation.
 
+For Order Service work, read `order-service/AGENTS.md`, README, and
+`IMPLEMENTATION_CHECKLIST.md`. Preserve Order ownership of lifecycle facts, atomic competing
+transitions, relationship-based backend authorization, durable duplicate handling, and supplier
+snapshots. Do not create a Credit call/event, notification schema, gateway route, broker, or
+shared runtime configuration until the affected owners have explicitly approved its contract and
+failure/reconciliation behavior.
+
+For Credit Service work, read `credit-service/AGENTS.md`, README, and
+`IMPLEMENTATION_CHECKLIST.md`. Preserve Credit ownership of balances, reservations, ledger
+records, compensation rounding, non-negative availability, and operation idempotency. Do not
+create a User activation integration or Order lifecycle integration until the producing owner and
+Credit owner have explicitly approved the operation/event, idempotency identity, caller,
+failure/retry, and reconciliation contract.
+
 ## Verification selection
 
-- Backend, API, or migration change: run `./mvnw test` (`.\\mvnw.cmd test` in
-  PowerShell).
-- Frontend change: from `supplier-service/frontend`, run `npm run lint`,
-  `npm run typecheck`, `npm test`, and `npm run build`.
+- Backend, API, or migration change: run the owning service's documented Maven Wrapper
+  verification once the service is scaffolded (`.\\mvnw.cmd --batch-mode --no-transfer-progress
+  verify` in PowerShell). A service without its scaffold has no passing source suite; report the
+  scaffold/test gap rather than borrowing another service's result.
+- Frontend change: run the owning frontend's documented lint, typecheck, test, and build checks.
 - Packaging, runtime configuration, migration integration, or deployment-facing
   change: when Docker and local configuration are available, run the relevant
   Docker Compose build/start and `GET /actuator/health` smoke check.

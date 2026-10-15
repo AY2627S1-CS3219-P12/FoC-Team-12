@@ -18,3 +18,10 @@ accessibility, and absence of client-side authorization claims.
 Return confirmed high-risk issues to `$foc-feature-implementation` or
 `$foc-ui-iteration`, then review the repair. A clean review is evidence-based,
 not a guarantee. Review does not authorize scope expansion or commits.
+
+For Order changes, review lifecycle ownership, relationship-based authorization, atomic competing
+transitions, retry idempotency, supplier snapshot behavior, and absence of direct Credit writes.
+For Credit changes, review account/reservation/ledger atomicity, non-negative balances, operation
+idempotency, integer rounding, caller authorization, and absence of Order-state mutation. Treat an
+unapproved cross-service call/event or shared-config edit without affected-owner review as a
+boundary finding.
