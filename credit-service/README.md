@@ -30,9 +30,10 @@ Retain authoritative ledger history locally. The backlog's user-visible transfer
 on Logging-owned retrieval; agree that integration before exposing it. Chat/Translation needs
 separate approved privacy, retention and participant-authorization decisions.
 
-The proposed cross-service event envelope, payloads and recovery ownership are documented in the
-[Credit event contract proposal](../docs/integration/credit-event-contract-proposal.md). It remains
-a proposal until all affected service and broker owners approve it.
+The cross-service event envelope, payloads, recovery rules and implementation responsibilities are
+defined in the shared
+[event communication blueprint](../docs/integration/event-communication-blueprint.md). This is the
+source of truth for User, Order and Credit event integration.
 
 ## Persistence model
 
