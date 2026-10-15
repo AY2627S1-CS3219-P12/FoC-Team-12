@@ -29,6 +29,19 @@ Retain authoritative ledger history locally. The backlog's user-visible transfer
 on Logging-owned retrieval; agree that integration before exposing it. Chat/Translation needs
 separate approved privacy, retention and participant-authorization decisions.
 
+## Persistence model
+
+PostgreSQL is used because reservations and transfers require atomic multi-row updates, row-level
+locking, uniqueness constraints and durable history. `credit_accounts` stores available and
+reserved integer balances by User UUID. `credit_reservations` stores one order-linked hold.
+`credit_operations` makes externally supplied operation UUIDs durable, and
+`credit_ledger_entries` records immutable available/reserved deltas and resulting balances.
+
+`totalBalance = availableBalance + reservedBalance` is derived rather than independently stored.
+Only initial allocation increases the closed economy; reserve, release, settlement and
+compensation move existing credits. User and Order UUIDs are cross-service identifiers rather than
+foreign keys to another service's database.
+
 ## Verification
 
 From this directory:
