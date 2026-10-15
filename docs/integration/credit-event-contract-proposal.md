@@ -21,7 +21,8 @@ Record approval in the pull request. Any payload change after approval requires 
 ## Delivery model
 
 - Proposed technology: Kafka with **at-least-once** delivery.
-- Proposed topics: `foc.user.events`, `foc.order.events` and `foc.credit.events`.
+- Proposed topics: `user.events`, `order.events` and `credit.events`. These match the current Order
+  design; Jun Hui still needs to approve the broker names and policies.
 - Message key: `aggregateId`. All events for one User or Order therefore use the same partition.
 - Consumers must assume duplicate delivery. `eventId` is the durable idempotency key.
 - A repeated `eventId` with identical content is ignored after successful processing.
@@ -59,6 +60,9 @@ This follows the envelope already described by Order Service.
 Rules:
 
 - `eventId`: new UUID for this fact; never reused for a different fact.
+- `operationId`: required inside `data` for every credit-affecting Order event and copied into the
+  corresponding Credit reply. It identifies the business operation independently of broker
+  delivery, while `eventId` identifies one published event.
 - `aggregateId`: User UUID for User events and Order UUID for Order/Credit order events.
 - `aggregateVersion`: version after the producer's state change. Allocation may use User version 1
   if User Service has no persisted aggregate version; Darryl must confirm.
@@ -73,11 +77,11 @@ Rules:
 | Event | Producer | Credit action | Proposed data |
 | --- | --- | --- | --- |
 | `UserActivated` | User | Allocate 10 credits once for the User UUID. | `userId`, `activatedAt` |
-| `OrderSubmitted` | Order | Reserve `creditReward` from the requester. | `orderId`, `requesterId`, `creditReward` |
-| `OrderRewardChangeRequested` | Order | Adjust an active reservation to `newCreditReward`. | `orderId`, `newCreditReward` |
-| `OrderCompleted` | Order | Transfer the full reservation to the courier. | `orderId`, `courierId`, `completedAt` |
-| `OrderCancelled` | Order | Release the reservation, or compensate the courier and release the remainder. | `orderId`, `courierId`, `compensationRequired`, `reason`, `cancelledAt` |
-| `OrderExpired` | Order | Release the full reservation. | `orderId`, `expiredAt` |
+| `OrderSubmitted` | Order | Reserve `creditReward` from the requester. | `operationId`, `orderId`, `requesterId`, `creditReward` |
+| `OrderRewardChangeRequested` | Order | Adjust an active reservation to `newCreditReward`. | `operationId`, `orderId`, `newCreditReward` |
+| `OrderCompleted` | Order | Transfer the full reservation to the courier. | `operationId`, `orderId`, `courierId`, `completedAt` |
+| `OrderCancelled` | Order | Release the reservation, or compensate the courier and release the remainder. | `operationId`, `orderId`, `courierId`, `compensationRequired`, `reason`, `cancelledAt` |
+| `OrderExpired` | Order | Release the full reservation. | `operationId`, `orderId`, `reason`, `expiredAt` |
 
 `OrderCancelled.courierId` is required when `compensationRequired` is true and must otherwise be
 null. Order Service owns the lifecycle decision; Credit Service must not infer whether compensation
@@ -102,6 +106,7 @@ is due.
     "role": "REQUESTER"
   },
   "data": {
+    "operationId": "c18cc1ac-690c-5f58-8a1f-21d8f5981ab4",
     "orderId": "513ea56a-41d5-49ad-b6c5-df81e2dd2b25",
     "requesterId": "1fd9b5c8-16cc-4460-a1cc-bc5ce0347a97",
     "creditReward": 3
@@ -114,16 +119,26 @@ is due.
 | Event | Consumer | Meaning / proposed data |
 | --- | --- | --- |
 | `CreditAccountAllocated` | User/observability | `userId`, `allocatedAmount`, `availableBalance`; allocation is complete or was already complete. |
-| `CreditReserved` | Order | `orderId`, `reservationId`, `amount`, requester balances; Order may move `PENDING_CREDIT` to `OPEN`. |
-| `CreditReservationRejected` | Order | `orderId`, `reasonCode`; Order may move to `RESERVATION_FAILED`. Do not include private exception text. |
-| `CreditRewardAdjusted` | Order | `orderId`, `reservationId`, `amount`, requester balances. |
-| `CreditReservationReleased` | Order | `orderId`, `releasedAmount`, requester balances. |
-| `CreditsTransferred` | Order | `orderId`, `requesterId`, `courierId`, `transferredAmount`, both resulting balances. |
-| `CreditsCompensated` | Order | `orderId`, `requesterId`, `courierId`, `transferredAmount`, `releasedAmount`, resulting balances. |
+| `CreditReserved` | Order | `operationId`, `orderId`, `reservationId`, `amount`, requester balances; Order may move `PENDING_CREDIT` to `OPEN`. |
+| `CreditReservationRejected` | Order | `operationId`, `orderId`, `reasonCode`; Order may move to `RESERVATION_FAILED`. Do not include private exception text. |
+| `CreditAdjusted` | Order | `operationId`, `orderId`, `reservationId`, `amount`, requester balances. |
+| `CreditAdjustmentRejected` | Order | `operationId`, `orderId`, `reasonCode`; the previous reservation remains unchanged. |
+| `CreditReleased` | Order | `operationId`, `orderId`, `releasedAmount`, requester balances. |
+| `CreditSettled` | Order | `operationId`, `orderId`, `requesterId`, `courierId`, `transferredAmount`, both resulting balances. |
+| `CourierCompensated` | Order | `operationId`, `orderId`, `requesterId`, `courierId`, `transferredAmount`, `releasedAmount`, resulting balances. |
 
-Each outgoing event uses a fresh `eventId`, copies the triggering event's `correlationId`, and sets
-`causationId` to the incoming `eventId`. Approved Credit handlers must use the incoming `eventId`
-as the durable domain operation ID, so broker retries cannot apply a ledger effect twice.
+Each outgoing event uses a fresh `eventId`, copies the triggering event's `operationId` and
+`correlationId`, and sets `causationId` to the incoming `eventId`. Approved Credit handlers must use
+the incoming `operationId` as the durable domain operation identity, while the inbox uses `eventId`
+to suppress redelivery of the same broker event.
+
+### Operation ID decision still required
+
+Credit currently stores operation IDs as UUIDs. Order's current design describes the conceptual
+identity as `{orderId}:{action}:{orderVersion}`. Before handlers are wired, XueTing and Eldridge must
+agree that Order sends a UUID-form `operationId` (for example, a deterministic UUID derived from
+that tuple), or jointly approve a schema migration to store textual operation IDs. Do not implement
+an implicit conversion independently in either service.
 
 ## Ordering decision to approve
 
