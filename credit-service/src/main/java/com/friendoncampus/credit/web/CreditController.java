@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.friendoncampus.credit.domain.CreditAccount;
 import com.friendoncampus.credit.domain.CreditLedgerEntry;
 import com.friendoncampus.credit.service.CreditQueryService;
+import com.friendoncampus.credit.service.InitialCreditAllocationService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -23,9 +25,19 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 public class CreditController {
 
     private final CreditQueryService queries;
+    private final InitialCreditAllocationService allocations;
 
-    public CreditController(CreditQueryService queries) {
+    public CreditController(CreditQueryService queries, InitialCreditAllocationService allocations) {
         this.queries = queries;
+        this.allocations = allocations;
+    }
+
+    @PostMapping
+    @Operation(summary = "Ensure the authenticated user has their one-time initial credit allocation")
+    public CreditResponses.Balance activate(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = subject(jwt);
+        allocations.allocateForAuthenticatedUser(userId);
+        return CreditResponses.Balance.from(queries.balance(userId));
     }
 
     @GetMapping

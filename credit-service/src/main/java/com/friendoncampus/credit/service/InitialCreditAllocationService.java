@@ -1,5 +1,6 @@
 package com.friendoncampus.credit.service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ import com.friendoncampus.credit.repository.CreditOperationRepository;
 public class InitialCreditAllocationService {
 
     public static final int INITIAL_CREDITS = 10;
+    private static final String SELF_PROVISION_OPERATION_PREFIX = "credit-account-activation:";
 
     private final CreditAccountRepository accounts;
     private final CreditOperationRepository operations;
@@ -30,6 +32,16 @@ public class InitialCreditAllocationService {
         this.accounts = accounts;
         this.operations = operations;
         this.ledger = ledger;
+    }
+
+    @Transactional
+    public AllocationResult allocateForAuthenticatedUser(UUID userId) {
+        if (userId == null) {
+            throw new IllegalArgumentException("User ID is required");
+        }
+        UUID operationId = UUID.nameUUIDFromBytes(
+                (SELF_PROVISION_OPERATION_PREFIX + userId).getBytes(StandardCharsets.UTF_8));
+        return allocate(operationId, userId);
     }
 
     @Transactional
@@ -52,6 +64,12 @@ public class InitialCreditAllocationService {
         accounts.insertEmptyIfAbsent(userId);
         CreditAccount account = accounts.findByUserIdForUpdate(userId)
                 .orElseThrow(() -> new IllegalStateException("Credit account could not be created"));
+
+        previous = operations.findById(operationId).orElse(null);
+        if (previous != null) {
+            requireSameRequest(previous, requestHash);
+            return result(account, false);
+        }
 
         boolean allocated = account.grantInitialAllocation(INITIAL_CREDITS);
         operations.saveAndFlush(CreditOperation.completed(

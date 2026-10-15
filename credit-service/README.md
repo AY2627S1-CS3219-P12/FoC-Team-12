@@ -7,7 +7,8 @@ Credit owns accounts, reservations and ledger effects. Scope and invariants live
 
 The Spring Boot foundation runs on port `8083` with PostgreSQL/Flyway configuration, User Service
 RS256/JWKS validation, Actuator health, OpenAPI and a non-root multi-stage Docker image. The shared
-Compose stack and gateway expose the packaged dashboard and query API. Broker integration remains
+Compose stack and gateway expose the packaged dashboard and query API. A broker-independent durable
+inbox/outbox foundation is implemented; Kafka adapters and approved User/Order event handlers remain
 coordinated follow-up work.
 
 ## Architecture
@@ -29,6 +30,10 @@ Retain authoritative ledger history locally. The backlog's user-visible transfer
 on Logging-owned retrieval; agree that integration before exposing it. Chat/Translation needs
 separate approved privacy, retention and participant-authorization decisions.
 
+The proposed cross-service event envelope, payloads and recovery ownership are documented in the
+[Credit event contract proposal](../docs/integration/credit-event-contract-proposal.md). It remains
+a proposal until all affected service and broker owners approve it.
+
 ## Persistence model
 
 PostgreSQL is used because reservations and transfers require atomic multi-row updates, row-level
@@ -36,6 +41,12 @@ locking, uniqueness constraints and durable history. `credit_accounts` stores av
 reserved integer balances by User UUID. `credit_reservations` stores one order-linked hold.
 `credit_operations` makes externally supplied operation UUIDs durable, and
 `credit_ledger_entries` records immutable available/reserved deltas and resulting balances.
+
+`credit_inbox_events` records incoming event identity, payload fingerprint, processing state,
+attempts and failures. Identical redelivery can be ignored; reuse of an event UUID with different
+content is rejected. `credit_outbox_events` durably stores canonical JSON outcomes until a future
+broker publisher records acknowledgement. Inbox receipt/failure transactions make delayed or failed
+work discoverable without coupling the domain to Kafka.
 
 `totalBalance = availableBalance + reservedBalance` is derived rather than independently stored.
 Only initial allocation increases the closed economy; reserve, release, settlement and
@@ -48,8 +59,11 @@ The configured team policy grants 10 credits once per activated User UUID. The t
 `InitialCreditAllocationService` accepts a durable operation UUID, creates the account if needed,
 locks it, records the allocation operation and writes an immutable ledger entry in one transaction.
 Replaying the same operation returns the existing balance; a different operation for an already
-allocated user records `ALREADY_ALLOCATED` without increasing the economy. User activation event
-consumption remains pending the User-owned contract and broker integration.
+allocated user records `ALREADY_ALLOCATED` without increasing the economy. Until the User activation
+event and broker integration are available, the authenticated dashboard transparently calls
+`POST /api/credits/me` with a deterministic operation identity. This makes the account and welcome
+credits available on first use without exposing a manual setup action, and retries cannot allocate
+the credits twice.
 
 ## Reservation lifecycle
 
@@ -85,8 +99,7 @@ collision-free production assets under `/credit-assets/**`. It reuses the valida
 `sessionStorage["foc.user-session"]` established by the User frontend on the shared gateway origin,
 adds the bearer token to the two user query endpoints, and never accepts a selectable account ID.
 It presents available, reserved and total balances plus paginated immutable ledger history. Signed
-out, loading, pending-account, expired-session, empty-history and unavailable-service states are
-handled explicitly.
+out, loading, expired-session, empty-history and unavailable-service states are handled explicitly.
 
 Authenticated users reach Credits from the main Profile service card or the shared Locations/Credits
 navigation. The FoC brand returns to Profile, and a guest sent to login is returned to `/credits` after

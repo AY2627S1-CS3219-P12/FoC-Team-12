@@ -5,6 +5,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -31,8 +32,10 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.friendoncampus.credit.domain.CreditAccount;
 import com.friendoncampus.credit.repository.CreditAccountRepository;
+import com.friendoncampus.credit.repository.CreditInboxEventRepository;
 import com.friendoncampus.credit.repository.CreditLedgerEntryRepository;
 import com.friendoncampus.credit.repository.CreditOperationRepository;
+import com.friendoncampus.credit.repository.CreditOutboxEventRepository;
 import com.friendoncampus.credit.repository.CreditReservationRepository;
 
 @SpringBootTest(properties = {
@@ -53,6 +56,8 @@ class CreditQuerySecurityTest {
     @MockitoBean CreditLedgerEntryRepository ledger;
     @MockitoBean CreditOperationRepository operations;
     @MockitoBean CreditReservationRepository reservations;
+    @MockitoBean CreditInboxEventRepository inbox;
+    @MockitoBean CreditOutboxEventRepository outbox;
 
     private CreditAccount account;
 
@@ -66,6 +71,14 @@ class CreditQuerySecurityTest {
     @Test
     void rejectsBalanceQueryWithoutBearerToken() throws Exception {
         mockMvc.perform(get("/api/credits/me"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.title").value("Unauthorized"));
+    }
+
+    @Test
+    void rejectsAccountActivationWithoutBearerToken() throws Exception {
+        mockMvc.perform(post("/api/credits/me"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.title").value("Unauthorized"));
@@ -91,6 +104,24 @@ class CreditQuerySecurityTest {
                 .andExpect(jsonPath("$.totalBalance").value(10));
 
         verify(accounts).findById(USER_ID);
+        verify(accounts, never()).findById(OTHER_USER_ID);
+    }
+
+    @Test
+    void transparentlyCreatesTheJwtSubjectsAccountWithTenCredits() throws Exception {
+        CreditAccount newAccount = CreditAccount.empty(USER_ID);
+        when(accounts.findByUserIdForUpdate(USER_ID)).thenReturn(Optional.of(newAccount));
+        when(accounts.findById(USER_ID)).thenReturn(Optional.of(newAccount));
+
+        mockMvc.perform(post("/api/credits/me")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer user-token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userId").value(USER_ID.toString()))
+                .andExpect(jsonPath("$.availableBalance").value(10))
+                .andExpect(jsonPath("$.reservedBalance").value(0))
+                .andExpect(jsonPath("$.totalBalance").value(10));
+
+        verify(accounts).insertEmptyIfAbsent(USER_ID);
         verify(accounts, never()).findById(OTHER_USER_ID);
     }
 
@@ -134,7 +165,7 @@ class CreditQuerySecurityTest {
     }
 
     @Test
-    void returnsNotFoundWhenActivationHasNotCreatedAnAccount() throws Exception {
+    void directBalanceQueryStillReturnsNotFoundBeforeAutomaticActivation() throws Exception {
         when(accounts.findById(USER_ID)).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/credits/me")
