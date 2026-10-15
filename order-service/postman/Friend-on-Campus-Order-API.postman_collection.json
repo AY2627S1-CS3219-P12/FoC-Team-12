@@ -1,0 +1,223 @@
+{
+  "info": {
+    "_postman_id": "50fdef3f-a711-401f-82f6-ba886ebbe21c",
+    "name": "Order Service",
+    "description": "Friend on Campus Order API. Set the `token` collection variable to a User Service access token with session role REQUESTER before running Create Order. Never commit a real token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Pickup deadline one day from now, so Create Order always sends a future deadline.",
+          "pm.collectionVariables.set('pickupDeadline', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Create Order",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.test('state is PENDING_CREDIT', () => pm.expect(pm.response.json().state).to.eql('PENDING_CREDIT'));",
+              "if (pm.response.code === 201) {",
+              "    pm.collectionVariables.set('orderId', pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Collect printing\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"dropoffLocationId\": \"eb46dc78-e25e-4f07-a7a2-26bff615d170\",\n  \"creditReward\": 10,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ]
+        },
+        "description": "Requires a REQUESTER session token. Expect 201 with the order in PENDING_CREDIT; requesterId is the token's sub."
+      },
+      "response": []
+    },
+    {
+      "name": "Create Order - no token (401)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+              "pm.test('WWW-Authenticate: Bearer', () => pm.response.to.have.header('WWW-Authenticate', 'Bearer'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Collect printing\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"dropoffLocationId\": \"eb46dc78-e25e-4f07-a7a2-26bff615d170\",\n  \"creditReward\": 10,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ]
+        },
+        "description": "Works without User Service: confirms the endpoint rejects requests that have no bearer token."
+      },
+      "response": []
+    },
+    {
+      "name": "Create Order - invalid fields (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('errors map lists the invalid fields', () => pm.expect(pm.response.json().errors).to.be.an('object'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"dropoffLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"creditReward\": 0,\n  \"pickupDeadline\": \"2020-01-01T00:00:00Z\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/orders",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ]
+        },
+        "description": "Requires a REQUESTER session token. Blank title, identical locations, zero reward and a past deadline each appear in the errors map."
+      },
+      "response": []
+    },
+    {
+      "name": "Health",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('service is UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/actuator/health",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8082"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "pickupDeadline",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    }
+  ]
+}
