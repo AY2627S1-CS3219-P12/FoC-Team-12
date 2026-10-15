@@ -57,15 +57,16 @@ class OrderControllerValidationTest {
                 .build();
 
         Jwt jwt = Jwt.withTokenValue("test-token")
-                .header("alg", "HS256")
+                .header("alg", "RS256")
                 .subject(REQUESTER_ID)
-                .claim("roles", List.of("USER"))
-                .issuer("user-service")
+                .claim("role", "REQUESTER")
+                .issuer("friend-on-campus-user-service")
+                .audience(List.of("friend-on-campus-api"))
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(3600))
                 .build();
         SecurityContextHolder.getContext().setAuthentication(
-                new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+                new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_REQUESTER"))));
     }
 
     @AfterEach

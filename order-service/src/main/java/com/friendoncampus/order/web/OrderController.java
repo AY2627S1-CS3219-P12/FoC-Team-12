@@ -43,7 +43,7 @@ public class OrderController {
             summary = "Create an order",
             description = "Validates and stores a new order in PENDING_CREDIT. The requester identity "
                     + "is taken from the verified User Service JWT 'sub' claim; it is never read from "
-                    + "the request body or a header.")
+                    + "the request body or a header. Requires a REQUESTER session role.")
     @ApiResponses({
             @ApiResponse(
                     responseCode = "201",
@@ -60,6 +60,10 @@ public class OrderController {
             @ApiResponse(
                     responseCode = "401",
                     description = "Missing, expired, or otherwise invalid bearer token",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Valid token, but the session role is not REQUESTER",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
     })
     @PostMapping

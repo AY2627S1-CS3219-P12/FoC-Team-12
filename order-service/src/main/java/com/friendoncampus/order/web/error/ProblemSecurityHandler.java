@@ -30,6 +30,7 @@ public class ProblemSecurityHandler implements AuthenticationEntryPoint, AccessD
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response,
             AuthenticationException authException) throws IOException {
+        response.setHeader("WWW-Authenticate", "Bearer");
         writeProblem(response, HttpStatus.UNAUTHORIZED, "Authentication required",
                 "A valid User Service bearer token is required to access this resource");
     }
@@ -38,7 +39,7 @@ public class ProblemSecurityHandler implements AuthenticationEntryPoint, AccessD
     public void handle(HttpServletRequest request, HttpServletResponse response,
             AccessDeniedException accessDeniedException) throws IOException {
         writeProblem(response, HttpStatus.FORBIDDEN, "Access denied",
-                "You do not have permission to perform this action");
+                "Your current session role is not permitted to perform this action");
     }
 
     private void writeProblem(HttpServletResponse response, HttpStatus status, String title, String detail)

@@ -10,8 +10,7 @@ import com.friendoncampus.order.repository.OrderRepository;
         "spring.autoconfigure.exclude="
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
-                + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
-        "order.security.jwt.secret=test-secret-please-change-0123456789abcdef"
+                + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
 })
 class OrderServiceApplicationTests {
 

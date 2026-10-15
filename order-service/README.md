@@ -11,40 +11,41 @@ the order database. Runs on port `8082`.
 
 All endpoints except `/actuator/health` and the OpenAPI/Swagger docs require a
 `Bearer` JWT issued by the **User Service**. The service is a stateless OAuth2
-resource server; it **validates** tokens but never issues them.
+resource server; it **validates** tokens but never issues them, following the
+[User JWT contract](../user-service/README.md#login-and-jwt-verification).
 
 - **Header:** `Authorization: Bearer <jwt>`.
+- **Verification:** RS256 signature checked against the User Service public
+  JWKS (`/.well-known/jwks.json`); `iss` must be `friend-on-campus-user-service`,
+  `aud` must contain `friend-on-campus-api`, and `exp`/`nbf` must be valid.
 - **Claims consumed:** `sub` → the caller's user UUID (the requester/courier
-  identity), `roles` → authorities (`ROLE_*`), `iss` → must match the configured
-  issuer, `exp` → expiry. The token is signed with HS256 using a shared secret.
+  identity); `role` → the single effective session role (`REQUESTER`, `COURIER`
+  or `ADMIN`), mapped to `ROLE_<role>`.
 - **Identity is taken only from `sub`.** It is never read from the request body
   or a header, so a client cannot impersonate another user by editing a field.
-- **Rejections:** missing, expired, wrong-issuer, bad-signature, or non-UUID-`sub`
-  tokens return `401` RFC-7807 `application/problem+json`; an authenticated caller
-  lacking the required role returns `403`.
+- **Rejections:** a missing, expired, bad-signature, wrong-issuer, wrong-audience,
+  missing/unsupported-role, or non-UUID-`sub` token returns `401` RFC-7807
+  `application/problem+json` with `WWW-Authenticate: Bearer`; a valid token whose
+  session role is not permitted for the action returns `403`.
 
-> ⚠️ **Pending contract.** This is built against the **proposed, not-yet-ratified**
-> User Service token contract
-> (`{ "sub": "user-uuid", "roles": ["USER"], "iss": "user-service", "iat": …, "exp": … }`)
-> and must be reconciled with the User Service owner (Darryl) before release. The
-> contract is config-driven — if it changes, only properties change, not code.
+**Configuration** (no shared secret; only the public JWKS is needed):
 
-**Configuration** (consumed from the shared `.env`, not owned here):
+| Property | Env var | Default |
+| --- | --- | --- |
+| `app.security.jwt.jwk-set-uri` | `ORDER_JWT_JWK_SET_URI` | `http://localhost:8081/.well-known/jwks.json` |
+| `app.security.jwt.issuer` | `ORDER_JWT_ISSUER` | `friend-on-campus-user-service` |
+| `app.security.jwt.audience` | `ORDER_JWT_AUDIENCE` | `friend-on-campus-api` |
 
-| Property | Env var | Default | Notes |
-| --- | --- | --- | --- |
-| `order.security.jwt.secret` | `JWT_SECRET` | *(empty → startup fails)* | HS256 shared secret; must match the issuer |
-| `order.security.jwt.issuer` | `JWT_ISSUER` | `user-service` | expected `iss` claim |
-
-Whoever wires order-service into `compose.yaml` (a separate task) must pass
-`JWT_SECRET` (and optionally `JWT_ISSUER`); an empty secret fails startup by
-design, so the service never runs in an insecure open state.
+The defaults suit a local run beside User Service. Whoever wires order-service
+into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
+`http://user-service:8081/.well-known/jwks.json`, as Supplier does.
 
 ## Create order
 
 `POST /api/orders`
 
-- **Auth:** `Bearer` JWT (see above). The requester is the token's `sub`.
+- **Auth:** `Bearer` JWT (see above) with session role `REQUESTER`; any other
+  role gets `403`. The requester is the token's `sub`.
 - **Body fields (client-supplied):**
 
   | Field | Rules |
@@ -62,6 +63,8 @@ design, so the service never runs in an insecure open state.
   violations are collected under an `errors` map.
 - **Unauthenticated:** `401` RFC-7807 `application/problem+json` (no `errors` map)
   when the bearer token is missing or invalid.
+- **Forbidden:** `403` RFC-7807 `application/problem+json` when the token is valid
+  but the session role is not `REQUESTER`.
 
 Location **name snapshots** are not sent on create. Orders carry only location
 IDs; the Supplier-owned names arrive asynchronously via an event and populate
