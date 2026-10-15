@@ -5,9 +5,10 @@ import java.util.UUID;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -16,18 +17,19 @@ import com.friendoncampus.order.web.dto.CreateOrderRequest;
 import com.friendoncampus.order.web.dto.OrderResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.headers.Header;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/orders")
 @Tag(name = "Orders", description = "Create and manage campus errand orders")
+@SecurityRequirement(name = "bearer-jwt")
 public class OrderController {
 
     private final OrderService orderService;
@@ -39,8 +41,9 @@ public class OrderController {
     @Operation(
             operationId = "createOrder",
             summary = "Create an order",
-            description = "Validates and stores a new order in PENDING_CREDIT. The requester is taken "
-                    + "from the X-User-Id header; auth-based identity replaces this later.")
+            description = "Validates and stores a new order in PENDING_CREDIT. The requester identity "
+                    + "is taken from the verified User Service JWT 'sub' claim; it is never read from "
+                    + "the request body or a header. Requires a REQUESTER session role.")
     @ApiResponses({
             @ApiResponse(
                     responseCode = "201",
@@ -52,14 +55,23 @@ public class OrderController {
                     content = @Content(schema = @Schema(implementation = OrderResponse.class))),
             @ApiResponse(
                     responseCode = "400",
-                    description = "Missing or malformed X-User-Id, or missing/invalid order fields",
+                    description = "Missing or invalid order fields",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Missing, expired, or otherwise invalid bearer token",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Valid token, but the session role is not REQUESTER",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
     })
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(
-            @Parameter(description = "Requester's user UUID", required = true, example = "97947588-bb2e-42f2-91ba-9abf8e15a8e7")
-            @RequestHeader("X-User-Id") UUID requesterId,
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody CreateOrderRequest request) {
+        // The decoder guarantees a present, UUID-shaped 'sub'; identity comes only from the token.
+        UUID requesterId = UUID.fromString(jwt.getSubject());
         OrderResponse response = OrderResponse.from(
                 orderService.createOrder(request.toCommand(requesterId)));
         URI location = URI.create("/api/orders/" + response.id());
