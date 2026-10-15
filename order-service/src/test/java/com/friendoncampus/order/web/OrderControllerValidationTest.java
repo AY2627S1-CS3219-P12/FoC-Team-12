@@ -9,13 +9,21 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -24,6 +32,12 @@ import com.friendoncampus.order.service.CreateOrderCommand;
 import com.friendoncampus.order.service.OrderService;
 import com.friendoncampus.order.web.error.ApiExceptionHandler;
 
+/**
+ * Body-validation and identity-binding tests for {@link OrderController} using the repo's
+ * standalone MockMvc convention. Identity is supplied as an authenticated JWT principal in the
+ * SecurityContext (never a header/body); token rejection (401) is covered by
+ * {@code OrderSecurityIntegrationTest}, which exercises the real filter chain.
+ */
 class OrderControllerValidationTest {
 
     private static final String REQUESTER_ID = "97947588-bb2e-42f2-91ba-9abf8e15a8e7";
@@ -39,7 +53,24 @@ class OrderControllerValidationTest {
         mockMvc = MockMvcBuilders
                 .standaloneSetup(new OrderController(orderService))
                 .setControllerAdvice(new ApiExceptionHandler())
+                .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();
+
+        Jwt jwt = Jwt.withTokenValue("test-token")
+                .header("alg", "HS256")
+                .subject(REQUESTER_ID)
+                .claim("roles", List.of("USER"))
+                .issuer("user-service")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .build();
+        SecurityContextHolder.getContext().setAuthentication(
+                new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_USER"))));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     private static String futureDeadline() {
@@ -74,7 +105,7 @@ class OrderControllerValidationTest {
     }
 
     @Test
-    void createsOrderForValidRequest() throws Exception {
+    void createsOrderUsingJwtSubjectAsRequester() throws Exception {
         when(orderService.createOrder(any(CreateOrderCommand.class))).thenAnswer(invocation -> {
             CreateOrderCommand command = invocation.getArgument(0);
             return Order.submit(command.requesterId(), command.title(), command.description(),
@@ -83,39 +114,18 @@ class OrderControllerValidationTest {
         });
 
         mockMvc.perform(post("/api/orders")
-                        .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(validBody()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.state").value("PENDING_CREDIT"))
+                // Requester is bound to the token subject, not anything the client sent.
                 .andExpect(jsonPath("$.requesterId").value(REQUESTER_ID));
-    }
-
-    @Test
-    void rejectsMissingRequesterHeader() throws Exception {
-        mockMvc.perform(post("/api/orders")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validBody()))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.title").value("Missing request header"));
-        verify(orderService, never()).createOrder(any());
-    }
-
-    @Test
-    void rejectsMalformedRequesterHeader() throws Exception {
-        mockMvc.perform(post("/api/orders")
-                        .header("X-User-Id", "not-a-uuid")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(validBody()))
-                .andExpect(status().isBadRequest());
-        verify(orderService, never()).createOrder(any());
     }
 
     @Test
     void rejectsBlankTitle() throws Exception {
         String requestBody = body("   ", "Grab my printout", PICKUP, DROPOFF, "10", futureDeadline());
         mockMvc.perform(post("/api/orders")
-                        .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
@@ -127,7 +137,6 @@ class OrderControllerValidationTest {
     void rejectsNonPositiveReward() throws Exception {
         String requestBody = body("Collect printing", "Grab my printout", PICKUP, DROPOFF, "0", futureDeadline());
         mockMvc.perform(post("/api/orders")
-                        .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
@@ -138,7 +147,6 @@ class OrderControllerValidationTest {
     void rejectsIdenticalPickupAndDropoff() throws Exception {
         String requestBody = body("Collect printing", "Grab my printout", PICKUP, PICKUP, "10", futureDeadline());
         mockMvc.perform(post("/api/orders")
-                        .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
@@ -149,7 +157,6 @@ class OrderControllerValidationTest {
     void rejectsPastDeadline() throws Exception {
         String requestBody = body("Collect printing", "Grab my printout", PICKUP, DROPOFF, "10", pastDeadline());
         mockMvc.perform(post("/api/orders")
-                        .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
@@ -159,7 +166,6 @@ class OrderControllerValidationTest {
     @Test
     void rejectsMalformedBody() throws Exception {
         mockMvc.perform(post("/api/orders")
-                        .header("X-User-Id", REQUESTER_ID)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ not json"))
                 .andExpect(status().isBadRequest());
