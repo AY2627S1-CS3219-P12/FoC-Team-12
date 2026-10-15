@@ -98,7 +98,19 @@ jobs:
       - name: Validate Compose configuration
         run: docker compose config --quiet
       - name: Build and start the gateway-backed User stack
-        run: docker compose up -d --build gateway
+        run: |
+          for attempt in 1 2 3; do
+            if docker compose up -d --build gateway; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+
+            docker compose down --remove-orphans || true
+            sleep 5
+          done
       - name: Check live UI, JWKS, and protected API routing
         run: |
           for attempt in $(seq 1 60); do
