@@ -1,29 +1,17 @@
 ---
 name: foc-test-design
-description: Design focused Friend on Campus automated and manual checks from an approved feature brief.
+description: Select focused automated tests and manual acceptance checks for an approved FoC feature.
 ---
 
 # FoC Test Design
 
-Use the approved FoC feature brief as the source of truth. Read the owning
-service guidance, existing tests, and CI workflow before proposing cases.
+Use the approved brief and applicable service instructions from the
+[root reading path](../../../AGENTS.md). Inspect affected tests and only relevant CI jobs.
 
-Cover successful behavior, boundaries, invalid states, authorization when
-applicable, contract/data consistency, concurrency where the domain requires it,
-and affected-flow regressions. Separate automated tests from manual acceptance.
+Select success, validation, authorization, state/data integrity and regression cases proportionate
+to the change. Derive domain-specific race, retry and rounding cases from service invariants;
+include cross-service failure/reconciliation cases when integration is in scope.
+Do not add unrelated suites.
 
-For Supplier backend work, follow the existing JUnit/Mockito/controller test
-style and include API validation, Problem Details, optimistic locking, or Flyway
-effects when affected. For Supplier frontend work, use Vitest and Testing Library
-for behavior that can be automated, plus responsive 375px/desktop, keyboard,
-focus, and error-feedback manual checks. Do not propose database integration
-tests or generated-contract checks when the approved change does not need them.
-
-Call out unavailable environments or unimplemented service test conventions as
-limitations. Do not edit tests or product files at this stage.
-
-For Order work, include affected state/actor authorization, invalid transition, duplicate retry,
-and acceptance/cancellation/expiry race cases. For Credit work, include insufficient funds,
-non-negative availability, atomic reservation/ledger behavior, duplicate operation, concurrent
-mutation, and exact cancellation-compensation rounding cases. Add integration failure and
-reconciliation cases only when an approved cross-service contract exists.
+Separate automated coverage from manual acceptance and identify unavailable test conventions or
+environments. This stage defines checks; implementation adds them.

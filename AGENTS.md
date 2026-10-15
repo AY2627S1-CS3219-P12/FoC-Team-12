@@ -1,13 +1,30 @@
-# Repository agent boundaries
+# Repository agent rules
 
-Before coding, identify the target service named in the task. Read [`TASK_SPLIT.md`](TASK_SPLIT.md)
-and that service's `AGENTS.md`. If the task does not name a service or owner, ask rather than
-choosing one.
+Before editing, identify the owning service from [TASK_SPLIT.md](TASK_SPLIT.md) and read its
+`AGENTS.md`, including any nested instructions for the affected folder. Ask if ownership is
+unclear. For an explicitly assigned shared task, identify its editor and affected service owners.
 
-- Work only in the identified service's folder and explicitly assigned nice-to-have area.
-- Do not edit another service, database, API contract, or frontend to make your task pass.
-- Keep service data private; cross-service integration uses explicit APIs or events.
-- Root files such as `compose.yaml`, `.env.example`, and CI configuration are shared: one owner
-  edits them and affected service owners review.
-- Do not guess missing product rules. Flag them for confirmation against the backlog/wireframes.
-- Update tests and the service README when implementation behavior changes.
+## Boundaries
+
+- Work within the assigned service/N2H area and approved shared-file scope. Never change another
+  service's code, API, frontend, or database just to make your task pass.
+- Each service exclusively reads/writes its own database. Integrate through producer-owned
+  APIs/events; every backend enforces authorization locally.
+- Before introducing or changing a cross-service contract, obtain explicit approval of ownership
+  and behavior. Document caller/producer/consumer, inputs/outcomes, operation identity, duplicate
+  handling, failure/retry/reconciliation responsibility, and observability where applicable.
+- Shared gateway, Compose, environment examples, broker configuration and CI changes have one
+  nominated editor and require review from all affected service owners.
+- Use approved backlog/wireframes for product rules; record missing or conflicting rules for
+  confirmation. Update affected tests and service documentation when behavior changes.
+
+## Reading and workflow
+
+Read applicable guidance once per task; revisit it when scope or documents change. Inspect only
+relevant README/contract sections, source and tests. Read a service checklist when choosing or
+scoping an iteration; it is a roadmap, not a requirement to implement all steps.
+
+Use `$foc-iterate-feature <service>-<iteration>: <outcome>` for the staged feature workflow, and
+`$foc-commit` when commits are requested. Skills define the process; service instructions define
+the invariants; READMEs hold behavior/contracts and verification commands. Personal, ignored
+checklists are not shared acceptance sources.

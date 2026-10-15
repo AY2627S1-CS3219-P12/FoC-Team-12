@@ -1,71 +1,53 @@
 # Order Service
 
-Owned by XueTing. This service is the D3 source of truth for errand lifecycle facts. Read
-[`AGENTS.md`](AGENTS.md), [`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md), and
-[`../TASK_SPLIT.md`](../TASK_SPLIT.md) before implementation.
+Order owns errand lifecycle facts. Scope and invariants live in [AGENTS.md](AGENTS.md);
+the D3 roadmap is [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md).
 
 ## Current state
 
-This folder is deliberately a D3 implementation starting point: the Order application, database
-schema, API contract, tests, and Compose wiring have not been created yet. Do not claim that an
-endpoint, runtime command, Docker image, or integration exists until its owning iteration has
-implemented and verified it.
+Only documentation and an empty Dockerfile exist. Application code, schema, APIs, tests and
+Compose integration are planned. No runnable service or published Order contract exists yet.
 
-## Responsibility
+## Architecture
 
-Order Service stores each errand's requester/courier UUID references, captured pickup and
-drop-off details, reward, deadline, lifecycle state, and transition history. It owns creation,
-editing while OPEN, acceptance, withdrawal, cancellation, pickup, delivery, completion,
-automatic expiry, discovery, and history queries.
+Use the stack specified in AGENTS.md with a private PostgreSQL database. Store requester/courier
+UUID references, location snapshots, title/description, reward, pickup deadline, state and
+transition history. Resolve User identity through the
+[User JWT contract](../user-service/README.md#login-and-jwt-verification) and locations through
+the [Supplier API](../supplier-service/README.md).
 
-It consumes User identity through the existing User JWT/JWKS contract and Supplier data through
-the published Supplier contract. It must not read either database. Credit Service owns all balance
-and reservation effects; Order owns the lifecycle decision that can request those effects.
+Choose and document the concurrency mechanism before acceptance is implemented. Order records
+lifecycle decisions; Credit applies ledger effects. User activation, Order-Credit transport,
+service authentication, broker selection, message schemas and reconciliation remain pending
+approved contracts under the root rules. A successful local transaction alone does not prove
+cross-service completion.
 
-## D3 architecture decisions
+## Lifecycle
 
-- Use PostgreSQL for transactional order state and Flyway for forward-only schema migrations.
-- Use the authenticated JWT subject as the user ID and the signed effective role for role checks.
-  Enforce requester/courier-to-order relationships in backend code on every protected action.
-- Keep supplier/location snapshots on the order so a later Supplier change, deactivation, or
-  deletion cannot rewrite historical errands.
-- Make competing OPEN-state transitions atomic and make externally triggered transitions
-  idempotent. The exact locking/optimistic-concurrency mechanism is an implementation decision,
-  but it must be documented and tested before the acceptance endpoint is merged.
-- Add Order-to-Credit calls/events only after a jointly approved contract with the Credit owner.
-  A successful HTTP call or published event alone is not a completed workflow; failure,
-  duplicate, retry, and reconciliation behavior must be implemented and observable.
-
-## Backlog lifecycle
-
-| Current state | Allowed next state | Actor or trigger |
+| Current | Next | Actor/condition |
 | --- | --- | --- |
-| `OPEN` | `ACCEPTED`, `CANCELLED`, `EXPIRED` | Eligible courier, requester, expiry worker |
-| `ACCEPTED` | `OPEN`, `PICKED_UP`, `CANCELLED` | Assigned courier withdrawal, assigned courier, requester |
-| `PICKED_UP` | `DELIVERED` | Assigned courier |
-| `DELIVERED` | `COMPLETED` | Original requester |
+| OPEN | ACCEPTED | Eligible courier, not the requester |
+| OPEN | CANCELLED | Requester |
+| OPEN | EXPIRED | Pickup deadline passed |
+| ACCEPTED | OPEN | Assigned courier withdraws before deadline |
+| ACCEPTED | EXPIRED | Assigned courier withdraws after deadline |
+| ACCEPTED | CANCELLED | Requester before pickup; compensate courier through Credit |
+| ACCEPTED | PICKED_UP | Assigned courier |
+| PICKED_UP | DELIVERED | Assigned courier |
+| DELIVERED | COMPLETED | Requester confirms receipt |
 
-`CANCELLED`, `EXPIRED`, and `COMPLETED` are terminal. A withdrawal after the pickup deadline
-becomes `EXPIRED`, not `OPEN`. The D1 backlog is authoritative where an edge case is not listed
-here.
+COMPLETED, CANCELLED and EXPIRED are terminal. Cancellation is forbidden after pickup.
+The approved backlog governs unresolved boundary cases such as the exact deadline instant.
 
-## First implementation sequence
+## Verification
 
-Use one invocation at a time, wait for approval of its feature brief, and retain the outcome in
-the PR/issue rather than creating local workflow logs:
+After the scaffold implements Maven Wrapper, run from this directory:
 
-```text
-$foc-iterate-feature order-service-scaffold: Create the verified Order Service backend scaffold
-with private PostgreSQL/Flyway persistence, health, OpenAPI, and User JWT validation. Do not add
-gateway, Compose, Supplier, or Credit integration.
-
-$foc-iterate-feature order-service-core-lifecycle: Implement approved local Order creation,
-OPEN-only editing/cancellation, lifecycle persistence, and backend authorization using User JWT
-identity. Do not invent Credit or event contracts.
-
-$foc-iterate-feature order-service-concurrency-expiry: Implement atomic acceptance/expiry races,
-safe duplicate transition retries, and automatic OPEN-order expiry with tests.
+```powershell
+.\mvnw.cmd --batch-mode --no-transfer-progress verify
 ```
 
-The Credit integration, notification events, frontend, gateway routes, and container topology are
-separate approved iterations. See the checklist for their prerequisites and acceptance evidence.
+On Unix use `./mvnw --batch-mode --no-transfer-progress verify`. Focused tests may be used during
+iteration; completion requires the affected verification suite. Runtime changes additionally
+need the approved Compose startup and health checks. Until scaffold/dependencies exist, report
+these checks as unavailable.

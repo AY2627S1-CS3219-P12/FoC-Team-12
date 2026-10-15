@@ -1,22 +1,15 @@
-# Supplier Service agent boundary
+# Supplier Service
 
-Owner: Jun Hui.
+Owner: Jun Hui. Own Supplier/location schema, CRUD/query APIs, ACTIVE/INACTIVE behavior, UI,
+authorization integration, migrations and contracts; also Logging, broker reliability/retries,
+failure recording and observability.
 
-## In scope
+Preserve backend web/service/domain/repository separation, DTO validation, Problem Details and
+optimistic locking. Use forward-only Flyway migrations; never edit an applied migration.
+Document behavior/OpenAPI changes in the [README](README.md), including consumer effects.
+For API changes affecting frontend types, follow the generation rules in
+[frontend/AGENTS.md](frontend/AGENTS.md#architecture-and-checks), even during backend work.
 
-- Supplier/location schema and data, CRUD/query APIs, ACTIVE/INACTIVE behavior, Supplier UI,
-  authentication/RBAC integration, migrations, tests, and API contract.
-- Logging, event-broker reliability/retries/failure recording, and observability.
-
-## Out of scope
-
-Do not implement user identity, Order lifecycle, Credit rules, Notifications, or Chat. Use
-published identities/contracts and never access another service's database.
-
-## Existing checks
-
-- Backend: `./mvnw test`
-- Frontend: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`
-
-Frontend work must also follow `frontend/AGENTS.md`. Do not invent unresolved authentication,
-event-broker, logging-retention, or cloud behavior.
+Frontend work also follows [frontend/AGENTS.md](frontend/AGENTS.md). Backend completion checks
+are in the README; frontend scripts and design rules are in the nested instructions. Resolve
+missing broker, logging-retention or cloud decisions before implementing them.

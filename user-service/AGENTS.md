@@ -1,19 +1,10 @@
-# User Service agent boundary
+# User Service
 
-Owner: Darryl.
+Owner: Darryl. Own registration/NUS verification, login/JWT/JWKS, reset OTPs, profiles,
+roles/RBAC, protected fields, account lifecycle and the Admin Dashboard in the User-owned area.
 
-## In scope
+Publish stable user UUIDs and signed identity/role claims for consumers. Keep admin assignment and
+account-state checks on the backend; never expose privileged self-service role changes. Resolve
+missing account/token/OTP/admin rules against the approved backlog.
 
-- NUS-email registration, login/tokens, reset OTP, profiles, roles/RBAC, and account lifecycle.
-- Protected user fields and administrator access workflows.
-- Admin Dashboard implementation inside the User-owned area.
-- User database, migrations, tests, API contract, and identity integration documentation.
-
-## Out of scope
-
-Do not implement Supplier data, Order lifecycle, Credit balances, Logging storage,
-Notifications, or Chat. Publish stable user IDs and identity/role claims for those services;
-never give them direct database access.
-
-Use the D2-D4 User/Admin criteria in `TASK_SPLIT.md` and the approved backlog as acceptance
-sources. Do not invent account states, token policy, OTP policy, or admin powers if unspecified.
+Read the relevant [README](README.md) behavior, JWT contract and verification sections.

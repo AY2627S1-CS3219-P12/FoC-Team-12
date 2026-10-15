@@ -49,6 +49,25 @@ microservice (`user-service/`, `supplier-service/`, `order-service/`,
   may be added as needed, but must still **respect the
   one-service-per-folder skeleton** for core implementation.
 
+## Working with agents
+
+| Document | Responsibility |
+| --- | --- |
+| [Root AGENTS.md](AGENTS.md) | Universal rules, reading path and cross-service review |
+| [TASK_SPLIT.md](TASK_SPLIT.md) | Teammate and service ownership map |
+| Each service's AGENTS.md | Local scope and critical implementation invariants |
+| Each service's README.md | Architecture, behavior/contracts and verification commands |
+| Order/Credit IMPLEMENTATION_CHECKLIST.md | D3 iteration order and acceptance evidence |
+| [.codex/skills](.codex/skills) | Reusable feature stages and commit workflow |
+
+Each teammate works in their own branch/checkout and service area. Use
+`$foc-iterate-feature <service>-<iteration>: <outcome>` to define and approve one feature,
+then design tests, implement, review, verify and obtain manual acceptance. Request `$foc-commit`
+separately. Existing approvals carry through repairs within the same scope.
+
+For integration, agree the producer's contract before parallel implementation. Shared files and
+gateway changes have one editor with affected-owner review, preventing competing agent edits.
+
 ## API Gateway
 
 Run the Docker stack and use `http://localhost:8088` as the normal browser and API origin. The

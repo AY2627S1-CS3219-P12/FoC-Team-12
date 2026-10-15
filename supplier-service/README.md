@@ -103,8 +103,11 @@ they use the Supplier frontend's committed tokens, responsive shell, and interac
 From the `supplier-service` directory:
 
 ```sh
-./mvnw test
+./mvnw --batch-mode --no-transfer-progress verify
 ```
+
+On Windows use `.\mvnw.cmd --batch-mode --no-transfer-progress verify`. Focused tests may
+be run during iteration; use `verify` for the backend completion check, matching CI.
 
 ## Run the application
 
