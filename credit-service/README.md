@@ -78,6 +78,28 @@ account. All roles issued by the agreed User JWT contract may view their own dat
 remain closed until service-caller authentication and the User/Order integration contracts are
 approved.
 
+## Credit dashboard
+
+The responsive React dashboard is packaged inside the service and served at `/credits`, with
+collision-free production assets under `/credit-assets/**`. It reuses the validated
+`sessionStorage["foc.user-session"]` established by the User frontend on the shared gateway origin,
+adds the bearer token to the two user query endpoints, and never accepts a selectable account ID.
+It presents available, reserved and total balances plus paginated immutable ledger history. Signed
+out, loading, pending-account, expired-session, empty-history and unavailable-service states are
+handled explicitly.
+
+Frontend development runs on port `5175` and proxies `/api` to the Credit Service:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+The packaged shared-origin experience requires the approved Gateway route described in the root
+deployment documentation; direct frontend development does not share session storage with port
+`8088`.
+
 ## Verification
 
 From this directory:
@@ -89,3 +111,6 @@ From this directory:
 On Unix use `./mvnw --batch-mode --no-transfer-progress verify`. Focused tests may be used during
 iteration; completion requires the affected verification suite. Runtime changes additionally
 need the approved database startup and health checks.
+
+From `frontend`, run `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` for the UI
+completion checks.
