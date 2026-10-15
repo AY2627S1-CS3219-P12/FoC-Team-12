@@ -72,19 +72,21 @@ gateway changes have one editor with affected-owner review, preventing competing
 
 Run the Docker stack and use `http://localhost:8088` as the normal browser and API origin. The
 gateway serves the packaged User application at `/`, the Supplier application under `/suppliers`,
-and the current APIs from the same origin:
+the Credit dashboard at `/credits`, and the current APIs from the same origin:
 
 ```text
 /                             -> User login and profile
 /suppliers/**                 -> Supplier public UI
 /admin/suppliers/**           -> Supplier administration UI
+/credits/**                   -> Credit dashboard
 /api/users/**                -> User Service
 /api/suppliers/**            -> Supplier Service
 /api/admin/suppliers/**      -> Supplier Service
+/api/credits/**              -> Credit Service
 ```
 
 Keeping both applications on `8088` lets their browser code share the validated
-`sessionStorage["foc.user-session"]` login session. Direct ports `8080` and `8081` remain exposed
+`sessionStorage["foc.user-session"]` login session. Direct ports `8080`, `8081` and `8083` remain exposed
 for service-owner debugging, but they are not the normal presentation flow.
 
 Gateway Swagger UI is available at `http://localhost:8088/swagger-ui/index.html`. See

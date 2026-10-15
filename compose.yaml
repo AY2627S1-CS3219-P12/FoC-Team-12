@@ -6,11 +6,14 @@ services:
     environment:
       USER_SERVICE_URL: http://user-service:8081
       SUPPLIER_SERVICE_URL: http://supplier-service:8080
+      CREDIT_SERVICE_URL: http://credit-service:8083
     depends_on:
       user-service:
         condition: service_healthy
       supplier-service:
         condition: service_started
+      credit-service:
+        condition: service_healthy
     ports:
       - "8088:8088"
 
@@ -88,6 +91,44 @@ services:
     volumes:
       - supplier-db-data:/var/lib/postgresql/data
 
+  credit-service:
+    build:
+      context: ./credit-service
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: credit-db
+      DB_PORT: 5432
+      DB_NAME: ${CREDIT_DB_NAME:?CREDIT_DB_NAME must be set}
+      DB_USER: ${CREDIT_DB_USER:?CREDIT_DB_USER must be set}
+      DB_PASSWORD: ${CREDIT_DB_PASSWORD:?CREDIT_DB_PASSWORD must be set}
+      CREDIT_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
+      CREDIT_JWT_ISSUER: friend-on-campus-user-service
+      CREDIT_JWT_AUDIENCE: friend-on-campus-api
+      SPRING_PROFILES_ACTIVE: ${CREDIT_SPRING_PROFILES_ACTIVE:-}
+      CREDIT_DEMO_USER_ID: ${CREDIT_DEMO_USER_ID:-}
+    depends_on:
+      credit-db:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+
+  credit-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${CREDIT_DB_NAME:?CREDIT_DB_NAME must be set}
+      POSTGRES_USER: ${CREDIT_DB_USER:?CREDIT_DB_USER must be set}
+      POSTGRES_PASSWORD: ${CREDIT_DB_PASSWORD:?CREDIT_DB_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CREDIT_DB_USER} -d ${CREDIT_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "127.0.0.1:5435:5432"
+    volumes:
+      - credit-db-data:/var/lib/postgresql/data
+
 volumes:
   user-db-data:
   supplier-db-data:
+  credit-db-data:

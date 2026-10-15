@@ -6,9 +6,9 @@ Credit owns accounts, reservations and ledger effects. Scope and invariants live
 ## Current state
 
 The Spring Boot foundation runs on port `8083` with PostgreSQL/Flyway configuration, User Service
-RS256/JWKS validation, Actuator health, OpenAPI and a non-root multi-stage Docker image. Credit
-domain operations and APIs are added in the following bounded iterations. Shared Compose, gateway,
-CI and broker integration remain coordinated follow-up work.
+RS256/JWKS validation, Actuator health, OpenAPI and a non-root multi-stage Docker image. The shared
+Compose stack and gateway expose the packaged dashboard and query API. Broker integration remains
+coordinated follow-up work.
 
 ## Architecture
 
@@ -99,6 +99,25 @@ npm run dev
 The packaged shared-origin experience requires the approved Gateway route described in the root
 deployment documentation; direct frontend development does not share session storage with port
 `8088`.
+
+## Opt-in demo scenario
+
+For an assessor demo before User and Order publish their Kafka events, the `demo` Spring profile can
+prepare one deterministic local scenario. It grants the configured registered user the normal 10
+initial credits and reserves 3, producing visible balance and ledger history. The identifiers are
+stable, so restarting does not duplicate credits or reservations. This fixture calls the same domain
+services as future event consumers; it does not add an unsecured mutation API.
+
+Set these values in the root `.env`, then rebuild `credit-service`:
+
+```text
+CREDIT_SPRING_PROFILES_ACTIVE=demo
+CREDIT_DEMO_USER_ID=<UUID from the registered User account>
+```
+
+Leave both values blank for normal operation. The fixture is disabled unless the `demo` profile is
+explicitly active. It is presentation scaffolding, not a replacement for the pending Kafka
+integration.
 
 ## Verification
 
