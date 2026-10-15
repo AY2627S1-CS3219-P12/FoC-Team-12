@@ -36,7 +36,7 @@ public class CreditReservationService {
         this.ledger = ledger;
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = CreditRequestRejectedException.class)
     public ReservationResult reserve(UUID operationId, UUID orderId, UUID requesterId, int amount) {
         requireIdentifiers(operationId, orderId, requesterId);
         requirePositive(amount);
@@ -45,45 +45,51 @@ public class CreditReservationService {
         CreditOperation previous = operations.findById(operationId).orElse(null);
         if (previous != null) {
             requireSameRequest(previous, CreditOperationType.RESERVE, requestHash);
+            throwIfRejected(previous, orderId, requesterId);
             return currentResult(orderId, false);
         }
 
-        CreditReservation existing = reservations.findByOrderId(orderId).orElse(null);
-        if (existing != null) {
-            if (!existing.getRequesterId().equals(requesterId) || existing.getAmount() != amount) {
-                throw new ReservationConflictException();
-            }
-            CreditAccount account = requireAccount(requesterId, false);
-            operations.save(CreditOperation.completed(
-                    operationId, CreditOperationType.RESERVE, orderId, requestHash, "ALREADY_RESERVED"));
-            return result(existing, account, false);
-        }
-
-        CreditAccount account = requireAccount(requesterId, true);
         try {
-            account.reserve(amount);
-        } catch (IllegalStateException exception) {
-            throw new InsufficientCreditsException();
-        }
+            CreditReservation existing = reservations.findByOrderId(orderId).orElse(null);
+            if (existing != null) {
+                if (!existing.getRequesterId().equals(requesterId) || existing.getAmount() != amount) {
+                    throw new ReservationConflictException();
+                }
+                CreditAccount account = requireAccount(requesterId, false);
+                operations.save(CreditOperation.completed(
+                        operationId, CreditOperationType.RESERVE, orderId, requestHash, "ALREADY_RESERVED"));
+                return result(existing, account, false);
+            }
 
-        CreditReservation reservation = CreditReservation.active(orderId, requesterId, amount);
-        operations.saveAndFlush(CreditOperation.completed(
-                operationId, CreditOperationType.RESERVE, orderId, requestHash, "RESERVED"));
-        reservations.saveAndFlush(reservation);
-        accounts.save(account);
-        ledger.save(CreditLedgerEntry.record(
-                operationId,
-                requesterId,
-                reservation.getId(),
-                LedgerEntryType.RESERVATION_CREATED,
-                -amount,
-                amount,
-                account.getAvailableBalance(),
-                account.getReservedBalance()));
-        return result(reservation, account, true);
+            CreditAccount account = requireAccount(requesterId, true);
+            try {
+                account.reserve(amount);
+            } catch (IllegalStateException exception) {
+                throw new InsufficientCreditsException();
+            }
+
+            CreditReservation reservation = CreditReservation.active(orderId, requesterId, amount);
+            operations.saveAndFlush(CreditOperation.completed(
+                    operationId, CreditOperationType.RESERVE, orderId, requestHash, "RESERVED"));
+            reservations.saveAndFlush(reservation);
+            accounts.save(account);
+            ledger.save(CreditLedgerEntry.record(
+                    operationId,
+                    requesterId,
+                    reservation.getId(),
+                    LedgerEntryType.RESERVATION_CREATED,
+                    -amount,
+                    amount,
+                    account.getAvailableBalance(),
+                    account.getReservedBalance()));
+            return result(reservation, account, true);
+        } catch (CreditRequestRejectedException rejection) {
+            recordRejection(operationId, CreditOperationType.RESERVE, orderId, requestHash, rejection);
+            throw rejection;
+        }
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = CreditRequestRejectedException.class)
     public ReservationResult adjust(UUID operationId, UUID orderId, int newAmount) {
         requireIdentifiers(operationId, orderId);
         requirePositive(newAmount);
@@ -92,48 +98,54 @@ public class CreditReservationService {
         CreditOperation previous = operations.findById(operationId).orElse(null);
         if (previous != null) {
             requireSameRequest(previous, CreditOperationType.ADJUST, requestHash);
+            throwIfRejected(previous, orderId, null);
             return currentResult(orderId, false);
         }
 
-        CreditReservation reservation = requireActiveReservation(orderId);
-        CreditAccount account = requireAccount(reservation.getRequesterId(), true);
-        int difference = newAmount - reservation.getAmount();
-        LedgerEntryType entryType = null;
+        try {
+            CreditReservation reservation = requireActiveReservation(orderId);
+            CreditAccount account = requireAccount(reservation.getRequesterId(), true);
+            int difference = newAmount - reservation.getAmount();
+            LedgerEntryType entryType = null;
 
-        if (difference > 0) {
-            try {
-                account.reserve(difference);
-            } catch (IllegalStateException exception) {
-                throw new InsufficientCreditsException();
+            if (difference > 0) {
+                try {
+                    account.reserve(difference);
+                } catch (IllegalStateException exception) {
+                    throw new InsufficientCreditsException();
+                }
+                entryType = LedgerEntryType.RESERVATION_INCREASED;
+            } else if (difference < 0) {
+                account.release(-difference);
+                entryType = LedgerEntryType.RESERVATION_DECREASED;
             }
-            entryType = LedgerEntryType.RESERVATION_INCREASED;
-        } else if (difference < 0) {
-            account.release(-difference);
-            entryType = LedgerEntryType.RESERVATION_DECREASED;
-        }
 
-        reservation.adjustAmount(newAmount);
-        operations.saveAndFlush(CreditOperation.completed(
-                operationId,
-                CreditOperationType.ADJUST,
-                orderId,
-                requestHash,
-                difference == 0 ? "UNCHANGED" : "ADJUSTED"));
-        reservations.save(reservation);
-        accounts.save(account);
-
-        if (difference != 0) {
-            ledger.save(CreditLedgerEntry.record(
+            reservation.adjustAmount(newAmount);
+            operations.saveAndFlush(CreditOperation.completed(
                     operationId,
-                    account.getUserId(),
-                    reservation.getId(),
-                    entryType,
-                    -difference,
-                    difference,
-                    account.getAvailableBalance(),
-                    account.getReservedBalance()));
+                    CreditOperationType.ADJUST,
+                    orderId,
+                    requestHash,
+                    difference == 0 ? "UNCHANGED" : "ADJUSTED"));
+            reservations.save(reservation);
+            accounts.save(account);
+
+            if (difference != 0) {
+                ledger.save(CreditLedgerEntry.record(
+                        operationId,
+                        account.getUserId(),
+                        reservation.getId(),
+                        entryType,
+                        -difference,
+                        difference,
+                        account.getAvailableBalance(),
+                        account.getReservedBalance()));
+            }
+            return result(reservation, account, difference != 0);
+        } catch (CreditRequestRejectedException rejection) {
+            recordRejection(operationId, CreditOperationType.ADJUST, orderId, requestHash, rejection);
+            throw rejection;
         }
-        return result(reservation, account, difference != 0);
     }
 
     @Transactional
@@ -230,6 +242,61 @@ public class CreditReservationService {
         if (previous.getOperationType() != expectedType || !previous.getRequestHash().equals(requestHash)) {
             throw new IdempotencyConflictException();
         }
+    }
+
+    private void recordRejection(
+            UUID operationId,
+            CreditOperationType operationType,
+            UUID orderId,
+            String requestHash,
+            CreditRequestRejectedException rejection) {
+        operations.saveAndFlush(CreditOperation.completed(
+                operationId, operationType, orderId, requestHash, rejectionCode(rejection)));
+    }
+
+    private void throwIfRejected(CreditOperation operation, UUID orderId, UUID requesterId) {
+        switch (operation.getResultCode()) {
+            case "INSUFFICIENT_CREDITS" -> throw new InsufficientCreditsException();
+            case "CREDIT_ACCOUNT_NOT_FOUND" -> {
+                UUID accountId = requesterId;
+                if (accountId == null) {
+                    accountId = reservations.findByOrderId(orderId)
+                            .map(CreditReservation::getRequesterId)
+                            .orElseThrow(() -> new CreditReservationNotFoundException(orderId));
+                }
+                throw new CreditAccountNotFoundException(accountId);
+            }
+            case "RESERVATION_NOT_FOUND" -> throw new CreditReservationNotFoundException(orderId);
+            case "INVALID_RESERVATION_STATE" ->
+                    throw new InvalidReservationStateException("Reservation request was previously rejected");
+            case "REQUEST_CONFLICT" -> throw new ReservationConflictException();
+            default -> {
+                boolean knownSuccess = operation.getOperationType() == CreditOperationType.RESERVE
+                        ? operation.getResultCode().equals("RESERVED")
+                                || operation.getResultCode().equals("ALREADY_RESERVED")
+                        : operation.getResultCode().equals("ADJUSTED")
+                                || operation.getResultCode().equals("UNCHANGED");
+                if (!knownSuccess) {
+                    throw new IllegalStateException("Stored credit operation has an unknown result code");
+                }
+            }
+        }
+    }
+
+    private static String rejectionCode(CreditRequestRejectedException rejection) {
+        if (rejection instanceof InsufficientCreditsException) {
+            return "INSUFFICIENT_CREDITS";
+        }
+        if (rejection instanceof CreditAccountNotFoundException) {
+            return "CREDIT_ACCOUNT_NOT_FOUND";
+        }
+        if (rejection instanceof CreditReservationNotFoundException) {
+            return "RESERVATION_NOT_FOUND";
+        }
+        if (rejection instanceof InvalidReservationStateException) {
+            return "INVALID_RESERVATION_STATE";
+        }
+        return "REQUEST_CONFLICT";
     }
 
     private static void requirePositive(int amount) {

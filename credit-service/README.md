@@ -8,8 +8,8 @@ Credit owns accounts, reservations and ledger effects. Scope and invariants live
 The Spring Boot foundation runs on port `8083` with PostgreSQL/Flyway configuration, User Service
 RS256/JWKS validation, Actuator health, OpenAPI and a non-root multi-stage Docker image. The shared
 Compose stack and gateway expose the packaged dashboard and query API. A broker-independent durable
-inbox/outbox foundation is implemented; Kafka adapters and approved User/Order event handlers remain
-coordinated follow-up work.
+inbox/outbox foundation and the version-1 User/Order event handlers are implemented. Kafka listener
+and publisher adapters remain coordinated follow-up work.
 
 ## Architecture
 
@@ -21,10 +21,9 @@ Use the [User JWT contract](../user-service/README.md#login-and-jwt-verification
 authentication. Integration caller authentication still needs its own approved contract: a
 student bearer token alone must not authorize internal ledger mutations.
 
-The User activation/allocation contract and Order reservation, reward-adjustment, release and
-settlement contracts remain to be agreed. Define transport, allowed callers, duplicate/conflicting
-requests and recovery ownership under root rules before integrating. Credit applies financial
-effects of Order decisions; it does not infer lifecycle transitions.
+The User activation/allocation and Order reservation, reward-adjustment, release and settlement
+contracts are defined by the shared event blueprint. Credit applies the financial effects of those
+facts and emits outcomes; it does not infer lifecycle transitions.
 
 Retain authoritative ledger history locally. The backlog's user-visible transfer history depends
 on Logging-owned retrieval; agree that integration before exposing it. Chat/Translation needs
@@ -34,6 +33,22 @@ The cross-service event envelope, payloads, recovery rules and implementation re
 defined in the shared
 [event communication blueprint](../docs/integration/event-communication-blueprint.md). This is the
 source of truth for User, Order and Credit event integration.
+
+## Event handling
+
+The transport-neutral handler validates version-1 envelopes and payloads before creating an inbox
+receipt. It accepts `UserActivated`, `OrderSubmitted`, `OrderRewardChangeRequested`,
+`OrderCompleted`, `OrderCancelled` and `OrderExpired`, then maps them to the existing Credit domain
+services. Successful effects and expected reservation/adjustment rejections create the matching
+contract outcome in the Credit outbox.
+
+The domain effect, durable operation result, inbox completion and outcome outbox row share one
+database transaction. Unexpected failures roll that transaction back and leave a failed inbox
+receipt for retry. Repeated event IDs are suppressed, conflicting event content is rejected, and
+rejected reservation operations remain durable by `operationId` so a redelivery with a new event ID
+returns the same rejection rather than applying a later balance change. No Kafka API appears in the
+domain handler; the future adapter only deserializes broker records, calls the handler and publishes
+pending outbox rows.
 
 ## Persistence model
 
