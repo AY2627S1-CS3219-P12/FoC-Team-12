@@ -23,14 +23,19 @@ not push, amend, rebase, merge, reset, deploy, or bypass hooks.
 4. Include `supplier-service/frontend/src/api/schema.d.ts` only when the Supplier
    OpenAPI contract changed, the types were regenerated from the running service,
    and the generated diff was reviewed. Never hand-edit it.
-5. Do not stage `.env` files, credentials, private keys, `node_modules`, coverage,
+5. For Order or Credit backend behavior, keep the implementation, focused tests, new Flyway
+   migration, and affected README/OpenAPI documentation in the same logical commit. Include a
+   shared Order-Credit/User contract artifact only when the responsible service owners have
+   reviewed it; never hide an unapproved cross-service dependency in a service-only commit.
+6. Do not stage `.env` files, credentials, private keys, `node_modules`, coverage,
    `target`, `dist`, or unrelated teammates' files. Respect `.gitignore`; never
    force-add ignored paths.
-6. Run relevant validation when current results are missing: Supplier backend uses
+7. Run relevant validation when current results are missing: Supplier backend uses
    `.\\mvnw.cmd test` in PowerShell (or `./mvnw test` elsewhere); Supplier
-   frontend uses lint, typecheck, tests, and build. Review the complete staged
-   diff before each commit.
-7. Use a Conventional Commit subject with no scope unless requested, for example
+   frontend uses lint, typecheck, tests, and build. Order/Credit backend uses its documented Maven
+   Wrapper verification after the service scaffold exists; report an unscaffolded suite as absent.
+   Review the complete staged diff before each commit.
+8. Use a Conventional Commit subject with no scope unless requested, for example
    `feat: add supplier public list`. Create each commit, inspect its result and
    the remaining worktree, and report hashes, subjects, checks, and uncommitted
    files.

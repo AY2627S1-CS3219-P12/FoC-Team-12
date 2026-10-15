@@ -21,3 +21,9 @@ tests or generated-contract checks when the approved change does not need them.
 
 Call out unavailable environments or unimplemented service test conventions as
 limitations. Do not edit tests or product files at this stage.
+
+For Order work, include affected state/actor authorization, invalid transition, duplicate retry,
+and acceptance/cancellation/expiry race cases. For Credit work, include insufficient funds,
+non-negative availability, atomic reservation/ledger behavior, duplicate operation, concurrent
+mutation, and exact cancellation-compensation rounding cases. Add integration failure and
+reconciliation cases only when an approved cross-service contract exists.

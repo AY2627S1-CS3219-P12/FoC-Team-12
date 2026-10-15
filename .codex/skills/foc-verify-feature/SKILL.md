@@ -24,3 +24,9 @@ running service before reporting success. Return failures to
 `$foc-feature-implementation` or `$foc-ui-iteration`, rerun affected checks
 after repair, and do not suppress failures or commit/deploy without separate
 authorization.
+
+For Order and Credit changes, use each service's documented Maven Wrapper verification after the
+scaffold exists. Add concurrency/integration checks selected by the approved feature brief; a
+single-service passing test does not verify an unimplemented cross-service workflow. For an
+approved broker or Compose change, run the relevant container startup/health checks and report any
+missing local secrets, dependencies, or consumers as limitations.

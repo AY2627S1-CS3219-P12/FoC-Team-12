@@ -15,6 +15,11 @@ components, the generated API client, and TanStack Query. Do not use client-side
 role flags as authorization or hand-write API contracts already available from
 OpenAPI.
 
+For an Order or Credit UI that has not yet established its own frontend conventions, the feature
+brief must first identify the approved design source, route ownership, API contract, generated
+client strategy, and test commands. Do not copy the Supplier UI architecture or invent a client-
+side authorization rule merely because it is the only existing frontend reference.
+
 Implement the smallest coherent flow. Prepare manual checks for the affected
 workflow at the mobile reference width and desktop layout, keyboard/focus access,
 validation/error feedback, and affected-route regressions. Return behavior and

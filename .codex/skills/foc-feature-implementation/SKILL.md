@@ -21,5 +21,15 @@ typed client and server-state conventions rather than duplicating contracts or
 business rules in the UI. Add the approved automated tests and return changed
 behavior evidence to `$foc-quality-review` and `$foc-verify-feature`.
 
+For Order work, enforce the approved state machine transactionally, authorize from the JWT and
+Order relationship in backend code, and test transition races/retries where affected. Preserve
+historical pickup/drop-off snapshots and do not make credit arithmetic or another service's
+database a dependency.
+
+For Credit work, keep balance, reservation, and ledger changes atomic; make every externally
+triggered credit operation idempotent; and enforce non-negative available balance. Do not make
+Order-state decisions, give users a direct transfer capability, or create a User/Order integration
+without its approved contract.
+
 Do not commit, push, merge, deploy, alter CI, or broaden scope unless separately
 authorized.
