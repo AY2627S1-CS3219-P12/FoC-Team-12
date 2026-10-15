@@ -39,7 +39,7 @@ public class CreditOutboxService {
                 envelope.aggregateType(),
                 envelope.aggregateId(),
                 envelope.aggregateVersion(),
-                envelope.occurredAt(),
+                EventTimestampPrecision.forPostgres(envelope.occurredAt()),
                 envelope.producer(),
                 envelope.correlationId(),
                 envelope.causationId(),

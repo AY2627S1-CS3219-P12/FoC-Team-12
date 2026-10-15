@@ -1,5 +1,6 @@
 package com.friendoncampus.credit.integration;
 
+import java.time.OffsetDateTime;
 import java.util.Objects;
 
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class CreditInboxReceiptService {
     public Receipt register(CreditEventEnvelope envelope) {
         EventPayloadCodec.CanonicalPayload actor = payloadCodec.canonicalize(envelope.actorJson());
         EventPayloadCodec.CanonicalPayload payload = payloadCodec.canonicalize(envelope.payloadJson());
+        OffsetDateTime occurredAt = EventTimestampPrecision.forPostgres(envelope.occurredAt());
         int inserted = inbox.insertReceivedIfAbsent(
                 envelope.eventId(),
                 envelope.eventType(),
@@ -34,7 +36,7 @@ public class CreditInboxReceiptService {
                 envelope.aggregateType(),
                 envelope.aggregateId(),
                 envelope.aggregateVersion(),
-                envelope.occurredAt(),
+                occurredAt,
                 envelope.producer(),
                 envelope.correlationId(),
                 envelope.causationId(),
@@ -42,13 +44,14 @@ public class CreditInboxReceiptService {
                 payload.hash());
         CreditInboxEvent stored = inbox.findByEventIdForUpdate(envelope.eventId())
                 .orElseThrow(() -> new IllegalStateException("Registered inbox event is missing"));
-        requireSameEnvelope(stored, envelope, actor.json(), payload.hash());
+        requireSameEnvelope(stored, envelope, occurredAt, actor.json(), payload.hash());
         return new Receipt(stored.getStatus(), inserted == 0);
     }
 
     private static void requireSameEnvelope(
             CreditInboxEvent stored,
             CreditEventEnvelope received,
+            OffsetDateTime occurredAt,
             String actorJson,
             String payloadHash) {
         boolean matches = stored.getEventType().equals(received.eventType())
@@ -56,7 +59,7 @@ public class CreditInboxReceiptService {
                 && stored.getAggregateType().equals(received.aggregateType())
                 && stored.getAggregateId().equals(received.aggregateId())
                 && stored.getAggregateVersion() == received.aggregateVersion()
-                && stored.getOccurredAt().isEqual(received.occurredAt())
+                && stored.getOccurredAt().isEqual(occurredAt)
                 && stored.getProducer().equals(received.producer())
                 && stored.getCorrelationId().equals(received.correlationId())
                 && Objects.equals(stored.getCausationId(), received.causationId())

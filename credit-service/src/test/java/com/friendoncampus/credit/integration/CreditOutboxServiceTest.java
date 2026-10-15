@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,10 +37,14 @@ class CreditOutboxServiceTest {
 
     @Test
     void storesCanonicalJsonForLaterPublishing() {
-        CreditEventEnvelope event = event("{ \"reservationId\" : \"abc\" }");
+        CreditEventEnvelope source = event("{ \"reservationId\" : \"abc\" }");
+        CreditEventEnvelope event = withOccurredAt(
+                source,
+                OffsetDateTime.parse("2026-10-15T14:00:00.123456789Z"));
+        OffsetDateTime storedTimestamp = event.occurredAt().truncatedTo(ChronoUnit.MICROS);
         CreditEventEnvelope canonical = new CreditEventEnvelope(
                 event.eventId(), event.eventType(), event.eventVersion(), event.aggregateType(),
-                event.aggregateId(), event.aggregateVersion(), event.occurredAt(), event.producer(),
+                event.aggregateId(), event.aggregateVersion(), storedTimestamp, event.producer(),
                 event.correlationId(), event.causationId(), event.actorJson(),
                 "{\"reservationId\":\"abc\"}");
         CreditOutboxEvent stored = CreditOutboxEvent.pending(
@@ -53,7 +58,7 @@ class CreditOutboxServiceTest {
         assertThat(result.getPublishedAt()).isNull();
         verify(outbox).insertPendingIfAbsent(
                 event.eventId(), event.eventType(), event.eventVersion(), event.aggregateType(),
-                event.aggregateId(), event.aggregateVersion(), event.occurredAt(), event.producer(),
+                event.aggregateId(), event.aggregateVersion(), storedTimestamp, event.producer(),
                 event.correlationId(), event.causationId(), event.actorJson(),
                 canonical.payloadJson(), EventFingerprint.sha256(canonical.payloadJson()));
     }
@@ -91,5 +96,14 @@ class CreditOutboxServiceTest {
                 OffsetDateTime.parse("2026-10-15T14:00:00Z"),
                 CreditOutboxService.CREDIT_PRODUCER, UUID.randomUUID(), UUID.randomUUID(),
                 "{\"type\":\"SYSTEM\"}", payload);
+    }
+
+    private static CreditEventEnvelope withOccurredAt(
+            CreditEventEnvelope source,
+            OffsetDateTime occurredAt) {
+        return new CreditEventEnvelope(
+                source.eventId(), source.eventType(), source.eventVersion(), source.aggregateType(),
+                source.aggregateId(), source.aggregateVersion(), occurredAt, source.producer(),
+                source.correlationId(), source.causationId(), source.actorJson(), source.payloadJson());
     }
 }

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,13 +38,20 @@ class CreditInboxReceiptServiceTest {
 
     @Test
     void recognizesTheSameEventDeliveredAgain() {
-        CreditEventEnvelope envelope = event("{\"amount\":3}");
-        CreditInboxEvent stored = stored(envelope, EventFingerprint.sha256("{\"amount\":3}"));
+        CreditEventEnvelope source = event("{\"amount\":3}");
+        CreditEventEnvelope envelope = withOccurredAt(
+                source,
+                OffsetDateTime.parse("2026-10-15T14:00:00.123456789Z"));
+        OffsetDateTime storedTimestamp = envelope.occurredAt().truncatedTo(ChronoUnit.MICROS);
+        CreditInboxEvent stored = stored(
+                envelope,
+                storedTimestamp,
+                EventFingerprint.sha256("{\"amount\":3}"));
         when(stored.getStatus()).thenReturn(InboxEventStatus.PROCESSED);
         when(inbox.insertReceivedIfAbsent(
                 envelope.eventId(), envelope.eventType(), envelope.eventVersion(),
                 envelope.aggregateType(), envelope.aggregateId(), envelope.aggregateVersion(),
-                envelope.occurredAt(),
+                storedTimestamp,
                 envelope.producer(), envelope.correlationId(), envelope.causationId(),
                 "{\"type\":\"SYSTEM\"}",
                 EventFingerprint.sha256("{\"amount\":3}")))
@@ -59,7 +67,10 @@ class CreditInboxReceiptServiceTest {
     @Test
     void rejectsAnEventIdReusedWithDifferentContent() {
         CreditEventEnvelope envelope = event("{\"amount\":4}");
-        CreditInboxEvent stored = stored(envelope, EventFingerprint.sha256("{\"amount\":3}"));
+        CreditInboxEvent stored = stored(
+                envelope,
+                envelope.occurredAt(),
+                EventFingerprint.sha256("{\"amount\":3}"));
         when(inbox.insertReceivedIfAbsent(
                 envelope.eventId(), envelope.eventType(), envelope.eventVersion(),
                 envelope.aggregateType(), envelope.aggregateId(), envelope.aggregateVersion(),
@@ -83,14 +94,17 @@ class CreditInboxReceiptServiceTest {
                 .hasMessage("Event payload must be valid JSON");
     }
 
-    private static CreditInboxEvent stored(CreditEventEnvelope envelope, String payloadHash) {
+    private static CreditInboxEvent stored(
+            CreditEventEnvelope envelope,
+            OffsetDateTime occurredAt,
+            String payloadHash) {
         CreditInboxEvent stored = mock(CreditInboxEvent.class);
         when(stored.getEventType()).thenReturn(envelope.eventType());
         when(stored.getEventVersion()).thenReturn(envelope.eventVersion());
         when(stored.getAggregateType()).thenReturn(envelope.aggregateType());
         when(stored.getAggregateId()).thenReturn(envelope.aggregateId());
         when(stored.getAggregateVersion()).thenReturn(envelope.aggregateVersion());
-        when(stored.getOccurredAt()).thenReturn(envelope.occurredAt());
+        when(stored.getOccurredAt()).thenReturn(occurredAt);
         when(stored.getProducer()).thenReturn(envelope.producer());
         when(stored.getCorrelationId()).thenReturn(envelope.correlationId());
         when(stored.getCausationId()).thenReturn(envelope.causationId());
@@ -105,5 +119,14 @@ class CreditInboxReceiptServiceTest {
                 OffsetDateTime.parse("2026-10-15T14:00:00Z"),
                 "order-service", UUID.randomUUID(), null,
                 "{\"type\":\"SYSTEM\"}", payload);
+    }
+
+    private static CreditEventEnvelope withOccurredAt(
+            CreditEventEnvelope source,
+            OffsetDateTime occurredAt) {
+        return new CreditEventEnvelope(
+                source.eventId(), source.eventType(), source.eventVersion(), source.aggregateType(),
+                source.aggregateId(), source.aggregateVersion(), occurredAt, source.producer(),
+                source.correlationId(), source.causationId(), source.actorJson(), source.payloadJson());
     }
 }
