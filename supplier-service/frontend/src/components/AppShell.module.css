@@ -37,6 +37,206 @@
   font-weight: 600;
 }
 
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--foc-space-24);
+}
+
+.workspaceSelector {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--foc-space-8);
+  color: var(--foc-muted);
+  font-size: var(--foc-text-small);
+  font-weight: 600;
+}
+
+.workspaceSelectorOptions {
+  display: inline-flex;
+  padding: 0.1875rem;
+  border: 1px solid var(--foc-line);
+  border-radius: var(--foc-radius-8);
+  background: var(--foc-surface);
+}
+
+.actions .workspaceSelectorOptions button {
+  min-height: 2rem;
+  padding: 0 var(--foc-space-8);
+  border: 0;
+  border-radius: calc(var(--foc-radius-8) - 0.125rem);
+  background: transparent;
+  color: var(--foc-muted);
+  text-decoration: none;
+}
+
+.actions .workspaceSelectorOptions button[aria-pressed='true'] {
+  background: var(--foc-action);
+  color: var(--foc-surface);
+  box-shadow: 0 1px 2px rgb(23 32 51 / 18%);
+}
+
+.actions .workspaceSelectorOptions button:disabled {
+  cursor: wait;
+}
+
+.actions a,
+.actions button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--foc-action);
+  font-size: var(--foc-text-small);
+  font-weight: 600;
+}
+
+.actions button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.userMenu {
+  position: relative;
+  min-width: 0;
+  max-width: 12rem;
+}
+
+.userMenu summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  max-width: 12rem;
+  color: var(--foc-action);
+  cursor: pointer;
+  font-size: var(--foc-text-small);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  list-style: none;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.accountAvatar {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 1.625rem;
+  height: 1.625rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--foc-action-soft);
+  color: var(--foc-action);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.accountName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.userMenu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menuChevron {
+  width: 0.4375rem;
+  height: 0.4375rem;
+  margin: -0.25rem 0.125rem 0 0.125rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 150ms ease;
+}
+
+.userMenu[open] .menuChevron {
+  margin-top: 0.25rem;
+  transform: rotate(225deg);
+}
+
+.userMenu summary:hover,
+.userMenu summary:focus-visible {
+  text-decoration: underline;
+}
+
+.userMenuItems {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% - var(--foc-space-4));
+  right: 0;
+  display: grid;
+  min-width: 11.5rem;
+  padding: var(--foc-space-8);
+  border: 1px solid var(--foc-line);
+  border-radius: var(--foc-radius-8);
+  background: var(--foc-surface);
+  box-shadow: 0 8px 20px rgb(23 32 51 / 14%);
+}
+
+.menuDivider {
+  height: 1px;
+  margin: var(--foc-space-4) 0;
+  background: var(--foc-line);
+}
+
+.userMenuItems .menuSignOut {
+  color: var(--foc-ink);
+}
+
+.userMenuItems a,
+.userMenuItems button {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0 var(--foc-space-8);
+  color: var(--foc-action);
+  text-decoration: none;
+}
+
+.userMenuItems button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.userMenuItems a:hover,
+.userMenuItems a:focus-visible,
+.userMenuItems button:hover,
+.userMenuItems button:focus-visible {
+  background: var(--foc-action-soft);
+  text-decoration: none;
+}
+
+.workspaceError {
+  width: min(100% - 2rem, 80rem);
+  margin: var(--foc-space-8) auto 0;
+  color: var(--foc-danger, #b42318);
+  font-size: var(--foc-text-small);
+}
+
+@media (max-width: 35rem) {
+  .userMenu,
+  .userMenu summary {
+    max-width: 7.25rem;
+  }
+  .actions {
+    gap: var(--foc-space-8);
+  }
+  .workspaceSelectorLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
 .main {
   width: min(100%, 80rem);
   margin: 0 auto;

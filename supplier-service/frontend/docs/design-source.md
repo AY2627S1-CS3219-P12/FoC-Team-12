@@ -18,11 +18,11 @@ The shared-components link currently targets the section heading. When implement
 
 ## API references
 
-With Supplier Service running:
+With the complete stack running through the gateway:
 
-- Swagger UI: <http://localhost:8080/swagger-ui/index.html>
-- OpenAPI JSON: <http://localhost:8080/v3/api-docs>
-- Supplier API: <http://localhost:8080/api/suppliers>
+- Swagger UI: <http://localhost:8088/swagger-ui/index.html>
+- OpenAPI JSON: <http://localhost:8088/docs/supplier/openapi.json>
+- Supplier API: <http://localhost:8088/api/suppliers>
 
 The backend contract takes precedence over example data and incomplete form fields in Figma. In particular, the real Supplier model includes building information, optional location details, operating hours, image URL, status, timestamps, and optimistic-lock versioning.
 
@@ -56,3 +56,30 @@ Service workflow:
 - Supplier details use a local, Figma-aligned campus storefront illustration when a photo is
   missing, loading, or unavailable. This preserves the image layout without implying that a
   generic photograph depicts the real location.
+
+## Task 15 administration adaptations
+
+The administrative UI follows Supplier screens L01–L05 while adapting the hurried draft to
+the complete API and a safer responsive workflow:
+
+- L01's location cards become a readable table on desktop and management cards on mobile;
+  both show status and expose the same edit, activate/deactivate, and delete actions.
+- Search, category, building, status, sorting, and pagination use the administrative API and
+  remain shareable through URL parameters.
+- L02/L03 use one reusable form containing every real Supplier field. Status is selectable on
+  creation and remains a separate version-checked action during editing.
+- L04/L05 are implemented as focused confirmation dialogs and accessible in-page success
+  feedback instead of separate destructive-action routes. This keeps context on small screens
+  and makes cancellation unambiguous.
+- Deletion explicitly recommends `INACTIVE` for ordinary removal. `409` conflicts require a
+  deliberate latest-record reload and are never silently retried.
+- The route remains absent from ordinary-user navigation. The shared User session controls the
+  frontend experience, while Supplier Service's `ADMIN` JWT checks remain authoritative.
+
+## Shared-origin integration
+
+Production User and Supplier pages are presented through gateway port `8088`. Supplier assets use
+`/supplier-assets/**`, preventing collisions with User assets under `/user-assets/**`. The Supplier
+SPA may read the validated shared User session for navigation and bearer forwarding, but this is a
+user-experience aid only; designs must never imply that hiding an admin control replaces backend
+authorization.

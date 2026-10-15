@@ -1,26 +1,17 @@
 ---
 name: foc-verify-feature
-description: Run and report the applicable Friend on Campus build, test, lint, and smoke checks for a bounded feature.
+description: Run applicable FoC verification checks and report evidence and limitations.
 ---
 
 # FoC Verify Feature
 
-Read root/service guidance and `.github/workflows/ci.yml`, then run only checks
-that apply to the approved change. Report build, automated-test, static-analysis,
-packaging, and smoke outcomes separately. A skipped or unavailable check is a
-limitation, never a pass.
+Follow the [root reading path](../../../AGENTS.md). Use the approved test plan, owning service's
+documented commands and relevant CI jobs. Reuse current results for unchanged code.
 
-For Supplier backend code, API, or migration changes, run the Maven Wrapper
-verification lifecycle: `./mvnw --batch-mode --no-transfer-progress verify`
-(`.\\mvnw.cmd --batch-mode --no-transfer-progress verify` in PowerShell).
-For Supplier frontend changes, run `npm ci`, `npm run lint`, `npm run typecheck`,
-`npm test`, and `npm run build` from `supplier-service/frontend`. Use Docker
-Compose build/start and `/actuator/health` only for packaging, runtime
-configuration, or integration changes when Docker and required environment values
-are available.
+Run completion checks for affected code/API/migrations or frontend work. Use Compose build/start
+and health smoke checks for runtime/integration changes when required dependencies/configuration
+exist. Verify affected generated contracts against the running service.
 
-For an OpenAPI contract change, verify regenerated frontend types against the
-running service before reporting success. Return failures to
-`$foc-feature-implementation` or `$foc-ui-iteration`, rerun affected checks
-after repair, and do not suppress failures or commit/deploy without separate
-authorization.
+Report build, tests, static checks, packaging and smoke results as applicable. Missing scaffolds,
+dependencies, skipped checks and unverified cross-service flows are limitations, never passes.
+Return failures for repair and rerun affected checks; do not suppress failures.

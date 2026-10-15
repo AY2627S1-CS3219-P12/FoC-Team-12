@@ -1,7 +1,8 @@
 # Order Service
 
 Owned by XueTing. See [`AGENTS.md`](AGENTS.md) for the coding boundary and
-[`../TASK_SPLIT.md`](../TASK_SPLIT.md) for team responsibilities.
+[`../TASK_SPLIT.md`](../TASK_SPLIT.md) for team responsibilities. The D3 roadmap is
+[`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md).
 
 Spring Boot service (Java 17) that owns the order aggregate, its lifecycle, and
 the order database. Runs on port `8082`.
@@ -51,6 +52,23 @@ missing/out-of-order events.
 
 Event **publishing** is not yet wired (no broker in `compose.yaml`); this
 iteration persists to `PENDING_CREDIT` only.
+
+## Lifecycle
+
+| Current | Next | Actor/condition |
+| --- | --- | --- |
+| OPEN | ACCEPTED | Eligible courier, not the requester |
+| OPEN | CANCELLED | Requester |
+| OPEN | EXPIRED | Pickup deadline passed |
+| ACCEPTED | OPEN | Assigned courier withdraws before deadline |
+| ACCEPTED | EXPIRED | Assigned courier withdraws after deadline |
+| ACCEPTED | CANCELLED | Requester before pickup; compensate courier through Credit |
+| ACCEPTED | PICKED_UP | Assigned courier |
+| PICKED_UP | DELIVERED | Assigned courier |
+| DELIVERED | COMPLETED | Requester confirms receipt |
+
+COMPLETED, CANCELLED and EXPIRED are terminal. Cancellation is forbidden after pickup.
+The approved backlog governs unresolved boundary cases such as the exact deadline instant.
 
 ## Build and test
 

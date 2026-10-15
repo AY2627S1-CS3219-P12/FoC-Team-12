@@ -1,17 +1,16 @@
-import { useEffect, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import {
   useSupplierListQuery,
   useSupplierMetadataQuery,
 } from '../api/supplierQueries'
-import { Button, Field, SelectField } from '../components/DirectoryControls'
+import { Button, SelectField } from '../components/DirectoryControls'
+import { DebouncedSearchField } from '../components/DebouncedSearchField'
 import {
   StatePanel,
   SupplierCardSkeletons,
 } from '../components/DirectoryStates'
 import { Pagination } from '../components/Pagination'
 import { SupplierCard } from '../components/SupplierCard'
-import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import styles from './SupplierDirectoryPage.module.css'
 
 const PAGE_SIZE = 12
@@ -98,9 +97,12 @@ export function SupplierDirectoryPage() {
 
       <div aria-label="Filter campus locations" className={styles.filters}>
         <div className={styles.searchField}>
-          <SearchControl
+          <DebouncedSearchField
+            id="supplier-search"
             key={urlSearch}
-            onDebouncedChange={updateSearch}
+            label="Search locations"
+            onChange={updateSearch}
+            placeholder="Search by name, building, or directions"
             value={urlSearch}
           />
         </div>
@@ -201,34 +203,5 @@ export function SupplierDirectoryPage() {
         totalPages={totalPages}
       />
     </section>
-  )
-}
-
-function SearchControl({
-  value,
-  onDebouncedChange,
-}: {
-  value: string
-  onDebouncedChange: (value: string) => void
-}) {
-  const [inputValue, setInputValue] = useState(value)
-  const debouncedValue = useDebouncedValue(inputValue, 300)
-
-  useEffect(() => {
-    const normalized = debouncedValue.trim()
-    if (normalized !== value) onDebouncedChange(normalized)
-  }, [debouncedValue, onDebouncedChange, value])
-
-  return (
-    <Field id="supplier-search" label="Search locations">
-      <input
-        autoComplete="off"
-        id="supplier-search"
-        onChange={(event) => setInputValue(event.target.value)}
-        placeholder="Search by name, building, or directions"
-        type="search"
-        value={inputValue}
-      />
-    </Field>
   )
 }

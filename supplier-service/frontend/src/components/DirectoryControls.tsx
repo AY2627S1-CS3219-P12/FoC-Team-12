@@ -42,8 +42,8 @@ export function SelectField({
 
 interface ButtonProps {
   children: ReactNode
-  onClick: () => void
-  variant?: 'primary' | 'secondary'
+  onClick?: () => void
+  variant?: 'primary' | 'secondary' | 'danger'
   type?: 'button' | 'submit'
   disabled?: boolean
 }
@@ -57,7 +57,13 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={variant === 'primary' ? styles.primaryButton : styles.button}
+      className={
+        variant === 'primary'
+          ? styles.primaryButton
+          : variant === 'danger'
+            ? styles.dangerButton
+            : styles.button
+      }
       disabled={disabled}
       onClick={onClick}
       type={type}

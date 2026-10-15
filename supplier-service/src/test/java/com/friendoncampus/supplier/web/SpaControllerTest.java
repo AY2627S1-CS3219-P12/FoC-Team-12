@@ -26,6 +26,6 @@ class SpaControllerTest {
     void forwardsFrontendRoutesToTheSpa(String path) throws Exception {
         mockMvc.perform(get(path))
                 .andExpect(status().isOk())
-                .andExpect(forwardedUrl("/index.html"));
+                .andExpect(forwardedUrl("/supplier-assets/index.html"));
     }
 }

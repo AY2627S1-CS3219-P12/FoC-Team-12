@@ -1,0 +1,64 @@
+.backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--foc-space-16);
+  background: rgb(21 37 32 / 55%);
+}
+
+.dialog {
+  display: grid;
+  gap: var(--foc-space-16);
+  width: min(100%, 31rem);
+  padding: var(--foc-space-24);
+  border-radius: var(--foc-radius-12);
+  background: var(--foc-surface);
+  box-shadow: var(--foc-shadow);
+}
+
+.dialog h2,
+.dialog p {
+  margin: 0;
+}
+
+.dialog h2 {
+  font-size: var(--foc-text-heading);
+}
+
+.content {
+  display: grid;
+  gap: var(--foc-space-12);
+  color: var(--foc-muted);
+  line-height: 1.55;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--foc-space-12);
+}
+
+.cancel {
+  min-height: 2.75rem;
+  padding: 0 var(--foc-space-16);
+  border: 1px solid var(--foc-line);
+  border-radius: var(--foc-radius-8);
+  color: var(--foc-action);
+  background: var(--foc-surface);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (min-width: 32rem) {
+  .actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+}

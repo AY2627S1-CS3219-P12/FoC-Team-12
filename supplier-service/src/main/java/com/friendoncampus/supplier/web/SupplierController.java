@@ -34,6 +34,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
@@ -136,7 +137,8 @@ public class SupplierController {
     @Operation(
             operationId = "createSupplier",
             summary = "Create a supplier",
-            description = "Creates an active or inactive supplier. This mutation is temporarily unauthenticated and will later require ADMIN.")
+            description = "Creates an active or inactive supplier. Requires an ADMIN access token.",
+            security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @ApiResponse(
                     responseCode = "201",
@@ -151,7 +153,19 @@ public class SupplierController {
                     description = "Missing, malformed, or invalid supplier fields",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
-                            schema = @Schema(implementation = ApiErrorDocumentation.InvalidSupplierRequest.class)))
+                            schema = @Schema(implementation = ApiErrorDocumentation.InvalidSupplierRequest.class))),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Bearer token is missing or invalid",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Unauthorized.class))),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Authenticated user is not an administrator",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Forbidden.class)))
     })
     @PostMapping
     public ResponseEntity<SupplierResponse> createSupplier(
@@ -165,7 +179,8 @@ public class SupplierController {
     @Operation(
             operationId = "updateSupplier",
             summary = "Replace supplier details",
-            description = "Fully replaces editable details while preserving status, ID, and creation time. Use the latest version to prevent lost updates. This mutation will later require ADMIN.")
+            description = "Fully replaces editable details while preserving status, ID, and creation time. Use the latest version to prevent lost updates. Requires an ADMIN access token.",
+            security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
@@ -191,7 +206,19 @@ public class SupplierController {
                     description = "Requested version is stale",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
-                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierUpdateConflict.class)))
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierUpdateConflict.class))),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Bearer token is missing or invalid",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Unauthorized.class))),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Authenticated user is not an administrator",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Forbidden.class)))
     })
     @PutMapping("/{id}")
     public SupplierResponse updateSupplier(
@@ -204,7 +231,8 @@ public class SupplierController {
     @Operation(
             operationId = "changeSupplierStatus",
             summary = "Change supplier status",
-            description = "Activates or deactivates a supplier without resending its details. Use the latest version to prevent lost updates. This mutation will later require ADMIN.")
+            description = "Activates or deactivates a supplier without resending its details. Use the latest version to prevent lost updates. Requires an ADMIN access token.",
+            security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
@@ -230,7 +258,19 @@ public class SupplierController {
                     description = "Requested version is stale",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
-                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierUpdateConflict.class)))
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierUpdateConflict.class))),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Bearer token is missing or invalid",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Unauthorized.class))),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Authenticated user is not an administrator",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Forbidden.class)))
     })
     @PatchMapping("/{id}/status")
     public SupplierResponse changeSupplierStatus(
@@ -244,7 +284,8 @@ public class SupplierController {
     @Operation(
             operationId = "deleteSupplier",
             summary = "Permanently delete a supplier",
-            description = "Hard-deletes an active or inactive supplier. Prefer INACTIVE for normal removal from listings. The version prevents deletion of unseen changes. This mutation will later require ADMIN.")
+            description = "Hard-deletes an active or inactive supplier. Prefer INACTIVE for normal removal from listings. The version prevents deletion of unseen changes. Requires an ADMIN access token.",
+            security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Supplier permanently deleted"),
             @ApiResponse(
@@ -264,7 +305,19 @@ public class SupplierController {
                     description = "Requested version is stale",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
-                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierUpdateConflict.class)))
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierUpdateConflict.class))),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Bearer token is missing or invalid",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Unauthorized.class))),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Authenticated user is not an administrator",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.Forbidden.class)))
     })
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteSupplier(

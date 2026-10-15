@@ -1,18 +1,30 @@
-# Credit Service agent boundary
+# Credit Service
 
-Owner: Eldridge.
+Owner: Eldridge. Own accounts, reservations, immutable ledger records, balance arithmetic,
+compensation rounding and credit-operation authorization; also Chat/Translation as separate
+N2H iterations. User owns activation/identity and Order owns lifecycle decisions.
 
-## In scope
+## Invariants
 
-- Credit accounts, initial 10-credit allocation, reservations, releases, transfers, immutable
-  transaction history, compensation, authorization, nonnegative balances, and idempotency.
-- Chat and Translation, including errand chat and administrator case chat.
-- Credit/Chat databases, migrations, tests, and API/event contracts.
+- Allocate 10 available credits at most once per activated User UUID, including retries/replays.
+- Reserve only positive whole-credit rewards covered by available balance; link each hold to its
+  order. Keep account, reservation and ledger changes atomic and available balances non-negative.
+- Reward increases reserve the difference only if affordable; decreases release the difference.
+  Reject insufficient-fund adjustments without changing the existing reservation.
+- Release the full reservation on OPEN-order expiry or cancellation without compensation.
+  Completion transfers the full reservation to the assigned courier.
+- On compensation-required requester cancellation, transfer `ceil(reserved * 20 / 100)` to the
+  courier and release the remainder to the requester.
+- Make allocation, reservation, adjustment, release and settlement idempotent with durable
+  operation identities. Preserve acknowledged transactions across recoverable restarts.
+- Only approved platform operations/administrators mutate credits; reject direct user-to-user
+  transfers. Consume approved User/Order facts without deciding Order state.
 
-## Out of scope
+## Implementation
 
-Do not implement user authentication, supplier data, Order transitions, notifications, or
-logging. Consume User/Order facts through published contracts and never access their databases.
+Use Java 17, Spring Boot, Maven Wrapper, PostgreSQL, JPA transactions/locking, Flyway,
+validation, Actuator, OpenAPI and User-contract RS256/JWKS validation. Never edit applied
+migrations. Resolve Chat privacy/retention independently from ledger work.
 
-Do not guess the reservation timing, reward transfer, 20-percent compensation basis/rounding,
-or Chat privacy/retention rules when the backlog does not define them.
+Read [README](README.md) architecture/verification sections as needed and the relevant
+[checklist](IMPLEMENTATION_CHECKLIST.md) item when scoping D3 work.

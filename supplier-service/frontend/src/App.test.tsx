@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -7,6 +7,9 @@ import type { InitialEntry } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { supplierApi } from './api/client'
+import { navigateTo } from './navigation'
+
+vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 
 const supplierId = 'ca9bd61f-93da-4500-9e9d-48de1bea52fa'
 const secondSupplierId = '184a5d15-0714-47ad-9ee9-524bf84f361c'
@@ -132,6 +135,8 @@ function renderRoute(route: InitialEntry, extra?: ReactNode) {
 
 describe('Public supplier directory', () => {
   afterEach(() => {
+    sessionStorage.clear()
+    vi.clearAllMocks()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     vi.useRealTimers()
@@ -302,6 +307,29 @@ describe('Public supplier details', () => {
     vi.unstubAllGlobals()
   })
 
+  it('keeps the Requester and Courier selector available on supplier details', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'requester.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Requester',
+        role: 'REQUESTER',
+        availableRoles: ['REQUESTER'],
+      }),
+    )
+    mockApi()
+    renderRoute(`/suppliers/${supplierId}`)
+
+    expect(
+      await screen.findByRole('heading', { name: "Anna's x Soup Union" }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it('loads an active supplier image over the branded placeholder', async () => {
     mockApi()
     renderRoute(`/suppliers/${supplierId}`)
@@ -427,14 +455,261 @@ describe('Public supplier details', () => {
 })
 
 describe('Other frontend routes', () => {
-  it('keeps the unlinked admin placeholder', () => {
-    renderRoute('/admin/suppliers')
+  it('shows an administrator the public experience in Requester mode', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'requester.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'REQUESTER',
+        availableRoles: ['REQUESTER', 'ADMIN'],
+      }),
+    )
+    mockApi()
+    renderRoute('/suppliers')
+
+    expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute('aria-pressed', 'false')
     expect(
-      screen.getByRole('heading', { name: 'Supplier administration' }),
+      screen.queryByRole('link', { name: 'Add supplier' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('exchanges an eligible administrator session before opening Admin mode', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'requester.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'REQUESTER',
+        availableRoles: ['REQUESTER', 'ADMIN'],
+      }),
+    )
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
+      accessToken: 'admin.jwt',
+      tokenType: 'Bearer',
+      expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+      username: 'Admin',
+      role: 'ADMIN',
+      availableRoles: ['REQUESTER', 'ADMIN'],
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    mockApi()
+    const user = userEvent.setup()
+    renderRoute('/suppliers')
+
+    await screen.findByText("Anna's x Soup Union")
+    await user.click(screen.getByLabelText('Open account menu for Admin'))
+    await user.click(screen.getByRole('button', { name: 'Switch to Admin' }))
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/users/me/session-role',
+        expect.objectContaining({ method: 'PATCH' }),
+      )
+    })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ role: 'ADMIN' })
+    expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers')
+    expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({
+      accessToken: 'admin.jwt',
+      role: 'ADMIN',
+    })
+  })
+
+  it('keeps administrator landing separate from ordinary supplier routes', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    mockApi()
+    renderRoute('/admin/suppliers')
+    expect(await screen.findByRole('heading', { name: 'Campus locations' })).toBeInTheDocument()
+  })
+
+  it('does not allow a Requester token to render a direct Admin route', () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'requester.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'REQUESTER',
+        availableRoles: ['REQUESTER', 'ADMIN'],
+      }),
+    )
+    mockApi()
+    renderRoute('/admin/suppliers')
+
+    expect(
+      screen.getByRole('heading', { name: 'You cannot manage suppliers' }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('link', { name: 'Admin' }),
+      screen.queryByRole('link', { name: 'Add supplier' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('redirects public routes to the Admin landing while Admin mode is active', () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'admin')
+    mockApi()
+    renderRoute('/suppliers')
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/suppliers')
+  })
+
+  it('keeps developer authorization detail out of the administrator page', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'admin')
+    mockApi()
+    renderRoute('/admin/suppliers')
+
+    expect(await screen.findByRole('heading', { name: 'Campus locations' })).toBeInTheDocument()
+    expect(screen.queryByText(/Supplier Service verifies your signed User Service token/)).not.toBeInTheDocument()
+  })
+
+  it('clears the selected mode when an administrator signs out', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'user')
+    mockApi()
+    const user = userEvent.setup()
+    renderRoute('/suppliers')
+
+    await user.click(screen.getByLabelText('Open account menu for Admin'))
+    await user.click(screen.getByRole('button', { name: 'Sign out' }))
+
+    expect(sessionStorage.getItem('foc.user-session')).toBeNull()
+    expect(sessionStorage.getItem('foc.ui-mode')).toBeNull()
+    expect(navigateTo).toHaveBeenCalledWith('/')
+  })
+
+  it('clears a saved mode when the shared session is invalid', () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'expired.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2020-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'admin')
+    mockApi()
+    renderRoute('/suppliers')
+
+    expect(sessionStorage.getItem('foc.user-session')).toBeNull()
+    expect(sessionStorage.getItem('foc.ui-mode')).toBeNull()
+    expect(
+      screen.queryByRole('switch', { name: 'Admin mode' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('sends unauthenticated administrators to login without rendering CRUD', () => {
+    mockApi()
+    renderRoute('/admin/suppliers')
+    expect(
+      screen.getByRole('heading', { name: 'Taking you to sign in…' }),
+    ).toBeInTheDocument()
+    expect(navigateTo).toHaveBeenCalledWith('/?returnTo=%2Fadmin%2Fsuppliers')
+    expect(
+      screen.queryByRole('link', { name: 'Add supplier' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows access denied to signed-in non-admin users', () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'user.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Alice',
+        role: 'USER',
+      }),
+    )
+    renderRoute('/admin/suppliers')
+    expect(
+      screen.getByRole('heading', { name: 'You cannot manage suppliers' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Add supplier' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('switch', { name: 'Admin mode' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows access denied when Supplier Service rejects an admin session', async () => {
+    sessionStorage.setItem(
+      'foc.user-session',
+      JSON.stringify({
+        accessToken: 'mismatched.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+      }),
+    )
+    sessionStorage.setItem('foc.ui-mode', 'admin')
+    mockApi()
+    renderRoute('/admin/suppliers')
+    window.dispatchEvent(new Event('foc:access-denied'))
+    expect(
+      await screen.findByRole('heading', {
+        name: 'You cannot manage suppliers',
+      }),
+    ).toBeInTheDocument()
+    expect(sessionStorage.getItem('foc.user-session')).not.toBeNull()
   })
 
   it('handles unknown routes', () => {

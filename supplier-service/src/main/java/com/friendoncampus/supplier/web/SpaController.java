@@ -14,6 +14,6 @@ public class SpaController {
             "/admin/suppliers/{*path}"
     })
     public String forwardToFrontend() {
-        return "forward:/index.html";
+        return "forward:/supplier-assets/index.html";
     }
 }

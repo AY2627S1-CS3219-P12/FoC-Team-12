@@ -1,20 +1,14 @@
 ---
 name: foc-quality-review
-description: Review changed Friend on Campus code for concrete correctness, service boundaries, contract, and maintainability issues.
+description: Review a FoC change for concrete correctness, boundary and contract issues.
 ---
 
 # FoC Quality Review
 
-Review changed files and nearby architecture against root/service guidance and
-the approved feature brief. Report concrete findings by severity, path/location,
-impact, and practical resolution; do not invent project standards.
+Review the diff and relevant surrounding code against the approved brief and applicable
+instructions from the [root reading path](../../../AGENTS.md). Check ownership/contracts,
+service invariants, affected API/documentation consistency and selected test coverage.
 
-Check service ownership and contract boundaries first. For Supplier backend
-changes, check layering, validation/error behavior, optimistic locking, API/README
-consistency, and migration immutability. For Supplier frontend changes, check
-typed-client/TanStack Query use, token/component reuse, responsiveness,
-accessibility, and absence of client-side authorization claims.
-
-Return confirmed high-risk issues to `$foc-feature-implementation` or
-`$foc-ui-iteration`, then review the repair. A clean review is evidence-based,
-not a guarantee. Review does not authorize scope expansion or commits.
+Report actionable findings with severity, path/line, impact and practical resolution; do not
+invent standards or expand scope. Return confirmed high-risk issues to implementation/UI, then
+review the repair. State remaining limitations when no findings are confirmed.
