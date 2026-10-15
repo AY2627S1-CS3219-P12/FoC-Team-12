@@ -73,6 +73,29 @@ public class CreditReservation {
         status = ReservationStatus.RELEASED;
     }
 
+    public void settle(UUID courierId) {
+        requireActive();
+        requireDistinctCourier(courierId);
+        this.courierId = courierId;
+        status = ReservationStatus.SETTLED;
+    }
+
+    public void compensate(UUID courierId) {
+        requireActive();
+        requireDistinctCourier(courierId);
+        this.courierId = courierId;
+        status = ReservationStatus.COMPENSATED;
+    }
+
+    private void requireDistinctCourier(UUID courierId) {
+        if (courierId == null) {
+            throw new IllegalArgumentException("Courier identifier is required");
+        }
+        if (requesterId.equals(courierId)) {
+            throw new IllegalArgumentException("Requester and courier must be different users");
+        }
+    }
+
     private void requireActive() {
         if (status != ReservationStatus.ACTIVE) {
             throw new IllegalStateException("Reservation is not active");

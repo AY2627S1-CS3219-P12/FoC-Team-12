@@ -78,6 +78,19 @@ public class CreditAccount {
         availableBalance += amount;
     }
 
+    public void debitReserved(int amount) {
+        requirePositive(amount);
+        if (reservedBalance < amount) {
+            throw new IllegalStateException("Reserved balance is lower than the debit amount");
+        }
+        reservedBalance -= amount;
+    }
+
+    public void creditAvailable(int amount) {
+        requirePositive(amount);
+        availableBalance = Math.addExact(availableBalance, amount);
+    }
+
     private static void requirePositive(int amount) {
         if (amount <= 0) {
             throw new IllegalArgumentException("Credit amount must be positive");

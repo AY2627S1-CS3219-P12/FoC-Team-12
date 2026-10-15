@@ -60,6 +60,15 @@ difference when affordable; decreases release the difference. Cancellation or ex
 entire active reservation. Replayed operation UUIDs return the persisted outcome, while reuse with
 different inputs is rejected as an idempotency conflict.
 
+## Settlement and compensation
+
+An active reservation is settled atomically by removing the full reserved amount from the
+requester and crediting it to the assigned courier. A compensation-required cancellation instead
+transfers `ceil(reserved * 20 / 100)` and releases the remainder to the requester. The reservation,
+both account balances, durable operation and two-sided ledger entries commit in one transaction.
+Account rows are locked in UUID order to reduce deadlock risk; retries are idempotent and a settled
+reservation cannot be settled through a different outcome.
+
 ## Verification
 
 From this directory:
