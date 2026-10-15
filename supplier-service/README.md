@@ -58,6 +58,10 @@ Requester mode exchanges the token again and opens the public directory. The ses
 sign-out, expiry, or malformed storage. Supplier Service still requires an effective `ADMIN` JWT for
 every administrative API request; frontend navigation never grants authority.
 
+The shared header links back to the main Profile experience and exposes Locations and Credits as parts
+of the same gateway-hosted application. Moving between them preserves the same validated browser
+session; the services remain independently deployed and continue to authorize their own APIs.
+
 Install dependencies and run frontend checks from `supplier-service/frontend`:
 
 ```sh

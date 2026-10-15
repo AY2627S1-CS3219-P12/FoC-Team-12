@@ -13,22 +13,26 @@ issue tokens, or replace downstream authorization.
 | `GET /suppliers` and `GET /suppliers/**` | Supplier Service | unchanged |
 | `GET /admin/suppliers` and `GET /admin/suppliers/**` | Supplier Service | unchanged |
 | `GET /supplier-assets/**` | Supplier Service | unchanged |
+| `GET /credits` and `GET /credits/**` | Credit Service | unchanged |
+| `GET /credit-assets/**` | Credit Service | unchanged |
 | `/api/users` and `/api/users/**` | User Service | unchanged |
 | `/api/suppliers` and `/api/suppliers/**` | Supplier Service | unchanged |
 | `/api/admin/suppliers` and `/api/admin/suppliers/**` | Supplier Service | unchanged |
+| `/api/credits` and `/api/credits/**` | Credit Service | unchanged |
 | `GET /.well-known/jwks.json` | User Service | unchanged |
 | `GET /docs/user/openapi.json` | User Service | `/v3/api-docs` |
 | `GET /docs/user/openapi.yaml` | User Service | Converted from `/v3/api-docs` |
 | `GET /docs/supplier/openapi.json` | Supplier Service | `/v3/api-docs` |
 | `GET /docs/supplier/openapi.yaml` | Supplier Service | `/v3/api-docs.yaml` |
+| `GET /docs/credit/openapi.json` | Credit Service | `/v3/api-docs` |
+| `GET /docs/credit/openapi.yaml` | Credit Service | `/v3/api-docs.yaml` |
 
 The UI routes are explicit; the gateway has no catch-all route. Unrecognised paths return `404`.
-Order and Credit routes will be added only after those service
-owners publish their ports and API paths.
+Order routes will be added only after its service owner publishes its port and API paths.
 
 ## Run locally
 
-Java 17 is required. Start User and Supplier services first, then run:
+Java 17 is required. Start User, Supplier and Credit services first, then run:
 
 ```sh
 ./mvnw spring-boot:run
@@ -39,6 +43,7 @@ Local defaults are:
 ```text
 USER_SERVICE_URL=http://localhost:8081
 SUPPLIER_SERVICE_URL=http://localhost:8080
+CREDIT_SERVICE_URL=http://localhost:8083
 ```
 
 Override either environment variable when the downstream service uses another address.
@@ -50,13 +55,13 @@ including `JWT_PRIVATE_KEY`, and then run:
 docker compose up -d --build gateway
 ```
 
-Compose routes internally through `user-service:8081` and `supplier-service:8080`. Open
-`http://localhost:8088` for the packaged login and Profile experience, then use its Supplier links.
+Compose routes internally through each service name. Open `http://localhost:8088` to sign in, then
+open `http://localhost:8088/credits` for the packaged Credit dashboard.
 The SPAs share the validated `sessionStorage["foc.user-session"]` value while production assets
-remain collision-free under `/user-assets/**` and `/supplier-assets/**`.
+remain collision-free under `/user-assets/**`, `/supplier-assets/**` and `/credit-assets/**`.
 
 Use the shared `8088` origin by default for frontend clients, Postman, and cross-service testing.
-Direct ports `8080` and `8081` remain available only for service-specific development and
+Direct ports `8080`, `8081` and `8083` remain available only for service-specific development and
 troubleshooting during this phase.
 
 ## Documentation and health
@@ -66,9 +71,11 @@ troubleshooting during this phase.
 - User OpenAPI YAML: `http://localhost:8088/docs/user/openapi.yaml`
 - Supplier OpenAPI JSON: `http://localhost:8088/docs/supplier/openapi.json`
 - Supplier OpenAPI YAML: `http://localhost:8088/docs/supplier/openapi.yaml`
+- Credit OpenAPI JSON: `http://localhost:8088/docs/credit/openapi.json`
+- Credit OpenAPI YAML: `http://localhost:8088/docs/credit/openapi.yaml`
 - Gateway health: `http://localhost:8088/actuator/health`
 
-The Swagger UI selector switches between the User and Supplier contracts. Because the current
+The Swagger UI selector switches between the User, Supplier and Credit contracts. Because the current
 specifications do not declare a separate server URL, **Try it out** sends requests through the
 gateway origin. Direct service Swagger remains available for debugging until UI/gateway
 integration is completed.
@@ -81,8 +88,8 @@ improve navigation only and are not a security boundary.
 
 The gateway forwards bearer tokens but does not validate them. User Service remains the token
 issuer, and each backend remains responsible for validating JWTs and enforcing its own roles.
-Supplier Service therefore continues to return `401` for invalid or missing tokens and `403` for
-authenticated users without `ADMIN`.
+Supplier and Credit services therefore validate the User Service signature, issuer and audience
+before applying their own endpoint authorization.
 
 ## Tests
 

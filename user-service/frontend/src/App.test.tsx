@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest'
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { App } from './App'
@@ -15,7 +15,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.clearAllMocks()
 })
-
 const fillLogin = async () => {
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
@@ -33,6 +32,7 @@ test('signs in successfully and stores the browser session', async () => {
       userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
       }),
     })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ availableBalance: 10 }) })
     .mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -46,6 +46,7 @@ test('signs in successfully and stores the browser session', async () => {
   await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
 
   expect(fetch).toHaveBeenCalledWith('/api/users/login', expect.objectContaining({ method: 'POST' }))
+  expect(fetch).toHaveBeenCalledWith('/api/credits/me', expect.objectContaining({ method: 'POST' }))
   await screen.findByRole('heading', { name: 'Profile' })
   expect(await screen.findByText('Persisted Alice')).toBeInTheDocument()
   expect(fetch).toHaveBeenLastCalledWith('/api/users/me', expect.objectContaining({ method: 'GET' }))
@@ -58,6 +59,8 @@ test('signs in successfully and stores the browser session', async () => {
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({ accessToken: 'signed.jwt' })
   expect(sessionStorage.getItem('foc.login-failures:alice@u.nus.edu')).toBeNull()
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
+  expect(screen.getByRole('link', { name: /View my credits/ })).toHaveAttribute('href', '/credits')
+  expect(screen.getByRole('navigation', { name: 'Main navigation' })).toHaveTextContent('Credits')
   expect(screen.queryByRole('link', { name: /Manage suppliers/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('switch', { name: 'Admin mode' })).not.toBeInTheDocument()
 })
@@ -69,6 +72,7 @@ test('keeps Profile open after a public Supplier return destination was requeste
       accessToken: 'signed.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
       userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
     }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ availableBalance: 10 }) })
     .mockResolvedValueOnce({ ok: true, json: async () => ({
       userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
       role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
@@ -81,6 +85,23 @@ test('keeps Profile open after a public Supplier return destination was requeste
   expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
   expect(navigateTo).not.toHaveBeenCalled()
+})
+
+test('activates credits and returns to Credits after authentication was requested there', async () => {
+  window.history.replaceState(null, '', '/?returnTo=%2Fcredits')
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      accessToken: 'signed.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+    }) })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ availableBalance: 10 }) }))
+  render(<App />)
+  const user = await fillLogin()
+
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(fetch).toHaveBeenCalledWith('/api/credits/me', expect.objectContaining({ method: 'POST' }))
+  expect(navigateTo).toHaveBeenCalledWith('/credits')
 })
 
 test('uses the Requester and Courier selector to replace a session token', async () => {
@@ -142,10 +163,19 @@ test('lets an administrator select Admin mode without leaving Profile', async ()
   render(<App />)
   const user = userEvent.setup()
 
-  await user.click(await screen.findByLabelText('Open account menu for Admin'))
+  const accountMenuButton = await screen.findByLabelText('Open account menu for Admin')
+  const accountMenu = accountMenuButton.closest('details')
+  await user.click(accountMenuButton)
+  expect(accountMenu).toHaveAttribute('open')
   await user.click(screen.getByRole('button', { name: 'Switch to Admin' }))
 
+  await waitFor(() => expect(accountMenu).not.toHaveAttribute('open'))
+
   expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+  expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
+    .getByRole('link', { name: 'Suppliers' })).toHaveAttribute('href', '/admin/suppliers')
+  expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute('href', '/?view=users')
+  expect(screen.getByRole('button', { name: 'Switch to User' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
   const accountAccess = screen.getByText('Account access').parentElement
   expect(accountAccess).not.toBeNull()
@@ -165,9 +195,11 @@ test('clears malformed and expired sessions instead of restoring Profile', () =>
   expect(screen.getByRole('link', { name: 'Browse suppliers without signing in' })).toHaveAttribute('href', '/suppliers')
 })
 
-test('accepts only relative Supplier return destinations', () => {
+test('accepts only approved relative service return destinations', () => {
   expect(safeReturnTo('?returnTo=%2Fsuppliers%3Fsearch%3Dcoffee')).toBe('/suppliers?search=coffee')
   expect(safeReturnTo('?returnTo=%2Fadmin%2Fsuppliers%2Fnew')).toBe('/admin/suppliers/new')
+  expect(safeReturnTo('?returnTo=%2Fcredits')).toBe('/credits')
+  expect(safeReturnTo('?returnTo=%2Fcredits%2Fhistory%3Fpage%3D2')).toBe('/credits/history?page=2')
   expect(safeReturnTo('?returnTo=https%3A%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2Fapi%2Fusers')).toBeNull()
