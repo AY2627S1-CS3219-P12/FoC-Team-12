@@ -69,6 +69,15 @@ both account balances, durable operation and two-sided ledger entries commit in 
 Account rows are locked in UUID order to reduce deadlock risk; retries are idempotent and a settled
 reservation cannot be settled through a different outcome.
 
+## User query API
+
+An authenticated user can call `GET /api/credits/me` for their balance and
+`GET /api/credits/me/transactions?page=0&size=20` for immutable ledger history. The account UUID is
+taken only from the validated User Service JWT subject, so callers cannot select another user's
+account. All roles issued by the agreed User JWT contract may view their own data. Mutation routes
+remain closed until service-caller authentication and the User/Order integration contracts are
+approved.
+
 ## Verification
 
 From this directory:

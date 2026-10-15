@@ -1,6 +1,7 @@
 package com.friendoncampus.credit.config;
 
 import java.util.Set;
+import java.util.UUID;
 
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2Error;
@@ -25,11 +26,20 @@ public final class JwtContractValidator implements OAuth2TokenValidator<Jwt> {
                     ? OAuth2TokenValidatorResult.success()
                     : failure("Missing or unsupported role claim");
         };
+        OAuth2TokenValidator<Jwt> subjectValidator = jwt -> {
+            try {
+                UUID.fromString(jwt.getSubject());
+                return OAuth2TokenValidatorResult.success();
+            } catch (IllegalArgumentException | NullPointerException exception) {
+                return failure("Token subject must be a User UUID");
+            }
+        };
 
         delegate = new DelegatingOAuth2TokenValidator<>(
                 JwtValidators.createDefaultWithIssuer(properties.issuer()),
                 audienceValidator,
-                roleValidator);
+                roleValidator,
+                subjectValidator);
     }
 
     @Override
