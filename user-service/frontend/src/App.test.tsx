@@ -15,7 +15,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.clearAllMocks()
 })
-
 const fillLogin = async () => {
   const user = userEvent.setup()
   await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
@@ -58,6 +57,8 @@ test('signs in successfully and stores the browser session', async () => {
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({ accessToken: 'signed.jwt' })
   expect(sessionStorage.getItem('foc.login-failures:alice@u.nus.edu')).toBeNull()
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
+  expect(screen.getByRole('link', { name: /View my credits/ })).toHaveAttribute('href', '/credits')
+  expect(screen.getByRole('navigation', { name: 'Main navigation' })).toHaveTextContent('Credits')
   expect(screen.queryByRole('link', { name: /Manage suppliers/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('switch', { name: 'Admin mode' })).not.toBeInTheDocument()
 })
@@ -81,6 +82,20 @@ test('keeps Profile open after a public Supplier return destination was requeste
   expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
   expect(navigateTo).not.toHaveBeenCalled()
+})
+
+test('returns to Credits after authentication was requested by the Credit page', async () => {
+  window.history.replaceState(null, '', '/?returnTo=%2Fcredits')
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({
+    accessToken: 'signed.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+    userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role: 'USER',
+  }) }))
+  render(<App />)
+  const user = await fillLogin()
+
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+
+  expect(navigateTo).toHaveBeenCalledWith('/credits')
 })
 
 test('uses the Requester and Courier selector to replace a session token', async () => {
@@ -165,9 +180,11 @@ test('clears malformed and expired sessions instead of restoring Profile', () =>
   expect(screen.getByRole('link', { name: 'Browse suppliers without signing in' })).toHaveAttribute('href', '/suppliers')
 })
 
-test('accepts only relative Supplier return destinations', () => {
+test('accepts only approved relative service return destinations', () => {
   expect(safeReturnTo('?returnTo=%2Fsuppliers%3Fsearch%3Dcoffee')).toBe('/suppliers?search=coffee')
   expect(safeReturnTo('?returnTo=%2Fadmin%2Fsuppliers%2Fnew')).toBe('/admin/suppliers/new')
+  expect(safeReturnTo('?returnTo=%2Fcredits')).toBe('/credits')
+  expect(safeReturnTo('?returnTo=%2Fcredits%2Fhistory%3Fpage%3D2')).toBe('/credits/history?page=2')
   expect(safeReturnTo('?returnTo=https%3A%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2Fapi%2Fusers')).toBeNull()

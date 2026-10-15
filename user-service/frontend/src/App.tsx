@@ -4,12 +4,14 @@ import { ApiError, api, type UserProfile } from './api/client'
 import {
   clearSession,
   readSession,
+  safeReturnTo,
   saveSession,
   type AuthSession,
   type WorkspaceRole,
 } from './auth/session'
 import { OtpInput } from './OtpInput'
 import { AdminUserManagement } from './AdminUserManagement'
+import { navigateTo } from './navigation'
 
 type View = 'login' | 'register' | 'email-verification' | 'reset-request' | 'reset-verification' | 'reset-confirmation' | 'reset-complete'
 type State = 'idle' | 'loading' | 'success' | 'error'
@@ -42,7 +44,6 @@ function PasswordInput({
     </button>
   </span>
 }
-
 export function App() {
   const [view, setView] = useState<View>('login')
   const [session, setSession] = useState<AuthSession | null>(() => readSession())
@@ -312,6 +313,10 @@ export function App() {
       setLoginPassword('')
       setSession(saveSession(nextSession))
       setLoginState('success')
+      const destination = safeReturnTo()
+      if (destination && (destination === '/credits' || destination.startsWith('/credits/'))) {
+        navigateTo(destination)
+      }
     } catch (error) {
       if (error instanceof ApiError && error.code === 'EMAIL_VERIFICATION_REQUIRED') {
         clearLoginFailures(loginEmail)
@@ -670,7 +675,11 @@ export function App() {
     return <div className="profile-shell">
       <header className="profile-app-header">
         <div className="profile-app-header-content">
-          <span className="profile-brand">Friend on Campus</span>
+          <a className="profile-brand" href="/">Friend on Campus</a>
+          <nav className="profile-service-nav" aria-label="Main navigation">
+            <a href="/suppliers">Locations</a>
+            <a href="/credits">Credits</a>
+          </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">
             {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">
               <span className="workspace-selector-label">Acting as</span>
@@ -722,6 +731,10 @@ export function App() {
           <strong>Manage users</strong>
           <span>Search accounts, grant or remove Admin access, and manage account status.</span>
         </a>}
+        <a className="service-card" href="/credits">
+          <strong>View my credits</strong>
+          <span>Check your available balance, reserved credits, and transaction history.</span>
+        </a>
       </nav>
       {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
       {profileMessage && <p role="alert" className="error">{profileMessage}</p>}

@@ -37,6 +37,31 @@
   font-weight: 600;
 }
 
+.serviceNav {
+  display: flex;
+  align-items: center;
+  gap: var(--foc-space-16);
+  margin-right: auto;
+}
+
+.serviceNav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  color: var(--foc-muted);
+  font-size: var(--foc-text-small);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.serviceNav a:hover,
+.serviceNav a:focus-visible,
+.serviceNav a[aria-current='page'] {
+  color: var(--foc-action);
+  text-decoration: underline;
+  text-underline-offset: 0.35rem;
+}
+
 .actions {
   display: flex;
   align-items: center;
@@ -220,6 +245,28 @@
 }
 
 @media (max-width: 35rem) {
+  .brand span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .serviceNav {
+    gap: var(--foc-space-8);
+  }
+  .serviceNav a:first-child {
+    display: none;
+  }
+  .accountName {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
   .userMenu,
   .userMenu summary {
     max-width: 7.25rem;

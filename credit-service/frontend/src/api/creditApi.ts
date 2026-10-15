@@ -1,4 +1,4 @@
-import { clearSession, readSession } from '../auth/session'
+import { expireSession, readSession } from '../auth/session'
 
 export type CreditBalance = {
   userId: string
@@ -57,7 +57,7 @@ async function authenticatedGet<T>(path: string): Promise<T> {
       Authorization: `${session.tokenType} ${session.accessToken}`,
     },
   })
-  if (response.status === 401) clearSession()
+  if (response.status === 401) expireSession()
   if (!response.ok) {
     let detail = 'Unable to load credit information'
     try {

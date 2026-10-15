@@ -88,6 +88,10 @@ It presents available, reserved and total balances plus paginated immutable ledg
 out, loading, pending-account, expired-session, empty-history and unavailable-service states are
 handled explicitly.
 
+Authenticated users reach Credits from the main Profile service card or the shared Locations/Credits
+navigation. The FoC brand returns to Profile, and a guest sent to login is returned to `/credits` after
+successful authentication.
+
 Frontend development runs on port `5175` and proxies `/api` to the Credit Service:
 
 ```sh

@@ -117,6 +117,9 @@ describe('Credit dashboard', () => {
       await screen.findByRole('heading', { name: /4 available/i }),
     ).toBeInTheDocument()
     expect(
+      screen.getByRole('link', { name: 'Friend on Campus' }),
+    ).toHaveAttribute('href', '/')
+    expect(
       screen.getByLabelText('4 of 10 credits available'),
     ).toBeInTheDocument()
     expect(screen.getByText('Reserved for an errand')).toBeInTheDocument()
@@ -147,6 +150,49 @@ describe('Credit dashboard', () => {
       )
     })
     expect(await screen.findByText('Page 2 of 2')).toBeInTheDocument()
+  })
+
+  it('changes the active workspace through the shared User Service session', async () => {
+    signedIn()
+    const creditApi = mockSuccessfulApi()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/users/me/session-role') {
+        return response({
+          accessToken: 'courier-token',
+          tokenType: 'Bearer',
+          expiresAt: new Date(Date.now() + 300_000).toISOString(),
+          userId: balance.userId,
+          username: 'alex',
+          role: 'COURIER',
+          availableRoles: ['REQUESTER', 'COURIER'],
+        })
+      }
+      return creditApi(input)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(await screen.findByRole('button', { name: 'Courier' }))
+
+    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByText('courier')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/users/me/session-role',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ role: 'COURIER' }),
+      }),
+    )
+    expect(
+      JSON.parse(sessionStorage.getItem(sessionKey) ?? '{}'),
+    ).toMatchObject({
+      accessToken: 'courier-token',
+      role: 'COURIER',
+    })
   })
 
   it('shows a recoverable pending-account state for a 404', async () => {
@@ -182,6 +228,7 @@ describe('Credit dashboard', () => {
     expect(
       await screen.findByRole('heading', { name: 'Please sign in again' }),
     ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
     expect(sessionStorage.getItem(sessionKey)).toBeNull()
   })
 })

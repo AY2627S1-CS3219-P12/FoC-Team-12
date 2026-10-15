@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CreditApiError, getBalance, getTransactions } from './api/creditApi'
-import { readSession } from './auth/session'
+import { readSession, sessionChangedEvent } from './auth/session'
 import { BalanceOverview } from './components/BalanceOverview'
 import { CreditShell } from './components/CreditShell'
 import { TransactionHistory } from './components/TransactionHistory'
@@ -50,8 +50,13 @@ function MessageState({
 }
 
 export function App() {
-  const [session] = useState(readSession)
+  const [session, setSession] = useState(readSession)
   const [page, setPage] = useState(0)
+  useEffect(() => {
+    const refreshSession = () => setSession(readSession())
+    window.addEventListener(sessionChangedEvent, refreshSession)
+    return () => window.removeEventListener(sessionChangedEvent, refreshSession)
+  }, [])
   const balance = useQuery({
     queryKey: ['credit-balance'],
     queryFn: getBalance,
