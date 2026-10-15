@@ -42,6 +42,15 @@ Only initial allocation increases the closed economy; reserve, release, settleme
 compensation move existing credits. User and Order UUIDs are cross-service identifiers rather than
 foreign keys to another service's database.
 
+## Initial allocation
+
+The configured team policy grants 10 credits once per activated User UUID. The transport-neutral
+`InitialCreditAllocationService` accepts a durable operation UUID, creates the account if needed,
+locks it, records the allocation operation and writes an immutable ledger entry in one transaction.
+Replaying the same operation returns the existing balance; a different operation for an already
+allocated user records `ALREADY_ALLOCATED` without increasing the economy. User activation event
+consumption remains pending the User-owned contract and broker integration.
+
 ## Verification
 
 From this directory:

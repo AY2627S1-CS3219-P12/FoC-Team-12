@@ -2,6 +2,12 @@ package com.friendoncampus.credit;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import com.friendoncampus.credit.repository.CreditAccountRepository;
+import com.friendoncampus.credit.repository.CreditLedgerEntryRepository;
+import com.friendoncampus.credit.repository.CreditOperationRepository;
+import com.friendoncampus.credit.repository.CreditReservationRepository;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -10,6 +16,11 @@ import org.springframework.boot.test.context.SpringBootTest;
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
 })
 class CreditServiceApplicationTests {
+
+    @MockitoBean CreditAccountRepository accounts;
+    @MockitoBean CreditReservationRepository reservations;
+    @MockitoBean CreditOperationRepository operations;
+    @MockitoBean CreditLedgerEntryRepository ledger;
 
     @Test
     void contextLoads() {

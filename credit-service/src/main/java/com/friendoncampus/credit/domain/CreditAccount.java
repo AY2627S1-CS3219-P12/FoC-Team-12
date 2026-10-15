@@ -36,6 +36,9 @@ public class CreditAccount {
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
 
+    @Column(name = "initial_allocation_granted_at")
+    private OffsetDateTime initialAllocationGrantedAt;
+
     protected CreditAccount() {
     }
 
@@ -43,6 +46,18 @@ public class CreditAccount {
         CreditAccount account = new CreditAccount();
         account.userId = userId;
         return account;
+    }
+
+    public boolean grantInitialAllocation(int amount) {
+        if (amount <= 0) {
+            throw new IllegalArgumentException("Initial allocation must be positive");
+        }
+        if (initialAllocationGrantedAt != null) {
+            return false;
+        }
+        availableBalance += amount;
+        initialAllocationGrantedAt = OffsetDateTime.now(ZoneOffset.UTC);
+        return true;
     }
 
     @PrePersist
@@ -83,5 +98,9 @@ public class CreditAccount {
 
     public OffsetDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    public OffsetDateTime getInitialAllocationGrantedAt() {
+        return initialAllocationGrantedAt;
     }
 }
