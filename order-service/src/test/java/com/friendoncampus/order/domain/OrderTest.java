@@ -366,4 +366,121 @@ class OrderTest {
         assertThat(order.getState()).isEqualTo(OrderState.ACCEPTED);
         assertThat(order.getCourierId()).isEqualTo(COURIER);
     }
+
+    // ---- Phase 3: pickUp, deliver, complete ----
+
+    private static Order assigned(OrderState state) {
+        Order order = order(state);
+        ReflectionTestUtils.setField(order, "courierId", COURIER);
+        return order;
+    }
+
+    @Test
+    void theAssignedCourierPicksUpAnAcceptedOrder() {
+        Order order = assigned(OrderState.ACCEPTED);
+
+        OrderTransition transition = order.pickUp(COURIER, NOW);
+
+        assertThat(order.getState()).isEqualTo(OrderState.PICKED_UP);
+        assertThat(order.getPickedUpAt()).isEqualTo(NOW);
+        assertThat(order.getCourierId()).isEqualTo(COURIER);
+        assertThat(transition.creditEffect()).isEqualTo(CreditEffect.NONE);
+        assertThat(transition.eventType()).isEqualTo("OrderPickedUp");
+    }
+
+    @Test
+    void aLatePickupAfterTheDeadlineIsAllowed() {
+        Order order = order(OrderState.ACCEPTED, NOW.minusHours(1));
+        ReflectionTestUtils.setField(order, "courierId", COURIER);
+
+        order.pickUp(COURIER, NOW);
+
+        assertThat(order.getState()).isEqualTo(OrderState.PICKED_UP);
+    }
+
+    @Test
+    void theAssignedCourierDeliversAPickedUpOrder() {
+        Order order = assigned(OrderState.PICKED_UP);
+
+        OrderTransition transition = order.deliver(COURIER, NOW);
+
+        assertThat(order.getState()).isEqualTo(OrderState.DELIVERED);
+        assertThat(order.getDeliveredAt()).isEqualTo(NOW);
+        assertThat(transition.eventType()).isEqualTo("OrderDelivered");
+    }
+
+    @Test
+    void theRequesterCompletesADeliveredOrderAndTheRewardIsSettledToTheCourier() {
+        Order order = assigned(OrderState.DELIVERED);
+
+        OrderTransition transition = order.complete(REQUESTER, NOW);
+
+        assertThat(order.getState()).isEqualTo(OrderState.COMPLETED);
+        assertThat(order.getCompletedAt()).isEqualTo(NOW);
+        assertThat(order.getCourierId()).isEqualTo(COURIER);
+        assertThat(transition.actorRole()).isEqualTo(ActorRole.REQUESTER);
+        assertThat(transition.courierId()).isEqualTo(COURIER);
+        assertThat(transition.creditEffect()).isEqualTo(CreditEffect.SETTLE);
+        assertThat(transition.eventType()).isEqualTo("OrderCompleted");
+    }
+
+    @Test
+    void onlyTheAssignedCourierCanPickUpOrDeliver() {
+        Order accepted = assigned(OrderState.ACCEPTED);
+        Order pickedUp = assigned(OrderState.PICKED_UP);
+
+        for (UUID other : new UUID[] {REQUESTER, UUID.randomUUID()}) {
+            assertThatThrownBy(() -> accepted.pickUp(other, NOW))
+                    .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                            assertThat(exception.getCode()).isEqualTo(OrderErrorCode.NOT_ASSIGNED_COURIER));
+            assertThatThrownBy(() -> pickedUp.deliver(other, NOW))
+                    .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                            assertThat(exception.getCode()).isEqualTo(OrderErrorCode.NOT_ASSIGNED_COURIER));
+        }
+        assertThat(accepted.getState()).isEqualTo(OrderState.ACCEPTED);
+        assertThat(pickedUp.getState()).isEqualTo(OrderState.PICKED_UP);
+    }
+
+    @Test
+    void onlyTheRequesterCanConfirmReceipt() {
+        Order order = assigned(OrderState.DELIVERED);
+
+        assertThatThrownBy(() -> order.complete(COURIER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.NOT_ORDER_REQUESTER));
+        assertThat(order.getState()).isEqualTo(OrderState.DELIVERED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderState.class, names = "ACCEPTED", mode = EnumSource.Mode.EXCLUDE)
+    void pickUpIsOnlyValidFromAccepted(OrderState state) {
+        Order order = assigned(state);
+
+        assertThatThrownBy(() -> order.pickUp(COURIER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.INVALID_STATE_TRANSITION));
+        assertThat(order.getState()).isEqualTo(state);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderState.class, names = "PICKED_UP", mode = EnumSource.Mode.EXCLUDE)
+    void deliverIsOnlyValidFromPickedUp(OrderState state) {
+        Order order = assigned(state);
+
+        assertThatThrownBy(() -> order.deliver(COURIER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.INVALID_STATE_TRANSITION));
+        assertThat(order.getState()).isEqualTo(state);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderState.class, names = "DELIVERED", mode = EnumSource.Mode.EXCLUDE)
+    void completeIsOnlyValidFromDelivered(OrderState state) {
+        Order order = assigned(state);
+
+        assertThatThrownBy(() -> order.complete(REQUESTER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.INVALID_STATE_TRANSITION));
+        assertThat(order.getState()).isEqualTo(state);
+    }
 }

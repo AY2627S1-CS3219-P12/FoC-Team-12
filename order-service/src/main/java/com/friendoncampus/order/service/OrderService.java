@@ -131,6 +131,40 @@ public class OrderService {
         return apply(order, order.withdraw(callerId, now()));
     }
 
+    /** The assigned courier picks the item up. Repeating it is a no-op. */
+    @Transactional
+    public Order pickUp(UUID orderId, UUID callerId) {
+        Order order = lockVisible(orderId, callerId);
+        if (alreadyIn(order, OrderState.PICKED_UP, callerId, OrderAction.PICK_UP)) {
+            return order;
+        }
+        return apply(order, order.pickUp(callerId, now()));
+    }
+
+    /** The assigned courier delivers the item. Repeating it is a no-op. */
+    @Transactional
+    public Order deliver(UUID orderId, UUID callerId) {
+        Order order = lockVisible(orderId, callerId);
+        if (alreadyIn(order, OrderState.DELIVERED, callerId, OrderAction.DELIVER)) {
+            return order;
+        }
+        return apply(order, order.deliver(callerId, now()));
+    }
+
+    /**
+     * The requester confirms receipt and Credit settles the reward to the courier. A repeated
+     * confirmation (for example after a network retry) returns the completed order and records
+     * no second settlement (F7.1.1).
+     */
+    @Transactional
+    public Order complete(UUID orderId, UUID callerId) {
+        Order order = lockVisible(orderId, callerId);
+        if (alreadyIn(order, OrderState.COMPLETED, callerId, OrderAction.COMPLETE)) {
+            return order;
+        }
+        return apply(order, order.complete(callerId, now()));
+    }
+
     /** IDs of OPEN orders whose pickup deadline has been reached, for the expiry job. */
     @Transactional(readOnly = true)
     public List<UUID> findOverdueOpenOrderIds(int limit) {
@@ -191,6 +225,14 @@ public class OrderService {
             apply(order, order.expire(now()));
             throw new OrderExpiredOnActionException();
         }
+    }
+
+    /** True when the caller already moved the order into {@code target} with {@code action}. */
+    private boolean alreadyIn(Order order, OrderState target, UUID callerId, OrderAction action) {
+        return order.getState() == target
+                && transitionRepository.findFirstByOrderIdOrderByOrderVersionDesc(order.getId())
+                        .filter(record -> record.getAction() == action && callerId.equals(record.getActorId()))
+                        .isPresent();
     }
 
     /** Orders that never reached the open pool, so outsiders cannot know they exist. */

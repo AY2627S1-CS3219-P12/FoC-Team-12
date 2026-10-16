@@ -76,13 +76,19 @@ into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
 | `POST /api/orders/{id}/cancel` | The requester, in a `REQUESTER` session | `200` with the cancelled order |
 | `POST /api/orders/{id}/accept` | Any courier except the requester, in a `COURIER` session | `200` with the accepted order |
 | `POST /api/orders/{id}/withdraw` | The assigned courier, in a `COURIER` session | `200` with the reopened or expired order |
+| `POST /api/orders/{id}/pickup` | The assigned courier, in a `COURIER` session | `200` with the order in `PICKED_UP` |
+| `POST /api/orders/{id}/deliver` | The assigned courier, in a `COURIER` session | `200` with the order in `DELIVERED` |
+| `POST /api/orders/{id}/complete` | The requester, in a `REQUESTER` session | `200` with the order in `COMPLETED` |
 
 Cancelling an `OPEN` order releases the full reservation; cancelling an `ACCEPTED`
 order clears the courier and asks Credit to compensate them. If several couriers
 accept at once, only the first one processed wins. A courier who withdraws before
 the pickup deadline puts the order back in the pool; withdrawing at or after the
-deadline expires it instead. Repeating an action you already made (cancel,
-accept, withdraw) returns the order without any further effect.
+deadline expires it instead. The courier then picks up and delivers the item
+(a late pickup after the deadline is allowed), and the requester confirms
+receipt, which settles the full reward to the courier. Repeating an action you
+already made (for example a second `complete` after a network retry) returns the
+order without any further effect, so the reward is never settled twice.
 
 **Expiry:** an `OPEN` order expires once `now >= pickupDeadline`. A background job
 does this every 30 s (`ORDER_EXPIRY_INTERVAL_MS`; turn it off with
@@ -140,11 +146,11 @@ outbox); the full event list and proposed contract are in [`DESIGN.md`](DESIGN.m
 
 ## Lifecycle
 
-Implemented so far: creation, Credit's reservation outcome
-(`PENDING_CREDIT → OPEN / EXPIRED / RESERVATION_FAILED`, called by the Kafka
-consumer in a later iteration), requester cancellation (phase 1), and expiry,
-acceptance and withdrawal (phase 2). Pickup, delivery and completion come in
-phase 3. The table
+Every transition in the table is implemented: creation, Credit's reservation
+outcome (`PENDING_CREDIT → OPEN / EXPIRED / RESERVATION_FAILED`, which the Kafka
+consumer will call in a later iteration), requester cancellation, expiry,
+acceptance, withdrawal, pickup, delivery and completion. Events are stored in the
+outbox but not yet published, and reward editing is a later iteration. The table
 below is the approved target; [`DESIGN.md`](DESIGN.md) has the full transition
 table with guards, error codes, events and the iteration plan.
 

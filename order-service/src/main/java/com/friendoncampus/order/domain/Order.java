@@ -81,6 +81,15 @@ public class Order {
     @Column(name = "accepted_at")
     private OffsetDateTime acceptedAt;
 
+    @Column(name = "picked_up_at")
+    private OffsetDateTime pickedUpAt;
+
+    @Column(name = "delivered_at")
+    private OffsetDateTime deliveredAt;
+
+    @Column(name = "completed_at")
+    private OffsetDateTime completedAt;
+
     @Column(name = "cancelled_at")
     private OffsetDateTime cancelledAt;
 
@@ -238,6 +247,39 @@ public class Order {
                 CreditEffect.NONE, "OrderReopened", now);
     }
 
+    /**
+     * The assigned courier collects the item. The deadline does not apply once the order is
+     * accepted, so a late pickup is allowed (DESIGN.md open item).
+     */
+    public OrderTransition pickUp(UUID callerId, OffsetDateTime now) {
+        requireAssignedCourier(callerId);
+        requireState(OrderAction.PICK_UP, OrderState.ACCEPTED);
+        pickedUpAt = now;
+        return moveTo(OrderAction.PICK_UP, OrderState.PICKED_UP, callerId, ActorRole.COURIER, callerId, null,
+                CreditEffect.NONE, "OrderPickedUp", now);
+    }
+
+    /** The assigned courier hands the item over at the drop-off location. */
+    public OrderTransition deliver(UUID callerId, OffsetDateTime now) {
+        requireAssignedCourier(callerId);
+        requireState(OrderAction.DELIVER, OrderState.PICKED_UP);
+        deliveredAt = now;
+        return moveTo(OrderAction.DELIVER, OrderState.DELIVERED, callerId, ActorRole.COURIER, callerId, null,
+                CreditEffect.NONE, "OrderDelivered", now);
+    }
+
+    /** The requester confirms receipt; Credit transfers the full reservation to the courier. */
+    public OrderTransition complete(UUID callerId, OffsetDateTime now) {
+        if (!requesterId.equals(callerId)) {
+            throw new OrderTransitionException(OrderErrorCode.NOT_ORDER_REQUESTER, state,
+                    "Only the order's requester can confirm receipt");
+        }
+        requireState(OrderAction.COMPLETE, OrderState.DELIVERED);
+        completedAt = now;
+        return moveTo(OrderAction.COMPLETE, OrderState.COMPLETED, callerId, ActorRole.REQUESTER, courierId, null,
+                CreditEffect.SETTLE, "OrderCompleted", now);
+    }
+
     /** True for an OPEN order whose pickup deadline has been reached. */
     public boolean isOverdue(OffsetDateTime now) {
         return state == OrderState.OPEN && isPastDeadline(now);
@@ -255,6 +297,13 @@ public class Order {
 
     public boolean isParticipant(UUID callerId) {
         return requesterId.equals(callerId) || (courierId != null && courierId.equals(callerId));
+    }
+
+    private void requireAssignedCourier(UUID callerId) {
+        if (courierId == null || !courierId.equals(callerId)) {
+            throw new OrderTransitionException(OrderErrorCode.NOT_ASSIGNED_COURIER, state,
+                    "Only the assigned courier can do this");
+        }
     }
 
     private void requireState(OrderAction action, OrderState expected) {
@@ -362,6 +411,18 @@ public class Order {
 
     public OffsetDateTime getAcceptedAt() {
         return acceptedAt;
+    }
+
+    public OffsetDateTime getPickedUpAt() {
+        return pickedUpAt;
+    }
+
+    public OffsetDateTime getDeliveredAt() {
+        return deliveredAt;
+    }
+
+    public OffsetDateTime getCompletedAt() {
+        return completedAt;
     }
 
     public OffsetDateTime getCancelledAt() {

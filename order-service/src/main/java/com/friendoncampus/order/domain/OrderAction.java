@@ -8,5 +8,8 @@ public enum OrderAction {
     CANCEL,
     EXPIRE,
     ACCEPT,
-    WITHDRAW
+    WITHDRAW,
+    PICK_UP,
+    DELIVER,
+    COMPLETE
 }

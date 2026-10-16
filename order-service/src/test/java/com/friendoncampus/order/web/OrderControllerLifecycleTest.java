@@ -211,4 +211,32 @@ class OrderControllerLifecycleTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("NOT_ASSIGNED_COURIER"));
     }
+
+    @Test
+    void picksUpDeliversAndCompletesAnOrder() throws Exception {
+        when(orderService.pickUp(eq(ORDER_ID), eq(REQUESTER))).thenReturn(order(OrderState.PICKED_UP));
+        when(orderService.deliver(eq(ORDER_ID), eq(REQUESTER))).thenReturn(order(OrderState.DELIVERED));
+        when(orderService.complete(eq(ORDER_ID), eq(REQUESTER))).thenReturn(order(OrderState.COMPLETED));
+
+        mockMvc.perform(post("/api/orders/{id}/pickup", ORDER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("PICKED_UP"));
+        mockMvc.perform(post("/api/orders/{id}/deliver", ORDER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("DELIVERED"));
+        mockMvc.perform(post("/api/orders/{id}/complete", ORDER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("COMPLETED"));
+    }
+
+    @Test
+    void completingBeforeDeliveryIsAConflict() throws Exception {
+        when(orderService.complete(eq(ORDER_ID), eq(REQUESTER))).thenThrow(new OrderTransitionException(
+                OrderErrorCode.INVALID_STATE_TRANSITION, OrderState.PICKED_UP, "not delivered yet"));
+
+        mockMvc.perform(post("/api/orders/{id}/complete", ORDER_ID))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INVALID_STATE_TRANSITION"))
+                .andExpect(jsonPath("$.currentState").value("PICKED_UP"));
+    }
 }
