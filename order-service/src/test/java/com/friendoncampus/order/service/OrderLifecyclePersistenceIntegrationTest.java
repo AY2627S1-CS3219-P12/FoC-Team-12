@@ -38,7 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
  * stores the order change, its history row and its outbox event together, or nothing at all.
  * Requires Docker.
  */
-@SpringBootTest
+@SpringBootTest(properties = "app.orders.expiry.enabled=false")
 @Testcontainers
 class OrderLifecyclePersistenceIntegrationTest {
 

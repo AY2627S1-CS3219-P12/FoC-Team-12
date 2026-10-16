@@ -145,6 +145,60 @@ public class OrderController {
         return OrderResponse.from(orderService.cancel(id, callerId(jwt)));
     }
 
+    @Operation(
+            operationId = "acceptOrder",
+            summary = "Accept an order",
+            description = "A courier accepts an OPEN order before its pickup deadline and becomes its "
+                    + "assigned courier. If several couriers accept at once, only the first one processed "
+                    + "succeeds. Requesters cannot accept their own orders. Repeating an acceptance you "
+                    + "already made returns the order unchanged. Requires a COURIER session role.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The accepted order"),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "SELF_ACCEPTANCE_FORBIDDEN, or the session role is not COURIER",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No such order",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "ORDER_ALREADY_ACCEPTED (another courier won), ORDER_EXPIRED, or "
+                            + "INVALID_STATE_TRANSITION",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @PostMapping("/{id}/accept")
+    public OrderResponse acceptOrder(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return OrderResponse.from(orderService.accept(id, callerId(jwt)));
+    }
+
+    @Operation(
+            operationId = "withdrawFromOrder",
+            summary = "Withdraw from an accepted order",
+            description = "The assigned courier withdraws before pickup. Before the pickup deadline the "
+                    + "order reopens for other couriers; at or after the deadline it expires. Not allowed "
+                    + "once picked up. Requires a COURIER session role.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The reopened or expired order"),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "NOT_ASSIGNED_COURIER, or the session role is not COURIER",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No such order, or the caller may not see it",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "CANCELLATION_NOT_ALLOWED after pickup, or INVALID_STATE_TRANSITION",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @PostMapping("/{id}/withdraw")
+    public OrderResponse withdrawFromOrder(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return OrderResponse.from(orderService.withdraw(id, callerId(jwt)));
+    }
+
     private static UUID callerId(Jwt jwt) {
         // The decoder guarantees a present, UUID-shaped 'sub'; identity comes only from the token.
         return UUID.fromString(jwt.getSubject());

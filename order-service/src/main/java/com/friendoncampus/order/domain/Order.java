@@ -78,6 +78,9 @@ public class Order {
     @Column(name = "terminal_reason", length = 64)
     private TerminalReason terminalReason;
 
+    @Column(name = "accepted_at")
+    private OffsetDateTime acceptedAt;
+
     @Column(name = "cancelled_at")
     private OffsetDateTime cancelledAt;
 
@@ -167,6 +170,77 @@ public class Order {
         courierId = null;
         return moveTo(OrderAction.CANCEL, OrderState.CANCELLED, callerId, ActorRole.REQUESTER, formerCourier,
                 TerminalReason.REQUESTER_CANCELLED_ACCEPTED, CreditEffect.COMPENSATE, "OrderCancelled", now);
+    }
+
+    /** The pickup deadline passed while the order was still OPEN; the reservation is released. */
+    public OrderTransition expire(OffsetDateTime now) {
+        requireState(OrderAction.EXPIRE, OrderState.OPEN);
+        if (!isPastDeadline(now)) {
+            throw new OrderTransitionException(OrderErrorCode.INVALID_STATE_TRANSITION, state,
+                    "The pickup deadline has not passed yet");
+        }
+        expiredAt = now;
+        return moveTo(OrderAction.EXPIRE, OrderState.EXPIRED, null, ActorRole.SYSTEM, null,
+                TerminalReason.PICKUP_DEADLINE_PASSED, CreditEffect.RELEASE, "OrderExpired", now);
+    }
+
+    /**
+     * A courier accepts an OPEN order before its deadline. The requester can never accept their
+     * own order, and an order someone else already accepted is reported as such.
+     */
+    public OrderTransition accept(UUID callerId, OffsetDateTime now) {
+        if (requesterId.equals(callerId)) {
+            throw new OrderTransitionException(OrderErrorCode.SELF_ACCEPTANCE_FORBIDDEN, state,
+                    "You cannot accept your own order");
+        }
+        if (state == OrderState.ACCEPTED || state == OrderState.PICKED_UP || state == OrderState.DELIVERED
+                || state == OrderState.COMPLETED) {
+            throw new OrderTransitionException(OrderErrorCode.ORDER_ALREADY_ACCEPTED, state,
+                    "This order has already been accepted by another courier");
+        }
+        if (state == OrderState.EXPIRED) {
+            throw new OrderTransitionException(OrderErrorCode.ORDER_EXPIRED, state,
+                    "This order expired before it could be accepted");
+        }
+        requireState(OrderAction.ACCEPT, OrderState.OPEN);
+        if (isPastDeadline(now)) {
+            throw new OrderTransitionException(OrderErrorCode.ORDER_EXPIRED, state,
+                    "This order's pickup deadline has passed");
+        }
+        courierId = callerId;
+        acceptedAt = now;
+        return moveTo(OrderAction.ACCEPT, OrderState.ACCEPTED, callerId, ActorRole.COURIER, callerId, null,
+                CreditEffect.NONE, "OrderAccepted", now);
+    }
+
+    /**
+     * The assigned courier withdraws before pickup. Before the deadline the order reopens for other
+     * couriers; at or after the deadline it expires and the reservation is released.
+     */
+    public OrderTransition withdraw(UUID callerId, OffsetDateTime now) {
+        if (courierId == null || !courierId.equals(callerId)) {
+            throw new OrderTransitionException(OrderErrorCode.NOT_ASSIGNED_COURIER, state,
+                    "Only the assigned courier can withdraw from this order");
+        }
+        if (state == OrderState.PICKED_UP || state == OrderState.DELIVERED || state == OrderState.COMPLETED) {
+            throw new OrderTransitionException(OrderErrorCode.CANCELLATION_NOT_ALLOWED, state,
+                    "Couriers cannot withdraw once the order is picked up");
+        }
+        requireState(OrderAction.WITHDRAW, OrderState.ACCEPTED);
+        courierId = null;
+        acceptedAt = null;
+        if (isPastDeadline(now)) {
+            expiredAt = now;
+            return moveTo(OrderAction.WITHDRAW, OrderState.EXPIRED, callerId, ActorRole.COURIER, callerId,
+                    TerminalReason.COURIER_WITHDREW_AFTER_DEADLINE, CreditEffect.RELEASE, "OrderExpired", now);
+        }
+        return moveTo(OrderAction.WITHDRAW, OrderState.OPEN, callerId, ActorRole.COURIER, callerId, null,
+                CreditEffect.NONE, "OrderReopened", now);
+    }
+
+    /** True for an OPEN order whose pickup deadline has been reached. */
+    public boolean isOverdue(OffsetDateTime now) {
+        return state == OrderState.OPEN && isPastDeadline(now);
     }
 
     /** True when the pickup deadline has been reached: {@code now >= pickupDeadline}. */
@@ -284,6 +358,10 @@ public class Order {
 
     public TerminalReason getTerminalReason() {
         return terminalReason;
+    }
+
+    public OffsetDateTime getAcceptedAt() {
+        return acceptedAt;
     }
 
     public OffsetDateTime getCancelledAt() {

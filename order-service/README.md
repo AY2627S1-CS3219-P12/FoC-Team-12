@@ -67,23 +67,37 @@ into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
 - **Forbidden:** `403` RFC-7807 `application/problem+json` when the token is valid
   but the session role is not `REQUESTER`.
 
-## Read and cancel an order
+## Read and act on an order
 
 | Endpoint | Who | Result |
 | --- | --- | --- |
 | `GET /api/orders/{id}` | Any signed-in user for an `OPEN` order; otherwise only the requester or assigned courier | `200` with the order, or `404` (`ORDER_NOT_FOUND`) so hidden orders are not revealed |
 | `GET /api/orders/{id}/history` | The requester or assigned courier | `200` with every transition, oldest first |
 | `POST /api/orders/{id}/cancel` | The requester, in a `REQUESTER` session | `200` with the cancelled order |
+| `POST /api/orders/{id}/accept` | Any courier except the requester, in a `COURIER` session | `200` with the accepted order |
+| `POST /api/orders/{id}/withdraw` | The assigned courier, in a `COURIER` session | `200` with the reopened or expired order |
 
 Cancelling an `OPEN` order releases the full reservation; cancelling an `ACCEPTED`
-order clears the courier and asks Credit to compensate them. Repeating a cancel
-returns the cancelled order without any further effect. Rejections are RFC-7807
+order clears the courier and asks Credit to compensate them. If several couriers
+accept at once, only the first one processed wins. A courier who withdraws before
+the pickup deadline puts the order back in the pool; withdrawing at or after the
+deadline expires it instead. Repeating an action you already made (cancel,
+accept, withdraw) returns the order without any further effect.
+
+**Expiry:** an `OPEN` order expires once `now >= pickupDeadline`. A background job
+does this every 30 s (`ORDER_EXPIRY_INTERVAL_MS`; turn it off with
+`ORDER_EXPIRY_ENABLED=false`), and any action on an overdue `OPEN` order expires
+it first and is rejected with `ORDER_EXPIRED`. Accepted orders never expire. Rejections are RFC-7807
 problems with a `code` and the order's `currentState`:
 
 | Code | Status | When |
 | --- | --- | --- |
 | `NOT_ORDER_REQUESTER` | 403 | The caller is not the order's requester |
-| `CANCELLATION_NOT_ALLOWED` | 409 | The order is `PICKED_UP`, `DELIVERED` or `COMPLETED` |
+| `CANCELLATION_NOT_ALLOWED` | 409 | Cancel or withdraw when the order is `PICKED_UP`, `DELIVERED` or `COMPLETED` |
+| `NOT_ASSIGNED_COURIER` | 403 | The caller is not the order's assigned courier |
+| `SELF_ACCEPTANCE_FORBIDDEN` | 403 | The requester tried to accept their own order |
+| `ORDER_ALREADY_ACCEPTED` | 409 | Another courier accepted the order first |
+| `ORDER_EXPIRED` | 409 | The pickup deadline has passed |
 | `INVALID_STATE_TRANSITION` | 409 | The action is not valid in the order's current state |
 | `ORDER_NOT_FOUND` | 404 | No such order, or the caller may not see it |
 
@@ -126,10 +140,11 @@ outbox); the full event list and proposed contract are in [`DESIGN.md`](DESIGN.m
 
 ## Lifecycle
 
-Implemented so far (phase 1): creation, Credit's reservation outcome
+Implemented so far: creation, Credit's reservation outcome
 (`PENDING_CREDIT → OPEN / EXPIRED / RESERVATION_FAILED`, called by the Kafka
-consumer in a later iteration) and requester cancellation. Expiry, acceptance and
-withdrawal come in phase 2; pickup, delivery and completion in phase 3. The table
+consumer in a later iteration), requester cancellation (phase 1), and expiry,
+acceptance and withdrawal (phase 2). Pickup, delivery and completion come in
+phase 3. The table
 below is the approved target; [`DESIGN.md`](DESIGN.md) has the full transition
 table with guards, error codes, events and the iteration plan.
 
