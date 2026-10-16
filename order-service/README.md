@@ -10,6 +10,8 @@ the order database. Runs on port `8082`.
 
 ## Authentication
 
+Local cluster setup: [Kubernetes deployment](k8s/README.md).
+
 All endpoints except `/actuator/health` and the OpenAPI/Swagger docs require a
 `Bearer` JWT issued by the **User Service**. The service is a stateless OAuth2
 resource server; it **validates** tokens but never issues them, following the

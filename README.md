@@ -70,6 +70,9 @@ gateway changes have one editor with affected-owner review, preventing competing
 
 ## API Gateway
 
+The course-aligned Minikube deployment is documented in
+[`deploy/k8s/README.md`](deploy/k8s/README.md), with service manifests beside each Dockerfile.
+
 Run the Docker stack and use `http://localhost:8088` as the normal browser and API origin. The
 gateway serves the packaged User application at `/`, the Supplier application under `/suppliers`,
 the Credit dashboard at `/credits`, and the current APIs from the same origin:
@@ -85,7 +88,11 @@ the Credit dashboard at `/credits`, and the current APIs from the same origin:
 /api/credits/**              -> Credit Service
 ```
 
-Keeping both applications on `8088` lets their browser code share the validated
+The Kubernetes setup additionally deploys Order Service at `/api/orders/**`, with its OpenAPI
+document at `/docs/order/openapi.json`. Order is not yet part of the Compose stack and has no
+packaged frontend; Kafka integration remains separate work.
+
+Keeping the packaged frontends on `8088` lets their browser code share the validated
 `sessionStorage["foc.user-session"]` login session. Direct ports `8080`, `8081` and `8083` remain exposed
 for service-owner debugging, but they are not the normal presentation flow.
 
