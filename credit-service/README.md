@@ -5,6 +5,8 @@ Credit owns accounts, reservations and ledger effects. Scope and invariants live
 
 ## Current state
 
+Local cluster setup: [Kubernetes deployment](k8s/README.md).
+
 The Spring Boot foundation runs on port `8083` with PostgreSQL/Flyway configuration, User Service
 RS256/JWKS validation, Actuator health, OpenAPI and a non-root multi-stage Docker image. The shared
 Compose stack and gateway expose the packaged dashboard and query API. A broker-independent durable
