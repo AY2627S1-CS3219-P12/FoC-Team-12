@@ -42,6 +42,10 @@ spring:
               uri: ${CREDIT_SERVICE_URL:http://localhost:8083}
               predicates:
                 - Path=/api/credits,/api/credits/**
+            - id: order-api
+              uri: ${ORDER_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/orders,/api/orders/**
             - id: user-jwks
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:
@@ -75,6 +79,13 @@ spring:
                 - Method=GET
               filters:
                 - SetPath=/v3/api-docs
+            - id: order-openapi-json
+              uri: ${ORDER_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/docs/order/openapi.json
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs
             - id: credit-openapi-yaml
               uri: ${CREDIT_SERVICE_URL:http://localhost:8083}
               predicates:
@@ -101,4 +112,6 @@ springdoc:
         url: /docs/supplier/openapi.json
       - name: Credit Service
         url: /docs/credit/openapi.json
+      - name: Order Service
+        url: /docs/order/openapi.json
     urls-primary-name: Credit Service
