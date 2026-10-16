@@ -67,6 +67,31 @@ into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
 - **Forbidden:** `403` RFC-7807 `application/problem+json` when the token is valid
   but the session role is not `REQUESTER`.
 
+## Read and cancel an order
+
+| Endpoint | Who | Result |
+| --- | --- | --- |
+| `GET /api/orders/{id}` | Any signed-in user for an `OPEN` order; otherwise only the requester or assigned courier | `200` with the order, or `404` (`ORDER_NOT_FOUND`) so hidden orders are not revealed |
+| `GET /api/orders/{id}/history` | The requester or assigned courier | `200` with every transition, oldest first |
+| `POST /api/orders/{id}/cancel` | The requester, in a `REQUESTER` session | `200` with the cancelled order |
+
+Cancelling an `OPEN` order releases the full reservation; cancelling an `ACCEPTED`
+order clears the courier and asks Credit to compensate them. Repeating a cancel
+returns the cancelled order without any further effect. Rejections are RFC-7807
+problems with a `code` and the order's `currentState`:
+
+| Code | Status | When |
+| --- | --- | --- |
+| `NOT_ORDER_REQUESTER` | 403 | The caller is not the order's requester |
+| `CANCELLATION_NOT_ALLOWED` | 409 | The order is `PICKED_UP`, `DELIVERED` or `COMPLETED` |
+| `INVALID_STATE_TRANSITION` | 409 | The action is not valid in the order's current state |
+| `ORDER_NOT_FOUND` | 404 | No such order, or the caller may not see it |
+
+Every state change also stores a history row (`order_transitions`) and an
+`order.events` outbox row (`outbox_events`) in the same transaction, so a change
+and its event are always saved together. The rows are not published yet; the
+Kafka relay is a later iteration.
+
 **Location names come from the client.** Order Service never calls Supplier
 Service. The client picks locations from Supplier's public API and sends both the
 IDs and the display names; Order validates their format and stores the names as
@@ -101,9 +126,12 @@ outbox); the full event list and proposed contract are in [`DESIGN.md`](DESIGN.m
 
 ## Lifecycle
 
-Only creation (`∅ → PENDING_CREDIT`) is implemented so far. The table below is
-the approved target; [`DESIGN.md`](DESIGN.md) has the full transition table with
-guards, error codes, events and the iteration plan.
+Implemented so far (phase 1): creation, Credit's reservation outcome
+(`PENDING_CREDIT → OPEN / EXPIRED / RESERVATION_FAILED`, called by the Kafka
+consumer in a later iteration) and requester cancellation. Expiry, acceptance and
+withdrawal come in phase 2; pickup, delivery and completion in phase 3. The table
+below is the approved target; [`DESIGN.md`](DESIGN.md) has the full transition
+table with guards, error codes, events and the iteration plan.
 
 **R** = the order's requester (session role `REQUESTER`), **C** = the assigned
 courier (session role `COURIER`), **Sys** = the expiry scheduler or a Credit reply.
@@ -144,9 +172,13 @@ Rules that apply to every transition:
 ## Build and test
 
 ```bash
-./mvnw test          # unit + web-slice validation tests (no database required)
+./mvnw test          # unit, web and security tests, plus PostgreSQL integration tests
 ./mvnw verify        # full build
 ```
+
+The persistence integration tests start a throwaway PostgreSQL with
+Testcontainers, so **Docker must be running**. They apply the real Flyway
+migrations.
 
 Running the service needs a PostgreSQL database (`DB_HOST`/`DB_PORT`/`DB_NAME`/
 `DB_USER`/`DB_PASSWORD`) and Compose wiring, which are shared root files added in

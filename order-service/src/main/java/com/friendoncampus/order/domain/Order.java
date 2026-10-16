@@ -17,10 +17,10 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
 /**
- * Order aggregate. This iteration maps only the fields required to create an
- * order in {@link OrderState#PENDING_CREDIT}; nullable lifecycle columns
- * (courier, snapshots, credit reservation, terminal reason, transition
- * timestamps) are left to the database defaults and future iterations.
+ * Order aggregate and lifecycle state machine. Each transition method checks its guards, applies
+ * the change and returns an {@link OrderTransition} describing it; a rejected action throws
+ * {@link OrderTransitionException} and leaves the order unchanged. Deadline checks use
+ * {@code now >= pickupDeadline} as "expired" (see DESIGN.md).
  */
 @Entity
 @Table(name = "orders")
@@ -68,6 +68,22 @@ public class Order {
     @Column(name = "state_changed_at", nullable = false)
     private OffsetDateTime stateChangedAt;
 
+    @Column(name = "courier_id")
+    private UUID courierId;
+
+    @Column(name = "credit_reservation_id")
+    private UUID creditReservationId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "terminal_reason", length = 64)
+    private TerminalReason terminalReason;
+
+    @Column(name = "cancelled_at")
+    private OffsetDateTime cancelledAt;
+
+    @Column(name = "expired_at")
+    private OffsetDateTime expiredAt;
+
     protected Order() {
     }
 
@@ -96,12 +112,109 @@ public class Order {
         return order;
     }
 
+    /** The SUBMIT transition recorded when a new order is first stored. */
+    public OrderTransition submitted(OffsetDateTime now) {
+        return new OrderTransition(OrderAction.SUBMIT, null, OrderState.PENDING_CREDIT, requesterId,
+                ActorRole.REQUESTER, null, null, CreditEffect.RESERVE, "OrderSubmitted", now);
+    }
+
+    /**
+     * Credit confirmed the reservation. If it arrives at or after the pickup deadline, the order
+     * expires instead of opening, and the reservation must be released.
+     */
+    public OrderTransition open(UUID reservationId, OffsetDateTime now) {
+        requireState(OrderAction.OPEN, OrderState.PENDING_CREDIT);
+        creditReservationId = reservationId;
+        if (isPastDeadline(now)) {
+            expiredAt = now;
+            return moveTo(OrderAction.OPEN, OrderState.EXPIRED, null, ActorRole.SYSTEM, null,
+                    TerminalReason.PICKUP_DEADLINE_PASSED, CreditEffect.RELEASE, "OrderExpired", now);
+        }
+        return moveTo(OrderAction.OPEN, OrderState.OPEN, null, ActorRole.SYSTEM, null, null,
+                CreditEffect.NONE, "OrderOpened", now);
+    }
+
+    /** Credit rejected the reservation, for example because of insufficient credits. */
+    public OrderTransition failReservation(OffsetDateTime now) {
+        requireState(OrderAction.FAIL_RESERVATION, OrderState.PENDING_CREDIT);
+        return moveTo(OrderAction.FAIL_RESERVATION, OrderState.RESERVATION_FAILED, null,
+                ActorRole.SYSTEM, null, TerminalReason.CREDIT_RESERVATION_REJECTED,
+                CreditEffect.NONE, "OrderReservationFailed", now);
+    }
+
+    /**
+     * The requester cancels. OPEN orders release the full reservation; ACCEPTED orders clear the
+     * courier and require compensation. Cancellation is never allowed after pickup.
+     */
+    public OrderTransition cancel(UUID callerId, OffsetDateTime now) {
+        if (!requesterId.equals(callerId)) {
+            throw new OrderTransitionException(OrderErrorCode.NOT_ORDER_REQUESTER, state,
+                    "Only the order's requester can cancel it");
+        }
+        if (state == OrderState.PICKED_UP || state == OrderState.DELIVERED || state == OrderState.COMPLETED) {
+            throw new OrderTransitionException(OrderErrorCode.CANCELLATION_NOT_ALLOWED, state,
+                    "Orders cannot be cancelled once picked up");
+        }
+        if (state != OrderState.OPEN && state != OrderState.ACCEPTED) {
+            throw invalidTransition(OrderAction.CANCEL);
+        }
+        cancelledAt = now;
+        if (state == OrderState.OPEN) {
+            return moveTo(OrderAction.CANCEL, OrderState.CANCELLED, callerId, ActorRole.REQUESTER, null,
+                    TerminalReason.REQUESTER_CANCELLED_OPEN, CreditEffect.RELEASE, "OrderCancelled", now);
+        }
+        UUID formerCourier = courierId;
+        courierId = null;
+        return moveTo(OrderAction.CANCEL, OrderState.CANCELLED, callerId, ActorRole.REQUESTER, formerCourier,
+                TerminalReason.REQUESTER_CANCELLED_ACCEPTED, CreditEffect.COMPENSATE, "OrderCancelled", now);
+    }
+
+    /** True when the pickup deadline has been reached: {@code now >= pickupDeadline}. */
+    public boolean isPastDeadline(OffsetDateTime now) {
+        return !now.isBefore(pickupDeadline);
+    }
+
+    /** True for OPEN orders and for orders where the caller is the requester or assigned courier. */
+    public boolean isVisibleTo(UUID callerId) {
+        return state == OrderState.OPEN || isParticipant(callerId);
+    }
+
+    public boolean isParticipant(UUID callerId) {
+        return requesterId.equals(callerId) || (courierId != null && courierId.equals(callerId));
+    }
+
+    private void requireState(OrderAction action, OrderState expected) {
+        if (state != expected) {
+            throw invalidTransition(action);
+        }
+    }
+
+    private OrderTransitionException invalidTransition(OrderAction action) {
+        return new OrderTransitionException(OrderErrorCode.INVALID_STATE_TRANSITION, state,
+                "Cannot " + action.name().toLowerCase().replace('_', ' ') + " an order in state " + state);
+    }
+
+    private OrderTransition moveTo(OrderAction action, OrderState target, UUID actorId, ActorRole actorRole,
+            UUID transitionCourierId, TerminalReason reason, CreditEffect creditEffect, String eventType,
+            OffsetDateTime now) {
+        OrderState from = state;
+        state = target;
+        stateChangedAt = now;
+        if (reason != null) {
+            terminalReason = reason;
+        }
+        return new OrderTransition(action, from, target, actorId, actorRole, transitionCourierId, reason,
+                creditEffect, eventType, now);
+    }
+
     @PrePersist
     void prepareForCreate() {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         createdAt = now;
         updatedAt = now;
-        stateChangedAt = now;
+        if (stateChangedAt == null) {
+            stateChangedAt = now;
+        }
     }
 
     @PreUpdate
@@ -159,5 +272,25 @@ public class Order {
 
     public OffsetDateTime getStateChangedAt() {
         return stateChangedAt;
+    }
+
+    public UUID getCourierId() {
+        return courierId;
+    }
+
+    public UUID getCreditReservationId() {
+        return creditReservationId;
+    }
+
+    public TerminalReason getTerminalReason() {
+        return terminalReason;
+    }
+
+    public OffsetDateTime getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public OffsetDateTime getExpiredAt() {
+        return expiredAt;
     }
 }

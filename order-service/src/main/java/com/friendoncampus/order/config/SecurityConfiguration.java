@@ -44,7 +44,10 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                        // Error dispatches must reach the error page, or a 500 would surface as 403.
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/orders").hasRole("REQUESTER")
+                        .requestMatchers(HttpMethod.POST, "/api/orders/*/cancel").hasRole("REQUESTER")
                         .requestMatchers("/api/orders", "/api/orders/**").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
