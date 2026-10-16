@@ -25,6 +25,9 @@ function Assert-Http {
     $curl = @('exec', 'deployment/user-service', '--', 'curl', '--silent', '--show-error',
         '--max-time', '20', '--output', '/dev/null', '--write-out', '%{http_code}')
     if ($InvalidToken) { $curl += @('--header', 'Authorization: Bearer invalid-token') }
+    if ($Expected -eq 200) {
+        $curl += @('--fail', '--retry', '12', '--retry-delay', '2', '--retry-all-errors')
+    }
     $status = Invoke-Kubectl ($curl + $Url)
     if ("$status" -ne "$Expected") { throw "$Url expected $Expected, received $status" }
     Write-Host "PASS $Expected $Url"
@@ -60,12 +63,20 @@ switch ($Service) {
         Assert-Http 'http://gateway:8088/api/credits/me' 401
     }
     order {
+        Assert-Http "$base/api/orders" 401 -InvalidToken
         # An unauthenticated creation must fail before input validation or mutation.
         $status = Invoke-Kubectl @('exec', 'deployment/user-service', '--', 'curl',
             '--silent', '--show-error', '--max-time', '20', '--output', '/dev/null',
             '--write-out', '%{http_code}', '--request', 'POST', "$base/api/orders")
         if ("$status" -ne '401') { throw "Order creation without JWT returned $status" }
         Write-Host 'PASS 401 unauthenticated Order creation'
+        Assert-Http 'http://gateway:8088/docs/order/openapi.json' 200
+        $status = Invoke-Kubectl @('exec', 'deployment/user-service', '--', 'curl',
+            '--silent', '--show-error', '--max-time', '20', '--output', '/dev/null',
+            '--write-out', '%{http_code}', '--request', 'POST',
+            'http://gateway:8088/api/orders')
+        if ("$status" -ne '401') { throw "Gateway Order creation without JWT returned $status" }
+        Write-Host 'PASS 401 Order creation through the gateway'
     }
 }
 

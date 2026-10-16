@@ -26,8 +26,8 @@ Kubernetes Secrets. The image publisher runs:
 
 ```bash
 docker login
-docker build -t arkanian4/foc-gateway-service:d3-1 gateway-service
-docker push arkanian4/foc-gateway-service:d3-1
+docker build -t arkanian4/foc-gateway-service:d3-2 gateway-service
+docker push arkanian4/foc-gateway-service:d3-2
 ```
 
 Repeat the build/push pattern for each service, using the tag in its Deployment. Teammates using
@@ -35,6 +35,17 @@ the published images do not need to build or push. Kubernetes downloads them on 
 `IfNotPresent` reuses cached images. Use a new tag for changed builds, update the Deployment and
 apply it again. Do not replace a published release tag. Public repositories allow teammates to
 pull without credentials; private repositories additionally require an `imagePullSecret`.
+
+| Component | Published image |
+| --- | --- |
+| User | `arkanian4/foc-user-service:d3-1` |
+| Gateway | `arkanian4/foc-gateway-service:d3-2` |
+| Supplier | `arkanian4/foc-supplier-service:d3-1` |
+| Credit | `arkanian4/foc-credit-service:d3-1` |
+| Order | `arkanian4/foc-order-service:d3-1` |
+
+Runtime passwords/signing keys are created separately in each teammate's cluster. They are not
+included in images or Git. Never add them to application resources or frontend build settings.
 
 ## Incremental deployment
 
@@ -59,6 +70,42 @@ minikube -p foc-local kubectl -- --context=foc-local -n foc-local port-forward s
 
 Open `http://localhost:8088`. If Compose occupies that port, stop only its gateway or choose
 another local port. All packaged frontends must use the same browser origin to share the session.
+Port-forward attaches to one pod; reopen it after a rollout replaces that pod.
+
+Continue one service at a time: [Supplier](../../supplier-service/k8s/README.md),
+[Credit](../../credit-service/k8s/README.md), then [Order](../../order-service/k8s/README.md).
+Their guides create private credentials, wait for their databases, deploy and verify independently.
+All three use cluster-internal Services rather than extra public NodePorts; the gateway is the
+normal entry. User's NodePort remains available for the original manual exercise.
+
+## Updates, scaling and future Order work
+
+Use one application replica initially to fit a local laptop. This is a chosen starting count,
+not an autoscaling rule. Practice the guide's scale/rollout commands on the stateless gateway:
+
+```bash
+minikube -p foc-local kubectl -- --context=foc-local -n foc-local scale deployment/gateway --replicas=2
+minikube -p foc-local kubectl -- --context=foc-local -n foc-local rollout status deployment/gateway --timeout=300s
+minikube -p foc-local kubectl -- --context=foc-local -n foc-local get pods -l app=gateway
+minikube -p foc-local kubectl -- --context=foc-local -n foc-local scale deployment/gateway --replicas=1
+```
+
+For a release, build/push a new image tag, update the service's Deployment YAML and apply it.
+Use `rollout status`, `rollout history` and, for an application regression, `rollout undo`.
+Reflect a rollback in the YAML too; otherwise the next apply reinstates the bad release.
+Image rollback does not roll back database migrations: check compatibility before rollback.
+Never scale a PostgreSQL StatefulSet to create database replicas without a replication design.
+
+Order already has stable DNS, PostgreSQL storage, JWT settings and `/api/orders/**` gateway
+forwarding. Future endpoints under that prefix need an Order image update, not new gateway
+routes. A future separate frontend path needs a deliberate route. Kafka listener/publisher
+adapters will require coordinated broker deployment and connection configuration; this cluster
+does not pretend those integrations already exist. Credit uses no demo profile here.
+
+The smoke checks cover deployment, public routes, missing/invalid-token rejection and retained
+migration records. They do not prove authenticated business flows or ledger/event integration.
+User's default `MAIL_PROVIDER=noop` does not deliver verification codes: configure the documented
+mail provider with local Secrets before testing new-account login; do not bypass verification.
 
 ## Recovery and data
 

@@ -88,7 +88,11 @@ the Credit dashboard at `/credits`, and the current APIs from the same origin:
 /api/credits/**              -> Credit Service
 ```
 
-Keeping both applications on `8088` lets their browser code share the validated
+The Kubernetes setup additionally deploys Order Service at `/api/orders/**`, with its OpenAPI
+document at `/docs/order/openapi.json`. Order is not yet part of the Compose stack and has no
+packaged frontend; Kafka integration remains separate work.
+
+Keeping the packaged frontends on `8088` lets their browser code share the validated
 `sessionStorage["foc.user-session"]` login session. Direct ports `8080`, `8081` and `8083` remain exposed
 for service-owner debugging, but they are not the normal presentation flow.
 

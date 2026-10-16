@@ -25,6 +25,13 @@ if ($existing) {
     return
 }
 
+$claim = & $minikube -p $Profile kubectl -- "--context=$Profile" -n foc-local `
+    get pvc "data-$Service-db-0" --ignore-not-found -o name
+if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect existing database storage.' }
+if ($claim) {
+    throw 'Database storage exists without its Secret. Recover the original password; do not generate a replacement.'
+}
+
 # Generate only this service's password; never print or save a Secret manifest.
 $password = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 $secret = @{
