@@ -70,6 +70,10 @@ gateway changes have one editor with affected-owner review, preventing competing
 
 ## API Gateway
 
+CI publishing and one-time Docker Hub credential setup are documented in
+[the CI guide](.github/README.md). Successful main-branch CI publishes versioned images;
+developers choose when to [apply them to local Minikube](deploy/k8s/README.md#apply-a-ci-published-service-update).
+
 The course-aligned Minikube deployment is documented in
 [`deploy/k8s/README.md`](deploy/k8s/README.md), with service manifests beside each Dockerfile.
 
