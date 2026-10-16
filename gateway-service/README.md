@@ -32,6 +32,8 @@ Order routes will be added only after its service owner publishes its port and A
 
 ## Run locally
 
+For Minikube deployment, follow [`../deploy/k8s/README.md`](../deploy/k8s/README.md).
+
 Java 17 is required. Start User, Supplier and Credit services first, then run:
 
 ```sh

@@ -70,6 +70,9 @@ gateway changes have one editor with affected-owner review, preventing competing
 
 ## API Gateway
 
+The course-aligned Minikube deployment is documented in
+[`deploy/k8s/README.md`](deploy/k8s/README.md), with service manifests beside each Dockerfile.
+
 Run the Docker stack and use `http://localhost:8088` as the normal browser and API origin. The
 gateway serves the packaged User application at `/`, the Supplier application under `/suppliers`,
 the Credit dashboard at `/credits`, and the current APIs from the same origin:
