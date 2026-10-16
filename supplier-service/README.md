@@ -14,6 +14,8 @@ Task boundaries are in [`AGENTS.md`](AGENTS.md) and [`../TASK_SPLIT.md`](../TASK
 
 ## Prerequisites
 
+For the course-aligned local cluster, see [Kubernetes deployment](k8s/README.md).
+
 - Java 17
 - Node.js 22 and npm, for frontend development
 - Docker Desktop, for running the containerized service
