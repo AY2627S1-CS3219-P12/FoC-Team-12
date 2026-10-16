@@ -32,6 +32,9 @@ On macOS or Linux:
 
 ## Run locally
 
+For the course-aligned Minikube deployment with persistent PostgreSQL, see
+[`k8s/README.md`](k8s/README.md). The Compose instructions below remain available independently.
+
 From the repository root, create a local environment file before the first run if one
 does not already exist. Fill in `USER_DB_*` and `JWT_PRIVATE_KEY` before running any
 `docker compose` command (even when starting only `user-db`, Compose checks required
