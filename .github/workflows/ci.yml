@@ -10,6 +10,36 @@ permissions:
   contents: read
 
 jobs:
+  workflow-checks:
+    name: CI workflow checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Test image selection and release tags
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Validate GitHub Actions syntax and shell steps
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12 -color
+
+  image-plan:
+    name: Select changed service images
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has-images: ${{ steps.plan.outputs.has-images }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select services and unique SHA-based tag
+        id: plan
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: python3 .github/scripts/image_plan.py
+
   gateway:
     name: API gateway
     runs-on: ubuntu-24.04
@@ -116,7 +146,7 @@ jobs:
           done
       - name: Check live UI, JWKS, and protected API routing
         run: |
-          for attempt in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl --fail --silent --output /dev/null http://localhost:8088/actuator/health; then
               break
             fi
@@ -149,6 +179,26 @@ jobs:
           java-version: "17"
           cache: maven
           cache-dependency-path: supplier-service/pom.xml
+      - name: Verify backend
+        run: ./mvnw --batch-mode --no-transfer-progress verify
+
+  order-backend:
+    name: Order backend
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: order-service
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: order-service/pom.xml
+      - name: Make Maven wrapper executable
+        run: chmod +x ./mvnw
       - name: Verify backend
         run: ./mvnw --batch-mode --no-transfer-progress verify
 
@@ -247,7 +297,7 @@ jobs:
         run: docker compose up -d --build credit-service
       - name: Check health, dashboard and protected API
         run: |
-          for attempt in $(seq 1 60); do
+          for _ in $(seq 1 60); do
             if curl --fail --silent --output /dev/null http://localhost:8083/actuator/health; then
               break
             fi
@@ -263,3 +313,67 @@ jobs:
       - name: Stop test stack
         if: always()
         run: docker compose down --volumes --remove-orphans
+
+  publish-images:
+    name: Publish ${{ matrix.service }}
+    needs:
+      - workflow-checks
+      - image-plan
+      - gateway
+      - user-backend
+      - user-frontend
+      - user-docker
+      - supplier-backend
+      - supplier-frontend
+      - order-backend
+      - credit-backend
+      - credit-frontend
+      - credit-container
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.image-plan.outputs.has-images == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.image-plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check publishing credentials
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ "$DOCKERHUB_USERNAME" != arkanian4 ] || [ -z "$DOCKERHUB_TOKEN" ]; then
+            echo '::error::Set DOCKERHUB_USERNAME to arkanian4 and configure DOCKERHUB_TOKEN with write access to the five foc-* repositories.'
+            exit 1
+          fi
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Log in to Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and publish image
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ./${{ matrix.service }}
+          platforms: linux/amd64
+          push: true
+          tags: arkanian4/foc-${{ matrix.service }}:sha-${{ github.sha }}-r${{ github.run_id }}-${{ github.run_attempt }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=publish-${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=publish-${{ matrix.service }}
+      - name: Show published image for manual deployment
+        env:
+          SERVICE: ${{ matrix.service }}
+          IMAGE: arkanian4/foc-${{ matrix.service }}:sha-${{ github.sha }}-r${{ github.run_id }}-${{ github.run_attempt }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          printf '### Published %s\n\n**Image:** %s\n\n**Digest:** %s\n\nThis does not update Minikube. Follow deploy/k8s/README.md to deploy this version.\n' \
+            "$SERVICE" "$IMAGE" "$DIGEST" >> "$GITHUB_STEP_SUMMARY"

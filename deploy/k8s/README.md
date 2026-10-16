@@ -22,7 +22,8 @@ cluster; commands explicitly select `foc-local`.
 
 All Deployments use versioned Docker Hub images under `arkanian4`, following section 2 of the
 course guide. Publishing uploads application images, not running containers, database data or
-Kubernetes Secrets. The image publisher runs:
+Kubernetes Secrets. After [CI setup](../../.github/README.md), merged service changes are published
+automatically. Maintainers can still build/push initial or manual releases with:
 
 ```bash
 docker login
@@ -46,6 +47,41 @@ pull without credentials; private repositories additionally require an `imagePul
 
 Runtime passwords/signing keys are created separately in each teammate's cluster. They are not
 included in images or Git. Never add them to application resources or frontend build settings.
+
+## Apply a CI-published service update
+
+CI can build/publish merged service changes automatically; see
+[CI setup and image naming](../../.github/README.md). One-time Docker Hub credentials must be
+configured before publishing works. The `d3-*` images above remain initial releases; a new CI
+image does not automatically replace them in these Deployment files or your running cluster.
+
+Each time a teammate merges an update:
+
+1. Open GitHub **Actions → CI → the run for that merge**. Wait for the complete run to succeed.
+2. In its **Summary**, find **Published order-service** (or the affected service). Copy the complete
+   **Image** value, including the generated `sha-...` tag. If no image was selected, there is
+   nothing new to deploy for that service in that run.
+3. Pull the latest `main` without overwriting local work. In the affected service's
+   `k8s/deployment.yaml`, replace only the `image:` value with the copied value.
+4. With Docker Desktop and `foc-local` running, apply and verify. For Order, from the repo root:
+
+```bash
+minikube start -p foc-local --driver=docker
+minikube -p foc-local kubectl -- --context=foc-local apply -f order-service/k8s/deployment.yaml
+minikube -p foc-local kubectl -- --context=foc-local -n foc-local rollout status deployment/order-service --timeout=300s
+pwsh -File deploy/k8s/Test-LocalDeployment.ps1 -Service order
+```
+
+Use `user-service`, `supplier-service`, `credit-service` or `gateway-service` for other Deployment
+file folders. The gateway's Kubernetes Deployment name is `gateway`, not `gateway-service`.
+The smoke helper accepts `gateway`, `supplier`, `credit`, or `order`; verify User through the
+gateway helper and its own guide. Reopen any browser port-forward after its target pod is replaced.
+
+Keep the selected image tag in version control through your team's normal reviewed commit/PR
+process. Otherwise pulling/reapplying an older Deployment can undo your local update. You do not
+need to build/push the image yourself, recreate Secrets, reapply database manifests or delete any
+storage. This routine assumes the initial cluster setup below is already complete. Future new
+dependencies (such as Kafka) need their own reviewed deployment/configuration, not just a new tag.
 
 ## Incremental deployment
 
