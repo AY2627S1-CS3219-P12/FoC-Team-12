@@ -188,4 +188,182 @@ class OrderTest {
         assertThat(accepted.isVisibleTo(REQUESTER)).isTrue();
         assertThat(accepted.isVisibleTo(COURIER)).isTrue();
     }
+
+    // ---- Phase 2: expire, accept, withdraw ----
+
+    @Test
+    void expireEndsAnOverdueOpenOrderAndReleasesTheReservation() {
+        Order order = order(OrderState.OPEN, NOW);
+
+        OrderTransition transition = order.expire(NOW);
+
+        assertThat(order.getState()).isEqualTo(OrderState.EXPIRED);
+        assertThat(order.getTerminalReason()).isEqualTo(TerminalReason.PICKUP_DEADLINE_PASSED);
+        assertThat(order.getExpiredAt()).isEqualTo(NOW);
+        assertThat(transition.actorRole()).isEqualTo(ActorRole.SYSTEM);
+        assertThat(transition.creditEffect()).isEqualTo(CreditEffect.RELEASE);
+        assertThat(transition.eventType()).isEqualTo("OrderExpired");
+    }
+
+    @Test
+    void expireIsRejectedOneMillisecondBeforeTheDeadline() {
+        Order order = order(OrderState.OPEN, NOW.plusNanos(1_000_000));
+
+        assertThatThrownBy(() -> order.expire(NOW)).isInstanceOf(OrderTransitionException.class);
+        assertThat(order.getState()).isEqualTo(OrderState.OPEN);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderState.class, names = "OPEN", mode = EnumSource.Mode.EXCLUDE)
+    void onlyOpenOrdersExpire(OrderState state) {
+        Order order = order(state, NOW.minusHours(1));
+
+        assertThatThrownBy(() -> order.expire(NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.INVALID_STATE_TRANSITION));
+        assertThat(order.getState()).isEqualTo(state);
+    }
+
+    @Test
+    void isOverdueOnlyForOpenOrdersAtOrPastTheDeadline() {
+        assertThat(order(OrderState.OPEN, NOW).isOverdue(NOW)).isTrue();
+        assertThat(order(OrderState.OPEN, NOW.plusNanos(1_000_000)).isOverdue(NOW)).isFalse();
+        assertThat(order(OrderState.ACCEPTED, NOW.minusHours(1)).isOverdue(NOW)).isFalse();
+    }
+
+    @Test
+    void aCourierAcceptsAnOpenOrderBeforeTheDeadline() {
+        Order order = order(OrderState.OPEN, NOW.plusNanos(1_000_000));
+
+        OrderTransition transition = order.accept(COURIER, NOW);
+
+        assertThat(order.getState()).isEqualTo(OrderState.ACCEPTED);
+        assertThat(order.getCourierId()).isEqualTo(COURIER);
+        assertThat(order.getAcceptedAt()).isEqualTo(NOW);
+        assertThat(transition.actorRole()).isEqualTo(ActorRole.COURIER);
+        assertThat(transition.courierId()).isEqualTo(COURIER);
+        assertThat(transition.creditEffect()).isEqualTo(CreditEffect.NONE);
+        assertThat(transition.eventType()).isEqualTo("OrderAccepted");
+    }
+
+    @Test
+    void acceptingExactlyAtTheDeadlineIsRejectedAsExpired() {
+        Order order = order(OrderState.OPEN, NOW);
+
+        assertThatThrownBy(() -> order.accept(COURIER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.ORDER_EXPIRED));
+        assertThat(order.getCourierId()).isNull();
+    }
+
+    @Test
+    void theRequesterCannotAcceptTheirOwnOrder() {
+        Order order = order(OrderState.OPEN);
+
+        assertThatThrownBy(() -> order.accept(REQUESTER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.SELF_ACCEPTANCE_FORBIDDEN));
+        assertThat(order.getState()).isEqualTo(OrderState.OPEN);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderState.class, names = {"ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETED"})
+    void acceptingAnOrderAnotherCourierHasIsRejectedAsAlreadyAccepted(OrderState state) {
+        Order order = order(state);
+        UUID winner = UUID.randomUUID();
+        ReflectionTestUtils.setField(order, "courierId", winner);
+
+        assertThatThrownBy(() -> order.accept(COURIER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.ORDER_ALREADY_ACCEPTED));
+        assertThat(order.getCourierId()).isEqualTo(winner);
+    }
+
+    @Test
+    void acceptingAnExpiredOrderGivesTheExpiryAsTheReason() {
+        Order order = order(OrderState.EXPIRED);
+
+        assertThatThrownBy(() -> order.accept(COURIER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.ORDER_EXPIRED));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderState.class, names = {"PENDING_CREDIT", "CANCELLED", "RESERVATION_FAILED"})
+    void acceptIsRejectedInStatesThatAreNotInThePool(OrderState state) {
+        Order order = order(state);
+
+        assertThatThrownBy(() -> order.accept(COURIER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.INVALID_STATE_TRANSITION));
+    }
+
+    @Test
+    void withdrawingBeforeTheDeadlineReopensTheOrderForOtherCouriers() {
+        Order order = order(OrderState.ACCEPTED, NOW.plusNanos(1_000_000));
+        ReflectionTestUtils.setField(order, "courierId", COURIER);
+
+        OrderTransition transition = order.withdraw(COURIER, NOW);
+
+        assertThat(order.getState()).isEqualTo(OrderState.OPEN);
+        assertThat(order.getCourierId()).isNull();
+        assertThat(order.getAcceptedAt()).isNull();
+        assertThat(order.getTerminalReason()).isNull();
+        assertThat(transition.courierId()).isEqualTo(COURIER);
+        assertThat(transition.creditEffect()).isEqualTo(CreditEffect.NONE);
+        assertThat(transition.eventType()).isEqualTo("OrderReopened");
+    }
+
+    @Test
+    void withdrawingAtTheDeadlineExpiresTheOrderInsteadOfReopeningIt() {
+        Order order = order(OrderState.ACCEPTED, NOW);
+        ReflectionTestUtils.setField(order, "courierId", COURIER);
+
+        OrderTransition transition = order.withdraw(COURIER, NOW);
+
+        assertThat(order.getState()).isEqualTo(OrderState.EXPIRED);
+        assertThat(order.getCourierId()).isNull();
+        assertThat(order.getTerminalReason()).isEqualTo(TerminalReason.COURIER_WITHDREW_AFTER_DEADLINE);
+        assertThat(transition.creditEffect()).isEqualTo(CreditEffect.RELEASE);
+        assertThat(transition.eventType()).isEqualTo("OrderExpired");
+    }
+
+    @Test
+    void onlyTheAssignedCourierCanWithdraw() {
+        Order order = order(OrderState.ACCEPTED);
+        ReflectionTestUtils.setField(order, "courierId", COURIER);
+
+        assertThatThrownBy(() -> order.withdraw(UUID.randomUUID(), NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.NOT_ASSIGNED_COURIER));
+        assertThatThrownBy(() -> order.withdraw(REQUESTER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.NOT_ASSIGNED_COURIER));
+        assertThat(order.getCourierId()).isEqualTo(COURIER);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = OrderState.class, names = {"PICKED_UP", "DELIVERED", "COMPLETED"})
+    void couriersCannotWithdrawOncePickedUp(OrderState state) {
+        Order order = order(state);
+        ReflectionTestUtils.setField(order, "courierId", COURIER);
+
+        assertThatThrownBy(() -> order.withdraw(COURIER, NOW))
+                .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                        assertThat(exception.getCode()).isEqualTo(OrderErrorCode.CANCELLATION_NOT_ALLOWED));
+        assertThat(order.getState()).isEqualTo(state);
+        assertThat(order.getCourierId()).isEqualTo(COURIER);
+    }
+
+    @Test
+    void aCourierWhoWithdrewMayAcceptTheSameOrderAgain() {
+        Order order = order(OrderState.ACCEPTED, NOW.plusHours(1));
+        ReflectionTestUtils.setField(order, "courierId", COURIER);
+        order.withdraw(COURIER, NOW);
+
+        order.accept(COURIER, NOW);
+
+        assertThat(order.getState()).isEqualTo(OrderState.ACCEPTED);
+        assertThat(order.getCourierId()).isEqualTo(COURIER);
+    }
 }

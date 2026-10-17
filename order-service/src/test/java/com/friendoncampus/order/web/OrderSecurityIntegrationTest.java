@@ -60,6 +60,7 @@ import com.sun.net.httpserver.HttpServer;
                         + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
                         + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                         + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
+                "app.orders.expiry.enabled=false",
                 "app.security.jwt.issuer=" + OrderSecurityIntegrationTest.ISSUER,
                 "app.security.jwt.audience=" + OrderSecurityIntegrationTest.AUDIENCE
         })
@@ -81,6 +82,9 @@ class OrderSecurityIntegrationTest {
 
     @MockitoBean
     private OrderEventRecorder orderEventRecorder;
+
+    @MockitoBean
+    private com.friendoncampus.order.service.OrderExpiryScheduler orderExpiryScheduler;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
@@ -148,6 +152,25 @@ class OrderSecurityIntegrationTest {
             assertThat(response.statusCode()).as(role).isEqualTo(403);
         }
         verify(orderService, never()).cancel(any(), any());
+    }
+
+    @Test
+    void onlyACourierSessionMayAcceptOrWithdraw() throws Exception {
+        String orderId = "3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64";
+        for (String action : List.of("accept", "withdraw")) {
+            for (String role : List.of("REQUESTER", "ADMIN")) {
+                HttpResponse<String> response = http.send(HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + port + "/api/orders/" + orderId + "/" + action))
+                        .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role,
+                                Instant.now().plusSeconds(600)))
+                        .POST(HttpRequest.BodyPublishers.noBody())
+                        .build(), HttpResponse.BodyHandlers.ofString());
+
+                assertThat(response.statusCode()).as(action + " as " + role).isEqualTo(403);
+            }
+        }
+        verify(orderService, never()).accept(any(), any());
+        verify(orderService, never()).withdraw(any(), any());
     }
 
     @Test

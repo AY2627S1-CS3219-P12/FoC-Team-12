@@ -6,5 +6,7 @@ public enum OrderAction {
     OPEN,
     FAIL_RESERVATION,
     CANCEL,
-    EXPIRE
+    EXPIRE,
+    ACCEPT,
+    WITHDRAW
 }

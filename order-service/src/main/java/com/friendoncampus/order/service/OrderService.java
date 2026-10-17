@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -80,15 +81,74 @@ public class OrderService {
 
     /**
      * The requester cancels. Repeating a cancel the same requester already made returns the
-     * cancelled order without recording anything again.
+     * cancelled order without recording anything again. An overdue OPEN order is expired instead.
      */
-    @Transactional
+    @Transactional(noRollbackFor = OrderExpiredOnActionException.class)
     public Order cancel(UUID orderId, UUID callerId) {
         Order order = lockVisible(orderId, callerId);
+        expireIfOverdue(order);
         if (order.getState() == OrderState.CANCELLED && order.getRequesterId().equals(callerId)) {
             return order;
         }
         return apply(order, order.cancel(callerId, now()));
+    }
+
+    /**
+     * A courier accepts an OPEN order. The row lock means the first request processed wins; later
+     * ones see the accepted order and get {@code ORDER_ALREADY_ACCEPTED}. An overdue order is
+     * expired instead. Repeating an acceptance the same courier already made is a no-op.
+     */
+    @Transactional(noRollbackFor = OrderExpiredOnActionException.class)
+    public Order accept(UUID orderId, UUID callerId) {
+        // Not hidden behind visibility: a courier racing for an order saw it in the pool, so the
+        // loser is told it was taken (409) rather than that it does not exist (404).
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (neverListed(order) && !order.isParticipant(callerId)) {
+            throw new OrderNotFoundException(orderId);
+        }
+        expireIfOverdue(order);
+        if (order.getState() == OrderState.ACCEPTED && callerId.equals(order.getCourierId())) {
+            return order;
+        }
+        return apply(order, order.accept(callerId, now()));
+    }
+
+    /**
+     * The assigned courier withdraws. Before the deadline the order reopens; at or after it, the
+     * order expires. Repeating a withdrawal the same courier just made is a no-op.
+     */
+    @Transactional
+    public Order withdraw(UUID orderId, UUID callerId) {
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (lastTransitionWasWithdrawalBy(orderId, callerId)) {
+            return order;
+        }
+        if (!order.isVisibleTo(callerId)) {
+            throw new OrderNotFoundException(orderId);
+        }
+        return apply(order, order.withdraw(callerId, now()));
+    }
+
+    /** IDs of OPEN orders whose pickup deadline has been reached, for the expiry job. */
+    @Transactional(readOnly = true)
+    public List<UUID> findOverdueOpenOrderIds(int limit) {
+        return orderRepository.findIdsDueBy(OrderState.OPEN, now(), PageRequest.of(0, limit));
+    }
+
+    /**
+     * Expires the order if it is still OPEN and overdue once locked; returns false when another
+     * transition (for example an acceptance) got there first.
+     */
+    @Transactional
+    public boolean expireIfStillOverdue(UUID orderId) {
+        Order order = orderRepository.findByIdForUpdate(orderId).orElse(null);
+        if (order == null || !order.isOverdue(now())) {
+            return false;
+        }
+        apply(order, order.expire(now()));
+        return true;
     }
 
     /**
@@ -123,6 +183,25 @@ public class OrderService {
             throw new OrderNotFoundException(orderId);
         }
         return order;
+    }
+
+    /** Lazy expiry: an overdue OPEN order is expired and committed, then the action is rejected. */
+    private void expireIfOverdue(Order order) {
+        if (order.isOverdue(now())) {
+            apply(order, order.expire(now()));
+            throw new OrderExpiredOnActionException();
+        }
+    }
+
+    /** Orders that never reached the open pool, so outsiders cannot know they exist. */
+    private static boolean neverListed(Order order) {
+        return order.getState() == OrderState.PENDING_CREDIT || order.getState() == OrderState.RESERVATION_FAILED;
+    }
+
+    private boolean lastTransitionWasWithdrawalBy(UUID orderId, UUID callerId) {
+        return transitionRepository.findFirstByOrderIdOrderByOrderVersionDesc(orderId)
+                .filter(record -> record.getAction() == OrderAction.WITHDRAW && callerId.equals(record.getActorId()))
+                .isPresent();
     }
 
     private boolean alreadyHandled(UUID orderId, OrderAction action) {

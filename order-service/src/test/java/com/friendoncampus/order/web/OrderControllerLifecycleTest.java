@@ -150,4 +150,65 @@ class OrderControllerLifecycleTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("NOT_ORDER_REQUESTER"));
     }
+
+    @Test
+    void acceptsAnOrder() throws Exception {
+        Order accepted = order(OrderState.ACCEPTED);
+        when(orderService.accept(eq(ORDER_ID), eq(REQUESTER))).thenReturn(accepted);
+
+        mockMvc.perform(post("/api/orders/{id}/accept", ORDER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("ACCEPTED"));
+    }
+
+    @Test
+    void losingAnAcceptanceRaceIsAConflict() throws Exception {
+        when(orderService.accept(eq(ORDER_ID), eq(REQUESTER))).thenThrow(new OrderTransitionException(
+                OrderErrorCode.ORDER_ALREADY_ACCEPTED, OrderState.ACCEPTED, "taken"));
+
+        mockMvc.perform(post("/api/orders/{id}/accept", ORDER_ID))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_ALREADY_ACCEPTED"))
+                .andExpect(jsonPath("$.currentState").value("ACCEPTED"));
+    }
+
+    @Test
+    void acceptingAnExpiredOrderExplainsWhy() throws Exception {
+        when(orderService.accept(eq(ORDER_ID), eq(REQUESTER)))
+                .thenThrow(new com.friendoncampus.order.service.OrderExpiredOnActionException());
+
+        mockMvc.perform(post("/api/orders/{id}/accept", ORDER_ID))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("ORDER_EXPIRED"))
+                .andExpect(jsonPath("$.currentState").value("EXPIRED"));
+    }
+
+    @Test
+    void acceptingYourOwnOrderIsForbidden() throws Exception {
+        when(orderService.accept(eq(ORDER_ID), eq(REQUESTER))).thenThrow(new OrderTransitionException(
+                OrderErrorCode.SELF_ACCEPTANCE_FORBIDDEN, OrderState.OPEN, "own order"));
+
+        mockMvc.perform(post("/api/orders/{id}/accept", ORDER_ID))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("SELF_ACCEPTANCE_FORBIDDEN"));
+    }
+
+    @Test
+    void withdrawsFromAnOrder() throws Exception {
+        when(orderService.withdraw(eq(ORDER_ID), eq(REQUESTER))).thenReturn(order(OrderState.OPEN));
+
+        mockMvc.perform(post("/api/orders/{id}/withdraw", ORDER_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("OPEN"));
+    }
+
+    @Test
+    void withdrawingFromSomeoneElsesAssignmentIsForbidden() throws Exception {
+        when(orderService.withdraw(eq(ORDER_ID), eq(REQUESTER))).thenThrow(new OrderTransitionException(
+                OrderErrorCode.NOT_ASSIGNED_COURIER, OrderState.ACCEPTED, "not yours"));
+
+        mockMvc.perform(post("/api/orders/{id}/withdraw", ORDER_ID))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("NOT_ASSIGNED_COURIER"));
+    }
 }
