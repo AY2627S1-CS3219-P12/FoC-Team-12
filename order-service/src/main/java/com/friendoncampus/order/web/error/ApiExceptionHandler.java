@@ -15,6 +15,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import com.friendoncampus.order.domain.OrderErrorCode;
+import com.friendoncampus.order.domain.OrderTransitionException;
+import com.friendoncampus.order.service.OrderNotFoundException;
+
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
@@ -58,6 +62,28 @@ public class ApiExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 "'" + exception.getValue() + "' is not a valid value for '" + exception.getName() + "'");
         problem.setTitle("Invalid request value");
+        return problem;
+    }
+
+    @ExceptionHandler(OrderNotFoundException.class)
+    public ProblemDetail handleOrderNotFound(OrderNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage());
+        problem.setTitle("Order not found");
+        problem.setProperty("code", OrderErrorCode.ORDER_NOT_FOUND.name());
+        problem.setProperty("orderId", exception.getOrderId());
+        return problem;
+    }
+
+    @ExceptionHandler(OrderTransitionException.class)
+    public ProblemDetail handleRejectedTransition(OrderTransitionException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                exception.getCode().status(),
+                exception.getMessage());
+        problem.setTitle("Order action rejected");
+        problem.setProperty("code", exception.getCode().name());
+        problem.setProperty("currentState", exception.getCurrentState());
         return problem;
     }
 }

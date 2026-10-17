@@ -25,6 +25,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.List;
+import java.util.UUID;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.friendoncampus.order.domain.Order;
 import com.friendoncampus.order.service.CreateOrderCommand;
+import com.friendoncampus.order.messaging.OrderEventRecorder;
 import com.friendoncampus.order.service.OrderService;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -76,6 +78,9 @@ class OrderSecurityIntegrationTest {
 
     @MockitoBean
     private OrderService orderService;
+
+    @MockitoBean
+    private OrderEventRecorder orderEventRecorder;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
@@ -127,6 +132,53 @@ class OrderSecurityIntegrationTest {
             assertThat(response.statusCode()).as(role).isEqualTo(403);
         }
         verify(orderService, never()).createOrder(any());
+    }
+
+    @Test
+    void onlyARequesterSessionMayCancel() throws Exception {
+        String orderId = "3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64";
+        for (String role : List.of("COURIER", "ADMIN")) {
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + "/api/orders/" + orderId + "/cancel"))
+                    .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role,
+                            Instant.now().plusSeconds(600)))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).as(role).isEqualTo(403);
+        }
+        verify(orderService, never()).cancel(any(), any());
+    }
+
+    @Test
+    void readsNeedAValidTokenButAnyRole() throws Exception {
+        when(orderService.getOrder(any(), any())).thenReturn(Order.submit(
+                UUID.fromString(SUBJECT), "Collect printing", "Grab my printout",
+                UUID.randomUUID(), UUID.randomUUID(), 10, OffsetDateTime.now(ZoneOffset.UTC).plusDays(1)));
+        HttpResponse<String> anonymous = http.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/orders/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64"))
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(anonymous.statusCode()).isEqualTo(401);
+
+        HttpResponse<String> courier = http.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/orders/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64"))
+                .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, "COURIER",
+                        Instant.now().plusSeconds(600)))
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(courier.statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void anUnexpectedServerErrorIsReportedAs500NotForbidden() throws Exception {
+        when(orderService.getOrder(any(), any())).thenThrow(new IllegalStateException("boom"));
+
+        HttpResponse<String> response = http.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/orders/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64"))
+                .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, "REQUESTER",
+                        Instant.now().plusSeconds(600)))
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(500);
     }
 
     @Test

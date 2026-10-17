@@ -1,12 +1,15 @@
 package com.friendoncampus.order.web;
 
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.friendoncampus.order.service.OrderService;
 import com.friendoncampus.order.web.dto.CreateOrderRequest;
 import com.friendoncampus.order.web.dto.OrderResponse;
+import com.friendoncampus.order.web.dto.OrderTransitionResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -76,5 +80,73 @@ public class OrderController {
                 orderService.createOrder(request.toCommand(requesterId)));
         URI location = URI.create("/api/orders/" + response.id());
         return ResponseEntity.created(location).body(response);
+    }
+
+    @Operation(
+            operationId = "getOrder",
+            summary = "Get an order",
+            description = "OPEN orders are visible to any signed-in user. In any other state only the "
+                    + "requester or the assigned courier can see the order; anyone else gets 404.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The order"),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No such order, or the caller may not see it",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @GetMapping("/{id}")
+    public OrderResponse getOrder(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return OrderResponse.from(orderService.getOrder(id, callerId(jwt)));
+    }
+
+    @Operation(
+            operationId = "getOrderHistory",
+            summary = "Get an order's transition history",
+            description = "Every state change in the order it happened. Visible to the requester and "
+                    + "the assigned courier only.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The transitions, oldest first"),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No such order, or the caller is not a participant",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @GetMapping("/{id}/history")
+    public List<OrderTransitionResponse> getOrderHistory(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return orderService.getHistory(id, callerId(jwt)).stream()
+                .map(OrderTransitionResponse::from)
+                .toList();
+    }
+
+    @Operation(
+            operationId = "cancelOrder",
+            summary = "Cancel an order",
+            description = "The requester cancels an OPEN order (full credit release) or an ACCEPTED order "
+                    + "(the courier is compensated). Not allowed once the order is picked up. Repeating "
+                    + "a cancel returns the cancelled order without any further effect. Requires a "
+                    + "REQUESTER session role.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The cancelled order"),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "Not the order's requester, or the session role is not REQUESTER",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No such order, or the caller may not see it",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "CANCELLATION_NOT_ALLOWED after pickup, or INVALID_STATE_TRANSITION",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @PostMapping("/{id}/cancel")
+    public OrderResponse cancelOrder(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return OrderResponse.from(orderService.cancel(id, callerId(jwt)));
+    }
+
+    private static UUID callerId(Jwt jwt) {
+        // The decoder guarantees a present, UUID-shaped 'sub'; identity comes only from the token.
+        return UUID.fromString(jwt.getSubject());
     }
 }
