@@ -58,9 +58,10 @@ export function OrderShell({ children }: { children: ReactNode }) {
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className="main-nav">
-            <a aria-current="page" href="/errands">
+            <a aria-current="page" href="/errands/browse">
               Errands
             </a>
+            <a href="/errands/mine">My errands</a>
             <a href="/credits">Credits</a>
             <a href={suppliersPath}>Locations</a>
             <a href="/">Account</a>

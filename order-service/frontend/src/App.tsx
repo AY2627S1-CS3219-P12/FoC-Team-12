@@ -4,16 +4,7 @@ import { readSession } from './auth/session'
 import { signInPath } from './navigation'
 import { BrowsePage } from './pages/BrowsePage'
 import { ErrandPage } from './pages/ErrandPage'
-
-/** Placeholder until the screen's own iteration lands. */
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <section className="state-panel">
-      <h2>{title}</h2>
-      <p>This screen is coming in the next iteration.</p>
-    </section>
-  )
-}
+import { MyErrandsPage } from './pages/MyErrandsPage'
 
 function SignedOut() {
   return (
@@ -34,7 +25,7 @@ export function AppRoutes() {
     <Routes>
       <Route element={<Navigate replace to="/errands/browse" />} path="/errands" />
       <Route element={<BrowsePage />} path="/errands/browse" />
-      <Route element={<ComingSoon title="My errands" />} path="/errands/mine" />
+      <Route element={<MyErrandsPage />} path="/errands/mine" />
       <Route element={<ErrandPage />} path="/errands/:orderId" />
       <Route element={<Navigate replace to="/errands/browse" />} path="*" />
     </Routes>

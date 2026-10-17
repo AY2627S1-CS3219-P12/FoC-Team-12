@@ -137,6 +137,7 @@ dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
 
 /* Browse errands */
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* My errands */
 .errand-list { display: grid; gap: 1rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
 .errand-card p { margin: 0.2rem 0; }
 .errand-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
@@ -152,3 +153,6 @@ dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
 .errand-heading { margin-bottom: 0.75rem; }
 .section-title { margin: 0 0 0.5rem; color: var(--ink); font-size: 1rem; }
 .description { margin: 0; color: var(--ink); line-height: 1.6; white-space: pre-line; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
+.tab { border-color: var(--line); background: var(--surface); color: var(--ink); font-weight: 600; }
+.tab[aria-selected='true'] { border-color: var(--action-soft); background: var(--action-soft); color: var(--action); }
