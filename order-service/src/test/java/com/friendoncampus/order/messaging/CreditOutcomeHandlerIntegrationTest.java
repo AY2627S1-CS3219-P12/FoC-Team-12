@@ -66,7 +66,7 @@ class CreditOutcomeHandlerIntegrationTest {
 
     private UUID createOrder() {
         return orderService.createOrder(new CreateOrderCommand(REQUESTER, "Collect printing", "Grab my printout",
-                UUID.randomUUID(), UUID.randomUUID(), 10, OffsetDateTime.now(ZoneOffset.UTC).plusHours(1))).getId();
+                UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 10, OffsetDateTime.now(ZoneOffset.UTC).plusHours(1))).getId();
     }
 
     /** The outbox event Order published for this order with the given type. */

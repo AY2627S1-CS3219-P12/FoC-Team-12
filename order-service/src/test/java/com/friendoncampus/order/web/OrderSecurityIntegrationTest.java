@@ -118,7 +118,7 @@ class OrderSecurityIntegrationTest {
         when(orderService.createOrder(any(CreateOrderCommand.class))).thenAnswer(invocation -> {
             CreateOrderCommand command = invocation.getArgument(0);
             return Order.submit(command.requesterId(), command.title(), command.description(),
-                    command.pickupLocationId(), command.dropoffLocationId(), command.creditReward(),
+                    command.pickupLocationId(), "COM1 Print Shop", command.dropoffLocationId(), "UTown Residence", command.creditReward(),
                     command.pickupDeadline());
         });
 
@@ -202,7 +202,7 @@ class OrderSecurityIntegrationTest {
     void readsNeedAValidTokenButAnyRole() throws Exception {
         when(orderService.getOrder(any(), any())).thenReturn(Order.submit(
                 UUID.fromString(SUBJECT), "Collect printing", "Grab my printout",
-                UUID.randomUUID(), UUID.randomUUID(), 10, OffsetDateTime.now(ZoneOffset.UTC).plusDays(1)));
+                UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 10, OffsetDateTime.now(ZoneOffset.UTC).plusDays(1)));
         HttpResponse<String> anonymous = http.send(HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + "/api/orders/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64"))
                 .GET().build(), HttpResponse.BodyHandlers.ofString());
@@ -264,7 +264,9 @@ class OrderSecurityIntegrationTest {
                   "title": "Collect printing",
                   "description": "Grab my printout from COM1",
                   "pickupLocationId": "9fd58f13-c8d5-4320-b757-7893d69a4ae0",
+                  "pickupLocationName": "COM1 Print Shop",
                   "dropoffLocationId": "eb46dc78-e25e-4f07-a7a2-26bff615d170",
+                  "dropoffLocationName": "UTown Residence",
                   "creditReward": 10,
                   "pickupDeadline": "%s"
                 }

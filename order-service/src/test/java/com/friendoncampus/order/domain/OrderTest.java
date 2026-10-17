@@ -22,7 +22,7 @@ class OrderTest {
 
     private static Order order(OrderState state, OffsetDateTime deadline) {
         Order order = Order.submit(REQUESTER, "Collect printing", "Grab my printout",
-                UUID.randomUUID(), UUID.randomUUID(), 10, deadline);
+                UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 10, deadline);
         ReflectionTestUtils.setField(order, "state", state);
         return order;
     }

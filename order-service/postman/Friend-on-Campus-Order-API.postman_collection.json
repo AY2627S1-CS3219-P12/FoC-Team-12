@@ -55,7 +55,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"title\": \"Collect printing\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"dropoffLocationId\": \"eb46dc78-e25e-4f07-a7a2-26bff615d170\",\n  \"creditReward\": 10,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
+          "raw": "{\n  \"title\": \"Collect printing\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"pickupLocationName\": \"COM1 Print Shop\",\n  \"dropoffLocationId\": \"eb46dc78-e25e-4f07-a7a2-26bff615d170\",\n  \"dropoffLocationName\": \"UTown Residence\",\n  \"creditReward\": 10,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -103,7 +103,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"title\": \"Collect printing\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"dropoffLocationId\": \"eb46dc78-e25e-4f07-a7a2-26bff615d170\",\n  \"creditReward\": 10,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
+          "raw": "{\n  \"title\": \"Collect printing\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"pickupLocationName\": \"COM1 Print Shop\",\n  \"dropoffLocationId\": \"eb46dc78-e25e-4f07-a7a2-26bff615d170\",\n  \"dropoffLocationName\": \"UTown Residence\",\n  \"creditReward\": 10,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -148,7 +148,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"title\": \"\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"dropoffLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"creditReward\": 0,\n  \"pickupDeadline\": \"2020-01-01T00:00:00Z\"\n}",
+          "raw": "{\n  \"title\": \"\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"pickupLocationName\": \"COM1 Print Shop\",\n  \"dropoffLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"dropoffLocationName\": \"\",\n  \"creditReward\": 0,\n  \"pickupDeadline\": \"2020-01-01T00:00:00Z\"\n}",
           "options": {
             "raw": {
               "language": "json"

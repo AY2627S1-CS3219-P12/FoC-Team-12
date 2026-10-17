@@ -56,7 +56,9 @@ into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
   | `title` | required, 1–120 chars (trimmed) |
   | `description` | required, 1–2000 chars (trimmed) |
   | `pickupLocationId` | required UUID (Supplier-owned) |
+  | `pickupLocationName` | required, 1–160 chars (trimmed); the name Supplier shows |
   | `dropoffLocationId` | required UUID, must differ from pickup |
+  | `dropoffLocationName` | required, 1–160 chars (trimmed) |
   | `creditReward` | required integer, > 0 |
   | `pickupDeadline` | required, must be in the future (ISO-8601) |
 
@@ -117,14 +119,10 @@ always saved together. See [Order events](#order-events-contract).
 **Location names come from the client.** Order Service never calls Supplier
 Service. The client picks locations from Supplier's public API and sends both the
 IDs and the display names; Order validates their format and stores the names as
-snapshots, so later Supplier edits or deletions don't rewrite existing errands.
-Order does not check that a location exists or is active.
-
-> Current state: create accepts the location IDs only, and the snapshot columns
-> stay `NULL`. Adding the required `pickupLocationName`/`dropoffLocationName`
-> fields (1–160 chars, trimmed) is the planned `order-location-snapshot`
-> iteration in [`DESIGN.md`](DESIGN.md). The V1 snapshot columns stay nullable,
-> so existing rows remain valid.
+snapshots (`pickup_location_name_snapshot`, `dropoff_location_name_snapshot`), so
+later Supplier edits or deletions don't rewrite existing errands. Order does not
+check that a location exists or is active. Orders created before this change have
+no stored names (the columns stay nullable).
 
 ## Order events (contract)
 

@@ -309,7 +309,7 @@ Still to build (iteration `order-kafka-messaging`):
 | 4 | `order-event-blueprint-alignment`: blueprint envelope/payloads, five published events, Credit outcome handler with inbox (V3) | Done (this branch) |
 | 5 | `order-kafka-messaging`: outbox relay to `order.events`, `credit.events` listener and DLT; Order in `compose.yaml` (shared, Jun Hui reviews) | Next |
 | 6 | `order-discovery-history`: open-order pool (filters, sorting, paging), "my orders" history (F4, F9) | |
-| 7 | `order-location-snapshot`: client-supplied location names on create/edit | |
+| 7 | `order-location-snapshot`: client-supplied location names on create (edit comes with iteration 8) | Done |
 | 8 | `order-edit-reward`: edit details (T4) and reward through `OrderRewardChangeRequested` / `CreditAdjusted` (T5, T5a, T5b) | |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | |
 

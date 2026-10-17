@@ -84,17 +84,24 @@ class OrderControllerValidationTest {
 
     private static String body(String title, String description, String pickup, String dropoff,
             String creditReward, String deadline) {
+        return body(title, description, pickup, "COM1 Print Shop", dropoff, "UTown Residence", creditReward, deadline);
+    }
+
+    private static String body(String title, String description, String pickup, String pickupName,
+            String dropoff, String dropoffName, String creditReward, String deadline) {
         return """
                 {
                   "title": %s,
                   "description": %s,
                   "pickupLocationId": %s,
+                  "pickupLocationName": %s,
                   "dropoffLocationId": %s,
+                  "dropoffLocationName": %s,
                   "creditReward": %s,
                   "pickupDeadline": %s
                 }
-                """.formatted(
-                json(title), json(description), json(pickup), json(dropoff), creditReward, json(deadline));
+                """.formatted(json(title), json(description), json(pickup), json(pickupName), json(dropoff),
+                json(dropoffName), creditReward, json(deadline));
     }
 
     private static String json(String value) {
@@ -110,7 +117,7 @@ class OrderControllerValidationTest {
         when(orderService.createOrder(any(CreateOrderCommand.class))).thenAnswer(invocation -> {
             CreateOrderCommand command = invocation.getArgument(0);
             return Order.submit(command.requesterId(), command.title(), command.description(),
-                    command.pickupLocationId(), command.dropoffLocationId(), command.creditReward(),
+                    command.pickupLocationId(), "COM1 Print Shop", command.dropoffLocationId(), "UTown Residence", command.creditReward(),
                     command.pickupDeadline());
         });
 
@@ -170,6 +177,44 @@ class OrderControllerValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ not json"))
                 .andExpect(status().isBadRequest());
+        verify(orderService, never()).createOrder(any());
+    }
+
+    @Test
+    void storesTheTrimmedLocationNamesTheClientSent() throws Exception {
+        when(orderService.createOrder(any(CreateOrderCommand.class))).thenAnswer(invocation -> {
+            CreateOrderCommand command = invocation.getArgument(0);
+            return Order.submit(command.requesterId(), command.title(), command.description(),
+                    command.pickupLocationId(), command.pickupLocationName(), command.dropoffLocationId(),
+                    command.dropoffLocationName(), command.creditReward(), command.pickupDeadline());
+        });
+
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Collect printing", "Grab my printout", PICKUP, "  COM1 Print Shop  ",
+                                DROPOFF, "UTown Residence", "10", futureDeadline())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.pickupLocationName").value("COM1 Print Shop"))
+                .andExpect(jsonPath("$.dropoffLocationName").value("UTown Residence"));
+    }
+
+    @Test
+    void rejectsMissingBlankOrTooLongLocationNames() throws Exception {
+        String tooLong = "x".repeat(161);
+
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Collect printing", "Grab my printout", PICKUP, null, DROPOFF, "   ", "10",
+                                futureDeadline())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.pickupLocationName").exists())
+                .andExpect(jsonPath("$.errors.dropoffLocationName").exists());
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body("Collect printing", "Grab my printout", PICKUP, tooLong, DROPOFF,
+                                "UTown Residence", "10", futureDeadline())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.pickupLocationName").exists());
         verify(orderService, never()).createOrder(any());
     }
 }

@@ -50,7 +50,9 @@ public class OrderService {
                 command.title(),
                 command.description(),
                 command.pickupLocationId(),
+                command.pickupLocationName(),
                 command.dropoffLocationId(),
+                command.dropoffLocationName(),
                 command.creditReward(),
                 command.pickupDeadline()));
         eventRecorder.record(order, order.submitted(now()));

@@ -92,7 +92,7 @@ class OrderAcceptExpiryIntegrationTest {
     private UUID openOrder(Duration untilDeadline) {
         OffsetDateTime deadline = OffsetDateTime.ofInstant(CLOCK.instant(), ZoneOffset.UTC).plus(untilDeadline);
         UUID orderId = orderService.createOrder(new CreateOrderCommand(REQUESTER, "Collect printing",
-                "Grab my printout", UUID.randomUUID(), UUID.randomUUID(), 10, deadline)).getId();
+                "Grab my printout", UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 10, deadline)).getId();
         orderService.confirmReservation(orderId, UUID.randomUUID());
         return orderId;
     }
@@ -283,7 +283,7 @@ class OrderAcceptExpiryIntegrationTest {
     void aCourierCannotAcceptAnOrderThatNeverReachedThePool() {
         OffsetDateTime deadline = OffsetDateTime.ofInstant(CLOCK.instant(), ZoneOffset.UTC).plusHours(1);
         UUID pending = orderService.createOrder(new CreateOrderCommand(REQUESTER, "t", "d",
-                UUID.randomUUID(), UUID.randomUUID(), 5, deadline)).getId();
+                UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 5, deadline)).getId();
 
         assertThatThrownBy(() -> orderService.accept(pending, UUID.randomUUID()))
                 .isInstanceOf(OrderNotFoundException.class);
