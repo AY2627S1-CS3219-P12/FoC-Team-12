@@ -174,6 +174,28 @@ class OrderSecurityIntegrationTest {
     }
 
     @Test
+    void pickupAndDeliveryNeedACourierSessionAndCompletionARequesterSession() throws Exception {
+        String orderId = "3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64";
+        List<String[]> forbidden = List.of(
+                new String[] {"pickup", "REQUESTER"}, new String[] {"pickup", "ADMIN"},
+                new String[] {"deliver", "REQUESTER"}, new String[] {"deliver", "ADMIN"},
+                new String[] {"complete", "COURIER"}, new String[] {"complete", "ADMIN"});
+        for (String[] attempt : forbidden) {
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + "/api/orders/" + orderId + "/" + attempt[0]))
+                    .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, attempt[1],
+                            Instant.now().plusSeconds(600)))
+                    .POST(HttpRequest.BodyPublishers.noBody())
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).as(attempt[0] + " as " + attempt[1]).isEqualTo(403);
+        }
+        verify(orderService, never()).pickUp(any(), any());
+        verify(orderService, never()).deliver(any(), any());
+        verify(orderService, never()).complete(any(), any());
+    }
+
+    @Test
     void readsNeedAValidTokenButAnyRole() throws Exception {
         when(orderService.getOrder(any(), any())).thenReturn(Order.submit(
                 UUID.fromString(SUBJECT), "Collect printing", "Grab my printout",

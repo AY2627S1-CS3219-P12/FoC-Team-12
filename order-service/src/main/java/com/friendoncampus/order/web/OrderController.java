@@ -199,6 +199,82 @@ public class OrderController {
         return OrderResponse.from(orderService.withdraw(id, callerId(jwt)));
     }
 
+    @Operation(
+            operationId = "pickUpOrder",
+            summary = "Mark an order as picked up",
+            description = "The assigned courier confirms they have collected the item. Allowed only when "
+                    + "ACCEPTED; a late pickup after the deadline is allowed. Requires a COURIER session role.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The picked-up order"),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "NOT_ASSIGNED_COURIER, or the session role is not COURIER",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No such order, or the caller may not see it",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "INVALID_STATE_TRANSITION",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @PostMapping("/{id}/pickup")
+    public OrderResponse pickUpOrder(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return OrderResponse.from(orderService.pickUp(id, callerId(jwt)));
+    }
+
+    @Operation(
+            operationId = "deliverOrder",
+            summary = "Mark an order as delivered",
+            description = "The assigned courier confirms they have handed the item over. Allowed only when "
+                    + "PICKED_UP. Requires a COURIER session role.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The delivered order"),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "NOT_ASSIGNED_COURIER, or the session role is not COURIER",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No such order, or the caller may not see it",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "INVALID_STATE_TRANSITION",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @PostMapping("/{id}/deliver")
+    public OrderResponse deliverOrder(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return OrderResponse.from(orderService.deliver(id, callerId(jwt)));
+    }
+
+    @Operation(
+            operationId = "completeOrder",
+            summary = "Confirm receipt of an order",
+            description = "The requester confirms they received the item, which settles the full reward to "
+                    + "the courier. Allowed only when DELIVERED. Repeating a confirmation returns the "
+                    + "completed order with no second settlement. Requires a REQUESTER session role.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The completed order"),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "NOT_ORDER_REQUESTER, or the session role is not REQUESTER",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No such order, or the caller may not see it",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "INVALID_STATE_TRANSITION",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @PostMapping("/{id}/complete")
+    public OrderResponse completeOrder(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return OrderResponse.from(orderService.complete(id, callerId(jwt)));
+    }
+
     private static UUID callerId(Jwt jwt) {
         // The decoder guarantees a present, UUID-shaped 'sub'; identity comes only from the token.
         return UUID.fromString(jwt.getSubject());

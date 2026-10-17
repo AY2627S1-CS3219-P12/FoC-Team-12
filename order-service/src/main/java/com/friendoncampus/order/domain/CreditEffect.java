@@ -9,5 +9,6 @@ public enum CreditEffect {
     NONE,
     RESERVE,
     RELEASE,
-    COMPENSATE
+    COMPENSATE,
+    SETTLE
 }

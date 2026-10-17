@@ -47,8 +47,10 @@ public class SecurityConfiguration {
                         // Error dispatches must reach the error page, or a 500 would surface as 403.
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/orders").hasRole("REQUESTER")
-                        .requestMatchers(HttpMethod.POST, "/api/orders/*/cancel").hasRole("REQUESTER")
-                        .requestMatchers(HttpMethod.POST, "/api/orders/*/accept", "/api/orders/*/withdraw")
+                        .requestMatchers(HttpMethod.POST, "/api/orders/*/cancel", "/api/orders/*/complete")
+                        .hasRole("REQUESTER")
+                        .requestMatchers(HttpMethod.POST, "/api/orders/*/accept", "/api/orders/*/withdraw",
+                                "/api/orders/*/pickup", "/api/orders/*/deliver")
                         .hasRole("COURIER")
                         .requestMatchers("/api/orders", "/api/orders/**").authenticated()
                         .anyRequest().denyAll())
