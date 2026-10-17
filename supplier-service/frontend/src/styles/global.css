@@ -8,6 +8,7 @@ html {
   min-width: 20rem;
   background: var(--foc-canvas);
   font-family: 'Public Sans', system-ui, sans-serif;
+  font-synthesis: none;
   color: var(--foc-ink);
 }
 

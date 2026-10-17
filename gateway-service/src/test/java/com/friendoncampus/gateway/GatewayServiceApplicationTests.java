@@ -35,6 +35,8 @@ class GatewayServiceApplicationTests {
 
     private static HttpServer userService;
     private static HttpServer supplierService;
+    private static HttpServer creditService;
+    private static HttpServer orderService;
 
     @LocalServerPort
     private int gatewayPort;
@@ -48,6 +50,8 @@ class GatewayServiceApplicationTests {
     static void stopDownstreams() {
         userService.stop(0);
         supplierService.stop(0);
+        creditService.stop(0);
+        orderService.stop(0);
     }
 
     @DynamicPropertySource
@@ -55,6 +59,8 @@ class GatewayServiceApplicationTests {
         ensureDownstreamsStarted();
         registry.add("USER_SERVICE_URL", () -> serviceUrl(userService));
         registry.add("SUPPLIER_SERVICE_URL", () -> serviceUrl(supplierService));
+        registry.add("CREDIT_SERVICE_URL", () -> serviceUrl(creditService));
+        registry.add("ORDER_SERVICE_URL", () -> serviceUrl(orderService));
     }
 
     @Test
@@ -110,14 +116,32 @@ class GatewayServiceApplicationTests {
     }
 
     @Test
-    void routesPackagedUserAndSupplierFrontendsWithoutACatchAll() throws Exception {
-        Map<String, String> expectedBackends = Map.of(
-                "/", "user",
-                "/user-assets/index.js", "user",
-                "/suppliers", "supplier",
-                "/suppliers/example-id", "supplier",
-                "/admin/suppliers/example-id/edit", "supplier",
-                "/supplier-assets/index.js", "supplier");
+    void forwardsAuthenticatedCreditQueriesWithoutRewritingThePath() throws Exception {
+        HttpResponse<String> response = send(request("/api/credits/me/transactions?page=1&size=8")
+                .header("Authorization", "Bearer requester-token")
+                .GET()
+                .build());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("\"backend\":\"credit\"")
+                .contains("\"path\":\"/api/credits/me/transactions\"")
+                .contains("\"query\":\"page=1&size=8\"")
+                .contains("\"authorization\":\"Bearer requester-token\"");
+    }
+
+    @Test
+    void routesPackagedFrontendsWithoutACatchAll() throws Exception {
+        Map<String, String> expectedBackends = Map.ofEntries(
+                Map.entry("/", "user"),
+                Map.entry("/user-assets/index.js", "user"),
+                Map.entry("/suppliers", "supplier"),
+                Map.entry("/suppliers/example-id", "supplier"),
+                Map.entry("/admin/suppliers/example-id/edit", "supplier"),
+                Map.entry("/supplier-assets/index.js", "supplier"),
+                Map.entry("/credits", "credit"),
+                Map.entry("/credits/history", "credit"),
+                Map.entry("/credit-assets/index.js", "credit"));
 
         for (Map.Entry<String, String> expected : expectedBackends.entrySet()) {
             HttpResponse<String> response = get(expected.getKey());
@@ -129,6 +153,28 @@ class GatewayServiceApplicationTests {
         }
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/orders", "/api/orders/example-id/cancel"})
+    void forwardsOrderRequestsAndPreservesDownstreamProblems(String path) throws Exception {
+        HttpResponse<String> response = send(request(path + "?source=gateway")
+                .header("Authorization", "Bearer requester-token")
+                .header("Content-Type", "application/json")
+                .header("X-Stub-Response-Status", "409")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"title\":\"Collect lunch\"}"))
+                .build());
+
+        assertThat(response.statusCode()).isEqualTo(409);
+        assertThat(response.headers().firstValue("Content-Type").orElse(""))
+                .startsWith("application/problem+json");
+        assertThat(response.body())
+                .contains("\"backend\":\"order\"")
+                .contains("\"method\":\"POST\"")
+                .contains("\"path\":\"" + path + "\"")
+                .contains("\"query\":\"source=gateway\"")
+                .contains("\"authorization\":\"Bearer requester-token\"")
+                .contains("Collect lunch");
+    }
+
     @Test
     void routesJwksToUserService() throws Exception {
         HttpResponse<String> response = get("/.well-known/jwks.json");
@@ -138,11 +184,14 @@ class GatewayServiceApplicationTests {
     }
 
     @Test
-    void mapsUserAndSupplierOpenApiDocuments() throws Exception {
-        Map<String, String> expectedBodies = Map.of(
-                "/docs/user/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"user\"}",
-                "/docs/supplier/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"supplier\"}",
-                "/docs/supplier/openapi.yaml", "openapi: 3.1.0\\nservice: supplier\\n");
+    void mapsServiceOpenApiDocuments() throws Exception {
+        Map<String, String> expectedBodies = Map.ofEntries(
+                Map.entry("/docs/user/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"user\"}"),
+                Map.entry("/docs/supplier/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"supplier\"}"),
+                Map.entry("/docs/supplier/openapi.yaml", "openapi: 3.1.0\\nservice: supplier\\n"),
+                Map.entry("/docs/credit/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"credit\"}"),
+                Map.entry("/docs/order/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"order\"}"),
+                Map.entry("/docs/credit/openapi.yaml", "openapi: 3.1.0\\nservice: credit\\n"));
 
         for (Map.Entry<String, String> expected : expectedBodies.entrySet()) {
             HttpResponse<String> response = get(expected.getKey());
@@ -187,7 +236,7 @@ class GatewayServiceApplicationTests {
     }
 
     @Test
-    void exposesSwaggerUiConfiguredForBothServices() throws Exception {
+    void exposesSwaggerUiConfiguredForAllServices() throws Exception {
         HttpResponse<String> index = get("/swagger-ui/index.html");
         HttpResponse<String> configuration = get("/v3/api-docs/swagger-config");
 
@@ -197,7 +246,9 @@ class GatewayServiceApplicationTests {
         assertThat(configuration.body())
                 .contains("/docs/user/openapi.json")
                 .contains("/docs/supplier/openapi.json")
-                .contains("Supplier Service");
+                .contains("/docs/credit/openapi.json")
+                .contains("/docs/order/openapi.json")
+                .contains("Credit Service");
     }
 
     private HttpRequest.Builder request(String path) {
@@ -220,6 +271,8 @@ class GatewayServiceApplicationTests {
         try {
             userService = stubService("user");
             supplierService = stubService("supplier");
+            creditService = stubService("credit");
+            orderService = stubService("order");
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to start gateway test downstreams", exception);
         }

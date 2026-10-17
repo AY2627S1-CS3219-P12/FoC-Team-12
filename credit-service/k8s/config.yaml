@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: credit-service-config
+  namespace: foc-local
+data:
+  DB_HOST: credit-db
+  DB_PORT: "5432"
+  DB_NAME: credit_db
+  DB_USER: credit_user
+  CREDIT_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
+  CREDIT_JWT_ISSUER: friend-on-campus-user-service
+  CREDIT_JWT_AUDIENCE: friend-on-campus-api
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"

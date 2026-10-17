@@ -32,6 +32,9 @@ On macOS or Linux:
 
 ## Run locally
 
+For the course-aligned Minikube deployment with persistent PostgreSQL, see
+[`k8s/README.md`](k8s/README.md). The Compose instructions below remain available independently.
+
 From the repository root, create a local environment file before the first run if one
 does not already exist. Fill in `USER_DB_*` and `JWT_PRIVATE_KEY` before running any
 `docker compose` command (even when starting only `user-db`, Compose checks required
@@ -366,9 +369,14 @@ stored session is rejected and cleared when malformed or expired. It contains th
 token, its single effective role, and the account's available assignments; it contains no password.
 Each role selection replaces this object with the response from
 `PATCH /api/users/me/session-role`. There is no `foc.ui-mode` authorization or presentation flag.
-Every successful login opens Profile, including when a public Supplier `returnTo` destination was
-requested. A `returnTo` value is validated only to identify an attempted relative Supplier admin
-destination; absolute, external, API, and malformed destinations are rejected. An Admin destination
+The authenticated Profile header and service cards link to Locations and the user's Credit dashboard.
+After successful login, the shared frontend starts the Credit Service's authenticated, idempotent
+account activation in the background; login still succeeds if Credit is temporarily unavailable,
+and the Credit dashboard retries activation when opened.
+Every successful login opens Profile except when authentication was requested by the protected Credit
+page, which returns to that validated same-origin route. Supplier `returnTo` destinations continue to
+open Profile. A `returnTo` value accepts only approved relative Supplier and Credit UI routes; absolute,
+external, API, and malformed destinations are rejected. An Admin destination
 never silently elevates a Requester or Courier token: the administrator must explicitly select Admin
 mode. Backend authorization always uses the signed JWT's effective role.
 

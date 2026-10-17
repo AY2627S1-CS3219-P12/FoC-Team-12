@@ -70,21 +70,36 @@ gateway changes have one editor with affected-owner review, preventing competing
 
 ## API Gateway
 
+CI publishing and one-time Docker Hub credential setup are documented in
+[the CI guide](.github/README.md). Successful main-branch CI publishes versioned images;
+developers choose when to [apply them to local Minikube](deploy/k8s/README.md#apply-a-ci-published-service-update).
+
+The course-aligned Minikube deployment is documented in
+[`deploy/k8s/README.md`](deploy/k8s/README.md), with service manifests beside each Dockerfile.
+
 Run the Docker stack and use `http://localhost:8088` as the normal browser and API origin. The
 gateway serves the packaged User application at `/`, the Supplier application under `/suppliers`,
-and the current APIs from the same origin:
+the Credit dashboard at `/credits`, and the current APIs from the same origin:
 
 ```text
 /                             -> User login and profile
 /suppliers/**                 -> Supplier public UI
 /admin/suppliers/**           -> Supplier administration UI
+/credits/**                   -> Credit dashboard
 /api/users/**                -> User Service
 /api/suppliers/**            -> Supplier Service
 /api/admin/suppliers/**      -> Supplier Service
+/api/credits/**              -> Credit Service
 ```
 
-Keeping both applications on `8088` lets their browser code share the validated
-`sessionStorage["foc.user-session"]` login session. Direct ports `8080` and `8081` remain exposed
+The Kubernetes setup additionally deploys Order Service at `/api/orders/**`, with its OpenAPI
+document at `/docs/order/openapi.json`. Order is not yet part of the Compose stack and has no
+packaged frontend. The shared local Kafka broker, topics, ACLs and verification workflow are
+documented in [`deploy/kafka/README.md`](deploy/kafka/README.md); application adapters remain
+separate owner-reviewed work.
+
+Keeping the packaged frontends on `8088` lets their browser code share the validated
+`sessionStorage["foc.user-session"]` login session. Direct ports `8080`, `8081` and `8083` remain exposed
 for service-owner debugging, but they are not the normal presentation flow.
 
 Gateway Swagger UI is available at `http://localhost:8088/swagger-ui/index.html`. See
