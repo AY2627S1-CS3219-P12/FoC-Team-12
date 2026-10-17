@@ -230,8 +230,8 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
 - **`GET /api/orders`: the open pool** (F4.1–F4.3).
   - Includes only `state=OPEN`, `pickup_deadline > now`, no pending adjustment, and not the caller's own orders.
   - Filters: `minReward`, `maxReward`, `pickupLocationId`, `dropoffLocationId`.
-  - Sort: `reward,desc` | `pickupDeadline,asc` | `pickupLocationName,asc`.
-  - Paging: `page`, `size` (max 50).
+  - Sort: `reward` (highest first) | `deadline` (nearest pickup deadline first, default) | `pickupLocationName` (A to Z, ignoring case); `id` breaks ties.
+  - Paging: `page`, `size` (max 50). Invalid values are `400 INVALID_QUERY`.
   - No matches returns `200` with an empty page, which the client shows as "no matches" (F4.5).
   - Uses the existing partial indexes in V1.
 - **`GET /api/orders/{id}`.**
@@ -239,9 +239,9 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   - In other states, only R or the current courier can see the order. Anyone else gets 404, so it
     isn't revealed that the order exists.
 - **`GET /api/orders/{id}/history`:** the transition history, visible to participants only.
-- **`GET /api/orders/me?as=requester`:** R's orders in `COMPLETED`, `CANCELLED` or `EXPIRED` (F9.1).
+- **`GET /api/orders/me/requested`:** R's orders in `COMPLETED`, `CANCELLED` or `EXPIRED` (F9.1).
   - `RESERVATION_FAILED` is excluded. *(Gap. Confirm.)*
-- **`GET /api/orders/me?as=courier`:** `COMPLETED` orders where the caller was the courier (F9.2).
+- **`GET /api/orders/me/delivered`:** `COMPLETED` orders where the caller was the courier (F9.2).
 - **Client-only requirements:**
   - F1.1.1 form validation, F4.4 remembering filters, and the F5.1.1/F5.1.2 confirmation popup;
   - the API supports them, but the server can't enforce them;
@@ -311,7 +311,7 @@ Still to build (iteration `order-kafka-messaging`):
 | 3 | `order-lifecycle-delivery`: `pickUp`, `deliver`, `complete`, duplicate completion | Done (PR #58) |
 | 4 | `order-event-blueprint-alignment`: blueprint envelope/payloads, five published events, Credit outcome handler with inbox (V3) | Done (this branch) |
 | 5 | `order-kafka-messaging`: outbox relay to `order.events`, `credit.events` listener and DLT; Order in `compose.yaml` (shared, Jun Hui reviews) | Next |
-| 6 | `order-discovery-history`: open-order pool (filters, sorting, paging), "my orders" history (F4, F9) | |
+| 6 | `order-discovery-history`: open-order pool (filters, sorting, paging), "my orders" history (F4, F9) | Done (this branch) |
 | 7 | `order-location-snapshot`: client-supplied location names on create (edit comes with iteration 8) | Done |
 | 8 | `order-edit-reward`: edit details (T4) and reward through `OrderRewardChangeRequested` / `CreditAdjusted` (T5, T5a, T5b) | Done (branch `order-service/edit-reward`) |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | |

@@ -85,6 +85,9 @@ class OrderSecurityIntegrationTest {
     private OrderEventRecorder orderEventRecorder;
 
     @MockitoBean
+    private com.friendoncampus.order.service.OrderQueryService orderQueryService;
+
+    @MockitoBean
     private com.friendoncampus.order.service.OrderExpiryScheduler orderExpiryScheduler;
 
     @MockitoBean
@@ -246,6 +249,30 @@ class OrderSecurityIntegrationTest {
                         Instant.now().plusSeconds(600)))
                 .GET().build(), HttpResponse.BodyHandlers.ofString());
         assertThat(courier.statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void listReadsNeedAValidTokenButAnyRole() throws Exception {
+        org.springframework.data.domain.Page<Order> empty = org.springframework.data.domain.Page.empty();
+        when(orderQueryService.findOpenPool(any(), any())).thenReturn(empty);
+        when(orderQueryService.findRequestedHistory(any(), any())).thenReturn(empty);
+        when(orderQueryService.findDeliveredHistory(any(), any())).thenReturn(empty);
+        for (String path : List.of("/api/orders", "/api/orders/me/requested", "/api/orders/me/delivered")) {
+            HttpResponse<String> anonymous = http.send(HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + path))
+                    .GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(anonymous.statusCode()).as(path).isEqualTo(401);
+            for (String role : List.of("REQUESTER", "COURIER")) {
+                HttpResponse<String> signedIn = http.send(HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + port + path))
+                        .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role,
+                                Instant.now().plusSeconds(600)))
+                        .GET().build(), HttpResponse.BodyHandlers.ofString());
+                assertThat(signedIn.statusCode()).as(path + " as " + role).isEqualTo(200);
+            }
+        }
+        verify(orderQueryService, org.mockito.Mockito.times(2))
+                .findOpenPool(org.mockito.ArgumentMatchers.eq(UUID.fromString(SUBJECT)), any());
     }
 
     @Test

@@ -92,6 +92,9 @@ class OrderEditRewardIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private OrderQueryService orderQueryService;
+
     private final JsonMapper json = JsonMapper.builder().build();
 
     @BeforeEach
@@ -422,5 +425,25 @@ class OrderEditRewardIntegrationTest {
 
         assertThat(outcomes).containsExactlyInAnyOrder(null, OrderErrorCode.VERSION_CONFLICT);
         assertThat(history(order.getId())).containsOnlyOnce("EDIT");
+    }
+
+    /** True when a courier browsing the open pool can see the order. */
+    private boolean inPool(UUID orderId) {
+        return orderQueryService.findOpenPool(UUID.randomUUID(), new OrderPoolQuery(null, null, null, null,
+                OrderPoolSort.DEADLINE, new OrderPaging(0, 50))).getContent().stream()
+                .anyMatch(order -> order.getId().equals(orderId));
+    }
+
+    @Test
+    void aPendingRewardChangeHidesTheOrderFromThePoolUntilCreditAnswers() {
+        Order order = openOrder();
+        assertThat(inPool(order.getId())).isTrue();
+
+        orderService.edit(order.getId(), REQUESTER, reload(order.getId()).getVersion(), details("Collect printing", 15));
+        assertThat(inPool(order.getId())).isFalse();
+
+        handler.handle(adjusted(rewardChangeRequested(order.getId()), 15));
+        assertThat(inPool(order.getId())).isTrue();
+        assertThat(reload(order.getId()).getCreditReward()).isEqualTo(15);
     }
 }

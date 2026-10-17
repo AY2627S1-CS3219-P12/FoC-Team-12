@@ -14,7 +14,8 @@ public enum OrderErrorCode {
     SELF_ACCEPTANCE_FORBIDDEN(HttpStatus.FORBIDDEN),
     REWARD_ADJUSTMENT_PENDING(HttpStatus.CONFLICT),
     VERSION_CONFLICT(HttpStatus.CONFLICT),
-    INVALID_PICKUP_DEADLINE(HttpStatus.BAD_REQUEST);
+    INVALID_PICKUP_DEADLINE(HttpStatus.BAD_REQUEST),
+    INVALID_QUERY(HttpStatus.BAD_REQUEST);
 
     private final HttpStatus status;
 

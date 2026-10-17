@@ -249,6 +249,194 @@
         }
       },
       "response": []
+    },
+    {
+      "name": "List Open Orders",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('is a page', () => {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.items).to.be.an('array');",
+              "    pm.expect(body).to.have.keys('items', 'page', 'size', 'totalItems', 'totalPages');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/orders?sort=deadline&page=0&size=20",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ],
+          "query": [
+            {
+              "key": "sort",
+              "value": "deadline",
+              "description": "deadline (default) | reward | pickupLocationName"
+            },
+            {
+              "key": "page",
+              "value": "0",
+              "description": "Zero-based page, default 0"
+            },
+            {
+              "key": "size",
+              "value": "20",
+              "description": "1-50, default 20"
+            }
+          ]
+        },
+        "description": "Any signed-in session role. The open pool: OPEN orders with a future pickup deadline and no pending reward change, excluding the caller's own requests. Optional filters: minReward, maxReward (positive integers, min <= max), pickupLocationId, dropoffLocationId (UUIDs). No matches returns 200 with an empty page."
+      },
+      "response": []
+    },
+    {
+      "name": "List Open Orders - invalid sort (400)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('code is INVALID_QUERY', () => pm.expect(pm.response.json().code).to.eql('INVALID_QUERY'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/orders?sort=newest",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ],
+          "query": [
+            {
+              "key": "sort",
+              "value": "newest",
+              "description": "Unsupported value"
+            }
+          ]
+        },
+        "description": "Expect 400 problem+json with code INVALID_QUERY."
+      },
+      "response": []
+    },
+    {
+      "name": "My Requested Orders (history)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('is a page', () => {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.items).to.be.an('array');",
+              "    pm.expect(body).to.have.keys('items', 'page', 'size', 'totalItems', 'totalPages');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/orders/me/requested?page=0&size=20",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "me",
+            "requested"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "0",
+              "description": "Zero-based page, default 0"
+            },
+            {
+              "key": "size",
+              "value": "20",
+              "description": "1-50, default 20"
+            }
+          ]
+        },
+        "description": "Any signed-in session role. The caller's own orders in COMPLETED, CANCELLED or EXPIRED, latest state change first."
+      },
+      "response": []
+    },
+    {
+      "name": "My Delivered Orders (history)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "pm.test('is a page', () => {",
+              "    const body = pm.response.json();",
+              "    pm.expect(body.items).to.be.an('array');",
+              "    pm.expect(body).to.have.keys('items', 'page', 'size', 'totalItems', 'totalPages');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/orders/me/delivered?page=0&size=20",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "me",
+            "delivered"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "0",
+              "description": "Zero-based page, default 0"
+            },
+            {
+              "key": "size",
+              "value": "20",
+              "description": "1-50, default 20"
+            }
+          ]
+        },
+        "description": "Any signed-in session role. COMPLETED orders the caller delivered as courier, latest state change first."
+      },
+      "response": []
     }
   ],
   "variable": [
