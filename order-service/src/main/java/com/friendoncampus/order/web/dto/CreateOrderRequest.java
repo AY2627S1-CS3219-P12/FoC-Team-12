@@ -21,8 +21,12 @@ public record CreateOrderRequest(
         @NotBlank @Size(max = 2000) String description,
         @Schema(description = "Supplier-owned pickup location ID", example = "9fd58f13-c8d5-4320-b757-7893d69a4ae0")
         @NotNull UUID pickupLocationId,
+        @Schema(description = "Pickup location name, as shown by Supplier Service; stored as a snapshot", example = "COM1 Print Shop", maxLength = 160)
+        @NotBlank @Size(max = 160) String pickupLocationName,
         @Schema(description = "Supplier-owned drop-off location ID; must differ from pickup", example = "eb46dc78-e25e-4f07-a7a2-26bff615d170")
         @NotNull UUID dropoffLocationId,
+        @Schema(description = "Drop-off location name, as shown by Supplier Service; stored as a snapshot", example = "UTown Residence", maxLength = 160)
+        @NotBlank @Size(max = 160) String dropoffLocationName,
         @Schema(description = "Credit reward offered to the courier; must be positive", example = "10", minimum = "1")
         @NotNull @Positive Integer creditReward,
         @Schema(description = "Latest time the item may be picked up; must be in the future", type = "string", format = "date-time", example = "2026-09-25T14:00:00Z")
@@ -31,6 +35,8 @@ public record CreateOrderRequest(
     public CreateOrderRequest {
         title = trim(title);
         description = trim(description);
+        pickupLocationName = trim(pickupLocationName);
+        dropoffLocationName = trim(dropoffLocationName);
     }
 
     @Schema(hidden = true)
@@ -49,7 +55,9 @@ public record CreateOrderRequest(
                 title,
                 description,
                 pickupLocationId,
+                pickupLocationName,
                 dropoffLocationId,
+                dropoffLocationName,
                 creditReward,
                 pickupDeadline);
     }

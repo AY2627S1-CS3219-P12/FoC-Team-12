@@ -58,7 +58,7 @@ class OrderServiceTest {
         UUID dropoff = UUID.randomUUID();
         OffsetDateTime deadline = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).plusDays(1);
         CreateOrderCommand command = new CreateOrderCommand(
-                REQUESTER, "Collect printing", "Grab my printout", pickup, dropoff, 10, deadline);
+                REQUESTER, "Collect printing", "Grab my printout", pickup, "COM1 Print Shop", dropoff, "UTown Residence", 10, deadline);
         when(orderRepository.saveAndFlush(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Order saved = orderService.createOrder(command);
@@ -82,7 +82,7 @@ class OrderServiceTest {
     @Test
     void repeatingACancelRecordsNothingNew() {
         UUID orderId = UUID.randomUUID();
-        Order cancelled = Order.submit(REQUESTER, "t", "d", UUID.randomUUID(), UUID.randomUUID(), 5,
+        Order cancelled = Order.submit(REQUESTER, "t", "d", UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 5,
                 OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).plusDays(1));
         ReflectionTestUtils.setField(cancelled, "state", OrderState.CANCELLED);
         when(orderRepository.findByIdForUpdate(orderId)).thenReturn(Optional.of(cancelled));
@@ -96,7 +96,7 @@ class OrderServiceTest {
     @Test
     void hiddenOrdersAreReportedAsNotFound() {
         UUID orderId = UUID.randomUUID();
-        Order accepted = Order.submit(REQUESTER, "t", "d", UUID.randomUUID(), UUID.randomUUID(), 5,
+        Order accepted = Order.submit(REQUESTER, "t", "d", UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 5,
                 OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC).plusDays(1));
         ReflectionTestUtils.setField(accepted, "state", OrderState.ACCEPTED);
         ReflectionTestUtils.setField(accepted, "courierId", UUID.randomUUID());

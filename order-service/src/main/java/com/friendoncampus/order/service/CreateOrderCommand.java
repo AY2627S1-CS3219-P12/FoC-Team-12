@@ -12,7 +12,9 @@ public record CreateOrderCommand(
         String title,
         String description,
         UUID pickupLocationId,
+        String pickupLocationName,
         UUID dropoffLocationId,
+        String dropoffLocationName,
         int creditReward,
         OffsetDateTime pickupDeadline) {
 }

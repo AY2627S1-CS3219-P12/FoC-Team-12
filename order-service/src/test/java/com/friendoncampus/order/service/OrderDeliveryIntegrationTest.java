@@ -66,7 +66,7 @@ class OrderDeliveryIntegrationTest {
     private UUID acceptedOrder() {
         OffsetDateTime deadline = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
         UUID orderId = orderService.createOrder(new CreateOrderCommand(REQUESTER, "Collect printing",
-                "Grab my printout", UUID.randomUUID(), UUID.randomUUID(), 10, deadline)).getId();
+                "Grab my printout", UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 10, deadline)).getId();
         orderService.confirmReservation(orderId, UUID.randomUUID());
         orderService.accept(orderId, COURIER);
         return orderId;

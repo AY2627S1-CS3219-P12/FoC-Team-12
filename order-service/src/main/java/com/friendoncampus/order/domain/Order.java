@@ -46,6 +46,12 @@ public class Order {
     @Column(name = "dropoff_location_id", nullable = false)
     private UUID dropoffLocationId;
 
+    @Column(name = "pickup_location_name_snapshot", length = 160)
+    private String pickupLocationName;
+
+    @Column(name = "dropoff_location_name_snapshot", length = 160)
+    private String dropoffLocationName;
+
     @Column(name = "credit_reward", nullable = false)
     private int creditReward;
 
@@ -117,7 +123,9 @@ public class Order {
             String title,
             String description,
             UUID pickupLocationId,
+            String pickupLocationName,
             UUID dropoffLocationId,
+            String dropoffLocationName,
             int creditReward,
             OffsetDateTime pickupDeadline) {
         Order order = new Order();
@@ -126,6 +134,8 @@ public class Order {
         order.description = description;
         order.pickupLocationId = pickupLocationId;
         order.dropoffLocationId = dropoffLocationId;
+        order.pickupLocationName = pickupLocationName;
+        order.dropoffLocationName = dropoffLocationName;
         order.creditReward = creditReward;
         order.pickupDeadline = toStoredPrecision(pickupDeadline);
         order.state = OrderState.PENDING_CREDIT;
@@ -394,6 +404,15 @@ public class Order {
 
     public UUID getDropoffLocationId() {
         return dropoffLocationId;
+    }
+
+    /** Location name the client sent at creation; Supplier edits never rewrite it. */
+    public String getPickupLocationName() {
+        return pickupLocationName;
+    }
+
+    public String getDropoffLocationName() {
+        return dropoffLocationName;
     }
 
     public int getCreditReward() {

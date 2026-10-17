@@ -77,7 +77,7 @@ class OrderLifecyclePersistenceIntegrationTest {
         // The deadline is relative to real time so the database CHECK (deadline > created_at) holds.
         OffsetDateTime deadline = OffsetDateTime.now(ZoneOffset.UTC).plusDays(1);
         return orderService.createOrder(new CreateOrderCommand(REQUESTER, "Collect printing",
-                "Grab my printout", UUID.randomUUID(), UUID.randomUUID(), 10, deadline)).getId();
+                "Grab my printout", UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 10, deadline)).getId();
     }
 
     private int count(String table, UUID orderId) {
@@ -186,5 +186,15 @@ class OrderLifecyclePersistenceIntegrationTest {
         assertThat(orderService.getOrder(orderId, REQUESTER).getState()).isEqualTo(OrderState.PENDING_CREDIT);
         assertThat(count("order_transitions", orderId)).isEqualTo(1);
         assertThat(count("outbox_events", orderId)).isEqualTo(1);
+    }
+
+    @Test
+    void locationNamesAreStoredAsSnapshots() {
+        UUID orderId = createOrder();
+
+        assertThat(jdbc.queryForMap("select pickup_location_name_snapshot, dropoff_location_name_snapshot"
+                + " from orders where id = ?", orderId))
+                .containsEntry("pickup_location_name_snapshot", "COM1 Print Shop")
+                .containsEntry("dropoff_location_name_snapshot", "UTown Residence");
     }
 }

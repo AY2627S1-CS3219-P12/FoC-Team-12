@@ -73,7 +73,7 @@ class OrderControllerLifecycleTest {
 
     private static Order order(OrderState state) {
         Order order = Order.submit(REQUESTER, "Collect printing", "Grab my printout",
-                UUID.randomUUID(), UUID.randomUUID(), 10, OffsetDateTime.now(ZoneOffset.UTC).plusDays(1));
+                UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 10, OffsetDateTime.now(ZoneOffset.UTC).plusDays(1));
         ReflectionTestUtils.setField(order, "id", ORDER_ID);
         ReflectionTestUtils.setField(order, "state", state);
         return order;
