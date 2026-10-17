@@ -7,6 +7,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -81,8 +82,10 @@ class OrderAcceptExpiryIntegrationTest {
 
     @BeforeEach
     void resetClock() {
-        // Created rows are stamped with real time, so keep the test clock at real time too.
-        CLOCK.set(Instant.now());
+        // Created rows are stamped with real time, so keep the test clock at real time too. The
+        // sub-microsecond part mimics Linux clocks (nanoseconds), which PostgreSQL cannot store, so
+        // deadline-boundary tests behave the same on every machine.
+        CLOCK.set(Instant.now().truncatedTo(ChronoUnit.MICROS).plusNanos(700));
     }
 
     /** Creates an order and opens it, with the deadline {@code untilDeadline} from now. */

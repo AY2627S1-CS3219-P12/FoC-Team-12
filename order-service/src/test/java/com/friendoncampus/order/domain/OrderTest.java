@@ -483,4 +483,13 @@ class OrderTest {
                         assertThat(exception.getCode()).isEqualTo(OrderErrorCode.INVALID_STATE_TRANSITION));
         assertThat(order.getState()).isEqualTo(state);
     }
+
+    @Test
+    void theDeadlineIsKeptAtTheMicrosecondPrecisionThatIsStored() {
+        Order order = order(OrderState.OPEN, NOW.plusNanos(700));
+
+        // 700 ns would round up to 1 µs in PostgreSQL; truncating keeps memory and storage equal.
+        assertThat(order.getPickupDeadline()).isEqualTo(NOW);
+        assertThat(order.isPastDeadline(NOW)).isTrue();
+    }
 }

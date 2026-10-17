@@ -2,6 +2,7 @@ package com.friendoncampus.order.domain;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -126,7 +127,7 @@ public class Order {
         order.pickupLocationId = pickupLocationId;
         order.dropoffLocationId = dropoffLocationId;
         order.creditReward = creditReward;
-        order.pickupDeadline = pickupDeadline;
+        order.pickupDeadline = toStoredPrecision(pickupDeadline);
         order.state = OrderState.PENDING_CREDIT;
         order.correlationId = UUID.randomUUID();
         return order;
@@ -300,6 +301,15 @@ public class Order {
      */
     public void recordCreditStatus(CreditStatus status) {
         creditStatus = status;
+    }
+
+    /**
+     * PostgreSQL stores microseconds and rounds anything finer, which could move a nanosecond
+     * deadline later once saved. Truncating up front keeps the deadline checked in memory equal
+     * to the stored one.
+     */
+    public static OffsetDateTime toStoredPrecision(OffsetDateTime timestamp) {
+        return timestamp == null ? null : timestamp.truncatedTo(ChronoUnit.MICROS);
     }
 
     /** True when the pickup deadline has been reached: {@code now >= pickupDeadline}. */

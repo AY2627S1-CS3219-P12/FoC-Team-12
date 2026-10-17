@@ -258,7 +258,8 @@ public class OrderService {
         return saved;
     }
 
+    /** The current time at the precision PostgreSQL stores, so deadline checks match the database. */
     private OffsetDateTime now() {
-        return OffsetDateTime.now(clock);
+        return Order.toStoredPrecision(OffsetDateTime.now(clock));
     }
 }
