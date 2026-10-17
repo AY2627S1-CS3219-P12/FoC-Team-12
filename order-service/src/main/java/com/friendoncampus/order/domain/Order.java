@@ -110,6 +110,13 @@ public class Order {
     @Column(name = "expired_at")
     private OffsetDateTime expiredAt;
 
+    /**
+     * A reward change waiting on Credit (V1 column). Mapped read-only here so the open pool can
+     * leave such orders out; the reward-edit iteration owns writing it.
+     */
+    @Column(name = "pending_credit_reward", insertable = false, updatable = false)
+    private Integer pendingCreditReward;
+
     protected Order() {
     }
 
@@ -485,5 +492,9 @@ public class Order {
 
     public OffsetDateTime getExpiredAt() {
         return expiredAt;
+    }
+
+    public Integer getPendingCreditReward() {
+        return pendingCreditReward;
     }
 }

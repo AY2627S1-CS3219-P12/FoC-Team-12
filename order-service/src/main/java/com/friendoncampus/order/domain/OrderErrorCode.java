@@ -11,7 +11,8 @@ public enum OrderErrorCode {
     ORDER_ALREADY_ACCEPTED(HttpStatus.CONFLICT),
     NOT_ORDER_REQUESTER(HttpStatus.FORBIDDEN),
     NOT_ASSIGNED_COURIER(HttpStatus.FORBIDDEN),
-    SELF_ACCEPTANCE_FORBIDDEN(HttpStatus.FORBIDDEN);
+    SELF_ACCEPTANCE_FORBIDDEN(HttpStatus.FORBIDDEN),
+    INVALID_QUERY(HttpStatus.BAD_REQUEST);
 
     private final HttpStatus status;
 

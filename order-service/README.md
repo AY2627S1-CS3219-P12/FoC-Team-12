@@ -110,6 +110,7 @@ problems with a `code` and the order's `currentState`:
 | `ORDER_EXPIRED` | 409 | The pickup deadline has passed |
 | `INVALID_STATE_TRANSITION` | 409 | The action is not valid in the order's current state |
 | `ORDER_NOT_FOUND` | 404 | No such order, or the caller may not see it |
+| `INVALID_QUERY` | 400 | A list endpoint got an invalid filter, sort or paging value (no `currentState`) |
 
 Every state change also stores an `order_transitions`
 history row in the same transaction; credit-changing ones also store an
@@ -123,6 +124,42 @@ snapshots (`pickup_location_name_snapshot`, `dropoff_location_name_snapshot`), s
 later Supplier edits or deletions don't rewrite existing errands. Order does not
 check that a location exists or is active. Orders created before this change have
 no stored names (the columns stay nullable).
+
+## Browse open orders and history
+
+Any signed-in session role may call these; the caller is the token's `sub`. Each
+returns a page:
+
+```json
+{ "items": [ /* orders, same shape as GET /api/orders/{id} */ ],
+  "page": 0, "size": 20, "totalItems": 21, "totalPages": 2 }
+```
+
+| Endpoint | Returns | Order |
+| --- | --- | --- |
+| `GET /api/orders` | The open pool: `OPEN` orders whose `pickupDeadline` is still in the future, with no reward change pending, excluding the caller's own requests (F4.1) | `sort` below |
+| `GET /api/orders/me/requested` | The caller's own orders in `COMPLETED`, `CANCELLED` or `EXPIRED` (F9.1); `RESERVATION_FAILED` is left out | Latest state change first, then `id` |
+| `GET /api/orders/me/delivered` | `COMPLETED` orders the caller delivered as courier (F9.2) | Latest state change first, then `id` |
+
+An `OPEN` order whose deadline has passed is never offered, even before the
+expiry job has expired it.
+
+Query parameters (all optional; filters combine with AND, a blank value is ignored):
+
+| Parameter | Applies to | Rule |
+| --- | --- | --- |
+| `minReward`, `maxReward` | pool | Positive whole credits, inclusive; `minReward` must not exceed `maxReward` (F4.2) |
+| `pickupLocationId`, `dropoffLocationId` | pool | Supplier location UUID (F4.2) |
+| `sort` | pool | `deadline` (nearest pickup deadline first, the default), `reward` (highest first, then nearest deadline) or `pickupLocationName` (A to Z ignoring case, orders without a stored name last, then nearest deadline). `id` breaks any remaining tie so paging is stable (F4.3) |
+| `page` | all | Zero-based, default `0` |
+| `size` | all | `1`–`50`, default `20` |
+
+No matches returns `200` with an empty `items` list, which the client shows as
+"no matches" (F4.5). Any invalid value returns `400` problem+json with
+`code: INVALID_QUERY` and a `detail` naming the parameter.
+
+**F4.4 (keep the courier's filters) is client-only:** the client remembers the last
+filter/sort values and sends them again; the API is stateless.
 
 ## Order events (contract)
 
