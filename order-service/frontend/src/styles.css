@@ -147,3 +147,8 @@ dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
 .filter-form label { margin-top: 0.4rem; color: var(--ink); font-size: 0.82rem; font-weight: 600; }
 .filter-form input, .filter-form select { min-height: 2.75rem; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--surface); color: var(--ink); font: inherit; }
 .filter-form button { justify-self: start; margin-top: 0.75rem; }
+/* Errand detail and active orders */
+.errand-heading h1 { margin: 0; color: var(--ink); font-size: clamp(1.6rem, 3.5vw, 2rem); letter-spacing: -0.03em; }
+.errand-heading { margin-bottom: 0.75rem; }
+.section-title { margin: 0 0 0.5rem; color: var(--ink); font-size: 1rem; }
+.description { margin: 0; color: var(--ink); line-height: 1.6; white-space: pre-line; }
