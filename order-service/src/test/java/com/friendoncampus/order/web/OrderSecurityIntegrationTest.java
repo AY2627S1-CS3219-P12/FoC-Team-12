@@ -234,6 +234,20 @@ class OrderSecurityIntegrationTest {
     }
 
     @Test
+    void theErrandUiIsPublicButTheApiIsNot() throws Exception {
+        for (String path : List.of("/errands", "/errands/browse", "/order-assets/index.html")) {
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + path)).GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(response.statusCode()).as(path).isNotIn(401, 403);
+        }
+        HttpResponse<String> api = http.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/orders")).GET().build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(api.statusCode()).isEqualTo(401);
+    }
+
+    @Test
     void readsNeedAValidTokenButAnyRole() throws Exception {
         when(orderService.getOrder(any(), any())).thenReturn(Order.submit(
                 UUID.fromString(SUBJECT), "Collect printing", "Grab my printout",
