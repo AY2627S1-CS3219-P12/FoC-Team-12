@@ -1,0 +1,224 @@
+package com.friendoncampus.order.messaging;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
+import java.time.OffsetDateTime;
+import java.util.HexFormat;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.friendoncampus.order.domain.CreditStatus;
+import com.friendoncampus.order.domain.Order;
+import com.friendoncampus.order.repository.OrderRepository;
+import com.friendoncampus.order.repository.OutboxEventRepository;
+import com.friendoncampus.order.repository.ProcessedEventRepository;
+import com.friendoncampus.order.service.OrderService;
+
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+
+/**
+ * Applies {@code credit.events} outcomes to orders, following the event communication blueprint:
+ * validate the envelope, deduplicate by {@code eventId} (inbox), match the outcome to the Order
+ * command that requested it by {@code operationId}, then apply only the Order behaviour the
+ * blueprint lists for that outcome, all in one transaction. The Kafka listener acknowledges the
+ * record only after this commits.
+ */
+@Component
+public class CreditOutcomeHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(CreditOutcomeHandler.class);
+    private static final String CREDIT_PRODUCER = "credit-service";
+    private static final Set<String> ORDER_OUTCOMES = Set.of(
+            "CreditReserved", "CreditReservationRejected", "CreditAdjusted", "CreditAdjustmentRejected",
+            "CreditReleased", "CreditSettled", "CourierCompensated");
+
+    /** What happened to one received event; stored in the inbox. */
+    public enum Outcome {
+        APPLIED,
+        DUPLICATE,
+        IGNORED
+    }
+
+    private final ProcessedEventRepository processedEventRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final OrderRepository orderRepository;
+    private final OrderService orderService;
+    private final Clock clock;
+    private final JsonMapper jsonMapper = JsonMapper.builder().build();
+
+    public CreditOutcomeHandler(
+            ProcessedEventRepository processedEventRepository,
+            OutboxEventRepository outboxEventRepository,
+            OrderRepository orderRepository,
+            OrderService orderService,
+            Clock clock) {
+        this.processedEventRepository = processedEventRepository;
+        this.outboxEventRepository = outboxEventRepository;
+        this.orderRepository = orderRepository;
+        this.orderService = orderService;
+        this.clock = clock;
+    }
+
+    @Transactional
+    public Outcome handle(String json) {
+        JsonNode envelope = parse(json);
+        UUID eventId = requiredUuid(envelope, "eventId");
+        String eventType = requiredText(envelope, "eventType");
+        String fingerprint = fingerprint(json);
+
+        Optional<ProcessedEvent> previous = processedEventRepository.findById(eventId);
+        if (previous.isPresent()) {
+            if (!previous.get().getFingerprint().equals(fingerprint)) {
+                throw reject("EVENT_ID_CONFLICT", "eventId " + eventId + " was reused with different content");
+            }
+            log.info("Ignored duplicate credit event eventId={} eventType={}", eventId, eventType);
+            return Outcome.DUPLICATE;
+        }
+
+        if (!ORDER_OUTCOMES.contains(eventType)) {
+            // CreditAccountAllocated and any future Credit events carry no Order behaviour.
+            return remember(eventId, eventType, requiredUuid(envelope, "aggregateId"), null, fingerprint,
+                    Outcome.IGNORED);
+        }
+        validateEnvelope(envelope);
+        JsonNode data = envelope.get("data");
+        UUID operationId = requiredUuid(data, "operationId");
+        UUID orderId = requiredUuid(data, "orderId");
+        if (!orderId.equals(requiredUuid(envelope, "aggregateId"))) {
+            throw reject("INVALID_EVENT", "aggregateId does not match data.orderId");
+        }
+        OutboxEvent command = outboxEventRepository.findByOperationId(operationId)
+                .filter(event -> event.getAggregateId().equals(orderId))
+                .orElseThrow(() -> reject("UNKNOWN_OPERATION",
+                        "No Order command with operationId " + operationId + " for order " + orderId));
+
+        apply(eventType, orderId, data, command);
+        log.info("Applied credit event eventId={} eventType={} operationId={} correlationId={}",
+                eventId, eventType, operationId, text(envelope, "correlationId"));
+        return remember(eventId, eventType, orderId, operationId, fingerprint, Outcome.APPLIED);
+    }
+
+    private void apply(String eventType, UUID orderId, JsonNode data, OutboxEvent command) {
+        switch (eventType) {
+            case "CreditReserved" -> {
+                requireCommand(command, "OrderSubmitted", eventType);
+                orderService.confirmReservation(orderId, requiredUuid(data, "reservationId"));
+            }
+            case "CreditReservationRejected" -> {
+                requireCommand(command, "OrderSubmitted", eventType);
+                orderService.rejectReservation(orderId);
+            }
+            case "CreditAdjusted", "CreditAdjustmentRejected" -> {
+                // Reward editing is a later iteration; Order never sends OrderRewardChangeRequested yet.
+                throw reject("UNKNOWN_OPERATION", eventType + " has no pending reward change to apply");
+            }
+            case "CreditReleased" -> recordCreditStatus(orderId, CreditStatus.RELEASED);
+            case "CreditSettled" -> {
+                requireCommand(command, "OrderCompleted", eventType);
+                recordCreditStatus(orderId, CreditStatus.SETTLED);
+            }
+            case "CourierCompensated" -> {
+                requireCommand(command, "OrderCancelled", eventType);
+                recordCreditStatus(orderId, CreditStatus.COMPENSATED);
+            }
+            default -> throw new IllegalStateException("Unhandled credit outcome " + eventType);
+        }
+    }
+
+    /** Credit status only; the blueprint says these outcomes never change the lifecycle state. */
+    private void recordCreditStatus(UUID orderId, CreditStatus status) {
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> reject("UNKNOWN_OPERATION", "Order " + orderId + " does not exist"));
+        order.recordCreditStatus(status);
+    }
+
+    private static void requireCommand(OutboxEvent command, String expected, String outcome) {
+        if (!command.getEventType().equals(expected)) {
+            throw reject("OPERATION_ID_CONFLICT",
+                    outcome + " answers operation " + command.getOperationId() + ", which was "
+                            + command.getEventType() + ", not " + expected);
+        }
+    }
+
+    private Outcome remember(UUID eventId, String eventType, UUID aggregateId, UUID operationId,
+            String fingerprint, Outcome outcome) {
+        processedEventRepository.save(new ProcessedEvent(eventId, eventType, aggregateId, operationId, fingerprint,
+                outcome.name(), OffsetDateTime.now(clock)));
+        return outcome;
+    }
+
+    private static void validateEnvelope(JsonNode envelope) {
+        if (envelope.path("eventVersion").asInt() != OrderEventRecorder.EVENT_VERSION) {
+            throw reject("INVALID_EVENT", "Unsupported eventVersion");
+        }
+        if (!CREDIT_PRODUCER.equals(text(envelope, "producer"))) {
+            throw reject("INVALID_EVENT", "Unexpected producer " + text(envelope, "producer"));
+        }
+        if (!"Order".equals(text(envelope, "aggregateType"))) {
+            throw reject("INVALID_EVENT", "Order outcomes must use aggregateType Order");
+        }
+        requiredUuid(envelope, "correlationId");
+        if (!envelope.has("data") || !envelope.get("data").isObject()) {
+            throw reject("INVALID_EVENT", "data must be an object");
+        }
+    }
+
+    private JsonNode parse(String json) {
+        try {
+            JsonNode node = jsonMapper.readTree(json);
+            if (node == null || !node.isObject()) {
+                throw reject("INVALID_EVENT", "Event must be a JSON object");
+            }
+            return node;
+        } catch (RuntimeException exception) {
+            if (exception instanceof CreditOutcomeRejectedException rejected) {
+                throw rejected;
+            }
+            throw reject("INVALID_EVENT", "Event is not valid JSON");
+        }
+    }
+
+    private static String text(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        return value == null || value.isNull() ? null : value.asString();
+    }
+
+    private static String requiredText(JsonNode node, String field) {
+        String value = text(node, field);
+        if (value == null || value.isBlank()) {
+            throw reject("INVALID_EVENT", field + " is required");
+        }
+        return value;
+    }
+
+    private static UUID requiredUuid(JsonNode node, String field) {
+        String value = requiredText(node, field);
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            throw reject("INVALID_EVENT", field + " must be a UUID");
+        }
+    }
+
+    private static String fingerprint(String json) {
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(json.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
+    private static CreditOutcomeRejectedException reject(String reasonCode, String message) {
+        return new CreditOutcomeRejectedException(reasonCode, message);
+    }
+}

@@ -7,6 +7,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import com.friendoncampus.order.repository.OrderRepository;
 import com.friendoncampus.order.repository.OrderTransitionRepository;
 import com.friendoncampus.order.repository.OutboxEventRepository;
+import com.friendoncampus.order.repository.ProcessedEventRepository;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -25,6 +26,9 @@ class OrderServiceApplicationTests {
 
     @MockitoBean
     private OutboxEventRepository outboxEventRepository;
+
+    @MockitoBean
+    private ProcessedEventRepository processedEventRepository;
 
     @Test
     void contextLoads() {

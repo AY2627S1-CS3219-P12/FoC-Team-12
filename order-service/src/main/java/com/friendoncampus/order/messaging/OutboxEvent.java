@@ -35,6 +35,9 @@ public class OutboxEvent {
     @Column(nullable = false, length = 128)
     private String topic;
 
+    @Column(name = "operation_id")
+    private UUID operationId;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
     private String payload;
@@ -52,12 +55,13 @@ public class OutboxEvent {
     }
 
     public OutboxEvent(UUID id, UUID aggregateId, long aggregateVersion, String eventType, String topic,
-            String payload, OffsetDateTime createdAt) {
+            UUID operationId, String payload, OffsetDateTime createdAt) {
         this.id = id;
         this.aggregateId = aggregateId;
         this.aggregateVersion = aggregateVersion;
         this.eventType = eventType;
         this.topic = topic;
+        this.operationId = operationId;
         this.payload = payload;
         this.createdAt = createdAt;
     }
@@ -80,6 +84,10 @@ public class OutboxEvent {
 
     public String getTopic() {
         return topic;
+    }
+
+    public UUID getOperationId() {
+        return operationId;
     }
 
     public String getPayload() {

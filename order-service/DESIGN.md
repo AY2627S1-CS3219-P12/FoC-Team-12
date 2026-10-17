@@ -1,11 +1,19 @@
 # Order Service D3 design: lifecycle, transitions and API
 
 ## Context
-Order Service today only creates orders (`POST /api/orders`, stored as `PENDING_CREDIT`) and checks
-RS256 JWTs. The README lifecycle table is incomplete: it gives actors but no guards, credit effects,
-events or errors, and leaves the deadline boundary open. This plan turns functional requirements
-F1–F9 into one complete state machine and API, fills the gaps, and splits the work into
-`/foc-iterate-feature` iterations. Owner: XueTing (`order-service/` only).
+This plan turns functional requirements F1–F9 into one complete state machine and API, fills the
+gaps, and splits the work into `/foc-iterate-feature` iterations. Owner: XueTing
+(`order-service/` only).
+
+> **Cross-service wire format:** the shared
+> [event communication blueprint](../docs/integration/event-communication-blueprint.md) (version 1)
+> is the contract for topics, event names, envelopes and payloads. Where this document and the
+> blueprint differ, **the blueprint wins**. This document covers Order's internal design.
+
+**Status (2026-10-17):** every lifecycle transition is built (phases 1–3, PRs #56–#58), and the
+outbox payloads and Credit outcome handling follow the blueprint (`event-blueprint-alignment`).
+Still to build: the Kafka publisher and listener, reward editing, location names, the open-order
+pool and the history lists. See [Iterations](#iterations-each-one-is-a-foc-iterate-feature-order--run).
 
 Decisions confirmed with XueTing:
 - **Reward editing stays in D3.** It goes through a Credit adjustment.
@@ -13,9 +21,11 @@ Decisions confirmed with XueTing:
   - Order and Credit communicate only through Kafka events, never through each other's database or synchronous calls.
   - Order writes events to a transactional outbox and a relay publishes them to Kafka.
   - Credit's replies are consumed idempotently.
-  - A dev/test **credit stub** (a Kafka listener) stands in for Credit until it exists.
-  - The Credit event contract needs Eldridge's approval.
-  - Kafka in Compose is a shared file: Jun Hui owns event-broker reliability, so he edits or reviews it.
+  - The contract is the shared event communication blueprint, owned jointly with Eldridge (Credit)
+    and Jun Hui (Kafka). Credit Service and the Kafka infrastructure now exist on `main`, so no
+    credit stub is needed.
+  - Kafka infrastructure (topics, ACLs, Compose) is shared and owned by Jun Hui
+    (`deploy/kafka/README.md`).
 - **Session role must match the action**, otherwise 403. This applies to mutations only; reads just need a valid token.
   - `REQUESTER`: create, edit, cancel, confirm receipt.
   - `COURIER`: accept, withdraw, pick up, deliver.
@@ -52,39 +62,65 @@ User Service ── JWKS ──► Order (token verification only)
   - the transactional outbox prevents "saved but not published";
   - inbox de-duplication prevents double-applying a replayed event.
 
-### Kafka contract (proposal; needs Eldridge and Jun Hui to approve)
+### Kafka contract (from the shared blueprint)
 
-| Topic | Producer | Key | Partitions | Consumers |
-|---|---|---|---|---|
-| `order.events` | Order | `orderId` | 3 | Credit, Notifications (N2H), Logging |
-| `credit.events` | Credit | `orderId` | 3 | Order |
-| `*.DLT` | Spring retry | same key | 1 | Ops / observability |
+Topics, keys, partitions and producer/consumer settings are defined in the
+[blueprint](../docs/integration/event-communication-blueprint.md#kafka-configuration). For Order:
 
-- **Per-order ordering.** Keying by `orderId` keeps all of one order's events on one partition, so
-  they are consumed in order. Consumers still check `aggregateVersion` and ignore stale events.
-- **Envelope.** The README envelope is kept as JSON: `eventId`, `eventType`, `eventVersion`,
-  `aggregateId`, `aggregateVersion`, `occurredAt`, `producer`, `correlationId`, `causationId`,
-  `actor` and `data`. Credit-affecting events also carry `operationId` in `data`.
-- **Events Order publishes:**
-  - `OrderSubmitted` (reserve);
-  - `OrderOpened`, `OrderUpdated`;
-  - `OrderRewardChangeRequested` (adjust), `OrderRewardChanged`, `OrderRewardChangeRejected`;
-  - `OrderAccepted`, `OrderReopened`, `OrderPickedUp`, `OrderDelivered`;
-  - `OrderCancelled` (release, or compensate when `compensationRequired=true`);
-  - `OrderExpired` (release);
-  - `OrderCompleted` (settle);
-  - `OrderReservationFailed`.
-- **Credit replies Order consumes:**
-  - `CreditReserved` (carries `reservationId`), `CreditReservationRejected`;
-  - `CreditAdjusted`, `CreditAdjustmentRejected`;
-  - `CreditReleased`, `CreditSettled`, `CourierCompensated`. These three only update the order's
-    credit-status fields and never change its state.
-  - Replies carry the `operationId` from the event that caused them, plus `causationId`.
-- **Producer settings:** `acks=all`, `enable.idempotence=true`, key = `orderId`.
-- **Consumer settings:**
-  - group `order-service`;
-  - manual ack only after the database transaction commits;
-  - 3 retries with backoff, then the DLT.
+| Topic | Order's role | Key | Consumer group |
+|---|---|---|---|
+| `order.events` | Producer | Order UUID | (Credit: `credit-service`) |
+| `credit.events` | Consumer | Order UUID for order outcomes | `order-service` |
+| `credit.events.DLT` | Retry recoverer target | original key | Operations |
+
+- **Envelope** (blueprint "Required envelope"): `eventId`, `eventType`, `eventVersion` = 1,
+  `aggregateType` = `Order`, `aggregateId` = order UUID (= Kafka key), `aggregateVersion` = the
+  order's version after the change, `occurredAt` in UTC with `Z`, `producer` = `order-service`,
+  `correlationId` (one per order workflow, stored on the order), `causationId`, and
+  `actor` = `{type: USER, userId, role}` or `{type: SYSTEM}`.
+- **`causationId`** is null for every Order event: `OrderSubmitted` initiates the workflow, and the
+  others are triggered by a user action or the expiry job, not by another event.
+- **`operationId`** is a fresh UUID generated once per credit-changing transition, stored in the
+  outbox row (`outbox_events.operation_id`) and never regenerated on a retry.
+
+**Events Order publishes on `order.events`: exactly the blueprint's five.**
+
+| Event | Transition(s) | `data` |
+|---|---|---|
+| `OrderSubmitted` | T1 | `operationId`, `orderId`, `requesterId`, `creditReward` |
+| `OrderRewardChangeRequested` | T5 | `operationId`, `orderId`, `newCreditReward` |
+| `OrderCancelled` | T6, T11 | `operationId`, `orderId`, `courierId` (null unless compensating), `compensationRequired`, `reason`, `cancelledAt` |
+| `OrderExpired` | T2b, T7, T10 | `operationId`, `orderId`, `reason`, `expiredAt` |
+| `OrderCompleted` | T14 | `operationId`, `orderId`, `courierId`, `completedAt` |
+
+Transitions that change no credits (T2 opened, T3 reservation failed, T4 details edited, T8
+accepted, T9 reopened, T12 picked up, T13 delivered) are **not published**. They are recorded in
+`order_transitions` and shown by `GET /api/orders/{id}/history`. Publishing them later (for
+example for Notifications) needs a blueprint change agreed with Credit, because Credit rejects
+unknown event types on `order.events`.
+
+**Credit outcomes Order consumes from `credit.events`** (blueprint "Credit outcome events"):
+
+| Outcome | Must answer | Order behaviour |
+|---|---|---|
+| `CreditReserved` | `OrderSubmitted` | T2 `PENDING_CREDIT → OPEN` (or T2b `EXPIRED` if at/after the deadline); store `reservationId`; credit status `RESERVED` |
+| `CreditReservationRejected` | `OrderSubmitted` | T3 `PENDING_CREDIT → RESERVATION_FAILED` |
+| `CreditAdjusted` / `CreditAdjustmentRejected` | `OrderRewardChangeRequested` | T5a / T5b (reward-edit iteration) |
+| `CreditReleased` | `OrderCancelled` or `OrderExpired` | credit status `RELEASED`; state unchanged |
+| `CreditSettled` | `OrderCompleted` | credit status `SETTLED`; state unchanged |
+| `CourierCompensated` | `OrderCancelled` | credit status `COMPENSATED`; state unchanged |
+
+Consumer rules (`messaging/CreditOutcomeHandler`), in one transaction:
+1. Parse and validate the envelope: version 1, `producer` = `credit-service`,
+   `aggregateType` = `Order`, `aggregateId` = `data.orderId`.
+2. Inbox (`processed_events`, keyed by `eventId`): a redelivery with the same content is a no-op;
+   the same `eventId` with different content is rejected as `EVENT_ID_CONFLICT`.
+3. Match `data.operationId` to the Order outbox row that requested it. An unknown operation is
+   rejected (`UNKNOWN_OPERATION`); an outcome answering the wrong kind of command is rejected
+   (`OPERATION_ID_CONFLICT`).
+4. Apply the behaviour above, mark the inbox row, and commit. The listener acknowledges Kafka only
+   after commit; rejected events are left unrecorded so they can go to the DLT and be replayed.
+5. Credit events with no Order behaviour (`CreditAccountAllocated`) are recorded as `IGNORED`.
 
 ## Global rules (resolved gaps)
 
@@ -116,8 +152,9 @@ User Service ── JWKS ──► Order (token verification only)
    - A duplicate returns `200` with the current order. It publishes no event, writes no history and
      has no credit effect.
    - The same target state reached by a *different* actor is a 409, e.g. losing an acceptance race.
-   - Every credit-affecting event also carries an `operationId = {orderId}:{action}:{orderVersion}`
-     so Credit can de-duplicate replays. Order never issues a second command for the same transition.
+   - Every credit-changing event carries a UUID `operationId`, generated once and stored with the
+     outbox row, so Credit can de-duplicate replays. Order never issues a second command for the
+     same transition.
 7. **Order of checks** for every action:
    1. authentication (401);
    2. session role (403 `ROLE_NOT_PERMITTED`);
@@ -156,21 +193,21 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
 | # | From → To | Trigger / endpoint | Actor | Guard | Credit effect (via event) | Event | Errors |
 |---|---|---|---|---|---|---|---|
 | T1 | ∅ → PENDING_CREDIT | `POST /api/orders` | Any user, REQUESTER session; becomes R | Valid fields (F1.1.2), including the client-supplied location IDs and names; deadline > now | Credit **reserves** `creditReward` | `OrderSubmitted` | 400 errors map, 403 |
-| T2 | PENDING_CREDIT → OPEN | `CreditReserved` reply | Sys | State is PENDING_CREDIT and now < deadline; store `credit_reservation_id` | none | `OrderOpened` | Duplicate reply is ignored |
+| T2 | PENDING_CREDIT → OPEN | `CreditReserved` reply | Sys | State is PENDING_CREDIT and now < deadline; store `credit_reservation_id` | none | history only | Duplicate reply is ignored |
 | T2b | PENDING_CREDIT → EXPIRED | `CreditReserved` reply arrives at or after the deadline | Sys | now ≥ deadline | **Release** the full reservation | `OrderExpired` (reason `PICKUP_DEADLINE_PASSED`) | — |
-| T3 | PENDING_CREDIT → RESERVATION_FAILED | `CreditReservationRejected` reply | Sys | State is PENDING_CREDIT | none | `OrderReservationFailed` | — |
-| T4 | OPEN → OPEN (details) | `PATCH /api/orders/{id}` with `version` | R | OPEN, no pending adjustment, version matches, valid fields, deadline > now | none (unless the reward changed, see T5) | `OrderUpdated` | 400, 403 `NOT_ORDER_REQUESTER`, 409 `VERSION_CONFLICT` / `INVALID_STATE_TRANSITION` / `REWARD_ADJUSTMENT_PENDING` |
+| T3 | PENDING_CREDIT → RESERVATION_FAILED | `CreditReservationRejected` reply | Sys | State is PENDING_CREDIT | none | history only | — |
+| T4 | OPEN → OPEN (details) | `PATCH /api/orders/{id}` with `version` | R | OPEN, no pending adjustment, version matches, valid fields, deadline > now | none (unless the reward changed, see T5) | history only | 400, 403 `NOT_ORDER_REQUESTER`, 409 `VERSION_CONFLICT` / `INVALID_STATE_TRANSITION` / `REWARD_ADJUSTMENT_PENDING` |
 | T5 | OPEN → OPEN (reward requested) | The same `PATCH` with a different `creditReward` | R | As T4; set `pending_credit_reward` and leave `credit_reward` unchanged | Credit **adjusts**: reserves the extra if affordable, or releases the difference | `OrderRewardChangeRequested` | As T4 |
-| T5a | OPEN → OPEN (reward applied) | `CreditAdjusted` reply | Sys | Pending value matches the reply | Already applied by Credit | `OrderRewardChanged` | Ignored if the order is no longer OPEN |
-| T5b | OPEN → OPEN (reward rejected) | `CreditAdjustmentRejected` reply | Sys | Pending value matches the reply; clear it | none; the old reservation stands | `OrderRewardChangeRejected` (the client shows "insufficient credits") | Ignored if no longer OPEN |
+| T5a | OPEN → OPEN (reward applied) | `CreditAdjusted` reply | Sys | Pending value matches the reply | Already applied by Credit | history only | Ignored if the order is no longer OPEN |
+| T5b | OPEN → OPEN (reward rejected) | `CreditAdjustmentRejected` reply | Sys | Pending value matches the reply; clear it | none; the old reservation stands | history only (the client shows "insufficient credits") | Ignored if no longer OPEN |
 | T6 | OPEN → CANCELLED | `POST /api/orders/{id}/cancel` | R | OPEN (F3.1) | **Release** the full reservation, no compensation | `OrderCancelled` (`compensationRequired=false`) | 403, 409 `INVALID_STATE_TRANSITION` |
 | T7 | OPEN → EXPIRED | Scheduler or lazy expiry | Sys | OPEN and now ≥ deadline (F8.1) | **Release** the full reservation | `OrderExpired` (`PICKUP_DEADLINE_PASSED`) | — |
-| T8 | OPEN → ACCEPTED | `POST /api/orders/{id}/accept` | Any user except R, COURIER session; becomes C | OPEN, now < deadline, no pending adjustment, caller ≠ requester (F5.2) | none; the reservation stays held | `OrderAccepted` | 403 `SELF_ACCEPTANCE_FORBIDDEN`; 409 `ORDER_ALREADY_ACCEPTED` (race loser, F5.3.1), `ORDER_EXPIRED` (F5.4.2, lazy expiry ran), `REWARD_ADJUSTMENT_PENDING`, `INVALID_STATE_TRANSITION` |
-| T9 | ACCEPTED → OPEN | `POST /api/orders/{id}/withdraw` | C | ACCEPTED and now < deadline (F3.2); clear the courier | none; the reservation stays held | `OrderReopened` (`withdrawnCourierId`); back in the pool (F3.2.2) | 403 `NOT_ASSIGNED_COURIER`, 409 |
+| T8 | OPEN → ACCEPTED | `POST /api/orders/{id}/accept` | Any user except R, COURIER session; becomes C | OPEN, now < deadline, no pending adjustment, caller ≠ requester (F5.2) | none; the reservation stays held | history only | 403 `SELF_ACCEPTANCE_FORBIDDEN`; 409 `ORDER_ALREADY_ACCEPTED` (race loser, F5.3.1), `ORDER_EXPIRED` (F5.4.2, lazy expiry ran), `REWARD_ADJUSTMENT_PENDING`, `INVALID_STATE_TRANSITION` |
+| T9 | ACCEPTED → OPEN | `POST /api/orders/{id}/withdraw` | C | ACCEPTED and now < deadline (F3.2); clear the courier | none; the reservation stays held | history only; back in the pool (F3.2.2) | 403 `NOT_ASSIGNED_COURIER`, 409 |
 | T10 | ACCEPTED → EXPIRED | Same `withdraw` endpoint | C | ACCEPTED and now ≥ deadline (F3.2.3); clear the courier | **Release** the full reservation to R | `OrderExpired` (`COURIER_WITHDREW_AFTER_DEADLINE`) | As T9 |
 | T11 | ACCEPTED → CANCELLED | `POST /api/orders/{id}/cancel` | R | ACCEPTED, not yet picked up (F3.3); clear the courier | **Compensate**: courier gets `ceil(reserved × 20 / 100)`, the rest goes back to R (F3.3.2) | `OrderCancelled` (`compensationRequired=true`, `courierId`) | 403, 409 |
-| T12 | ACCEPTED → PICKED_UP | `POST /api/orders/{id}/pickup` | C | ACCEPTED (F6.1); late pickup allowed | none | `OrderPickedUp` | 403 `NOT_ASSIGNED_COURIER`, 409 |
-| T13 | PICKED_UP → DELIVERED | `POST /api/orders/{id}/deliver` | C | PICKED_UP (F6.2) | none | `OrderDelivered` | 403, 409 |
+| T12 | ACCEPTED → PICKED_UP | `POST /api/orders/{id}/pickup` | C | ACCEPTED (F6.1); late pickup allowed | none | history only | 403 `NOT_ASSIGNED_COURIER`, 409 |
+| T13 | PICKED_UP → DELIVERED | `POST /api/orders/{id}/deliver` | C | PICKED_UP (F6.2) | none | history only | 403, 409 |
 | T14 | DELIVERED → COMPLETED | `POST /api/orders/{id}/complete` | R | DELIVERED (F6.3) | **Settle**: the full reservation goes to C | `OrderCompleted` | 403, 409 |
 | — | PICKED_UP / DELIVERED / COMPLETED → CANCELLED | `cancel` from R, or `withdraw` from C | — | Always rejected (F3.4/F3.4.1) | none | none | 409 `CANCELLATION_NOT_ALLOWED` |
 | — | Any terminal → anything | Any action | — | Rejected, except a duplicate of the same action (rule 6) | none | none | 409 `INVALID_STATE_TRANSITION` |
@@ -210,107 +247,80 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   - the API supports them, but the server can't enforce them;
   - **gap: who owns the Order UI** (Order Service has no frontend).
 
-## Data model (new migration `V2__order_lifecycle.sql`; V1 is never edited)
-- **`order_transitions`:**
-  - `id`, `order_id`, `action`, `from_state`, `to_state`, `actor_id`, `actor_role`, `courier_id`,
-    `reason`, `order_version`, `occurred_at`;
-  - index on `(order_id, occurred_at)`.
-  - Used for the history view (F9) and for duplicate detection.
-- **`outbox_events`:**
-  - `id` (= eventId), `aggregate_id`, `aggregate_version`, `event_type`, `topic`, `payload JSONB`,
-    `created_at`, `published_at NULL`, `attempts`;
-  - partial index where `published_at IS NULL`.
-- **`processed_events`** (the consumer inbox):
-  - `event_id` primary key, plus `consumed_at`;
-  - inserted in the same transaction as the order update. A duplicate key means "already handled", so the event is skipped.
-- **`orders`:**
-  - add `credit_status` (`RESERVED`, `RELEASED`, `SETTLED`, `COMPENSATED`) so the later Credit
-    outcomes are visible;
-  - updated only by the `credit.events` consumer.
-- **`orders` entity:**
-  - map the existing V1 columns: `courier_id`, the two snapshot names, `pending_credit_reward`,
-    `credit_reservation_id`, `terminal_reason` and the `*_at` timestamps;
-  - add domain methods, one per transition, each returning the event to record.
+## Data model (applied migrations are never edited)
+- **V1 `orders`:** the order aggregate and its lifecycle columns.
+- **V2 `order_transitions`:** one row per transition (`action`, `from_state`, `to_state`,
+  `actor_id`, `actor_role`, `courier_id`, `reason`, `order_version`, `occurred_at`). Used for the
+  history view (F9) and duplicate detection. Every transition is recorded, published or not.
+- **V2 `outbox_events`:** `id` (= `eventId`), `aggregate_id`, `aggregate_version`, `event_type`,
+  `topic`, `payload JSONB`, `created_at`, `published_at` (null until Kafka acknowledges),
+  `attempts`. Only the five blueprint events are written here.
+- **V3 (blueprint alignment):**
+  - `orders.correlation_id`: one UUID per order workflow, set at creation (existing rows reuse the
+    order ID);
+  - `orders.credit_status` (`RESERVED`, `RELEASED`, `SETTLED`, `COMPENSATED`): set only by Credit
+    outcomes, never changes the lifecycle state;
+  - `outbox_events.operation_id`, unique, so a Credit outcome can be matched to its command;
+  - `processed_events` (the inbox): `event_id` primary key, `event_type`, `aggregate_id`,
+    `operation_id`, `fingerprint` (SHA-256 of the received event, for `EVENT_ID_CONFLICT`),
+    `outcome`, `processed_at`.
+- **Later:** a V4 migration for reward editing (`pending_credit_reward` already exists in V1).
 
 ## Code structure (all under `order-service/src/main/java/com/friendoncampus/order/`)
-- `domain/Order.java`: pure transition methods (`accept(courierId, now)`, `withdraw(now)`, …) that
-  throw `InvalidTransitionException`.
-- `domain/OrderAction.java`: the action enum.
-- `domain/TerminalReason.java`: the terminal-reason enum.
-- `service/OrderLifecycleService.java`:
-  - one `@Transactional` method per action;
-  - each does lock → lazy expiry → duplicate check → transition, then saves the history row and
-    the outbox event;
-  - it reuses `OrderService` for create and edit.
-- `service/OrderExpiryScheduler.java`:
-  - `@Scheduled(fixedDelay = 30s)`;
-  - selects batches with `FOR UPDATE SKIP LOCKED`.
-- `messaging/OutboxRecorder.java`: writes the event row inside the transition transaction.
-- `messaging/OutboxRelay.java`:
-  - `@Scheduled` every 1 s;
-  - claims unpublished rows with `FOR UPDATE SKIP LOCKED`, then sends each one through
-    `KafkaTemplate` and waits for the broker acknowledgement;
-  - marks a row `published_at` only after the send succeeds. Failures increase `attempts` and are
-    retried, with a metric and a log.
-- `messaging/CreditEventsListener.java`:
-  - a `@KafkaListener` on `credit.events`;
-  - inserts into the `processed_events` inbox, then calls `CreditReplyHandler`;
-  - covers T2, T2b, T3, T5a and T5b, plus the `credit_status` updates.
-- `messaging/stub/CreditStubListener.java`:
-  - only active with `@Profile("credit-stub")`;
-  - consumes `order.events` and publishes matching `credit.events`: always reserve, always adjust,
-    and acknowledge every release, settlement and compensation;
-  - stands in for Credit until it exists. It's removed once Credit consumes the topic.
-- `config/KafkaConfiguration.java`:
-  - declares the topics with `NewTopic` beans;
-  - JSON serde for the envelope;
-  - `DefaultErrorHandler` with backoff and a DLT recoverer.
-- New dependency: `spring-kafka`. Properties: `spring.kafka.bootstrap-servers=${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}`.
-- `web/dto/CreateOrderRequest.java` and `UpdateOrderRequest.java`:
-  - add `pickupLocationName` and `dropoffLocationName` (`@NotBlank`, `@Size(max = 160)`, trimmed);
-  - stored in the existing V1 snapshot columns.
-- `web/OrderController.java`: the new endpoints.
-- `config/SecurityConfiguration.java`:
-  - per-route `hasRole(...)` rules, following the role/action mapping above;
-  - reads `authenticated()`.
+Built:
+- `domain/Order.java`: the state machine. One method per transition (`open`, `failReservation`,
+  `cancel`, `expire`, `accept`, `withdraw`, `pickUp`, `deliver`, `complete`), each returning an
+  `OrderTransition`; a rejected action throws `OrderTransitionException(code, currentState)`.
+- `domain/`: `OrderAction`, `OrderErrorCode`, `TerminalReason`, `CreditEffect`, `CreditStatus`,
+  `ActorRole`, and the `OrderTransitionRecord` history entity.
+- `service/OrderService.java`: one `@Transactional` method per action. Each locks the row
+  (`SELECT … FOR UPDATE`), applies lazy expiry, checks for a duplicate, applies the transition,
+  then records history and the outbox event.
+- `service/OrderExpiryScheduler.java` (the job) and `OrderExpirySchedule.java` (its 30 s timer,
+  switched off with `ORDER_EXPIRY_ENABLED=false`).
+- `messaging/OrderEventRecorder.java`: history row for every transition; blueprint envelope and
+  payload in `outbox_events` for the five credit-changing events.
+- `messaging/CreditOutcomeHandler.java`: applies one `credit.events` JSON message per the consumer
+  rules above, with the `processed_events` inbox.
+
+Still to build (iteration `order-kafka-messaging`):
+- `messaging/OutboxRelay.java`: `@Scheduled` every 1 s; claims unpublished rows with
+  `FOR UPDATE SKIP LOCKED`; sends each with its stored `eventId`, payload and `aggregate_id` key;
+  sets `published_at` only after Kafka acknowledges; on failure increments `attempts` and retries.
+- `messaging/CreditEventsListener.java`: `@KafkaListener` on `credit.events`, group
+  `order-service`, manual acknowledgement after `CreditOutcomeHandler` commits; three retries with
+  backoff for transient errors, then the original record to `credit.events.DLT`. A
+  `CreditOutcomeRejectedException` is not retried.
+- `config/KafkaConfiguration.java`: producer `acks=all` with idempotence; SASL_PLAINTEXT/PLAIN
+  client settings from `KAFKA_BOOTSTRAP_SERVERS`, `KAFKA_SECURITY_PROTOCOL`,
+  `KAFKA_SASL_MECHANISM`, `KAFKA_USERNAME`, `KAFKA_PASSWORD` (see `deploy/kafka/README.md`).
+  Topics and ACLs are created by the shared Kafka initializer, not by Order.
+- New dependency `spring-kafka`; tests with Testcontainers Kafka.
+- No credit stub: the real Credit Service consumes `order.events` on `main`.
 
 ## Iterations (each one is a `/foc-iterate-feature order-…` run)
-1. **`order-lifecycle-core`:**
-   - the V2 migration, the domain state machine with a table-driven unit test for every (state, action) pair;
-   - history recording and the outbox recorder (rows only, not yet relayed);
-   - `GET /{id}` and `/{id}/history`, plus the error codes.
-2. **`order-kafka-messaging`:**
-   - `spring-kafka`, the outbox relay, the `credit.events` listener with inbox, the DLT;
-   - the `credit-stub` profile, so T2 and T3 work end to end (PENDING_CREDIT → OPEN through Kafka).
-   - Shared-file follow-up: Kafka (KRaft, a single broker) in `compose.yaml` and `KAFKA_BOOTSTRAP_SERVERS`
-     in `.env.example`. Jun Hui edits or reviews these.
-3. **`order-edit-cancel`:** T4 and T6, with version checks.
-4. **`order-accept-expiry`:**
-   - T7, T8, the scheduler and lazy expiry;
-   - race tests: accept/accept, accept/expiry and accept/cancel.
-5. **`order-courier-progress`:** T9–T14, the rules for blocked cancellation, and duplicate completion.
-6. **`order-discovery-history`:** the pool's filters, sorting and paging, and the F9 history endpoints.
-7. **`order-location-snapshot`:**
-   - accept the client-supplied location names on create and edit, and validate them;
-   - store them in the snapshot columns;
-   - this is what makes F4.3's pickup-name sort possible;
-   - no cross-service dependency.
-8. **`order-reward-adjust`:** T5, T5a and T5b through Kafka against the stub.
-9. **`order-credit-integration`:**
-   - switch from the stub to the real Credit consumer and producer, using the approved event contract;
-   - needs Eldridge;
-   - demonstrates recovery: Credit down, then a replay with no double effect.
+
+| # | Iteration | Status |
+|---|---|---|
+| — | Create order with field validation; RS256 JWT identity | Done (PRs #32, #50) |
+| 1 | `order-lifecycle-reservation-cancel`: V2 migration, history, outbox, reads, `open`, `failReservation`, `cancel` | Done (PR #56) |
+| 2 | `order-lifecycle-accept-expiry`: `expire` (job + lazy), `accept`, `withdraw`, race tests | Done (PR #57) |
+| 3 | `order-lifecycle-delivery`: `pickUp`, `deliver`, `complete`, duplicate completion | Done (PR #58) |
+| 4 | `order-event-blueprint-alignment`: blueprint envelope/payloads, five published events, Credit outcome handler with inbox (V3) | Done (this branch) |
+| 5 | `order-kafka-messaging`: outbox relay to `order.events`, `credit.events` listener and DLT; Order in `compose.yaml` (shared, Jun Hui reviews) | Next |
+| 6 | `order-discovery-history`: open-order pool (filters, sorting, paging), "my orders" history (F4, F9) | |
+| 7 | `order-location-snapshot`: client-supplied location names on create/edit | |
+| 8 | `order-edit-reward`: edit details (T4) and reward through `OrderRewardChangeRequested` / `CreditAdjusted` (T5, T5a, T5b) | |
+| 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | |
 
 ## Open items to confirm (flag to the backlog and owners)
-- Late pickup after the deadline is allowed (rule 3).
-- A courier who withdrew may re-accept the same order (rule 9).
+- Late pickup after the deadline is allowed (rule 3). Built in phase 3.
+- A courier who withdrew may re-accept the same order (rule 9). Built in phase 2.
 - `RESERVATION_FAILED` is excluded from F9.1 history.
-- F3.3.2 says "release the 20%". The plan uses Credit's rule instead: the courier gets
-  `ceil(20%)` and the remainder goes back to the requester.
 - Ownership of the Order UI (F1.1.1, F4.2–F4.5, F5.1.1/2).
-- The Kafka topic names and the event names and payloads above. These need Eldridge (Credit) and
-  Jun Hui (broker owner) to approve before iteration 9; iterations 2–8 use the stub.
-- The Kafka Compose service, which is a shared file (Jun Hui).
+- **Resolved by the blueprint:** topic and event names, payloads, `operationId`, compensation
+  (`ceil(reserved × 20 / 100)` to the courier, the rest released). Order Compose wiring is still a
+  shared-file change for Jun Hui.
 
 ## Verification
 - **Every iteration:** `cd order-service && ./mvnw -B verify` with JDK 17.
@@ -324,8 +334,8 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   - test accept against the scheduler at the deadline;
   - test a duplicate `complete` (one `OrderCompleted` outbox row);
   - test that a failed transition writes no history and no outbox row.
-- **Kafka tests:** use Testcontainers Kafka (`org.testcontainers:kafka`) with the `credit-stub` profile.
-  - A created order becomes OPEN through `OrderSubmitted` → `CreditReserved`.
+- **Kafka tests (iteration 5):** Testcontainers Kafka (`org.testcontainers:kafka`).
+  - Blueprint-shaped `CreditReserved` opens the order (already covered at the handler level).
   - Publishing the same `CreditReserved` twice gives one state change (inbox de-duplication).
   - With the broker down, rows stay unpublished; once it's back the relay delivers them.
   - A poison message lands in `credit.events.DLT`.

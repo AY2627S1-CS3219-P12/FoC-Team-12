@@ -68,6 +68,13 @@ public class Order {
     @Column(name = "state_changed_at", nullable = false)
     private OffsetDateTime stateChangedAt;
 
+    @Column(name = "correlation_id", nullable = false, updatable = false)
+    private UUID correlationId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "credit_status", length = 16)
+    private CreditStatus creditStatus;
+
     @Column(name = "courier_id")
     private UUID courierId;
 
@@ -121,6 +128,7 @@ public class Order {
         order.creditReward = creditReward;
         order.pickupDeadline = pickupDeadline;
         order.state = OrderState.PENDING_CREDIT;
+        order.correlationId = UUID.randomUUID();
         return order;
     }
 
@@ -137,6 +145,7 @@ public class Order {
     public OrderTransition open(UUID reservationId, OffsetDateTime now) {
         requireState(OrderAction.OPEN, OrderState.PENDING_CREDIT);
         creditReservationId = reservationId;
+        creditStatus = CreditStatus.RESERVED;
         if (isPastDeadline(now)) {
             expiredAt = now;
             return moveTo(OrderAction.OPEN, OrderState.EXPIRED, null, ActorRole.SYSTEM, null,
@@ -285,6 +294,14 @@ public class Order {
         return state == OrderState.OPEN && isPastDeadline(now);
     }
 
+    /**
+     * Records the outcome Credit reported for the order's latest credit operation. This never
+     * changes the order's lifecycle state.
+     */
+    public void recordCreditStatus(CreditStatus status) {
+        creditStatus = status;
+    }
+
     /** True when the pickup deadline has been reached: {@code now >= pickupDeadline}. */
     public boolean isPastDeadline(OffsetDateTime now) {
         return !now.isBefore(pickupDeadline);
@@ -395,6 +412,14 @@ public class Order {
 
     public OffsetDateTime getStateChangedAt() {
         return stateChangedAt;
+    }
+
+    public UUID getCorrelationId() {
+        return correlationId;
+    }
+
+    public CreditStatus getCreditStatus() {
+        return creditStatus;
     }
 
     public UUID getCourierId() {

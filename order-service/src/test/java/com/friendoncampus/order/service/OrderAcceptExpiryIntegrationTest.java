@@ -100,6 +100,11 @@ class OrderAcceptExpiryIntegrationTest {
                 .toList();
     }
 
+    private List<String> history(UUID orderId) {
+        return jdbc.queryForList("select action from order_transitions where order_id = ? order by order_version",
+                String.class, orderId);
+    }
+
     private Order reload(UUID orderId) {
         return orderService.getOrder(orderId, REQUESTER);
     }
@@ -139,7 +144,7 @@ class OrderAcceptExpiryIntegrationTest {
         Order accepted = reload(orderId);
         assertThat(accepted.getState()).isEqualTo(OrderState.ACCEPTED);
         assertThat(courierIds).contains(accepted.getCourierId());
-        assertThat(eventTypes(orderId)).containsOnlyOnce("OrderAccepted");
+        assertThat(history(orderId)).containsOnlyOnce("ACCEPT");
     }
 
     @Test
@@ -171,7 +176,8 @@ class OrderAcceptExpiryIntegrationTest {
         // At the deadline the order can only expire; the courier is told why.
         assertThat(acceptOutcome).isEqualTo(OrderErrorCode.ORDER_EXPIRED);
         assertThat(reload(orderId).getState()).isEqualTo(OrderState.EXPIRED);
-        assertThat(eventTypes(orderId)).containsOnlyOnce("OrderExpired").doesNotContain("OrderAccepted");
+        assertThat(history(orderId)).containsOnlyOnce("EXPIRE").doesNotContain("ACCEPT");
+        assertThat(eventTypes(orderId)).containsOnlyOnce("OrderExpired");
     }
 
     @Test
@@ -186,7 +192,8 @@ class OrderAcceptExpiryIntegrationTest {
         Order order = reload(orderId);
         assertThat(order.getState()).isEqualTo(OrderState.EXPIRED);
         assertThat(order.getCourierId()).isNull();
-        assertThat(eventTypes(orderId)).containsExactly("OrderSubmitted", "OrderOpened", "OrderExpired");
+        assertThat(history(orderId)).containsExactly("SUBMIT", "OPEN", "EXPIRE");
+        assertThat(eventTypes(orderId)).containsExactly("OrderSubmitted", "OrderExpired");
     }
 
     @Test
@@ -227,7 +234,9 @@ class OrderAcceptExpiryIntegrationTest {
 
         assertThat(orderService.withdraw(orderId, first).getState()).isEqualTo(OrderState.OPEN);
         assertThat(orderService.accept(orderId, second).getCourierId()).isEqualTo(second);
-        assertThat(eventTypes(orderId)).containsSubsequence("OrderAccepted", "OrderReopened", "OrderAccepted");
+        assertThat(history(orderId)).containsSubsequence("ACCEPT", "WITHDRAW", "ACCEPT");
+        // Accepting and reopening change no credits, so nothing is published for them.
+        assertThat(eventTypes(orderId)).containsExactly("OrderSubmitted");
     }
 
     @Test
@@ -242,6 +251,14 @@ class OrderAcceptExpiryIntegrationTest {
         assertThat(order.getState()).isEqualTo(OrderState.EXPIRED);
         assertThat(order.getTerminalReason()).isEqualTo(TerminalReason.COURIER_WITHDREW_AFTER_DEADLINE);
         assertThat(eventTypes(orderId)).endsWith("OrderExpired");
+        OutboxEvent expired = outboxEventRepository.findByAggregateIdOrderByAggregateVersionAsc(orderId).stream()
+                .filter(event -> event.getEventType().equals("OrderExpired")).findFirst().orElseThrow();
+        tools.jackson.databind.JsonNode data = tools.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(expired.getPayload()).get("data");
+        // Exactly the blueprint's OrderExpired fields.
+        assertThat(data.propertyNames()).containsExactlyInAnyOrder("operationId", "orderId", "reason", "expiredAt");
+        assertThat(data.get("reason").asString()).isEqualTo("COURIER_WITHDREW_AFTER_DEADLINE");
+        assertThat(data.get("expiredAt").asString()).endsWith("Z");
     }
 
     @Test
@@ -253,8 +270,8 @@ class OrderAcceptExpiryIntegrationTest {
         orderService.withdraw(orderId, courier);
         orderService.withdraw(orderId, courier);
 
-        assertThat(eventTypes(orderId))
-                .containsExactly("OrderSubmitted", "OrderOpened", "OrderAccepted", "OrderReopened");
+        assertThat(history(orderId)).containsExactly("SUBMIT", "OPEN", "ACCEPT", "WITHDRAW");
+        assertThat(eventTypes(orderId)).containsExactly("OrderSubmitted");
         assertThat(jdbc.queryForObject("select count(*) from order_transitions where order_id = ?",
                 Integer.class, orderId)).isEqualTo(4);
     }

@@ -87,7 +87,7 @@ class OrderLifecyclePersistenceIntegrationTest {
     }
 
     @Test
-    void creatingAnOrderStoresOneHistoryRowAndOneOrderSubmittedEvent() {
+    void creatingAnOrderStoresOneHistoryRowAndABlueprintOrderSubmittedEvent() {
         UUID orderId = createOrder();
 
         assertThat(count("order_transitions", orderId)).isEqualTo(1);
@@ -102,13 +102,24 @@ class OrderLifecyclePersistenceIntegrationTest {
         assertThat(envelope.get("eventId").asString()).isEqualTo(event.getId().toString());
         assertThat(envelope.get("aggregateId").asString()).isEqualTo(orderId.toString());
         assertThat(envelope.get("aggregateVersion").asLong()).isEqualTo(event.getAggregateVersion());
+        assertThat(envelope.get("eventVersion").asInt()).isEqualTo(1);
+        assertThat(envelope.get("aggregateType").asString()).isEqualTo("Order");
         assertThat(envelope.get("producer").asString()).isEqualTo("order-service");
-        assertThat(envelope.get("actor").get("userId").asString()).isEqualTo(REQUESTER.toString());
+        assertThat(envelope.get("occurredAt").asString()).endsWith("Z");
+        assertThat(UUID.fromString(envelope.get("correlationId").asString())).isNotNull();
+        assertThat(envelope.get("causationId").isNull()).isTrue();
+        JsonNode actor = envelope.get("actor");
+        assertThat(actor.get("type").asString()).isEqualTo("USER");
+        assertThat(actor.get("userId").asString()).isEqualTo(REQUESTER.toString());
+        assertThat(actor.get("role").asString()).isEqualTo("REQUESTER");
         JsonNode data = envelope.get("data");
-        assertThat(data.get("toState").asString()).isEqualTo("PENDING_CREDIT");
-        assertThat(data.get("creditEffect").asString()).isEqualTo("RESERVE");
+        // Exactly the blueprint's OrderSubmitted fields.
+        assertThat(data.propertyNames()).containsExactlyInAnyOrder(
+                "operationId", "orderId", "requesterId", "creditReward");
+        assertThat(data.get("operationId").asString()).isEqualTo(event.getOperationId().toString());
+        assertThat(data.get("orderId").asString()).isEqualTo(orderId.toString());
+        assertThat(data.get("requesterId").asString()).isEqualTo(REQUESTER.toString());
         assertThat(data.get("creditReward").asInt()).isEqualTo(10);
-        assertThat(data.get("operationId").asString()).startsWith(orderId + ":SUBMIT:");
     }
 
     @Test
@@ -120,11 +131,19 @@ class OrderLifecyclePersistenceIntegrationTest {
 
         List<OutboxEvent> events = outboxEventRepository.findByAggregateIdOrderByAggregateVersionAsc(orderId);
         assertThat(events).extracting(OutboxEvent::getEventType)
-                .containsExactly("OrderSubmitted", "OrderOpened", "OrderCancelled");
+                .containsExactly("OrderSubmitted", "OrderCancelled");
         assertThat(events).extracting(OutboxEvent::getAggregateVersion).doesNotHaveDuplicates().isSorted();
-        JsonNode cancelled = json.readTree(events.get(2).getPayload()).get("data");
-        assertThat(cancelled.get("creditEffect").asString()).isEqualTo("RELEASE");
+        assertThat(events).extracting(OutboxEvent::getOperationId).doesNotHaveDuplicates();
+        JsonNode cancelledEnvelope = json.readTree(events.get(1).getPayload());
+        assertThat(cancelledEnvelope.get("correlationId").asString())
+                .isEqualTo(json.readTree(events.get(0).getPayload()).get("correlationId").asString());
+        JsonNode cancelled = cancelledEnvelope.get("data");
+        assertThat(cancelled.propertyNames()).containsExactlyInAnyOrder(
+                "operationId", "orderId", "courierId", "compensationRequired", "reason", "cancelledAt");
         assertThat(cancelled.get("compensationRequired").asBoolean()).isFalse();
+        assertThat(cancelled.get("courierId").isNull()).isTrue();
+        assertThat(cancelled.get("reason").asString()).isEqualTo("REQUESTER_CANCELLED_OPEN");
+        assertThat(cancelled.get("cancelledAt").asString()).endsWith("Z");
         assertThat(orderService.getHistory(orderId, REQUESTER)).hasSize(3);
     }
 
@@ -138,7 +157,8 @@ class OrderLifecyclePersistenceIntegrationTest {
         orderService.cancel(orderId, REQUESTER);
 
         assertThat(count("order_transitions", orderId)).isEqualTo(3);
-        assertThat(count("outbox_events", orderId)).isEqualTo(3);
+        // OrderSubmitted and OrderCancelled; opening changes no credits, so it is not published.
+        assertThat(count("outbox_events", orderId)).isEqualTo(2);
     }
 
     @Test
@@ -149,7 +169,9 @@ class OrderLifecyclePersistenceIntegrationTest {
         orderService.rejectReservation(orderId);
 
         assertThat(orderService.getOrder(orderId, REQUESTER).getState()).isEqualTo(OrderState.RESERVATION_FAILED);
-        assertThat(count("outbox_events", orderId)).isEqualTo(2);
+        assertThat(count("order_transitions", orderId)).isEqualTo(2);
+        // OrderSubmitted only: a rejected reservation changes no credits, so nothing is published.
+        assertThat(count("outbox_events", orderId)).isEqualTo(1);
     }
 
     @Test
