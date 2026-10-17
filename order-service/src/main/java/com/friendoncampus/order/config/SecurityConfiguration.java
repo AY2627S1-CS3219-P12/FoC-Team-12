@@ -46,6 +46,8 @@ public class SecurityConfiguration {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Error dispatches must reach the error page, or a 500 would surface as 403.
                         .requestMatchers("/error").permitAll()
+                        // The packaged errand UI; the API it calls is protected below.
+                        .requestMatchers(HttpMethod.GET, "/errands", "/errands/**", "/order-assets/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/orders").hasRole("REQUESTER")
                         .requestMatchers(HttpMethod.PATCH, "/api/orders/*").hasRole("REQUESTER")
                         .requestMatchers(HttpMethod.POST, "/api/orders/*/cancel", "/api/orders/*/complete")
