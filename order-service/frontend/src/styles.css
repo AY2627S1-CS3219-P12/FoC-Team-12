@@ -134,3 +134,9 @@ dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
   .main-nav { order: 3; width: 100%; overflow-x: auto; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* Errand detail and active orders */
+.errand-heading h1 { margin: 0; color: var(--ink); font-size: clamp(1.6rem, 3.5vw, 2rem); letter-spacing: -0.03em; }
+.errand-heading { margin-bottom: 0.75rem; }
+.section-title { margin: 0 0 0.5rem; color: var(--ink); font-size: 1rem; }
+.description { margin: 0; color: var(--ink); line-height: 1.6; white-space: pre-line; }

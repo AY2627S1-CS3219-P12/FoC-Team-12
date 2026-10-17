@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { OrderShell } from './components/OrderShell'
 import { readSession } from './auth/session'
 import { signInPath } from './navigation'
+import { ErrandPage } from './pages/ErrandPage'
 
 /** Placeholder until the screen's own iteration lands. */
 function ComingSoon({ title }: { title: string }) {
@@ -33,7 +34,7 @@ export function AppRoutes() {
       <Route element={<Navigate replace to="/errands/browse" />} path="/errands" />
       <Route element={<ComingSoon title="Run an errand" />} path="/errands/browse" />
       <Route element={<ComingSoon title="My errands" />} path="/errands/mine" />
-      <Route element={<ComingSoon title="Errand" />} path="/errands/:orderId" />
+      <Route element={<ErrandPage />} path="/errands/:orderId" />
       <Route element={<Navigate replace to="/errands/browse" />} path="*" />
     </Routes>
   )
