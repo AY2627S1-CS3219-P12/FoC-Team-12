@@ -21,6 +21,11 @@ spring:
               predicates:
                 - Path=/suppliers,/suppliers/**,/admin/suppliers,/admin/suppliers/**,/supplier-assets/**
                 - Method=GET
+            - id: credit-ui
+              uri: ${CREDIT_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/credits,/credits/**,/credit-assets/**
+                - Method=GET
             - id: user-api
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:
@@ -33,6 +38,14 @@ spring:
               uri: ${SUPPLIER_SERVICE_URL:http://localhost:8080}
               predicates:
                 - Path=/api/suppliers,/api/suppliers/**
+            - id: credit-api
+              uri: ${CREDIT_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/api/credits,/api/credits/**
+            - id: order-api
+              uri: ${ORDER_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/api/orders,/api/orders/**
             - id: user-jwks
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:
@@ -59,6 +72,27 @@ spring:
                 - Method=GET
               filters:
                 - SetPath=/v3/api-docs.yaml
+            - id: credit-openapi-json
+              uri: ${CREDIT_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/docs/credit/openapi.json
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs
+            - id: order-openapi-json
+              uri: ${ORDER_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/docs/order/openapi.json
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs
+            - id: credit-openapi-yaml
+              uri: ${CREDIT_SERVICE_URL:http://localhost:8083}
+              predicates:
+                - Path=/docs/credit/openapi.yaml
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs.yaml
 
 server:
   port: 8088
@@ -76,4 +110,8 @@ springdoc:
         url: /docs/user/openapi.json
       - name: Supplier Service
         url: /docs/supplier/openapi.json
-    urls-primary-name: Supplier Service
+      - name: Credit Service
+        url: /docs/credit/openapi.json
+      - name: Order Service
+        url: /docs/order/openapi.json
+    urls-primary-name: Credit Service

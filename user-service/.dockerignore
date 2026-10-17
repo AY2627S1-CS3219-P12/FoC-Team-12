@@ -11,3 +11,6 @@ frontend/coverage/
 frontend/.env
 frontend/.env.local
 frontend/.env.*.local
+k8s/*.key
+k8s/*.pem
+k8s/*.env*

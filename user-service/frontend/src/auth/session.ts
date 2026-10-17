@@ -16,7 +16,6 @@ function asWorkspaceRole(value: unknown): WorkspaceRole | null {
   if (value === "USER") return "REQUESTER";
   return value === "REQUESTER" || value === "COURIER" || value === "ADMIN" ? value : null;
 }
-
 function normalizeSession(value: unknown): AuthSession | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<AuthSession>;
@@ -74,7 +73,9 @@ export function safeReturnTo(search = window.location.search): string | null {
       destination.pathname === "/suppliers" ||
       destination.pathname.startsWith("/suppliers/") ||
       destination.pathname === "/admin/suppliers" ||
-      destination.pathname.startsWith("/admin/suppliers/")
+      destination.pathname.startsWith("/admin/suppliers/") ||
+      destination.pathname === "/credits" ||
+      destination.pathname.startsWith("/credits/")
     ) {
       return `${destination.pathname}${destination.search}${destination.hash}`;
     }

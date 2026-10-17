@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-service-config
+  namespace: foc-local
+data:
+  DB_HOST: order-db
+  DB_PORT: "5432"
+  DB_NAME: order_db
+  DB_USER: order_user
+  ORDER_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
+  ORDER_JWT_ISSUER: friend-on-campus-user-service
+  ORDER_JWT_AUDIENCE: friend-on-campus-api
+  JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"

@@ -136,6 +136,9 @@ export const api = {
       body: JSON.stringify(requestBody),
     })
   },
+  activateCreditAccount() {
+    return request('/api/credits/me', { method: 'POST' })
+  },
   requestPasswordReset(requestBody: PasswordResetRequest) {
     return requestPasswordResetWithCooldown(requestBody)
   },

@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -154,6 +160,10 @@ describe('Public supplier directory', () => {
     expect(screen.getByText('Next to NUS Co-op')).toBeInTheDocument()
     expect(screen.getByText(/9:00 am–6:00 pm/i)).toBeInTheDocument()
     expect(screen.getByText('21 active locations')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Credits' })).toHaveAttribute(
+      'href',
+      '/credits',
+    )
     expect(
       screen.queryByRole('link', { name: 'Admin' }),
     ).not.toBeInTheDocument()
@@ -326,8 +336,14 @@ describe('Public supplier details', () => {
     expect(
       await screen.findByRole('heading', { name: "Anna's x Soup Union" }),
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
   })
 
   it('loads an active supplier image over the branded placeholder', async () => {
@@ -472,8 +488,14 @@ describe('Other frontend routes', () => {
     renderRoute('/suppliers')
 
     expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
     expect(
       screen.queryByRole('link', { name: 'Add supplier' }),
     ).not.toBeInTheDocument()
@@ -492,22 +514,27 @@ describe('Other frontend routes', () => {
         availableRoles: ['REQUESTER', 'ADMIN'],
       }),
     )
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({
-      accessToken: 'admin.jwt',
-      tokenType: 'Bearer',
-      expiresAt: '2030-01-01T00:15:00Z',
-      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
-      username: 'Admin',
-      role: 'ADMIN',
-      availableRoles: ['REQUESTER', 'ADMIN'],
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        accessToken: 'admin.jwt',
+        tokenType: 'Bearer',
+        expiresAt: '2030-01-01T00:15:00Z',
+        userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993',
+        username: 'Admin',
+        role: 'ADMIN',
+        availableRoles: ['REQUESTER', 'ADMIN'],
+      }),
+    )
     vi.stubGlobal('fetch', fetchMock)
     mockApi()
     const user = userEvent.setup()
     renderRoute('/suppliers')
 
     await screen.findByText("Anna's x Soup Union")
-    await user.click(screen.getByLabelText('Open account menu for Admin'))
+    const accountMenuButton = screen.getByLabelText('Open account menu for Admin')
+    const accountMenu = accountMenuButton.closest('details')
+    await user.click(accountMenuButton)
+    expect(accountMenu).toHaveAttribute('open')
     await user.click(screen.getByRole('button', { name: 'Switch to Admin' }))
 
     await waitFor(() => {
@@ -516,15 +543,20 @@ describe('Other frontend routes', () => {
         expect.objectContaining({ method: 'PATCH' }),
       )
     })
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ role: 'ADMIN' })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      role: 'ADMIN',
+    })
     expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers')
-    expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({
+    expect(accountMenu).not.toHaveAttribute('open')
+    expect(
+      JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}'),
+    ).toMatchObject({
       accessToken: 'admin.jwt',
       role: 'ADMIN',
     })
   })
 
-  it('keeps administrator landing separate from ordinary supplier routes', async () => {
+  it('keeps administrator navigation and account actions consistent', async () => {
     sessionStorage.setItem(
       'foc.user-session',
       JSON.stringify({
@@ -537,8 +569,23 @@ describe('Other frontend routes', () => {
       }),
     )
     mockApi()
+    const user = userEvent.setup()
     renderRoute('/admin/suppliers')
-    expect(await screen.findByRole('heading', { name: 'Campus locations' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Campus locations' }),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('navigation', { name: 'Main navigation' }))
+        .getByRole('link', { name: 'Suppliers' }),
+    ).toHaveAttribute('href', '/admin/suppliers')
+    await user.click(screen.getByLabelText('Open account menu for Admin'))
+    expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute(
+      'href',
+      '/?view=users',
+    )
+    expect(
+      screen.getByRole('button', { name: 'Switch to User' }),
+    ).toBeInTheDocument()
   })
 
   it('does not allow a Requester token to render a direct Admin route', () => {
@@ -600,8 +647,14 @@ describe('Other frontend routes', () => {
     mockApi()
     renderRoute('/admin/suppliers')
 
-    expect(await screen.findByRole('heading', { name: 'Campus locations' })).toBeInTheDocument()
-    expect(screen.queryByText(/Supplier Service verifies your signed User Service token/)).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Campus locations' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        /Supplier Service verifies your signed User Service token/,
+      ),
+    ).not.toBeInTheDocument()
   })
 
   it('clears the selected mode when an administrator signs out', async () => {

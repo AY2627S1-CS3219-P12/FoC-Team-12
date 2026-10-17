@@ -14,6 +14,8 @@ Task boundaries are in [`AGENTS.md`](AGENTS.md) and [`../TASK_SPLIT.md`](../TASK
 
 ## Prerequisites
 
+For the course-aligned local cluster, see [Kubernetes deployment](k8s/README.md).
+
 - Java 17
 - Node.js 22 and npm, for frontend development
 - Docker Desktop, for running the containerized service
@@ -57,6 +59,10 @@ offers Admin mode. Selecting it exchanges the token and opens Supplier administr
 Requester mode exchanges the token again and opens the public directory. The session is cleared on
 sign-out, expiry, or malformed storage. Supplier Service still requires an effective `ADMIN` JWT for
 every administrative API request; frontend navigation never grants authority.
+
+The shared header links back to the main Profile experience and exposes Locations and Credits as parts
+of the same gateway-hosted application. Moving between them preserves the same validated browser
+session; the services remain independently deployed and continue to authorize their own APIs.
 
 Install dependencies and run frontend checks from `supplier-service/frontend`:
 
