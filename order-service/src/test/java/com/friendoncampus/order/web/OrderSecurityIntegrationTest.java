@@ -2,6 +2,7 @@ package com.friendoncampus.order.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -84,6 +85,9 @@ class OrderSecurityIntegrationTest {
     private OrderEventRecorder orderEventRecorder;
 
     @MockitoBean
+    private com.friendoncampus.order.service.OrderQueryService orderQueryService;
+
+    @MockitoBean
     private com.friendoncampus.order.service.OrderExpiryScheduler orderExpiryScheduler;
 
     @MockitoBean
@@ -158,6 +162,37 @@ class OrderSecurityIntegrationTest {
     }
 
     @Test
+    void onlyARequesterSessionMayEdit() throws Exception {
+        String orderId = "3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64";
+        String body = validBody().replace("{", "{\n  \"version\": 1,");
+        for (String role : List.of("COURIER", "ADMIN")) {
+            HttpResponse<String> response = http.send(HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + "/api/orders/" + orderId))
+                    .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role,
+                            Instant.now().plusSeconds(600)))
+                    .header("Content-Type", "application/json")
+                    .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).as(role).isEqualTo(403);
+        }
+        verify(orderService, never()).edit(any(), any(), anyLong(), any());
+
+        when(orderService.edit(any(), any(), anyLong(), any())).thenReturn(Order.submit(
+                UUID.fromString(SUBJECT), "Collect printing", "Grab my printout",
+                UUID.randomUUID(), "COM1 Print Shop", UUID.randomUUID(), "UTown Residence", 10,
+                OffsetDateTime.now(ZoneOffset.UTC).plusDays(1)));
+        HttpResponse<String> requester = http.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/orders/" + orderId))
+                .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, "REQUESTER",
+                        Instant.now().plusSeconds(600)))
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
+                .build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(requester.statusCode()).isEqualTo(200);
+    }
+
+    @Test
     void onlyACourierSessionMayAcceptOrWithdraw() throws Exception {
         String orderId = "3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64";
         for (String action : List.of("accept", "withdraw")) {
@@ -214,6 +249,30 @@ class OrderSecurityIntegrationTest {
                         Instant.now().plusSeconds(600)))
                 .GET().build(), HttpResponse.BodyHandlers.ofString());
         assertThat(courier.statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void listReadsNeedAValidTokenButAnyRole() throws Exception {
+        org.springframework.data.domain.Page<Order> empty = org.springframework.data.domain.Page.empty();
+        when(orderQueryService.findOpenPool(any(), any())).thenReturn(empty);
+        when(orderQueryService.findRequestedHistory(any(), any())).thenReturn(empty);
+        when(orderQueryService.findDeliveredHistory(any(), any())).thenReturn(empty);
+        for (String path : List.of("/api/orders", "/api/orders/me/requested", "/api/orders/me/delivered")) {
+            HttpResponse<String> anonymous = http.send(HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + path))
+                    .GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(anonymous.statusCode()).as(path).isEqualTo(401);
+            for (String role : List.of("REQUESTER", "COURIER")) {
+                HttpResponse<String> signedIn = http.send(HttpRequest.newBuilder()
+                        .uri(URI.create("http://localhost:" + port + path))
+                        .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role,
+                                Instant.now().plusSeconds(600)))
+                        .GET().build(), HttpResponse.BodyHandlers.ofString());
+                assertThat(signedIn.statusCode()).as(path + " as " + role).isEqualTo(200);
+            }
+        }
+        verify(orderQueryService, org.mockito.Mockito.times(2))
+                .findOpenPool(org.mockito.ArgumentMatchers.eq(UUID.fromString(SUBJECT)), any());
     }
 
     @Test

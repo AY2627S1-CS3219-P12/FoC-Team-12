@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.friendoncampus.order.domain.OrderAction;
 import com.friendoncampus.order.domain.Order;
+import com.friendoncampus.order.domain.OrderDetails;
 import com.friendoncampus.order.domain.OrderState;
 import com.friendoncampus.order.domain.OrderTransition;
 import com.friendoncampus.order.domain.OrderTransitionRecord;
@@ -165,6 +166,56 @@ public class OrderService {
             return order;
         }
         return apply(order, order.complete(callerId, now()));
+    }
+
+    /**
+     * The requester edits an OPEN order (T4), or requests a new reward (T5), based on the
+     * {@code expectedVersion} they last saw. Only a reward change writes an outbox event
+     * ({@code OrderRewardChangeRequested}); the current reward stays in force until Credit answers.
+     * Resending what the order already holds returns it unchanged. An overdue order is expired
+     * instead.
+     */
+    @Transactional(noRollbackFor = OrderExpiredOnActionException.class)
+    public Order edit(UUID orderId, UUID callerId, long expectedVersion, OrderDetails details) {
+        Order order = lockVisible(orderId, callerId);
+        expireIfOverdue(order);
+        return order.edit(callerId, expectedVersion, details, now())
+                .map(transition -> apply(order, transition))
+                .orElse(order);
+    }
+
+    /**
+     * Credit adjusted the reservation to {@code newCreditReward} (T5a). Ignored when the order is no
+     * longer OPEN or that reward is no longer pending (cancelled, expired, or already answered).
+     *
+     * @return true if the reward was applied
+     */
+    @Transactional
+    public boolean applyRewardChange(UUID orderId, int newCreditReward) {
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (!order.awaitsRewardChange(newCreditReward)) {
+            return false;
+        }
+        apply(order, order.applyRewardChange(newCreditReward, now()));
+        return true;
+    }
+
+    /**
+     * Credit rejected the adjustment to {@code newCreditReward} (T5b): the previous reward stands.
+     * Ignored like {@link #applyRewardChange}.
+     *
+     * @return true if the pending reward was cleared
+     */
+    @Transactional
+    public boolean rejectRewardChange(UUID orderId, int newCreditReward) {
+        Order order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> new OrderNotFoundException(orderId));
+        if (!order.awaitsRewardChange(newCreditReward)) {
+            return false;
+        }
+        apply(order, order.rejectRewardChange(newCreditReward, now()));
+        return true;
     }
 
     /** IDs of OPEN orders whose pickup deadline has been reached, for the expiry job. */

@@ -101,13 +101,14 @@ public class CreditOutcomeHandler {
                 .orElseThrow(() -> reject("UNKNOWN_OPERATION",
                         "No Order command with operationId " + operationId + " for order " + orderId));
 
-        apply(eventType, orderId, data, command);
-        log.info("Applied credit event eventId={} eventType={} operationId={} correlationId={}",
-                eventId, eventType, operationId, text(envelope, "correlationId"));
-        return remember(eventId, eventType, orderId, operationId, fingerprint, Outcome.APPLIED);
+        Outcome outcome = apply(eventType, orderId, data, command);
+        log.info("{} credit event eventId={} eventType={} operationId={} correlationId={}",
+                outcome == Outcome.APPLIED ? "Applied" : "Ignored", eventId, eventType, operationId,
+                text(envelope, "correlationId"));
+        return remember(eventId, eventType, orderId, operationId, fingerprint, outcome);
     }
 
-    private void apply(String eventType, UUID orderId, JsonNode data, OutboxEvent command) {
+    private Outcome apply(String eventType, UUID orderId, JsonNode data, OutboxEvent command) {
         switch (eventType) {
             case "CreditReserved" -> {
                 requireCommand(command, "OrderSubmitted", eventType);
@@ -118,8 +119,8 @@ public class CreditOutcomeHandler {
                 orderService.rejectReservation(orderId);
             }
             case "CreditAdjusted", "CreditAdjustmentRejected" -> {
-                // Reward editing is a later iteration; Order never sends OrderRewardChangeRequested yet.
-                throw reject("UNKNOWN_OPERATION", eventType + " has no pending reward change to apply");
+                requireCommand(command, "OrderRewardChangeRequested", eventType);
+                return applyRewardOutcome(eventType, orderId, command);
             }
             case "CreditReleased" -> recordCreditStatus(orderId, CreditStatus.RELEASED);
             case "CreditSettled" -> {
@@ -132,6 +133,31 @@ public class CreditOutcomeHandler {
             }
             default -> throw new IllegalStateException("Unhandled credit outcome " + eventType);
         }
+        return Outcome.APPLIED;
+    }
+
+    /**
+     * T5a/T5b. Only an answer to the order's latest reward change can touch the pending reward; an
+     * answer to an older request, or one arriving after the order left OPEN (for example it was
+     * cancelled meanwhile), is recorded in the inbox as IGNORED and changes nothing.
+     */
+    private Outcome applyRewardOutcome(String eventType, UUID orderId, OutboxEvent command) {
+        if (!isLatestRewardChange(command)) {
+            return Outcome.IGNORED;
+        }
+        int newCreditReward = jsonMapper.readTree(command.getPayload()).get("data").get("newCreditReward").asInt();
+        boolean changed = eventType.equals("CreditAdjusted")
+                ? orderService.applyRewardChange(orderId, newCreditReward)
+                : orderService.rejectRewardChange(orderId, newCreditReward);
+        return changed ? Outcome.APPLIED : Outcome.IGNORED;
+    }
+
+    private boolean isLatestRewardChange(OutboxEvent command) {
+        return outboxEventRepository.findByAggregateIdOrderByAggregateVersionAsc(command.getAggregateId()).stream()
+                .filter(event -> event.getEventType().equals("OrderRewardChangeRequested"))
+                .reduce((first, second) -> second)
+                .map(latest -> latest.getId().equals(command.getId()))
+                .orElse(false);
     }
 
     /** Credit status only; the blueprint says these outcomes never change the lifecycle state. */

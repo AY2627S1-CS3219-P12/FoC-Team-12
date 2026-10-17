@@ -17,6 +17,8 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 
 import com.friendoncampus.order.domain.OrderErrorCode;
 import com.friendoncampus.order.domain.OrderTransitionException;
+import com.friendoncampus.order.domain.OrderVersionConflictException;
+import com.friendoncampus.order.service.InvalidOrderQueryException;
 import com.friendoncampus.order.service.OrderNotFoundException;
 
 @RestControllerAdvice
@@ -76,6 +78,16 @@ public class ApiExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(InvalidOrderQueryException.class)
+    public ProblemDetail handleInvalidQuery(InvalidOrderQueryException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                OrderErrorCode.INVALID_QUERY.status(),
+                exception.getMessage());
+        problem.setTitle("Invalid order query");
+        problem.setProperty("code", OrderErrorCode.INVALID_QUERY.name());
+        return problem;
+    }
+
     @ExceptionHandler(OrderTransitionException.class)
     public ProblemDetail handleRejectedTransition(OrderTransitionException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
@@ -84,6 +96,9 @@ public class ApiExceptionHandler {
         problem.setTitle("Order action rejected");
         problem.setProperty("code", exception.getCode().name());
         problem.setProperty("currentState", exception.getCurrentState());
+        if (exception instanceof OrderVersionConflictException conflict) {
+            problem.setProperty("currentVersion", conflict.getCurrentVersion());
+        }
         return problem;
     }
 }

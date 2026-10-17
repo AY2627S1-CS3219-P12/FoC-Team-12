@@ -99,6 +99,7 @@ public class OrderEventRecorder {
                 data.put("requesterId", order.getRequesterId());
                 data.put("creditReward", order.getCreditReward());
             }
+            case "OrderRewardChangeRequested" -> data.put("newCreditReward", order.getPendingCreditReward());
             case "OrderCancelled" -> {
                 boolean compensationRequired = transition.creditEffect() == CreditEffect.COMPENSATE;
                 data.put("courierId", compensationRequired ? transition.courierId() : null);

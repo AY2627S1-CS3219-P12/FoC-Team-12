@@ -12,8 +12,8 @@ gaps, and splits the work into `/foc-iterate-feature` iterations. Owner: XueTing
 
 **Status (2026-10-17):** every lifecycle transition is built (phases 1–3, PRs #56–#58), and the
 outbox payloads and Credit outcome handling follow the blueprint (`event-blueprint-alignment`).
-Still to build: the Kafka publisher and listener, reward editing, location names, the open-order
-pool and the history lists. See [Iterations](#iterations-each-one-is-a-foc-iterate-feature-order--run).
+Reward editing (T4, T5, T5a, T5b) is built on `order-service/edit-reward`. Still to build: the
+Kafka publisher and listener, the open-order pool and the history lists. See [Iterations](#iterations-each-one-is-a-foc-iterate-feature-order--run).
 
 Decisions confirmed with XueTing:
 - **Reward editing stays in D3.** It goes through a Credit adjustment.
@@ -105,7 +105,7 @@ unknown event types on `order.events`.
 |---|---|---|
 | `CreditReserved` | `OrderSubmitted` | T2 `PENDING_CREDIT → OPEN` (or T2b `EXPIRED` if at/after the deadline); store `reservationId`; credit status `RESERVED` |
 | `CreditReservationRejected` | `OrderSubmitted` | T3 `PENDING_CREDIT → RESERVATION_FAILED` |
-| `CreditAdjusted` / `CreditAdjustmentRejected` | `OrderRewardChangeRequested` | T5a / T5b (reward-edit iteration) |
+| `CreditAdjusted` / `CreditAdjustmentRejected` | `OrderRewardChangeRequested` | T5a / T5b; applied only if it answers the order's latest reward change and the order is still OPEN with that reward pending, otherwise recorded as `IGNORED` |
 | `CreditReleased` | `OrderCancelled` or `OrderExpired` | credit status `RELEASED`; state unchanged |
 | `CreditSettled` | `OrderCompleted` | credit status `SETTLED`; state unchanged |
 | `CourierCompensated` | `OrderCancelled` | credit status `COMPENSATED`; state unchanged |
@@ -230,8 +230,8 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
 - **`GET /api/orders`: the open pool** (F4.1–F4.3).
   - Includes only `state=OPEN`, `pickup_deadline > now`, no pending adjustment, and not the caller's own orders.
   - Filters: `minReward`, `maxReward`, `pickupLocationId`, `dropoffLocationId`.
-  - Sort: `reward,desc` | `pickupDeadline,asc` | `pickupLocationName,asc`.
-  - Paging: `page`, `size` (max 50).
+  - Sort: `reward` (highest first) | `deadline` (nearest pickup deadline first, default) | `pickupLocationName` (A to Z, ignoring case); `id` breaks ties.
+  - Paging: `page`, `size` (max 50). Invalid values are `400 INVALID_QUERY`.
   - No matches returns `200` with an empty page, which the client shows as "no matches" (F4.5).
   - Uses the existing partial indexes in V1.
 - **`GET /api/orders/{id}`.**
@@ -239,9 +239,9 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   - In other states, only R or the current courier can see the order. Anyone else gets 404, so it
     isn't revealed that the order exists.
 - **`GET /api/orders/{id}/history`:** the transition history, visible to participants only.
-- **`GET /api/orders/me?as=requester`:** R's orders in `COMPLETED`, `CANCELLED` or `EXPIRED` (F9.1).
+- **`GET /api/orders/me/requested`:** R's orders in `COMPLETED`, `CANCELLED` or `EXPIRED` (F9.1).
   - `RESERVATION_FAILED` is excluded. *(Gap. Confirm.)*
-- **`GET /api/orders/me?as=courier`:** `COMPLETED` orders where the caller was the courier (F9.2).
+- **`GET /api/orders/me/delivered`:** `COMPLETED` orders where the caller was the courier (F9.2).
 - **Client-only requirements:**
   - F1.1.1 form validation, F4.4 remembering filters, and the F5.1.1/F5.1.2 confirmation popup;
   - the API supports them, but the server can't enforce them;
@@ -264,12 +264,15 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   - `processed_events` (the inbox): `event_id` primary key, `event_type`, `aggregate_id`,
     `operation_id`, `fingerprint` (SHA-256 of the received event, for `EVENT_ID_CONFLICT`),
     `outcome`, `processed_at`.
-- **Later:** a V4 migration for reward editing (`pending_credit_reward` already exists in V1).
+- **Reward editing** needs no migration: it maps the V1 `pending_credit_reward` column, and the
+  new history actions (`EDIT`, `REWARD_CHANGE_APPLIED`, `REWARD_CHANGE_REJECTED`) fit the
+  `order_transitions.action` VARCHAR.
 
 ## Code structure (all under `order-service/src/main/java/com/friendoncampus/order/`)
 Built:
 - `domain/Order.java`: the state machine. One method per transition (`open`, `failReservation`,
-  `cancel`, `expire`, `accept`, `withdraw`, `pickUp`, `deliver`, `complete`), each returning an
+  `cancel`, `expire`, `accept`, `withdraw`, `pickUp`, `deliver`, `complete`, and for iteration 8
+  `edit`, `applyRewardChange`, `rejectRewardChange`), each returning an
   `OrderTransition`; a rejected action throws `OrderTransitionException(code, currentState)`.
 - `domain/`: `OrderAction`, `OrderErrorCode`, `TerminalReason`, `CreditEffect`, `CreditStatus`,
   `ActorRole`, and the `OrderTransitionRecord` history entity.
@@ -308,9 +311,9 @@ Still to build (iteration `order-kafka-messaging`):
 | 3 | `order-lifecycle-delivery`: `pickUp`, `deliver`, `complete`, duplicate completion | Done (PR #58) |
 | 4 | `order-event-blueprint-alignment`: blueprint envelope/payloads, five published events, Credit outcome handler with inbox (V3) | Done (this branch) |
 | 5 | `order-kafka-messaging`: outbox relay to `order.events`, `credit.events` listener and DLT; Order in `compose.yaml` (shared, Jun Hui reviews) | Next |
-| 6 | `order-discovery-history`: open-order pool (filters, sorting, paging), "my orders" history (F4, F9) | |
+| 6 | `order-discovery-history`: open-order pool (filters, sorting, paging), "my orders" history (F4, F9) | Done (this branch) |
 | 7 | `order-location-snapshot`: client-supplied location names on create (edit comes with iteration 8) | Done |
-| 8 | `order-edit-reward`: edit details (T4) and reward through `OrderRewardChangeRequested` / `CreditAdjusted` (T5, T5a, T5b) | |
+| 8 | `order-edit-reward`: edit details (T4) and reward through `OrderRewardChangeRequested` / `CreditAdjusted` (T5, T5a, T5b) | Done (branch `order-service/edit-reward`) |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | |
 
 ## Open items to confirm (flag to the backlog and owners)
@@ -318,6 +321,18 @@ Still to build (iteration `order-kafka-messaging`):
 - A courier who withdrew may re-accept the same order (rule 9). Built in phase 2.
 - `RESERVATION_FAILED` is excluded from F9.1 history.
 - Ownership of the Order UI (F1.1.1, F4.2–F4.5, F5.1.1/2).
+- **Reward editing (iteration 8) decisions to confirm:**
+  - `PATCH /api/orders/{id}` is a full replace: every editable field and `version` are required.
+  - Cancelling while a reward change is pending is allowed (Credit releases the whole reservation);
+    cancel and expiry clear `pending_credit_reward`, and a later `CreditAdjusted` /
+    `CreditAdjustmentRejected` is recorded as `IGNORED`. Credit must release the *adjusted*
+    reservation if it applied the adjustment before seeing `OrderCancelled`.
+  - Resending the order's current values (pending reward counted as the reward) is a `200`
+    duplicate even with an old `version` or while the change is pending.
+  - The guard order puts the duplicate check after the state guard, because an edit has no
+    distinct target state.
+  - A rejected adjustment is visible only through the history (`REWARD_CHANGE_REJECTED`); the
+    Credit `reasonCode` is not stored.
 - **Resolved by the blueprint:** topic and event names, payloads, `operationId`, compensation
   (`ceil(reserved × 20 / 100)` to the courier, the rest released). Order Compose wiring is still a
   shared-file change for Jun Hui.

@@ -3,6 +3,8 @@ package com.friendoncampus.order.domain;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 import jakarta.persistence.Column;
@@ -54,6 +56,10 @@ public class Order {
 
     @Column(name = "credit_reward", nullable = false)
     private int creditReward;
+
+    /** Reward requested by an edit and awaiting Credit's answer; null when no adjustment is pending. */
+    @Column(name = "pending_credit_reward")
+    private Integer pendingCreditReward;
 
     @Column(name = "pickup_deadline", nullable = false)
     private OffsetDateTime pickupDeadline;
@@ -192,6 +198,8 @@ public class Order {
         }
         cancelledAt = now;
         if (state == OrderState.OPEN) {
+            // Credit releases the whole reservation, so a pending adjustment no longer matters.
+            pendingCreditReward = null;
             return moveTo(OrderAction.CANCEL, OrderState.CANCELLED, callerId, ActorRole.REQUESTER, null,
                     TerminalReason.REQUESTER_CANCELLED_OPEN, CreditEffect.RELEASE, "OrderCancelled", now);
         }
@@ -209,6 +217,7 @@ public class Order {
                     "The pickup deadline has not passed yet");
         }
         expiredAt = now;
+        pendingCreditReward = null;
         return moveTo(OrderAction.EXPIRE, OrderState.EXPIRED, null, ActorRole.SYSTEM, null,
                 TerminalReason.PICKUP_DEADLINE_PASSED, CreditEffect.RELEASE, "OrderExpired", now);
     }
@@ -235,6 +244,10 @@ public class Order {
         if (isPastDeadline(now)) {
             throw new OrderTransitionException(OrderErrorCode.ORDER_EXPIRED, state,
                     "This order's pickup deadline has passed");
+        }
+        if (isRewardAdjustmentPending()) {
+            throw new OrderTransitionException(OrderErrorCode.REWARD_ADJUSTMENT_PENDING, state,
+                    "This order's reward is being changed; try again shortly");
         }
         courierId = callerId;
         acceptedAt = now;
@@ -298,6 +311,102 @@ public class Order {
         completedAt = now;
         return moveTo(OrderAction.COMPLETE, OrderState.COMPLETED, callerId, ActorRole.REQUESTER, courierId, null,
                 CreditEffect.SETTLE, "OrderCompleted", now);
+    }
+
+    /**
+     * The requester replaces the editable fields of an OPEN order (T4). If the reward differs, the
+     * current reward is kept and the new one becomes pending until Credit answers (T5); the order
+     * then cannot be accepted or edited again. Guards run in DESIGN.md rule 7 order: relationship,
+     * state, duplicate, pending adjustment, version, then the deadline.
+     *
+     * <p>A body equal to what the order already holds (with a pending reward counting as the
+     * reward) is a duplicate, for example a retried request: it returns empty and changes nothing,
+     * whatever {@code expectedVersion} it carries.
+     */
+    public Optional<OrderTransition> edit(UUID callerId, long expectedVersion, OrderDetails details, OffsetDateTime now) {
+        if (!requesterId.equals(callerId)) {
+            throw new OrderTransitionException(OrderErrorCode.NOT_ORDER_REQUESTER, state,
+                    "Only the order's requester can edit it");
+        }
+        requireState(OrderAction.EDIT, OrderState.OPEN);
+        OffsetDateTime deadline = toStoredPrecision(details.pickupDeadline());
+        if (alreadyHolds(details, deadline)) {
+            return Optional.empty();
+        }
+        if (isRewardAdjustmentPending()) {
+            throw new OrderTransitionException(OrderErrorCode.REWARD_ADJUSTMENT_PENDING, state,
+                    "A reward change is waiting for Credit; edit again once it is answered");
+        }
+        if (expectedVersion != version) {
+            throw new OrderVersionConflictException(state, expectedVersion, version);
+        }
+        if (!deadline.isAfter(now)) {
+            throw new OrderTransitionException(OrderErrorCode.INVALID_PICKUP_DEADLINE, state,
+                    "The pickup deadline must be in the future");
+        }
+        title = details.title();
+        description = details.description();
+        pickupLocationId = details.pickupLocationId();
+        pickupLocationName = details.pickupLocationName();
+        dropoffLocationId = details.dropoffLocationId();
+        dropoffLocationName = details.dropoffLocationName();
+        pickupDeadline = deadline;
+        if (details.creditReward() != creditReward) {
+            pendingCreditReward = details.creditReward();
+            return Optional.of(new OrderTransition(OrderAction.EDIT, state, state, callerId, ActorRole.REQUESTER,
+                    null, null, CreditEffect.ADJUST, "OrderRewardChangeRequested", now));
+        }
+        return Optional.of(new OrderTransition(OrderAction.EDIT, state, state, callerId, ActorRole.REQUESTER,
+                null, null, CreditEffect.NONE, "OrderDetailsEdited", now));
+    }
+
+    private boolean alreadyHolds(OrderDetails details, OffsetDateTime deadline) {
+        int effectiveReward = pendingCreditReward != null ? pendingCreditReward : creditReward;
+        return title.equals(details.title())
+                && description.equals(details.description())
+                && pickupLocationId.equals(details.pickupLocationId())
+                && Objects.equals(pickupLocationName, details.pickupLocationName())
+                && dropoffLocationId.equals(details.dropoffLocationId())
+                && Objects.equals(dropoffLocationName, details.dropoffLocationName())
+                && effectiveReward == details.creditReward()
+                && pickupDeadline.isEqual(deadline);
+    }
+
+    /**
+     * True when Credit's answer to a reward change for {@code requestedReward} can still be applied:
+     * the order is OPEN and that reward is the one pending (T5a/T5b guard).
+     */
+    public boolean awaitsRewardChange(int requestedReward) {
+        return state == OrderState.OPEN && pendingCreditReward != null && pendingCreditReward == requestedReward;
+    }
+
+    /** Credit adjusted the reservation: the pending reward becomes the reward (T5a). */
+    public OrderTransition applyRewardChange(int requestedReward, OffsetDateTime now) {
+        requireAwaitedRewardChange(OrderAction.REWARD_CHANGE_APPLIED, requestedReward);
+        creditReward = pendingCreditReward;
+        pendingCreditReward = null;
+        return new OrderTransition(OrderAction.REWARD_CHANGE_APPLIED, state, state, null, ActorRole.SYSTEM, null,
+                null, CreditEffect.NONE, "OrderRewardChanged", now);
+    }
+
+    /** Credit rejected the adjustment: the previous reward stands and the pending one is dropped (T5b). */
+    public OrderTransition rejectRewardChange(int requestedReward, OffsetDateTime now) {
+        requireAwaitedRewardChange(OrderAction.REWARD_CHANGE_REJECTED, requestedReward);
+        pendingCreditReward = null;
+        return new OrderTransition(OrderAction.REWARD_CHANGE_REJECTED, state, state, null, ActorRole.SYSTEM, null,
+                null, CreditEffect.NONE, "OrderRewardChangeRejected", now);
+    }
+
+    /** The OPEN sub-flag: a reward change was requested and Credit has not answered yet. */
+    public boolean isRewardAdjustmentPending() {
+        return pendingCreditReward != null;
+    }
+
+    private void requireAwaitedRewardChange(OrderAction action, int requestedReward) {
+        if (!awaitsRewardChange(requestedReward)) {
+            throw new OrderTransitionException(OrderErrorCode.INVALID_STATE_TRANSITION, state,
+                    "Cannot " + action.name().toLowerCase().replace('_', ' ') + ": no matching reward change is pending");
+        }
     }
 
     /** True for an OPEN order whose pickup deadline has been reached. */
@@ -419,6 +528,11 @@ public class Order {
         return creditReward;
     }
 
+    /** Reward awaiting Credit's confirmation; null when none. {@link #getCreditReward()} is still in force. */
+    public Integer getPendingCreditReward() {
+        return pendingCreditReward;
+    }
+
     public OffsetDateTime getPickupDeadline() {
         return pickupDeadline;
     }
@@ -486,4 +600,5 @@ public class Order {
     public OffsetDateTime getExpiredAt() {
         return expiredAt;
     }
+
 }
