@@ -30,6 +30,11 @@ update its own workflow state.
 
 ## Kafka configuration
 
+The local broker, deterministic topic/ACL initializer and smoke-test commands are documented in
+[`deploy/kafka/README.md`](../../deploy/kafka/README.md). That infrastructure makes these channels
+available but does not replace the service-owned outbox, inbox, retry or DLT-forwarding adapters
+defined below.
+
 | Topic | Key | Producer | Consumers |
 | --- | --- | --- | --- |
 | `user.events` | User UUID | User Service | Credit Service |

@@ -40,6 +40,19 @@ jobs:
           BEFORE_SHA: ${{ github.event.before }}
         run: python3 .github/scripts/image_plan.py
 
+  kafka-infrastructure:
+    name: Kafka infrastructure smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Make Kafka scripts executable
+        run: chmod +x deploy/kafka/*.sh
+      - name: Verify topics, ACLs, authorization and persistence
+        run: ./deploy/kafka/Test-LocalKafka.sh
+
   gateway:
     name: API gateway
     runs-on: ubuntu-24.04
@@ -119,6 +132,11 @@ jobs:
       CREDIT_DB_USER: credit_user
       CREDIT_DB_PASSWORD: ci-credit-password
       MAIL_PROVIDER: noop
+      KAFKA_ADMIN_PASSWORD: ci-kafka-admin-password
+      KAFKA_BROKER_PASSWORD: ci-kafka-broker-password
+      KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
+      KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
+      KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
     steps:
       - uses: actions/checkout@v7
       - name: Set up Docker Buildx
@@ -286,6 +304,11 @@ jobs:
       CREDIT_DB_USER: credit_user
       CREDIT_DB_PASSWORD: ci-credit-password
       MAIL_PROVIDER: noop
+      KAFKA_ADMIN_PASSWORD: ci-kafka-admin-password
+      KAFKA_BROKER_PASSWORD: ci-kafka-broker-password
+      KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
+      KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
+      KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
     steps:
       - uses: actions/checkout@v7
       - name: Generate a throwaway JWT signing key
@@ -319,6 +342,7 @@ jobs:
     needs:
       - workflow-checks
       - image-plan
+      - kafka-infrastructure
       - gateway
       - user-backend
       - user-frontend

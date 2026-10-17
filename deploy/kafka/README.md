@@ -1,0 +1,229 @@
+# Shared Kafka foundation
+
+This directory provides the local event broker required by the
+[version-1 event blueprint](../../docs/integration/event-communication-blueprint.md). Kafka is
+shared transport infrastructure: it carries facts between services, while PostgreSQL remains each
+service's private source of truth. Kafka does not replace database transactions, constraints, or
+service ownership.
+
+This foundation provisions the broker, topics and access controls only. Event integration is not
+complete until the User, Order and Credit owners implement their transactional outbox relays,
+idempotent consumers/inboxes, retries and DLT forwarding. Supplier has no version-1 event contract
+and therefore receives no Kafka identity.
+
+## Local topology
+
+- Image: pinned `apache/kafka:4.3.1` JVM image.
+- Mode: one combined broker/controller using KRaft; ZooKeeper is not used.
+- Containers connect to `kafka:9092`.
+- Host-side debugging connects to `127.0.0.1:29092`.
+- Both client listeners use local-only `SASL_PLAINTEXT` with the `PLAIN` mechanism.
+- Broker data is stored in the Compose `kafka-data` named volume.
+- Automatic topic creation is disabled; `kafka-init` creates all resources explicitly.
+- Replication factor and minimum in-sync replicas are both `1`. This survives a local container
+  restart but provides **no broker redundancy**.
+
+`SASL_PLAINTEXT` authenticates clients but does not encrypt passwords or records. The external
+listener is bound to Mac/host loopback so it is not exposed to the wider network. This is a local
+development setup, not a production security design.
+
+## Credentials and future client contract
+
+Copy `.env.example` to `.env` and replace every Kafka placeholder with a distinct local password:
+
+```text
+KAFKA_ADMIN_PASSWORD=...
+KAFKA_BROKER_PASSWORD=...
+KAFKA_USER_SERVICE_PASSWORD=...
+KAFKA_ORDER_SERVICE_PASSWORD=...
+KAFKA_CREDIT_SERVICE_PASSWORD=...
+```
+
+Never commit `.env`. Passwords may contain ordinary punctuation, including quotes and backslashes,
+but must not contain line breaks. The broker writes a runtime-only JAAS file under `/tmp`; passwords
+are not written to the repository or Kafka data volume.
+
+Future Docker-based adapters use:
+
+```text
+KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+KAFKA_SECURITY_PROTOCOL=SASL_PLAINTEXT
+KAFKA_SASL_MECHANISM=PLAIN
+KAFKA_USERNAME=<service identity>
+KAFKA_PASSWORD=<that service's secret>
+```
+
+Host-side clients use `localhost:29092` instead. Compose already publishes the contract to the User
+and Credit containers, but the values are currently unused because this task adds no Kafka library
+or application adapter. Order is not part of the Compose stack yet.
+
+## Topics
+
+| Topic | Partitions | Retention | Purpose |
+| --- | ---: | ---: | --- |
+| `user.events` | 3 | 7 days | User activation facts |
+| `order.events` | 3 | 7 days | Order lifecycle facts |
+| `credit.events` | 3 | 7 days | Credit outcomes |
+| `user.events.DLT` | 1 | 30 days | Failed User-event delivery |
+| `order.events.DLT` | 1 | 30 days | Failed Order-event delivery |
+| `credit.events.DLT` | 1 | 30 days | Failed Credit-event delivery |
+
+All topics use `cleanup.policy=delete`. Keys and JSON envelopes must follow the shared blueprint:
+User UUID for User facts, Order UUID for Order facts, and the corresponding aggregate UUID for
+Credit outcomes. The fixed retention values are provisional local defaults, not an agreed
+production data-retention policy.
+
+## Access controls
+
+| Identity | Allowed operations |
+| --- | --- |
+| `user_service` | Write/describe `user.events`; cluster idempotent write |
+| `order_service` | Write/describe `order.events`; read/describe `credit.events` as group `order-service`; write/describe `credit.events.DLT`; cluster idempotent write |
+| `credit_service` | Read/describe `user.events` and `order.events` as group `credit-service`; write/describe `credit.events`, `user.events.DLT` and `order.events.DLT`; cluster idempotent write |
+| `foc_admin` | Broker initialization and local diagnosis (super-user) |
+| `foc_broker` | Broker-to-broker traffic (super-user) |
+
+ACLs deny every unlisted operation. The initializer is idempotent: rerunning it preserves records
+and converges topic retention settings and ACL entries.
+
+## Start, inspect and stop
+
+From the repository root:
+
+```bash
+docker compose up -d --wait kafka
+docker compose run --rm kafka-init
+docker compose ps kafka
+```
+
+List or describe topics with the authenticated health-check client configuration:
+
+```bash
+docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 \
+  --command-config /tmp/foc-kafka-health.properties \
+  --list
+
+docker compose exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 \
+  --command-config /tmp/foc-kafka-health.properties \
+  --describe --topic user.events
+```
+
+List ACLs:
+
+```bash
+docker compose exec kafka /opt/kafka/bin/kafka-acls.sh \
+  --bootstrap-server localhost:9092 \
+  --command-config /tmp/foc-kafka-health.properties \
+  --list
+```
+
+Stop Kafka while preserving its named volume:
+
+```bash
+docker compose stop kafka
+docker compose rm -f kafka kafka-init
+```
+
+Starting it and rerunning the initializer restores the broker with the existing records. To reset
+Kafka completely, first stop/remove those two containers, run `docker volume ls` to identify the
+project's exact `kafka-data` volume, and remove **only that exact volume** with `docker volume rm`.
+Do not use `docker compose down -v` on the normal project merely to reset Kafka; that would also
+delete the team's PostgreSQL volumes.
+
+## Manual produce and consume
+
+These commands generate temporary client files inside the broker container and never print the
+passwords. Start the consumer first, then run the producer in another terminal.
+
+Credit consuming User events:
+
+```bash
+docker compose exec kafka bash -lc '
+  source /opt/foc-kafka/lib.sh
+  write_client_properties /tmp/credit.properties credit_service "$KAFKA_CREDIT_SERVICE_PASSWORD"
+  /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
+    --consumer.config /tmp/credit.properties --topic user.events \
+    --group credit-service --from-beginning --property print.key=true
+'
+```
+
+User publishing a keyed test envelope:
+
+```bash
+docker compose exec -T kafka bash -lc '
+  source /opt/foc-kafka/lib.sh
+  write_client_properties /tmp/user.properties user_service "$KAFKA_USER_SERVICE_PASSWORD"
+  /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 \
+    --command-config /tmp/user.properties --topic user.events \
+    --reader-property parse.key=true --reader-property key.separator="|" \
+    --command-property enable.idempotence=true --command-property acks=all
+' <<'EOF'
+1fd9b5c8-16cc-4460-a1cc-bc5ce0347a97|{"eventId":"ea5f45d9-8911-40c4-b9c4-83f33b8492d8","eventType":"UserActivated","eventVersion":1,"aggregateType":"User","aggregateId":"1fd9b5c8-16cc-4460-a1cc-bc5ce0347a97","aggregateVersion":1,"occurredAt":"2026-10-17T00:00:00Z","producer":"user-service","correlationId":"ea5f45d9-8911-40c4-b9c4-83f33b8492d8","causationId":null,"actor":{"type":"SYSTEM"},"data":{"operationId":"573a3b84-2c96-4da0-940d-08a43420f0db","userId":"1fd9b5c8-16cc-4460-a1cc-bc5ce0347a97","activatedAt":"2026-10-17T00:00:00Z"}}
+EOF
+```
+
+## Automated smoke verification
+
+Run:
+
+```bash
+./deploy/kafka/Test-LocalKafka.sh
+```
+
+The script uses an isolated Compose project and disposable Kafka volume. It validates Compose,
+starts an authenticated broker, runs the initializer twice, checks every topic/configuration/ACL,
+performs an authorized keyed produce/consume, proves unauthorized topic and group access is denied,
+restarts Kafka, verifies the record and configuration survived, and removes only its disposable
+project and volume. Set `KEEP_KAFKA_SMOKE_STACK=1` only when diagnosing a failure manually.
+
+## Delivery reliability responsibilities
+
+The broker's topics and DLTs alone do not make delivery reliable. Each service adapter must later:
+
+1. Commit its business change and complete event into a transactional outbox in one PostgreSQL
+   transaction.
+2. Publish the stored key/envelope using `acks=all` and idempotent production.
+3. Consume with the assigned stable group and an inbox keyed by `eventId`.
+4. Apply the business effect and inbox completion atomically, then acknowledge Kafka.
+5. Retry transient failures using the team-approved policy, and only then forward the original
+   keyed record and metadata to the source topic's DLT.
+
+Kafka delivery is at least once, so consumers must remain idempotent. A DLT existing at broker
+startup does not implement retry or forwarding; those are application-side behaviors.
+
+## Troubleshooting
+
+- **Authentication failed:** ensure `.env` contains all five Kafka passwords and recreate the
+  broker after changing them. Existing broker processes do not reload JAAS automatically.
+- **Topic/group authorization failed:** confirm the service is using its own identity and assigned
+  consumer group. Inspect ACLs with the admin command above.
+- **Cannot connect from host:** use `localhost:29092`, not `kafka:9092`, and confirm the port is not
+  already occupied. Containers must use `kafka:9092`.
+- **Kafka is unhealthy:** run `docker compose ps kafka` and
+  `docker compose logs --tail=200 kafka kafka-init`; check credentials, listener configuration and
+  available Docker disk space.
+- **Initializer exited:** exit code `0` is expected for the one-shot container. Rerun it with
+  `docker compose run --rm kafka-init` after the broker becomes healthy.
+- **Disk usage grows:** retention is time-based, not an immediate hard size cap. Inspect the
+  `kafka-data` volume and Docker disk allocation before deleting anything.
+
+## Team review required before D4/production
+
+The following choices are intentionally unresolved and must be agreed by User, Order, Credit and
+infrastructure owners before production-like deployment:
+
+- Confirm or replace the provisional **7-day normal / 30-day DLT retention** policy.
+- Agree the exact timings and multiplier for the blueprint's three retry attempts.
+- Decide when local `SASL_PLAINTEXT` becomes encrypted `SASL_SSL` and how certificates rotate.
+- Select long-term metrics, dashboards and alerts for lag, outboxes, inboxes, retries and DLTs.
+- Design Kafka's Kubernetes topology, storage classes, disruption handling and credentials
+  separately; this Compose file must not be copied into Kubernetes.
+- Choose production broker count, replication/min-ISR, backup/recovery objectives and tested
+  disaster-recovery procedure.
+- Establish event-schema compatibility checks and the governance process for `eventVersion`
+  changes.
+
+Changes to this shared foundation require one nominated implementer plus review from the affected
+User, Order and Credit owners.

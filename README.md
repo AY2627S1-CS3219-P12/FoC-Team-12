@@ -94,7 +94,9 @@ the Credit dashboard at `/credits`, and the current APIs from the same origin:
 
 The Kubernetes setup additionally deploys Order Service at `/api/orders/**`, with its OpenAPI
 document at `/docs/order/openapi.json`. Order is not yet part of the Compose stack and has no
-packaged frontend; Kafka integration remains separate work.
+packaged frontend. The shared local Kafka broker, topics, ACLs and verification workflow are
+documented in [`deploy/kafka/README.md`](deploy/kafka/README.md); application adapters remain
+separate owner-reviewed work.
 
 Keeping the packaged frontends on `8088` lets their browser code share the validated
 `sessionStorage["foc.user-session"]` login session. Direct ports `8080`, `8081` and `8083` remain exposed
