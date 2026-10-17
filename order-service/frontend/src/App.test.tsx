@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppRoutes } from './App'
 import { sessionKey } from './auth/session'
 
@@ -20,7 +21,10 @@ function signIn(role: 'REQUESTER' | 'COURIER' = 'COURIER') {
 }
 
 describe('AppRoutes', () => {
-  afterEach(() => sessionStorage.clear())
+  afterEach(() => {
+    sessionStorage.clear()
+    vi.unstubAllGlobals()
+  })
 
   it('asks a signed-out visitor to sign in', () => {
     render(
@@ -33,10 +37,13 @@ describe('AppRoutes', () => {
 
   it('sends /errands to the browse screen', () => {
     signIn()
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
     render(
-      <MemoryRouter initialEntries={['/errands']}>
-        <AppRoutes />
-      </MemoryRouter>,
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter initialEntries={['/errands']}>
+          <AppRoutes />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
     expect(screen.getByRole('heading', { name: 'Run an errand' })).toBeInTheDocument()
   })
