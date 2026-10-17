@@ -109,10 +109,10 @@ problems with a `code` and the order's `currentState`:
 | `INVALID_STATE_TRANSITION` | 409 | The action is not valid in the order's current state |
 | `ORDER_NOT_FOUND` | 404 | No such order, or the caller may not see it |
 
-Every state change also stores a history row (`order_transitions`) and an
-`order.events` outbox row (`outbox_events`) in the same transaction, so a change
-and its event are always saved together. The rows are not published yet; the
-Kafka relay is a later iteration.
+Every state change also stores an `order_transitions`
+history row in the same transaction; credit-changing ones also store an
+`order.events` outbox row (`outbox_events`), so a change and its event are
+always saved together. See [Order events](#order-events-contract).
 
 **Location names come from the client.** Order Service never calls Supplier
 Service. The client picks locations from Supplier's public API and sends both the
@@ -128,23 +128,39 @@ Order does not check that a location exists or is active.
 
 ## Order events (contract)
 
-Order Service events share a common envelope (`eventId`, `eventType`,
-`eventVersion`, `aggregateType`, `aggregateId`, `aggregateVersion`, `occurredAt`,
-`producer`, `correlationId`, `causationId`, `actor`, `data`). `aggregateVersion`
-equals the order's `version` after the change so consumers can detect
-missing/out-of-order events.
+The cross-service wire format is the shared
+[event communication blueprint](../docs/integration/event-communication-blueprint.md)
+(version 1); this section summarises Order's part of it.
 
-| Event | When |
-| --- | --- |
-| `OrderSubmitted` | after a valid order is stored as `PENDING_CREDIT` (Credit Service reserves the reward) |
-| `OrderOpened` | after `CreditReserved`, `PENDING_CREDIT` → `OPEN` |
-| `OrderReservationFailed` | after Credit Service rejects the reservation |
-| `OrderUpdated` | when the requester edits an `OPEN` order without changing its reward |
+**Published to `order.events`** (key = order UUID), only for transitions that
+change credits:
 
-Event **publishing** is not yet wired (no broker in `compose.yaml`); this
-iteration persists to `PENDING_CREDIT` only. The planned transport is Kafka
-(`order.events` / `credit.events`, keyed by `orderId`, through a transactional
-outbox); the full event list and proposed contract are in [`DESIGN.md`](DESIGN.md).
+| Event | When | Credit effect |
+| --- | --- | --- |
+| `OrderSubmitted` | A valid order is stored as `PENDING_CREDIT` | Reserve the reward |
+| `OrderCancelled` | The requester cancels (`compensationRequired` when it was `ACCEPTED`) | Release, or compensate the courier |
+| `OrderExpired` | The deadline passes while `OPEN`, a reservation is confirmed too late, or a courier withdraws after the deadline | Release |
+| `OrderCompleted` | The requester confirms receipt | Settle the full reward to the courier |
+| `OrderRewardChangeRequested` | The requester edits the reward (later iteration) | Adjust the reservation |
+
+Each event uses the blueprint envelope (`eventVersion` 1, `producer`
+`order-service`, `aggregateType` `Order`, UTC `occurredAt`, one `correlationId`
+per order, `causationId` null, `actor` `{type: USER, userId, role}` or
+`{type: SYSTEM}`). Its `data` carries a UUID `operationId`, generated once and
+stored with the outbox row so retries never create a second operation. Other
+transitions (opened, accepted, reopened, picked up, delivered, reservation
+failed) change no credits and are only recorded in the order's history.
+
+**Consumed from `credit.events`** (`CreditOutcomeHandler`): `CreditReserved`
+opens the order, `CreditReservationRejected` ends it, and `CreditReleased`,
+`CreditSettled` and `CourierCompensated` only set the order's `creditStatus`.
+Each event is validated, deduplicated by `eventId` in the `processed_events`
+inbox, and matched to the Order command it answers by `operationId`, all in one
+transaction.
+
+Events are stored in `outbox_events` but **not yet sent to Kafka**: the outbox
+relay and the `credit.events` listener are the next iteration
+(`order-kafka-messaging` in [`DESIGN.md`](DESIGN.md)).
 
 ## Lifecycle
 
@@ -162,18 +178,18 @@ courier (session role `COURIER`), **Sys** = the expiry scheduler or a Credit rep
 | Current | Next | Actor | Guard | Credit effect | Event |
 | --- | --- | --- | --- | --- | --- |
 | — | PENDING_CREDIT | R | Valid fields; deadline in the future | Reserve the reward | `OrderSubmitted` |
-| PENDING_CREDIT | OPEN | Sys | `CreditReserved` before the deadline | — | `OrderOpened` |
+| PENDING_CREDIT | OPEN | Sys | `CreditReserved` before the deadline | — | (history only) |
 | PENDING_CREDIT | EXPIRED | Sys | `CreditReserved` at or after the deadline | Release in full | `OrderExpired` |
-| PENDING_CREDIT | RESERVATION_FAILED | Sys | `CreditReservationRejected` | — | `OrderReservationFailed` |
-| OPEN | OPEN (edit) | R | No reward adjustment pending; `version` matches | Adjust if the reward changed; the new reward applies only after `CreditAdjusted` | `OrderUpdated` / `OrderRewardChangeRequested` |
+| PENDING_CREDIT | RESERVATION_FAILED | Sys | `CreditReservationRejected` | — | (history only) |
+| OPEN | OPEN (edit) | R | No reward adjustment pending; `version` matches | Adjust if the reward changed; the new reward applies only after `CreditAdjusted` | `OrderRewardChangeRequested` if the reward changed |
 | OPEN | CANCELLED | R | — | Release in full, no compensation | `OrderCancelled` |
 | OPEN | EXPIRED | Sys | `now >= pickupDeadline` | Release in full | `OrderExpired` |
-| OPEN | ACCEPTED | C (any user except R) | Before the deadline; no reward adjustment pending; first request wins | — | `OrderAccepted` |
-| ACCEPTED | OPEN | C | Withdraws before the deadline; courier cleared, back in the pool | — | `OrderReopened` |
+| OPEN | ACCEPTED | C (any user except R) | Before the deadline; no reward adjustment pending; first request wins | — | (history only) |
+| ACCEPTED | OPEN | C | Withdraws before the deadline; courier cleared, back in the pool | — | (history only) |
 | ACCEPTED | EXPIRED | C | Withdraws at or after the deadline; courier cleared | Release in full | `OrderExpired` |
 | ACCEPTED | CANCELLED | R | Before pickup; courier cleared | Courier gets `ceil(reward × 20 / 100)`, the rest returns to R | `OrderCancelled` |
-| ACCEPTED | PICKED_UP | C | Late pickup allowed | — | `OrderPickedUp` |
-| PICKED_UP | DELIVERED | C | — | — | `OrderDelivered` |
+| ACCEPTED | PICKED_UP | C | Late pickup allowed | — | (history only) |
+| PICKED_UP | DELIVERED | C | — | — | (history only) |
 | DELIVERED | COMPLETED | R | Confirms receipt | Full reward to C | `OrderCompleted` |
 
 Rules that apply to every transition:

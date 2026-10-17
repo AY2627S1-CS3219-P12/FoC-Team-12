@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.junit.jupiter.Container;
@@ -57,6 +58,9 @@ class OrderDeliveryIntegrationTest {
     @Autowired
     private OutboxEventRepository outboxEventRepository;
 
+    @Autowired
+    private JdbcTemplate jdbc;
+
     private final JsonMapper json = JsonMapper.builder().build();
 
     private UUID acceptedOrder() {
@@ -70,6 +74,11 @@ class OrderDeliveryIntegrationTest {
 
     private List<OutboxEvent> events(UUID orderId) {
         return outboxEventRepository.findByAggregateIdOrderByAggregateVersionAsc(orderId);
+    }
+
+    private List<String> history(UUID orderId) {
+        return jdbc.queryForList("select action from order_transitions where order_id = ? order by order_version",
+                String.class, orderId);
     }
 
     private List<String> eventTypes(UUID orderId) {
@@ -87,12 +96,14 @@ class OrderDeliveryIntegrationTest {
         assertThat(completed.getState()).isEqualTo(OrderState.COMPLETED);
         assertThat(completed.getCourierId()).isEqualTo(COURIER);
         assertThat(completed.getCompletedAt()).isNotNull();
-        assertThat(eventTypes(orderId)).containsExactly("OrderSubmitted", "OrderOpened", "OrderAccepted",
-                "OrderPickedUp", "OrderDelivered", "OrderCompleted");
-        JsonNode settled = json.readTree(events(orderId).get(5).getPayload()).get("data");
-        assertThat(settled.get("creditEffect").asString()).isEqualTo("SETTLE");
+        assertThat(history(orderId))
+                .containsExactly("SUBMIT", "OPEN", "ACCEPT", "PICK_UP", "DELIVER", "COMPLETE");
+        assertThat(eventTypes(orderId)).containsExactly("OrderSubmitted", "OrderCompleted");
+        JsonNode settled = json.readTree(events(orderId).get(1).getPayload()).get("data");
         assertThat(settled.get("courierId").asString()).isEqualTo(COURIER.toString());
-        assertThat(settled.get("creditReward").asInt()).isEqualTo(10);
+        assertThat(settled.get("completedAt").asString()).endsWith("Z");
+        assertThat(settled.get("operationId").asString())
+                .isEqualTo(events(orderId).get(1).getOperationId().toString());
         assertThat(orderService.getHistory(orderId, COURIER)).hasSize(6);
     }
 
@@ -140,7 +151,7 @@ class OrderDeliveryIntegrationTest {
         orderService.deliver(orderId, COURIER);
         orderService.deliver(orderId, COURIER);
 
-        assertThat(eventTypes(orderId)).containsOnlyOnce("OrderPickedUp").containsOnlyOnce("OrderDelivered");
+        assertThat(history(orderId)).containsOnlyOnce("PICK_UP").containsOnlyOnce("DELIVER");
     }
 
     @Test
@@ -165,6 +176,6 @@ class OrderDeliveryIntegrationTest {
         assertThatThrownBy(() -> orderService.complete(orderId, REQUESTER))
                 .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo(OrderErrorCode.INVALID_STATE_TRANSITION));
-        assertThat(eventTypes(orderId)).endsWith("OrderPickedUp");
+        assertThat(history(orderId)).endsWith("PICK_UP");
     }
 }

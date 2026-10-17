@@ -3,6 +3,12 @@
 Select one bounded outcome per approved feature brief. Apply [service invariants](AGENTS.md);
 use [README](README.md) for architecture, lifecycle and verification.
 
+Progress (2026-10-17): Foundation and Lifecycle are built; Local APIs are partly built (creation,
+cancellation, detail and history; discovery and editing remain). Event payloads follow the shared
+[event communication blueprint](../docs/integration/event-communication-blueprint.md); the Kafka
+relay and listener are next. Iteration status and order are tracked in
+[DESIGN.md](DESIGN.md#iterations-each-one-is-a-foc-iterate-feature-order--run).
+
 ```text
 $foc-iterate-feature order-service-scaffold: Create the backend scaffold and its verification.
 ```

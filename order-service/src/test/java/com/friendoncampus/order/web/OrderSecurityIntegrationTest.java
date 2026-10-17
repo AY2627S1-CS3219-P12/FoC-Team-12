@@ -86,6 +86,9 @@ class OrderSecurityIntegrationTest {
     @MockitoBean
     private com.friendoncampus.order.service.OrderExpiryScheduler orderExpiryScheduler;
 
+    @MockitoBean
+    private com.friendoncampus.order.messaging.CreditOutcomeHandler creditOutcomeHandler;
+
     private final HttpClient http = HttpClient.newHttpClient();
 
     @DynamicPropertySource
