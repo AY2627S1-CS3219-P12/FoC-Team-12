@@ -11,5 +11,11 @@ public enum OrderAction {
     WITHDRAW,
     PICK_UP,
     DELIVER,
-    COMPLETE
+    COMPLETE,
+    /** The requester edited an OPEN order's details and/or requested a new reward (T4, T5). */
+    EDIT,
+    /** Credit confirmed the reward change; the pending reward became the reward (T5a). */
+    REWARD_CHANGE_APPLIED,
+    /** Credit rejected the reward change; the previous reward stands (T5b). */
+    REWARD_CHANGE_REJECTED
 }

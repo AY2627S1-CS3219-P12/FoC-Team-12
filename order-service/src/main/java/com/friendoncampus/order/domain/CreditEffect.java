@@ -8,6 +8,8 @@ package com.friendoncampus.order.domain;
 public enum CreditEffect {
     NONE,
     RESERVE,
+    /** Change the active reservation to the requested new reward (reward edit, T5). */
+    ADJUST,
     RELEASE,
     COMPENSATE,
     SETTLE

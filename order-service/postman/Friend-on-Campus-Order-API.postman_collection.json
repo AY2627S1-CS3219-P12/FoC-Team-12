@@ -170,6 +170,55 @@
       "response": []
     },
     {
+      "name": "Edit Order",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 OK', () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "    pm.collectionVariables.set('version', pm.response.json().version);",
+              "    pm.test('a changed reward is pending until Credit confirms', () => pm.expect(pm.response.json().pendingCreditReward).to.eql(12));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"version\": {{version}},\n  \"title\": \"Collect printing\",\n  \"description\": \"Grab my printout from COM1\",\n  \"pickupLocationId\": \"9fd58f13-c8d5-4320-b757-7893d69a4ae0\",\n  \"pickupLocationName\": \"COM1 Print Shop\",\n  \"dropoffLocationId\": \"eb46dc78-e25e-4f07-a7a2-26bff615d170\",\n  \"dropoffLocationName\": \"UTown Residence\",\n  \"creditReward\": 12,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/orders/{{orderId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "{{orderId}}"
+          ]
+        },
+        "description": "Requires a REQUESTER session token and an OPEN order (Credit must have reserved it). Full replace: every field plus the `version` last read (set `version` from a GET). Expect 200; a changed creditReward shows as pendingCreditReward until Credit confirms. 409 VERSION_CONFLICT carries currentVersion; 409 REWARD_ADJUSTMENT_PENDING while a change awaits Credit."
+      },
+      "response": []
+    },
+    {
       "name": "Health",
       "event": [
         {
@@ -218,6 +267,10 @@
     {
       "key": "orderId",
       "value": ""
+    },
+    {
+      "key": "version",
+      "value": "0"
     }
   ]
 }

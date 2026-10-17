@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,6 +20,7 @@ import com.friendoncampus.order.service.OrderService;
 import com.friendoncampus.order.web.dto.CreateOrderRequest;
 import com.friendoncampus.order.web.dto.OrderResponse;
 import com.friendoncampus.order.web.dto.OrderTransitionResponse;
+import com.friendoncampus.order.web.dto.UpdateOrderRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -116,6 +118,44 @@ public class OrderController {
         return orderService.getHistory(id, callerId(jwt)).stream()
                 .map(OrderTransitionResponse::from)
                 .toList();
+    }
+
+    @Operation(
+            operationId = "updateOrder",
+            summary = "Edit an open order",
+            description = "The requester replaces all editable fields of an OPEN order (every field is "
+                    + "required, with the create rules) and sends the order version they last read. "
+                    + "Changing only details applies at once. Changing creditReward keeps the current "
+                    + "reward, sets pendingCreditReward and asks Credit to adjust the reservation; the new "
+                    + "reward applies only after Credit confirms, and meanwhile the order cannot be "
+                    + "accepted or edited. Resending the values the order already holds returns it "
+                    + "unchanged. Requires a REQUESTER session role.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The edited order"),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Missing or invalid fields",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "NOT_ORDER_REQUESTER, or the session role is not REQUESTER",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "No such order, or the caller may not see it",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "INVALID_STATE_TRANSITION (not OPEN), ORDER_EXPIRED, REWARD_ADJUSTMENT_PENDING, "
+                            + "or VERSION_CONFLICT (with currentVersion)",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @PatchMapping("/{id}")
+    public OrderResponse updateOrder(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateOrderRequest request) {
+        return OrderResponse.from(orderService.edit(id, callerId(jwt), request.version(), request.toDetails()));
     }
 
     @Operation(

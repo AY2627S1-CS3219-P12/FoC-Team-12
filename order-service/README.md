@@ -71,6 +71,42 @@ into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
 - **Forbidden:** `403` RFC-7807 `application/problem+json` when the token is valid
   but the session role is not `REQUESTER`.
 
+## Edit an order
+
+`PATCH /api/orders/{id}`
+
+- **Auth:** session role `REQUESTER` (any other role gets `403`), and the caller
+  must be the order's requester.
+- **Body:** a full replacement. Every editable field is required, with the same
+  rules as [Create order](#create-order) (`title`, `description`,
+  `pickupLocationId` + `pickupLocationName`, `dropoffLocationId` +
+  `dropoffLocationName`, `creditReward`, `pickupDeadline` in the future), plus
+  `version`: the order `version` the client last read (integer ≥ 0).
+- **Allowed only while `OPEN`** and no reward change is pending.
+- **Details only** (reward unchanged): applied at once, recorded in the history
+  as `EDIT`; no event is published.
+- **Reward changed:** the other fields apply at once, but `creditReward` stays as
+  it was and the new value is stored as `pendingCreditReward`. Order writes one
+  `OrderRewardChangeRequested` (`operationId`, `orderId`, `newCreditReward`) and
+  the new reward applies **only after Credit confirms** with `CreditAdjusted`
+  (history `REWARD_CHANGE_APPLIED`). If Credit answers
+  `CreditAdjustmentRejected` (for example `INSUFFICIENT_CREDITS`), the old reward
+  stays and the pending value is cleared (history `REWARD_CHANGE_REJECTED`, which
+  the client can show as "insufficient credits"). While a change is pending the
+  order can't be accepted or edited (`409 REWARD_ADJUSTMENT_PENDING`), but it can
+  still be cancelled; cancelling or expiring clears the pending value, and a Credit
+  answer that arrives afterwards is recorded but changes nothing.
+- **Duplicates:** resending exactly what the order already holds (a pending
+  reward counts as the reward) returns `200` with the order unchanged, whatever
+  `version` it carries, so a network retry is safe.
+- **Checks, in order:** role (`403`) → order exists and is visible (`404`) → an
+  overdue `OPEN` order is expired and the edit rejected (`409 ORDER_EXPIRED`) →
+  caller is the requester (`403 NOT_ORDER_REQUESTER`) → state is `OPEN`
+  (`409 INVALID_STATE_TRANSITION`) → duplicate (`200`) → no pending reward change
+  (`409 REWARD_ADJUSTMENT_PENDING`) → `version` matches (`409 VERSION_CONFLICT`,
+  with `currentVersion`; reload and retry).
+- **Success:** `200` with the order; `version` increases on every applied edit.
+
 ## Read and act on an order
 
 | Endpoint | Who | Result |
@@ -110,6 +146,8 @@ problems with a `code` and the order's `currentState`:
 | `ORDER_EXPIRED` | 409 | The pickup deadline has passed |
 | `INVALID_STATE_TRANSITION` | 409 | The action is not valid in the order's current state |
 | `ORDER_NOT_FOUND` | 404 | No such order, or the caller may not see it |
+| `REWARD_ADJUSTMENT_PENDING` | 409 | Accept or edit while a reward change awaits Credit |
+| `VERSION_CONFLICT` | 409 | Edit based on an old `version`; the problem carries `currentVersion` |
 
 Every state change also stores an `order_transitions`
 history row in the same transaction; credit-changing ones also store an
@@ -139,7 +177,7 @@ change credits:
 | `OrderCancelled` | The requester cancels (`compensationRequired` when it was `ACCEPTED`) | Release, or compensate the courier |
 | `OrderExpired` | The deadline passes while `OPEN`, a reservation is confirmed too late, or a courier withdraws after the deadline | Release |
 | `OrderCompleted` | The requester confirms receipt | Settle the full reward to the courier |
-| `OrderRewardChangeRequested` | The requester edits the reward (later iteration) | Adjust the reservation |
+| `OrderRewardChangeRequested` | The requester edits an `OPEN` order's reward | Adjust the reservation to `newCreditReward` |
 
 Each event uses the blueprint envelope (`eventVersion` 1, `producer`
 `order-service`, `aggregateType` `Order`, UTC `occurredAt`, one `correlationId`
@@ -150,7 +188,10 @@ transitions (opened, accepted, reopened, picked up, delivered, reservation
 failed) change no credits and are only recorded in the order's history.
 
 **Consumed from `credit.events`** (`CreditOutcomeHandler`): `CreditReserved`
-opens the order, `CreditReservationRejected` ends it, and `CreditReleased`,
+opens the order, `CreditReservationRejected` ends it, `CreditAdjusted` applies
+the pending reward and `CreditAdjustmentRejected` drops it (both only if the
+order is still `OPEN` with that reward pending; otherwise the event is recorded as
+`IGNORED`), and `CreditReleased`,
 `CreditSettled` and `CourierCompensated` only set the order's `creditStatus`.
 Each event is validated, deduplicated by `eventId` in the `processed_events`
 inbox, and matched to the Order command it answers by `operationId`, all in one
@@ -165,8 +206,9 @@ relay and the `credit.events` listener are the next iteration
 Every transition in the table is implemented: creation, Credit's reservation
 outcome (`PENDING_CREDIT → OPEN / EXPIRED / RESERVATION_FAILED`, which the Kafka
 consumer will call in a later iteration), requester cancellation, expiry,
-acceptance, withdrawal, pickup, delivery and completion. Events are stored in the
-outbox but not yet published, and reward editing is a later iteration. The table
+acceptance, withdrawal, pickup, delivery and completion. Editing details and the
+reward (through Credit) is implemented too. Events are stored in the outbox but
+not yet published. The table
 below is the approved target; [`DESIGN.md`](DESIGN.md) has the full transition
 table with guards, error codes, events and the iteration plan.
 
