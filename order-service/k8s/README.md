@@ -33,7 +33,11 @@ Verify health, documentation, authorization rejection and the database (PowerShe
 ./deploy/k8s/Test-LocalDeployment.ps1 -Service order -CheckDatabaseRestart
 ```
 
-Only the currently implemented order-creation API is deployed. Creation persists `PENDING_CREDIT`; Kafka transport and later lifecycle transitions remain separate work. This service has no packaged frontend.
+The deployed image includes the full order lifecycle API and the packaged errand UI at
+`/errands`. The local cluster has no Kafka broker yet, so `ORDER_KAFKA_ENABLED` is `"false"` in
+`config.yaml`: Order runs normally and stores events in its outbox, but does not publish them and
+new orders stay `PENDING_CREDIT`. Deploying Kafka (a reviewed shared change) and setting the
+`KAFKA_*` variables, then removing that flag, turns event delivery on.
 
 The application reads only its own database and validates User JWTs via the internal public
 JWKS endpoint. No User signing key is copied here. The PostgreSQL StatefulSet uses a retained
