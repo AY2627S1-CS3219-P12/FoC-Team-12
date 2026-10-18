@@ -14,6 +14,11 @@ for variable in \
 done
 
 mode=${1:-before-restart}
+consumer_timeout=${KAFKA_VERIFY_CONSUMER_TIMEOUT_SECONDS:-15}
+denial_timeout=${KAFKA_VERIFY_DENIAL_TIMEOUT_SECONDS:-10}
+for value in "$consumer_timeout" "$denial_timeout"; do
+  [[ "$value" =~ ^[1-9][0-9]*$ ]] || { echo 'Verification timeouts must be positive seconds' >&2; exit 1; }
+done
 bootstrap_servers=localhost:9092
 work_dir=/tmp/foc-kafka-verification
 mkdir -p "$work_dir"
@@ -25,6 +30,11 @@ write_client_properties "$work_dir/credit.properties" credit_service "$KAFKA_CRE
 write_client_properties "$work_dir/ui.properties" kafka_ui "$KAFKA_UI_BROKER_PASSWORD"
 
 admin=(--bootstrap-server "$bootstrap_servers" --command-config "$work_dir/admin.properties")
+
+# Initialization is finished before verification. Reuse one ACL snapshot per resource instead
+# of launching a fresh JVM for every operation on the same resource (especially on Minikube).
+declare -A topic_acl_cache group_acl_cache prefixed_group_acl_cache
+cluster_acl_cache=
 
 assert_contains() {
   local text=$1
@@ -75,7 +85,10 @@ verify_topic_acl() {
   local operation=$2
   local topic=$3
   local listing
-  listing=$(kafka_command kafka-acls.sh "${admin[@]}" --list --topic "$topic")
+  if [[ ! ${topic_acl_cache[$topic]+present} ]]; then
+    topic_acl_cache[$topic]=$(kafka_command kafka-acls.sh "${admin[@]}" --list --topic "$topic")
+  fi
+  listing=${topic_acl_cache[$topic]}
   verify_acl_line "$listing" "$principal" "$operation" "topic $topic"
 }
 
@@ -84,7 +97,10 @@ verify_group_acl() {
   local operation=$2
   local group=$3
   local listing
-  listing=$(kafka_command kafka-acls.sh "${admin[@]}" --list --group "$group")
+  if [[ ! ${group_acl_cache[$group]+present} ]]; then
+    group_acl_cache[$group]=$(kafka_command kafka-acls.sh "${admin[@]}" --list --group "$group")
+  fi
+  listing=${group_acl_cache[$group]}
   verify_acl_line "$listing" "$principal" "$operation" "group $group"
 }
 
@@ -93,8 +109,11 @@ verify_prefixed_group_acl() {
   local operation=$2
   local group_prefix=$3
   local listing
-  listing=$(kafka_command kafka-acls.sh "${admin[@]}" --list \
-    --group "$group_prefix" --resource-pattern-type prefixed)
+  if [[ ! ${prefixed_group_acl_cache[$group_prefix]+present} ]]; then
+    prefixed_group_acl_cache[$group_prefix]=$(kafka_command kafka-acls.sh "${admin[@]}" --list \
+      --group "$group_prefix" --resource-pattern-type prefixed)
+  fi
+  listing=${prefixed_group_acl_cache[$group_prefix]}
   verify_acl_line "$listing" "$principal" "$operation" "group prefix $group_prefix"
 }
 
@@ -102,7 +121,10 @@ verify_cluster_acl() {
   local principal=$1
   local operation=$2
   local listing
-  listing=$(kafka_command kafka-acls.sh "${admin[@]}" --list --cluster)
+  if [ -z "$cluster_acl_cache" ]; then
+    cluster_acl_cache=$(kafka_command kafka-acls.sh "${admin[@]}" --list --cluster)
+  fi
+  listing=$cluster_acl_cache
   verify_acl_line "$listing" "$principal" "$operation" "cluster"
 }
 
@@ -111,7 +133,7 @@ verify_persisted_record() {
   event_id=$(cat "$work_dir/event-id")
   local output
   set +e
-  output=$(timeout 15 "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
+  output=$(timeout "$consumer_timeout" "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
     --bootstrap-server "$bootstrap_servers" \
     --consumer.config "$work_dir/admin.properties" \
     --topic user.events --from-beginning \
@@ -211,7 +233,7 @@ ui_configuration=$(kafka_command kafka-configs.sh \
   --describe --entity-type topics --entity-name user.events)
 assert_contains "$ui_configuration" "retention.ms=604800000" "Kafka UI topic configuration"
 
-ui_consumer_output=$(timeout 15 "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
+ui_consumer_output=$(timeout "$consumer_timeout" "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
   --bootstrap-server "$bootstrap_servers" \
   --consumer.config "$work_dir/ui.properties" \
   --topic user.events --from-beginning \
@@ -252,7 +274,7 @@ if [ "$ui_unauthorized_write_status" -eq 0 ] && [ -n "$ui_unauthorized_write" ];
 fi
 
 set +e
-ui_unauthorized_group=$(timeout 10 "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
+ui_unauthorized_group=$(timeout "$denial_timeout" "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
   --bootstrap-server "$bootstrap_servers" \
   --consumer.config "$work_dir/ui.properties" \
   --topic user.events --group credit-service --max-messages 1 2>&1)
@@ -277,7 +299,7 @@ fi
 assert_contains "$unauthorized_write" "TopicAuthorizationException" "unauthorized topic write denial"
 
 set +e
-unauthorized_group=$(timeout 10 "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
+unauthorized_group=$(timeout "$denial_timeout" "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
   --bootstrap-server "$bootstrap_servers" \
   --consumer.config "$work_dir/credit.properties" \
   --topic user.events --group order-service --max-messages 1 2>&1)

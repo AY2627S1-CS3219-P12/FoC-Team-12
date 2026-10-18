@@ -2,7 +2,8 @@
 
 This setup follows the [course guide](https://sds-edu.github.io/SDS-Kubernetes-Guide/): Minikube
 with the Docker driver, YAML Deployments/Services, NodePort access and explicit scaling/rollouts.
-Docker Desktop's own Kubernetes feature is not needed. Cloud and Kafka transport are separate work.
+Docker Desktop's own Kubernetes feature is not needed. Cloud remains separate work. For the
+optional in-cluster broker and dashboard, see [Kafka on Kubernetes](../kafka/k8s/README.md).
 
 Shared editor: Darryl's Kubernetes task. Each service owner reviews their deployment; Jun Hui
 reviews gateway/shared networking. Databases and credentials remain service-private.
@@ -137,6 +138,16 @@ forwarding. Future endpoints under that prefix need an Order image update, not n
 routes. A future separate frontend path needs a deliberate route. Kafka listener/publisher
 adapters will require coordinated broker deployment and connection configuration; this cluster
 does not pretend those integrations already exist. Credit uses no demo profile here.
+
+Kafka and its read-only UI can be added without replacing application/database pods:
+
+```powershell
+pwsh -File deploy/kafka/k8s/Apply-LocalKafka.ps1
+```
+
+The [Kafka guide](../kafka/k8s/README.md) covers independent Kubernetes credentials, internal
+listeners, retained broker storage, isolated verification and application-adapter prerequisites.
+The Kafka helper does not upgrade application images or enable missing service integrations.
 
 The smoke checks cover deployment, public routes, missing/invalid-token rejection and retained
 migration records. They do not prove authenticated business flows or ledger/event integration.

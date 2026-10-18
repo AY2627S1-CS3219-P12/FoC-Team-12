@@ -1,5 +1,8 @@
 # Shared Kafka foundation
 
+For the same broker and read-only UI inside Minikube, use the
+[Kubernetes setup](k8s/README.md). Compose and Kubernetes use separate data and credentials.
+
 This directory provides the local event broker required by the
 [version-1 event blueprint](../../docs/integration/event-communication-blueprint.md). Kafka is
 shared transport infrastructure: it carries facts between services, while PostgreSQL remains each
@@ -207,9 +210,9 @@ cannot connect to Compose's `kafka:9092` DNS name. The Kubernetes owner must sep
 broker with persistent storage and a Kubernetes Service, create credentials as Secrets, and set
 each participating application's Kafka client variables to that in-cluster Service address.
 
-The same pinned Kafbat image may later be deployed inside Kubernetes and reached through a local
-port-forward, but this repository currently provides no Kafka or Kafka UI Kubernetes manifests.
-Do not copy local `.env` credentials into YAML or expose the dashboard through the public gateway.
+The [Kubernetes setup](k8s/README.md) now provides that separate broker, the same pinned Kafbat
+dashboard and a local-only port-forward workflow. It creates independent Kubernetes Secrets;
+do not copy local `.env` credentials into YAML or expose the dashboard through the public gateway.
 
 ## Delivery reliability responsibilities
 
@@ -259,8 +262,8 @@ infrastructure owners before production-like deployment:
 - Agree the exact timings and multiplier for the blueprint's three retry attempts.
 - Decide when local `SASL_PLAINTEXT` becomes encrypted `SASL_SSL` and how certificates rotate.
 - Select long-term metrics, dashboards and alerts for lag, outboxes, inboxes, retries and DLTs.
-- Design Kafka's Kubernetes topology, storage classes, disruption handling and credentials
-  separately; this Compose file must not be copied into Kubernetes.
+- Review production Kafka topology, storage classes, disruption handling and credential rotation
+  separately; the single-broker local Kubernetes setup is not a production availability design.
 - Choose production broker count, replication/min-ISR, backup/recovery objectives and tested
   disaster-recovery procedure.
 - Establish event-schema compatibility checks and the governance process for `eventVersion`
