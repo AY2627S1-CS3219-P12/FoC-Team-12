@@ -13,13 +13,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import com.friendoncampus.user.domain.*;
 import com.friendoncampus.user.repository.*;
 import com.friendoncampus.user.support.FakeEmailVerificationMailer;
+import com.friendoncampus.user.messaging.UserActivationEvents;
 
 @ExtendWith(MockitoExtension.class)
 class EmailVerificationServiceTest {
  private static final Instant NOW = Instant.parse("2030-01-01T00:00:00Z");
  @Mock UserRepository users; @Mock EmailVerificationAttemptRepository attempts; @Mock PasswordEncoder passwords;
+ @Mock UserActivationEvents events;
  private FakeEmailVerificationMailer mailer; private EmailVerificationService service; private User user;
- @BeforeEach void setUp() { mailer = new FakeEmailVerificationMailer(); service = new EmailVerificationService(users, attempts, passwords, mailer, Clock.fixed(NOW, ZoneOffset.UTC)); user = User.register("alice@u.nus.edu", "Alice", "alice", "hash"); }
+ @BeforeEach void setUp() { mailer = new FakeEmailVerificationMailer(); service = new EmailVerificationService(users, attempts, passwords, mailer, Clock.fixed(NOW, ZoneOffset.UTC), events); user = User.register("alice@u.nus.edu", "Alice", "alice", "hash"); }
 
  @Test void sendsAHashedSixDigitCodeForNewRegistration() {
  when(passwords.encode(anyString())).thenAnswer(i -> "hashed-" + i.getArgument(0));
@@ -38,6 +40,7 @@ class EmailVerificationServiceTest {
   when(passwords.matches("123456", "verifier")).thenReturn(true);
   service.verify("alice@u.nus.edu", "123456");
   assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE); verify(users).save(user); verify(attempts).save(attempt);
+  verify(events).record(user.getId(), OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC));
  }
 
  @Test void rejectsExpiredReplayAndFiveIncorrectAttempts() {
@@ -50,6 +53,7 @@ class EmailVerificationServiceTest {
   when(passwords.matches("000000", "verifier")).thenReturn(false);
   for (int i = 0; i < 5; i++) assertThatThrownBy(() -> service.verify("alice@u.nus.edu", "000000")).isInstanceOf(InvalidEmailVerificationCodeException.class);
   assertThat(wrong.getAttempts()).isEqualTo(5);
+  verifyNoInteractions(events);
  }
 
  @Test void resendsAfterCooldownAndInvalidatesEarlierAttempts() {

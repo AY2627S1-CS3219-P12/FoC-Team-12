@@ -1,5 +1,7 @@
 package com.friendoncampus.user.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -20,6 +22,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.friendoncampus.user.domain.User;
 import com.friendoncampus.user.repository.UserRepository;
+import com.friendoncampus.user.messaging.UserOutboxRepository;
 import com.friendoncampus.user.service.EmailVerificationMailer;
 import com.friendoncampus.user.service.PasswordResetMailer;
 import com.friendoncampus.user.support.JwtTestProperties;
@@ -46,6 +49,9 @@ class RegistrationEmailVerificationLoginIntegrationTest {
 
     @Autowired
     private UserRepository users;
+
+    @Autowired
+    private UserOutboxRepository outbox;
 
     @MockitoBean
     private EmailVerificationMailer emailVerificationMailer;
@@ -82,6 +88,10 @@ class RegistrationEmailVerificationLoginIntegrationTest {
                         .contentType("application/json")
                         .content("{\"email\":\"" + email + "\",\"code\":\"" + code.getValue() + "\"}"))
                 .andExpect(status().isNoContent());
+
+        var activatedUser = users.findByEmail(email).orElseThrow();
+        assertThat(outbox.findAll().stream().filter(event -> event.getUserId().equals(activatedUser.getId())).count())
+                .isEqualTo(1);
 
         mvc.perform(post("/api/users/login")
                         .contentType("application/json")

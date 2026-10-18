@@ -8,11 +8,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.friendoncampus.user.domain.*;
 import com.friendoncampus.user.repository.*;
+import com.friendoncampus.user.messaging.UserActivationEvents;
 
 @Service
 public class EmailVerificationService {
     private final UserRepository users; private final EmailVerificationAttemptRepository attempts; private final PasswordEncoder passwords; private final EmailVerificationMailer mailer; private final Clock clock; private final SecureRandom random = new SecureRandom();
-    public EmailVerificationService(UserRepository users, EmailVerificationAttemptRepository attempts, PasswordEncoder passwords, EmailVerificationMailer mailer, Clock clock) { this.users = users; this.attempts = attempts; this.passwords = passwords; this.mailer = mailer; this.clock = clock; }
+    private final UserActivationEvents events;
+    public EmailVerificationService(UserRepository users, EmailVerificationAttemptRepository attempts, PasswordEncoder passwords, EmailVerificationMailer mailer, Clock clock, UserActivationEvents events) { this.users = users; this.attempts = attempts; this.passwords = passwords; this.mailer = mailer; this.clock = clock; this.events = events; }
 
     public void issueInitial(User user) { issue(user, now()); }
 
@@ -36,7 +38,9 @@ public class EmailVerificationService {
         EmailVerificationAttempt attempt = attempts.findFirstByUser_IdAndSentAtIsNotNullAndUsedAtIsNullAndInvalidatedAtIsNullOrderByCreatedAtDesc(user.getId()).orElseThrow(InvalidEmailVerificationCodeException::new);
         if (!attempt.isUsableAt(now())) throw new InvalidEmailVerificationCodeException();
         if (!passwords.matches(code, attempt.getVerifier())) { attempt.recordFailedAttempt(); attempts.save(attempt); throw new InvalidEmailVerificationCodeException(); }
-        attempt.markUsed(now()); user.activate(); attempts.save(attempt); users.save(user);
+        OffsetDateTime activatedAt = now();
+        attempt.markUsed(activatedAt); user.activate(); attempts.save(attempt); users.save(user);
+        events.record(user.getId(), activatedAt);
     }
 
     private void issue(User user, OffsetDateTime now) {
