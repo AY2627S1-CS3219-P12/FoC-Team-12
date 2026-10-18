@@ -285,6 +285,24 @@ Rules that apply to every transition:
 - **Errors:** wrong session role or not the order's requester/courier → `403`;
   invalid state → `409`; malformed body → `400` with nothing changed.
 
+## Errand UI
+
+A React frontend in `frontend/` is packaged inside the service, like the Credit dashboard. The
+service serves it at `/errands` with assets under `/order-assets/**`; it reuses the shared-origin
+login (`sessionStorage["foc.user-session"]`) and calls `/api/orders`. Design source and API
+adaptations: [`frontend/docs/design-source.md`](frontend/docs/design-source.md).
+
+```sh
+cd frontend
+npm ci
+npm run dev          # http://localhost:5176, proxies /api to the service on 8082
+npm run lint && npm run typecheck && npm test && npm run build
+```
+
+Through the shared gateway, the UI also needs a gateway route for `/errands` and `/order-assets/**`
+to this service (the API route `/api/orders/**` already exists). The gateway is a shared service,
+so that route is a separate change for its owner.
+
 ## Build and test
 
 ```bash
