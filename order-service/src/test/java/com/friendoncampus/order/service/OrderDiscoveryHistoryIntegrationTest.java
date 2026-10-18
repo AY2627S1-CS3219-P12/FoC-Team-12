@@ -36,7 +36,7 @@ import com.friendoncampus.order.support.MutableClock;
  * driven through {@link OrderService} so the stored rows look exactly like production ones.
  * Requires Docker.
  */
-@SpringBootTest(properties = "app.orders.expiry.enabled=false")
+@SpringBootTest(properties = {"app.orders.expiry.enabled=false", "app.kafka.enabled=false"})
 @Testcontainers
 class OrderDiscoveryHistoryIntegrationTest {
 

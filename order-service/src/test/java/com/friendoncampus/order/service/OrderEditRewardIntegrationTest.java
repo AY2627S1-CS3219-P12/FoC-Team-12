@@ -54,7 +54,7 @@ import tools.jackson.databind.json.JsonMapper;
  * PostgreSQL, with Credit outcomes shaped as the event communication blueprint defines them.
  * Requires Docker.
  */
-@SpringBootTest(properties = "app.orders.expiry.enabled=false")
+@SpringBootTest(properties = {"app.orders.expiry.enabled=false", "app.kafka.enabled=false"})
 @Testcontainers
 class OrderEditRewardIntegrationTest {
 
