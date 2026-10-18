@@ -240,7 +240,7 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
     isn't revealed that the order exists.
 - **`GET /api/orders/{id}/history`:** the transition history, visible to participants only.
 - **`GET /api/orders/me/requested`:** R's orders in `COMPLETED`, `CANCELLED` or `EXPIRED` (F9.1).
-  - `RESERVATION_FAILED` is excluded. *(Gap. Confirm.)*
+  - `RESERVATION_FAILED` is excluded. *(Confirmed by XueTing, 2026-10-18.)*
 - **`GET /api/orders/me/delivered`:** `COMPLETED` orders where the caller was the courier (F9.2).
 - **Client-only requirements:**
   - F1.1.1 form validation, F4.4 remembering filters, and the F5.1.1/F5.1.2 confirmation popup;
@@ -334,8 +334,8 @@ Confirmed by XueTing (2026-10-18):
   `CreditAdjusted` / `CreditAdjustmentRejected` is recorded as `IGNORED`. Credit must release the
   *adjusted* amount if it applied the adjustment before seeing `OrderCancelled`.
 
-Still to confirm:
-- `RESERVATION_FAILED` orders are left out of the requester history list (F9.1).
+- **`RESERVATION_FAILED` orders are not shown in the requester's history** (F9.1); history lists
+  only `COMPLETED`, `CANCELLED` and `EXPIRED` errands.
 
 Implementation details (no decision needed):
 - Resending the order's current values (pending reward counted as the reward) is a `200`
