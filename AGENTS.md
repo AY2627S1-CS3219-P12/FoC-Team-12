@@ -15,6 +15,9 @@ unclear. For an explicitly assigned shared task, identify its editor and affecte
   handling, failure/retry/reconciliation responsibility, and observability where applicable.
 - Shared gateway, Compose, environment examples, broker configuration and CI changes have one
   nominated editor and require review from all affected service owners.
+- A new required Compose variable (`${NAME:?...}`) must be added to `.env.example`, every CI job
+  that runs Compose and `deploy/kafka/Test-LocalKafka.sh` in the same change; CI never reads
+  `.env`. `python3 .github/scripts/compose_env_check.py` checks this on every PR.
 - Use approved backlog/wireframes for product rules; record missing or conflicting rules for
   confirmation. Update affected tests and service documentation when behavior changes.
 

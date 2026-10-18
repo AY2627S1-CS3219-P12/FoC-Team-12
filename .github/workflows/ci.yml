@@ -17,8 +17,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: Test image selection and release tags
+      - name: Test CI scripts (image selection, release tags, Compose environment)
         run: python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
+      - name: Check every Compose environment provides compose.yaml's required variables
+        run: python3 .github/scripts/compose_env_check.py
       - name: Validate GitHub Actions syntax and shell steps
         run: docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.12 -color
 
