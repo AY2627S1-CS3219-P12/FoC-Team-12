@@ -156,3 +156,18 @@ dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
 .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
 .tab { border-color: var(--line); background: var(--surface); color: var(--ink); font-weight: 600; }
 .tab[aria-selected='true'] { border-color: var(--action-soft); background: var(--action-soft); color: var(--action); }
+
+/* Create errand */
+.errand-form { display: grid; gap: 1rem; }
+.form-field { display: grid; gap: 0.35rem; }
+.form-field label { color: var(--ink); font-size: 0.85rem; font-weight: 600; }
+.form-field input, .form-field select, .form-field textarea { width: 100%; min-height: 2.75rem; padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--surface); color: var(--ink); font: inherit; }
+.form-field textarea { resize: vertical; }
+.form-field [aria-invalid='true'] { border-color: var(--danger); }
+.field-hint { margin: 0; color: var(--muted); font-size: 0.8rem; }
+.field-error { margin: 0; color: var(--danger); font-size: 0.82rem; font-weight: 600; }
+.tab-link { display: grid; min-height: 2.75rem; border: 1px solid var(--line); border-radius: 0.5rem; place-items: center; text-decoration: none; }
+.tab-link[aria-current='page'] { border-color: var(--action-soft); background: var(--action-soft); color: var(--action); }
+.balance-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; padding: 1rem 1.25rem; border-radius: 0.6rem; background: var(--action-soft); }
+.balance-tiles strong { display: block; color: var(--action); font-size: 1.5rem; }
+.balance-tiles span { color: var(--action); font-size: 0.8rem; }

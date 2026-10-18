@@ -76,6 +76,14 @@ export function BrowsePage() {
           <p>Find a campus errand that fits your trip.</p>
         </div>
       </div>
+      <nav aria-label="Errand mode" className="tabs">
+        <Link className="tab tab-link" to="/errands/new">
+          Request help
+        </Link>
+        <Link aria-current="page" className="tab tab-link" to="/errands/browse">
+          Run errands
+        </Link>
+      </nav>
       <div className="two-column">
         <section aria-labelledby="results-heading">
           <h2 className="visually-hidden" id="results-heading">

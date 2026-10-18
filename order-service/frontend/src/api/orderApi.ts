@@ -72,6 +72,8 @@ export class OrderApiError extends Error {
     message: string,
     readonly code: string | null = null,
     readonly currentState: OrderState | null = null,
+    /** Field name -> messages from a 400's `errors` map (see the README). */
+    readonly fieldErrors: Record<string, string[]> = {},
   ) {
     super(message)
   }
@@ -89,19 +91,22 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let detail = 'Something went wrong. Please try again.'
     let code: string | null = null
     let currentState: OrderState | null = null
+    let fieldErrors: Record<string, string[]> = {}
     try {
       const problem = (await response.json()) as {
         detail?: string
         code?: string
         currentState?: OrderState
+        errors?: Record<string, string[]>
       }
       detail = problem.detail ?? detail
       code = problem.code ?? null
       currentState = problem.currentState ?? null
+      fieldErrors = problem.errors ?? {}
     } catch {
       // Keep the generic message when the body is not problem+json.
     }
-    throw new OrderApiError(response.status, detail, code, currentState)
+    throw new OrderApiError(response.status, detail, code, currentState, fieldErrors)
   }
   return (await response.json()) as T
 }
@@ -127,4 +132,25 @@ export function fetchMyOrders(kind: 'requested' | 'delivered', page: number): Pr
 
 export function performAction(id: string, action: OrderAction): Promise<Order> {
   return request<Order>(`/api/orders/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
+}
+
+
+/** Body of POST /api/orders (CreateOrderRequest). Locations come from Supplier Service. */
+export type CreateOrderInput = {
+  title: string
+  description: string
+  pickupLocationId: string
+  pickupLocationName: string
+  dropoffLocationId: string
+  dropoffLocationName: string
+  creditReward: number
+  pickupDeadline: string
+}
+
+export function createOrder(input: CreateOrderInput): Promise<Order> {
+  return request<Order>('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
 }
