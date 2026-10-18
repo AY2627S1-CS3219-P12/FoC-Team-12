@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { ErrandTabs } from '../components/ErrandTabs'
+import { useNavigate } from 'react-router-dom'
 import { createOrder, OrderApiError } from '../api/orderApi'
 import {
   type CampusLocation,
@@ -106,14 +107,7 @@ export function CreateErrandPage() {
           <p>Tell your courier what to collect and where to bring it.</p>
         </div>
       </div>
-      <nav aria-label="Errand mode" className="tabs">
-        <Link aria-current="page" className="tab tab-link" to="/errands/new">
-          Request help
-        </Link>
-        <Link className="tab tab-link" to="/errands/browse">
-          Run errands
-        </Link>
-      </nav>
+      <ErrandTabs />
       {session?.role !== 'REQUESTER' && (
         <div className="notice notice-next">
           Posting errands needs a Requester session. Switch to Requester in the

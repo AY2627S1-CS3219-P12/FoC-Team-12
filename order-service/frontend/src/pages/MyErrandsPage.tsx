@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchMyOrders, type Order } from '../api/orderApi'
+import { ErrandTabs } from '../components/ErrandTabs'
 import { StateBadge } from '../components/StateBadge'
 import { formatDeadline, locationName } from '../utils/orderFormatting'
 
@@ -11,12 +12,14 @@ const TABS: { value: Tab; label: string; empty: string }[] = [
   {
     value: 'requested',
     label: 'Errands I requested',
-    empty: "Errands you requested appear here once they're completed, cancelled or expired.",
+    empty:
+      "Errands you requested appear here once they're completed, cancelled or expired.",
   },
   {
     value: 'delivered',
     label: 'Errands I delivered',
-    empty: 'Errands you delivered appear here once the requester confirms receipt.',
+    empty:
+      'Errands you delivered appear here once the requester confirms receipt.',
   },
 ]
 
@@ -39,6 +42,7 @@ export function MyErrandsPage() {
           <p>Errands you've finished, as a requester or as a courier.</p>
         </div>
       </div>
+      <ErrandTabs />
       <div aria-label="Errand history" className="tabs" role="tablist">
         {TABS.map((item) => (
           <button
@@ -58,7 +62,11 @@ export function MyErrandsPage() {
           </button>
         ))}
       </div>
-      <section aria-labelledby={`tab-${tab}`} id="history-panel" role="tabpanel">
+      <section
+        aria-labelledby={`tab-${tab}`}
+        id="history-panel"
+        role="tabpanel"
+      >
         {history.isPending && <p className="subtle">Loading your errands…</p>}
         {history.isError && (
           <div className="notice notice-error" role="alert">
@@ -80,7 +88,12 @@ export function MyErrandsPage() {
             </ul>
             {history.data.totalPages > 1 && (
               <nav aria-label="Pages" className="actions">
-                <button className="button-secondary" disabled={page === 0} onClick={() => setPage(page - 1)} type="button">
+                <button
+                  className="button-secondary"
+                  disabled={page === 0}
+                  onClick={() => setPage(page - 1)}
+                  type="button"
+                >
                   Previous
                 </button>
                 <span className="subtle">
@@ -111,12 +124,17 @@ function HistoryCard({ order }: { order: Order }) {
         <span className="reward">{order.creditReward} cr</span>
       </div>
       <p>
-        {locationName(order.pickupLocationName)} → {locationName(order.dropoffLocationName)}
+        {locationName(order.pickupLocationName)} →{' '}
+        {locationName(order.dropoffLocationName)}
       </p>
       <p>Finished {formatDeadline(order.stateChangedAt)}</p>
       <div className="errand-card-foot">
         <StateBadge state={order.state} />
-        <Link aria-label={`View ${order.title}`} className="text-link" to={`/errands/${order.id}`}>
+        <Link
+          aria-label={`View ${order.title}`}
+          className="text-link"
+          to={`/errands/${order.id}`}
+        >
           View →
         </Link>
       </div>
