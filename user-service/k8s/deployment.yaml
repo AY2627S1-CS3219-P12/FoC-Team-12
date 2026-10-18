@@ -37,8 +37,52 @@ spec:
                 secretKeyRef:
                   name: user-service-secrets
                   key: JWT_PRIVATE_KEY
+            - name: USER_EVENTS_PUBLISHER_ENABLED
+              value: "true"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: KAFKA_SECURITY_PROTOCOL
+              value: SASL_PLAINTEXT
+            - name: KAFKA_SASL_MECHANISM
+              value: PLAIN
+            - name: KAFKA_USERNAME
+              value: user_service
+            - name: KAFKA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: user-kafka-client
+                  key: KAFKA_PASSWORD
             - name: MAIL_PROVIDER
-              value: noop
+              value: sendgrid
+            - name: SENDGRID_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: user-mail-secrets
+                  key: SENDGRID_API_KEY
+            - name: SENDGRID_FROM_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: user-mail-secrets
+                  key: SENDGRID_FROM_EMAIL
+            # One-shot bootstrap: absent Secret leaves bootstrap disabled after setup.
+            - name: ADMIN_BOOTSTRAP_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: user-admin-bootstrap
+                  key: ADMIN_BOOTSTRAP_EMAIL
+                  optional: true
+            - name: ADMIN_BOOTSTRAP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: user-admin-bootstrap
+                  key: ADMIN_BOOTSTRAP_USERNAME
+                  optional: true
+            - name: ADMIN_BOOTSTRAP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: user-admin-bootstrap
+                  key: ADMIN_BOOTSTRAP_PASSWORD
+                  optional: true
             - name: JAVA_TOOL_OPTIONS
               value: "-XX:MaxRAMPercentage=70.0"
           startupProbe:
