@@ -95,6 +95,10 @@ Keep the service tunnel open on Windows. Use one browser address throughout a lo
 session storage belongs to its origin. This direct User NodePort supports the tutorial; use the
 gateway entry point once the shared stack is deployed.
 
+The Deployment enables the activation-event publisher at `kafka:9092` and reads only the
+`user_service` password from `user-kafka-client`. Verification still commits through the database
+when Kafka is temporarily unavailable; the durable outbox retries delivery after recovery.
+
 ## Verification and persistence
 
 Check `/`, `/actuator/health`, `/.well-known/jwks.json` and that `/api/users/me` returns `401`

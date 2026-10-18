@@ -115,6 +115,7 @@ services:
       CREDIT_JWT_AUDIENCE: friend-on-campus-api
       SPRING_PROFILES_ACTIVE: ${CREDIT_SPRING_PROFILES_ACTIVE:-}
       CREDIT_DEMO_USER_ID: ${CREDIT_DEMO_USER_ID:-}
+      KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
       KAFKA_SASL_MECHANISM: PLAIN
@@ -123,6 +124,8 @@ services:
     depends_on:
       credit-db:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     ports:
       - "8083:8083"
 

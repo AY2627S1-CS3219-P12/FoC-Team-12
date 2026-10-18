@@ -10,6 +10,7 @@ import com.friendoncampus.credit.repository.CreditLedgerEntryRepository;
 import com.friendoncampus.credit.repository.CreditOperationRepository;
 import com.friendoncampus.credit.repository.CreditOutboxEventRepository;
 import com.friendoncampus.credit.repository.CreditReservationRepository;
+import com.friendoncampus.credit.repository.CreditEventStreamVersionRepository;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -25,6 +26,7 @@ class CreditServiceApplicationTests {
     @MockitoBean CreditLedgerEntryRepository ledger;
     @MockitoBean CreditInboxEventRepository inbox;
     @MockitoBean CreditOutboxEventRepository outbox;
+    @MockitoBean CreditEventStreamVersionRepository eventVersions;
 
     @Test
     void contextLoads() {

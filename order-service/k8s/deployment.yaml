@@ -25,6 +25,8 @@ spec:
                 name: order-service-config
             - secretRef:
                 name: order-service-secrets
+            - secretRef:
+                name: order-kafka-client
           startupProbe:
             httpGet:
               path: /actuator/health

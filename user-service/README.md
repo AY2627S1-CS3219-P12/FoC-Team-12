@@ -218,12 +218,11 @@ SELECT event_id, user_id, attempt_count, published_at, next_attempt_at, last_fai
 FROM user_event_outbox ORDER BY occurred_at;
 ```
 
-After integration, Kubernetes only needs the new User image, publisher enable flag, reachable
-bootstrap/advertised broker addresses and matching credentials supplied through configuration
-and Secrets. Its existing manifests deliberately remain unchanged here: Kafka networking and
-broker provisioning are separate shared infrastructure work. Kafka does not belong on the HTTP
-gateway. Deploy the additive migration before relying on event publishing, and check database
-compatibility before rolling an application image back.
+Kubernetes supplies the publisher enable flag, `kafka:9092` broker address and `user_service`
+credential through the reviewed Deployment and `user-kafka-client` Secret. Provision Kafka first
+and select the verified SHA-tagged User image containing this migration and publisher. Kafka does
+not belong on the HTTP gateway. Check database compatibility before rolling an application image
+back.
 
 ### Verification
 
