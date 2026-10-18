@@ -8,7 +8,8 @@ for variable in \
   KAFKA_ADMIN_PASSWORD \
   KAFKA_USER_SERVICE_PASSWORD \
   KAFKA_ORDER_SERVICE_PASSWORD \
-  KAFKA_CREDIT_SERVICE_PASSWORD; do
+  KAFKA_CREDIT_SERVICE_PASSWORD \
+  KAFKA_UI_BROKER_PASSWORD; do
   require_env "$variable"
 done
 
@@ -21,6 +22,7 @@ write_client_properties "$work_dir/admin.properties" foc_admin "$KAFKA_ADMIN_PAS
 write_client_properties "$work_dir/user.properties" user_service "$KAFKA_USER_SERVICE_PASSWORD"
 write_client_properties "$work_dir/order.properties" order_service "$KAFKA_ORDER_SERVICE_PASSWORD"
 write_client_properties "$work_dir/credit.properties" credit_service "$KAFKA_CREDIT_SERVICE_PASSWORD"
+write_client_properties "$work_dir/ui.properties" kafka_ui "$KAFKA_UI_BROKER_PASSWORD"
 
 admin=(--bootstrap-server "$bootstrap_servers" --command-config "$work_dir/admin.properties")
 
@@ -32,6 +34,12 @@ assert_contains() {
     echo "Verification failed: $description (missing '$expected')" >&2
     return 1
   fi
+}
+
+topic_end_offset() {
+  local topic=$1
+  kafka_command kafka-get-offsets.sh "${admin[@]}" --topic "$topic" --time latest |
+    awk -F: '{ total += $3 } END { print total + 0 }'
 }
 
 verify_topic() {
@@ -73,17 +81,29 @@ verify_topic_acl() {
 
 verify_group_acl() {
   local principal=$1
-  local group=$2
+  local operation=$2
+  local group=$3
   local listing
   listing=$(kafka_command kafka-acls.sh "${admin[@]}" --list --group "$group")
-  verify_acl_line "$listing" "$principal" READ "group $group"
+  verify_acl_line "$listing" "$principal" "$operation" "group $group"
+}
+
+verify_prefixed_group_acl() {
+  local principal=$1
+  local operation=$2
+  local group_prefix=$3
+  local listing
+  listing=$(kafka_command kafka-acls.sh "${admin[@]}" --list \
+    --group "$group_prefix" --resource-pattern-type prefixed)
+  verify_acl_line "$listing" "$principal" "$operation" "group prefix $group_prefix"
 }
 
 verify_cluster_acl() {
   local principal=$1
+  local operation=$2
   local listing
   listing=$(kafka_command kafka-acls.sh "${admin[@]}" --list --cluster)
-  verify_acl_line "$listing" "$principal" IDEMPOTENT_WRITE "cluster"
+  verify_acl_line "$listing" "$principal" "$operation" "cluster"
 }
 
 verify_persisted_record() {
@@ -110,18 +130,30 @@ for topic in user.events.DLT order.events.DLT credit.events.DLT; do
 done
 
 verify_topic_acl user_service WRITE user.events
-verify_cluster_acl user_service
+verify_cluster_acl user_service IDEMPOTENT_WRITE
 verify_topic_acl order_service READ credit.events
-verify_group_acl order_service order-service
+verify_group_acl order_service READ order-service
 verify_topic_acl order_service WRITE credit.events.DLT
 verify_topic_acl credit_service READ user.events
 verify_topic_acl credit_service READ order.events
-verify_group_acl credit_service credit-service
+verify_group_acl credit_service READ credit-service
 verify_topic_acl credit_service WRITE credit.events
 verify_topic_acl credit_service WRITE user.events.DLT
 verify_topic_acl credit_service WRITE order.events.DLT
-verify_cluster_acl order_service
-verify_cluster_acl credit_service
+verify_cluster_acl order_service IDEMPOTENT_WRITE
+verify_cluster_acl credit_service IDEMPOTENT_WRITE
+
+for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT; do
+  verify_topic_acl kafka_ui READ "$topic"
+  verify_topic_acl kafka_ui DESCRIBE "$topic"
+  verify_topic_acl kafka_ui DESCRIBE_CONFIGS "$topic"
+done
+verify_cluster_acl kafka_ui DESCRIBE
+verify_cluster_acl kafka_ui DESCRIBE_CONFIGS
+verify_group_acl kafka_ui DESCRIBE order-service
+verify_group_acl kafka_ui DESCRIBE credit-service
+verify_prefixed_group_acl kafka_ui READ kafka-ui-browser
+verify_prefixed_group_acl kafka_ui DESCRIBE kafka-ui-browser
 
 if [ "$mode" = after-restart ]; then
   verify_persisted_record
@@ -167,6 +199,66 @@ if kill -0 "$consumer_pid" 2>/dev/null; then
 fi
 wait "$consumer_pid"
 assert_contains "$(cat "$consumer_output")" "$aggregate_id|$event" "authorized keyed produce/consume"
+
+ui_description=$(kafka_command kafka-topics.sh \
+  --bootstrap-server "$bootstrap_servers" \
+  --command-config "$work_dir/ui.properties" \
+  --describe --topic user.events)
+assert_contains "$ui_description" "PartitionCount: 3" "Kafka UI topic description"
+ui_configuration=$(kafka_command kafka-configs.sh \
+  --bootstrap-server "$bootstrap_servers" \
+  --command-config "$work_dir/ui.properties" \
+  --describe --entity-type topics --entity-name user.events)
+assert_contains "$ui_configuration" "retention.ms=604800000" "Kafka UI topic configuration"
+
+ui_consumer_output=$(timeout 15 "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
+  --bootstrap-server "$bootstrap_servers" \
+  --consumer.config "$work_dir/ui.properties" \
+  --topic user.events --from-beginning \
+  --group "kafka-ui-browser-$event_id" --max-messages 1 \
+  --property print.key=true --property key.separator='|' 2>&1)
+assert_contains "$ui_consumer_output" "$aggregate_id|$event" "Kafka UI message read"
+
+ui_acl_listing=$(kafka_command kafka-acls.sh "${admin[@]}" \
+  --list --principal User:kafka_ui)
+for forbidden_operation in WRITE CREATE DELETE ALTER ALTER_CONFIGS IDEMPOTENT_WRITE; do
+  if grep -Eq "principal=User:kafka_ui, host=\\*, operation=$forbidden_operation," \
+    <<< "$ui_acl_listing"; then
+    echo "Kafka UI unexpectedly has $forbidden_operation permission" >&2
+    exit 1
+  fi
+done
+
+ui_offset_before=$(topic_end_offset order.events)
+set +e
+ui_unauthorized_write=$(printf '%s|{}\n' "$aggregate_id" | kafka_command kafka-console-producer.sh \
+  --bootstrap-server "$bootstrap_servers" \
+  --command-config "$work_dir/ui.properties" \
+  --topic order.events \
+  --sync \
+  --reader-property parse.key=true --reader-property key.separator='|' \
+  --command-property max.block.ms=5000 \
+  --command-property delivery.timeout.ms=10000 2>&1)
+ui_unauthorized_write_status=$?
+set -e
+sleep 2
+ui_offset_after=$(topic_end_offset order.events)
+if [ "$ui_offset_after" -ne "$ui_offset_before" ]; then
+  echo "Kafka UI unexpectedly changed order.events from offset $ui_offset_before to $ui_offset_after" >&2
+  exit 1
+fi
+if [ "$ui_unauthorized_write_status" -eq 0 ] && [ -n "$ui_unauthorized_write" ]; then
+  echo "Kafka UI write was denied without changing order.events: $ui_unauthorized_write"
+fi
+
+set +e
+ui_unauthorized_group=$(timeout 10 "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
+  --bootstrap-server "$bootstrap_servers" \
+  --consumer.config "$work_dir/ui.properties" \
+  --topic user.events --group credit-service --max-messages 1 2>&1)
+set -e
+assert_contains "$ui_unauthorized_group" "GroupAuthorizationException" \
+  "Kafka UI business consumer-group denial"
 
 set +e
 unauthorized_write=$(printf '%s|{}\n' "$aggregate_id" | kafka_command kafka-console-producer.sh \

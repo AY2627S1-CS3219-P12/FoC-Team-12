@@ -20,6 +20,8 @@ and therefore receives no Kafka identity.
 - Both client listeners use local-only `SASL_PLAINTEXT` with the `PLAIN` mechanism.
 - Broker data is stored in the Compose `kafka-data` named volume.
 - Automatic topic creation is disabled; `kafka-init` creates all resources explicitly.
+- A pinned [Kafbat UI](https://ui.docs.kafbat.io/) dashboard is available at
+  `http://localhost:8090` for authenticated, read-only inspection.
 - Replication factor and minimum in-sync replicas are both `1`. This survives a local container
   restart but provides **no broker redundancy**.
 
@@ -37,11 +39,15 @@ KAFKA_BROKER_PASSWORD=...
 KAFKA_USER_SERVICE_PASSWORD=...
 KAFKA_ORDER_SERVICE_PASSWORD=...
 KAFKA_CREDIT_SERVICE_PASSWORD=...
+KAFKA_UI_BROKER_PASSWORD=...
+KAFKA_UI_LOGIN_USERNAME=...
+KAFKA_UI_LOGIN_PASSWORD=...
 ```
 
-Never commit `.env`. Passwords may contain ordinary punctuation, including quotes and backslashes,
-but must not contain line breaks. The broker writes a runtime-only JAAS file under `/tmp`; passwords
-are not written to the repository or Kafka data volume.
+Never commit `.env`. Use distinct values without quotes, backslashes or line breaks. The broker
+writes a runtime-only JAAS file under `/tmp`; passwords are not written to the repository or Kafka
+data volume. The UI login credentials protect the browser dashboard, while
+`KAFKA_UI_BROKER_PASSWORD` authenticates its separate `kafka_ui` client identity to Kafka.
 
 Future Docker-based adapters use:
 
@@ -80,6 +86,7 @@ production data-retention policy.
 | `user_service` | Write/describe `user.events`; cluster idempotent write |
 | `order_service` | Write/describe `order.events`; read/describe `credit.events` as group `order-service`; write/describe `credit.events.DLT`; cluster idempotent write |
 | `credit_service` | Read/describe `user.events` and `order.events` as group `credit-service`; write/describe `credit.events`, `user.events.DLT` and `order.events.DLT`; cluster idempotent write |
+| `kafka_ui` | Read/describe the six project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
 | `foc_admin` | Broker initialization and local diagnosis (super-user) |
 | `foc_broker` | Broker-to-broker traffic (super-user) |
 
@@ -88,13 +95,25 @@ and converges topic retention settings and ACL entries.
 
 ## Start, inspect and stop
 
-From the repository root:
+From the repository root, start the broker, initializer and dashboard together:
+
+```bash
+docker compose up -d --wait kafka-ui
+```
+
+Or start only the broker and initializer when the dashboard is unnecessary:
 
 ```bash
 docker compose up -d --wait kafka
 docker compose run --rm kafka-init
 docker compose ps kafka
 ```
+
+Open `http://localhost:8090` and sign in with `KAFKA_UI_LOGIN_USERNAME` and
+`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the six
+topics, partitions, configurations, message keys/envelopes, consumer groups and lag. The UI uses
+both Kafbat's read-only mode and broker ACLs: it cannot produce records, create/delete topics,
+change retention, reset business offsets or join a service's consumer group.
 
 List or describe topics with the authenticated health-check client configuration:
 
@@ -123,7 +142,8 @@ Stop Kafka while preserving its named volume:
 
 ```bash
 docker compose stop kafka
-docker compose rm -f kafka kafka-init
+docker compose stop kafka-ui
+docker compose rm -f kafka kafka-init kafka-ui
 ```
 
 Starting it and rerunning the initializer restores the broker with the existing records. To reset
@@ -173,10 +193,23 @@ Run:
 ```
 
 The script uses an isolated Compose project and disposable Kafka volume. It validates Compose,
-starts an authenticated broker, runs the initializer twice, checks every topic/configuration/ACL,
-performs an authorized keyed produce/consume, proves unauthorized topic and group access is denied,
-restarts Kafka, verifies the record and configuration survived, and removes only its disposable
-project and volume. Set `KEEP_KAFKA_SMOKE_STACK=1` only when diagnosing a failure manually.
+starts an authenticated broker and login-protected dashboard, runs the initializer twice, checks
+every topic/configuration/ACL, performs authorized keyed produce/consume, proves service and UI
+mutation boundaries, verifies dashboard login and cluster visibility, restarts Kafka, confirms the
+dashboard reconnects and verifies the record/configuration survived. It then removes only its
+disposable project and volume. Set `KEEP_KAFKA_SMOKE_STACK=1` only when diagnosing a failure
+manually.
+
+## Kubernetes handoff
+
+The Compose broker and dashboard do not exist inside the `foc-local` Kubernetes network. A pod
+cannot connect to Compose's `kafka:9092` DNS name. The Kubernetes owner must separately deploy a
+broker with persistent storage and a Kubernetes Service, create credentials as Secrets, and set
+each participating application's Kafka client variables to that in-cluster Service address.
+
+The same pinned Kafbat image may later be deployed inside Kubernetes and reached through a local
+port-forward, but this repository currently provides no Kafka or Kafka UI Kubernetes manifests.
+Do not copy local `.env` credentials into YAML or expose the dashboard through the public gateway.
 
 ## Delivery reliability responsibilities
 
@@ -195,8 +228,13 @@ startup does not implement retry or forwarding; those are application-side behav
 
 ## Troubleshooting
 
-- **Authentication failed:** ensure `.env` contains all five Kafka passwords and recreate the
+- **Authentication failed:** ensure `.env` contains all six Kafka client/broker passwords and
+  recreate the
   broker after changing them. Existing broker processes do not reload JAAS automatically.
+- **Cannot log into the dashboard:** check the two `KAFKA_UI_LOGIN_*` values, then recreate only
+  `kafka-ui`; changing these values does not require deleting Kafka data.
+- **Dashboard says the cluster is offline:** inspect `docker compose logs kafka-ui`, confirm Kafka
+  is healthy and ensure `KAFKA_UI_BROKER_PASSWORD` matches the value used when Kafka was created.
 - **Topic/group authorization failed:** confirm the service is using its own identity and assigned
   consumer group. Inspect ACLs with the admin command above.
 - **Cannot connect from host:** use `localhost:29092`, not `kafka:9092`, and confirm the port is not
