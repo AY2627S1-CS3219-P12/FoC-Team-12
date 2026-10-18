@@ -195,6 +195,11 @@ startup does not implement retry or forwarding; those are application-side behav
 
 ## Troubleshooting
 
+- **`set: pipefail: invalid option name` on Windows:** the bind-mounted shell scripts have CRLF
+  line endings. Save every `deploy/kafka/*.sh` file with LF endings, then restart Kafka and rerun
+  its initializer. The root `.gitattributes` keeps these scripts LF on future Git checkouts.
+  This is a script-formatting issue; do not delete any database or Kafka volumes to fix it.
+
 - **Authentication failed:** ensure `.env` contains all five Kafka passwords and recreate the
   broker after changing them. Existing broker processes do not reload JAAS automatically.
 - **Topic/group authorization failed:** confirm the service is using its own identity and assigned
