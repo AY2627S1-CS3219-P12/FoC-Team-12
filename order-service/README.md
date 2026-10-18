@@ -299,9 +299,21 @@ npm run dev          # http://localhost:5176, proxies /api to the service on 808
 npm run lint && npm run typecheck && npm test && npm run build
 ```
 
-Through the shared gateway, the UI also needs a gateway route for `/errands` and `/order-assets/**`
-to this service (the API route `/api/orders/**` already exists). The gateway is a shared service,
-so that route is a separate change for its owner.
+Through the shared gateway the UI is at <http://localhost:8088/errands> (routes `order-ui` and
+`order-api`).
+
+## Run with Docker Compose
+
+Order Service and its private database (`order-db`, host port `127.0.0.1:5436`) are part of the
+root `compose.yaml`. Put `ORDER_DB_NAME`, `ORDER_DB_USER` and `ORDER_DB_PASSWORD` in the root `.env`
+(see `.env.example`); Compose also requires the shared User, Credit and Kafka variables. Then:
+
+```sh
+docker compose up -d --build
+```
+
+The service listens on `8082` and verifies tokens with User Service's JWKS inside the Compose
+network. Its Kafka identity (`order_service`) is configured for the shared broker.
 
 ## Build and test
 
