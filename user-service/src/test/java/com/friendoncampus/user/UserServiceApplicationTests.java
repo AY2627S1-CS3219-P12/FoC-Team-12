@@ -22,6 +22,9 @@ import com.friendoncampus.user.support.JwtTestProperties;
 })
 class UserServiceApplicationTests {
     @MockitoBean
+    private com.friendoncampus.user.messaging.UserOutboxRepository userOutboxRepository;
+
+    @MockitoBean
     private UserRepository userRepository;
 
     @MockitoBean

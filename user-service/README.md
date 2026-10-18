@@ -146,6 +146,99 @@ verified, and `403` for a banned account.
 Email verification uses the same `MAIL_PROVIDER`, `SENDGRID_API_KEY`, and `SENDGRID_FROM_EMAIL`
 environment variables documented under Password reset. Never commit these credentials or a code.
 
+## Activation events and Kafka
+
+The existing email-verification endpoint still returns `204 No Content`. On its first successful
+`UNVERIFIED → ACTIVE` transition it now saves one `UserActivated` event in `user_event_outbox`
+**in the same database transaction** as activation and code use. Invalid, expired, replayed or
+concurrent losing verification requests do not create another event. A failure to save the outbox
+row rolls back activation too. Migration V10 is additive; old Flyway migrations are unchanged.
+
+The event follows [version 1 of the shared blueprint](../docs/integration/event-communication-blueprint.md):
+topic `user.events`, key = User UUID, `producer=user-service`, `aggregateType=User`,
+`aggregateVersion=1`. Its data contains `operationId`, `userId` and `activatedAt`. The complete
+envelope, event/operation/correlation IDs and key are stored once and reused for retries. It
+contains no email, password, verification code or JWT. There is no automatic backfill for
+already-active accounts, and administrator unban/reactivation emits no new activation event.
+
+### Transport configuration
+
+Activation events are always recorded. Sending is disabled by default so standalone/test and
+existing Kubernetes environments do not require Kafka before they are configured. The shared
+Compose User container explicitly enables publishing and already supplies its own `user_service`
+SASL identity. Start/initialize the [shared broker](../deploy/kafka/README.md) before expecting
+delivery. Kafka being offline does not block activation or change User's database-backed health.
+The producer connects lazily, so a temporarily unresolvable broker hostname also leaves events
+pending instead of preventing User startup. Invalid enabled-publisher credentials/settings fail
+configuration validation; do not log their values.
+
+| Setting | Default/purpose |
+| --- | --- |
+| `USER_EVENTS_PUBLISHER_ENABLED` | `false`; Compose sets `true` |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092`; Compose sets `kafka:9092` |
+| `KAFKA_SECURITY_PROTOCOL` | `SASL_PLAINTEXT` for the local broker; `SASL_SSL` is also supported |
+| `KAFKA_SASL_MECHANISM` | `PLAIN` |
+| `KAFKA_USERNAME` | `user_service` |
+| `KAFKA_PASSWORD` | Runtime secret; Compose maps `KAFKA_USER_SERVICE_PASSWORD` from ignored `.env` |
+| `USER_EVENTS_POLL_INTERVAL_MS` | `5000` between bounded batches |
+| `USER_EVENTS_INITIAL_DELAY_MS` | `5000` before the first batch |
+| `USER_EVENTS_BATCH_SIZE` | `10` rows at most per batch |
+| `USER_EVENTS_SEND_TIMEOUT_MS` | `5000` acknowledgement timeout; metadata acquisition is separately bounded by the same duration |
+| `USER_EVENTS_RETRY_DELAY_MS` | `10000` after each failed application-level send |
+
+Explicit `PLAINTEXT` is supported for isolated test brokers only; never use it as a workaround
+for the shared broker's authentication. The local `SASL_PLAINTEXT` setup authenticates but does
+not encrypt traffic. Encrypted deployments use `SASL_SSL` and trusted broker certificates.
+Never copy database/JWT secrets into an event or reuse the broker administrator identity.
+
+### Delivery, failures and recovery
+
+The background relay locks one ready outbox row at a time using `FOR UPDATE SKIP LOCKED`, allowing
+multiple User replicas without simultaneous claims of that row. It sends with `acks=all`, producer
+idempotence, and one in-flight request per connection, and sets `published_at` only after broker
+acknowledgement. No User row is locked while waiting for Kafka. Failed/uncertain sends increment
+the attempt count, store only a bounded error category and remain pending for retry after the
+configured delay. There is no retry-exhaustion discard or producer DLT: unsent activation facts
+remain in the source outbox until recoverable. Consumer retries/DLT handling belong to Credit.
+
+A crash after broker acknowledgement but before the database commit can deliver the same event
+again. Delivery is **at least once**, not end-to-end exactly once: Credit must deduplicate the
+stable event/operation IDs and allocate credits at most once. These changes do not implement the
+Credit consumer, calculate credit amounts, or replace the existing demo-profile UI fallback.
+Pending rows survive application/database restarts on retained storage. Acknowledged rows are
+retained for diagnosis; production retention/cleanup remains a reviewed follow-up.
+
+Logs record event type, event/operation/correlation IDs, attempt and outcome only. Micrometer
+records `user.events.published`, `user.events.publish.failures`, `user.events.outbox.pending`,
+and `user.events.outbox.oldest.age.seconds`. No additional public Actuator endpoints are exposed.
+Inspect metadata without printing event payloads or credentials:
+
+```sql
+SELECT event_id, user_id, attempt_count, published_at, next_attempt_at, last_failure
+FROM user_event_outbox ORDER BY occurred_at;
+```
+
+After integration, Kubernetes only needs the new User image, publisher enable flag, reachable
+bootstrap/advertised broker addresses and matching credentials supplied through configuration
+and Secrets. Its existing manifests deliberately remain unchanged here: Kafka networking and
+broker provisioning are separate shared infrastructure work. Kafka does not belong on the HTTP
+gateway. Deploy the additive migration before relying on event publishing, and check database
+compatibility before rolling an application image back.
+
+### Verification
+
+Run `./mvnw --batch-mode --no-transfer-progress verify` (Windows: `mvnw.cmd`). Docker is required
+for the new disposable PostgreSQL and Kafka integration tests. They test atomicity, rollback,
+duplicate/concurrent verification, no historical/unban backfill, real broker delivery and
+outage/recovery with stable payloads. Their isolated broker uses plaintext; unit tests verify the
+shared SASL/JAAS settings and credential escaping. Never treat a skipped Docker test as a pass.
+
+For manual acceptance, use Compose with the broker initialized and real SendGrid delivery:
+register and verify a new test account, then confirm its persisted event is acknowledged in Kafka.
+Pause only the broker, verify another new account, confirm the event stays pending, resume the
+broker and confirm delivery. Do not delete volumes, log OTPs, bypass verification or expect
+credits to appear until Credit's Kafka consumer is deployed.
+
 ## First administrator bootstrap
 
 The first administrator is deployment-only: there is no HTTP endpoint and no default credential.
