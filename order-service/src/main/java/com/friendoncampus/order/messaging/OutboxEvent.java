@@ -105,4 +105,14 @@ public class OutboxEvent {
     public int getAttempts() {
         return attempts;
     }
+
+    /** Kafka acknowledged the send; the row will not be sent again. */
+    public void markPublished(OffsetDateTime publishedAt) {
+        this.publishedAt = publishedAt;
+    }
+
+    /** The send failed; the row stays unpublished and is retried on a later run. */
+    public void recordFailedAttempt() {
+        attempts++;
+    }
 }

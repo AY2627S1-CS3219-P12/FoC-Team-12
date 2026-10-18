@@ -38,7 +38,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Phase 3 against a real PostgreSQL: the full happy path to COMPLETED, duplicate completion
  * (F7.1.1) and no cancellation after pickup (F3.4). Requires Docker.
  */
-@SpringBootTest(properties = "app.orders.expiry.enabled=false")
+@SpringBootTest(properties = {"app.orders.expiry.enabled=false", "app.kafka.enabled=false"})
 @Testcontainers
 class OrderDeliveryIntegrationTest {
 

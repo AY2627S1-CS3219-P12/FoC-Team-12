@@ -12,8 +12,8 @@ gaps, and splits the work into `/foc-iterate-feature` iterations. Owner: XueTing
 
 **Status (2026-10-17):** every lifecycle transition is built (phases 1–3, PRs #56–#58), and the
 outbox payloads and Credit outcome handling follow the blueprint (`event-blueprint-alignment`).
-Reward editing (T4, T5, T5a, T5b) is built on `order-service/edit-reward`. Still to build: the
-Kafka publisher and listener, the open-order pool and the history lists. See [Iterations](#iterations-each-one-is-a-foc-iterate-feature-order--run).
+All Order iterations are built, including the Kafka relay and listener. The end-to-end round
+trip waits on Credit Service's Kafka adapter. See [Iterations](#iterations-each-one-is-a-foc-iterate-feature-order--run).
 
 Decisions confirmed with XueTing:
 - **Reward editing stays in D3.** It goes through a Credit adjustment.
@@ -286,7 +286,7 @@ Built:
 - `messaging/CreditOutcomeHandler.java`: applies one `credit.events` JSON message per the consumer
   rules above, with the `processed_events` inbox.
 
-Still to build (iteration `order-kafka-messaging`):
+Built in iteration `order-kafka-messaging` (was "still to build"):
 - `messaging/OutboxRelay.java`: `@Scheduled` every 1 s; claims unpublished rows with
   `FOR UPDATE SKIP LOCKED`; sends each with its stored `eventId`, payload and `aggregate_id` key;
   sets `published_at` only after Kafka acknowledges; on failure increments `attempts` and retries.
@@ -309,11 +309,11 @@ Still to build (iteration `order-kafka-messaging`):
 | 1 | `order-lifecycle-reservation-cancel`: V2 migration, history, outbox, reads, `open`, `failReservation`, `cancel` | Done (PR #56) |
 | 2 | `order-lifecycle-accept-expiry`: `expire` (job + lazy), `accept`, `withdraw`, race tests | Done (PR #57) |
 | 3 | `order-lifecycle-delivery`: `pickUp`, `deliver`, `complete`, duplicate completion | Done (PR #58) |
-| 4 | `order-event-blueprint-alignment`: blueprint envelope/payloads, five published events, Credit outcome handler with inbox (V3) | Done (this branch) |
-| 5 | `order-kafka-messaging`: outbox relay to `order.events`, `credit.events` listener and DLT; Order in `compose.yaml` (shared, Jun Hui reviews) | Next |
-| 6 | `order-discovery-history`: open-order pool (filters, sorting, paging), "my orders" history (F4, F9) | Done (this branch) |
+| 4 | `order-event-blueprint-alignment`: blueprint envelope/payloads, five published events, Credit outcome handler with inbox (V3) | Done (PR #59) |
+| 5 | `order-kafka-messaging`: outbox relay to `order.events`, `credit.events` listener and DLT; Order in `compose.yaml` (shared, Jun Hui reviews) | Done (Kafka adapters; Compose wiring in its own PR) |
+| 6 | `order-discovery-history`: open-order pool (filters, sorting, paging), "my orders" history (F4, F9) | Done (PR #65) |
 | 7 | `order-location-snapshot`: client-supplied location names on create (edit comes with iteration 8) | Done |
-| 8 | `order-edit-reward`: edit details (T4) and reward through `OrderRewardChangeRequested` / `CreditAdjusted` (T5, T5a, T5b) | Done (branch `order-service/edit-reward`) |
+| 8 | `order-edit-reward`: edit details (T4) and reward through `OrderRewardChangeRequested` / `CreditAdjusted` (T5, T5a, T5b) | Done (PR #65) |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | |
 
 ## Open items to confirm (flag to the backlog and owners)

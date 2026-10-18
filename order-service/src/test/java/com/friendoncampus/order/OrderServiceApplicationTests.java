@@ -14,7 +14,8 @@ import com.friendoncampus.order.repository.ProcessedEventRepository;
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
-                "app.orders.expiry.enabled=false"
+                "app.orders.expiry.enabled=false",
+                "app.kafka.enabled=false"
 })
 class OrderServiceApplicationTests {
 

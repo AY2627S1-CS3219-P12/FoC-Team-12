@@ -36,7 +36,7 @@ import tools.jackson.databind.json.JsonMapper;
  * Credit outcome events shaped exactly as the event communication blueprint defines them, applied
  * against a real PostgreSQL. Requires Docker.
  */
-@SpringBootTest(properties = "app.orders.expiry.enabled=false")
+@SpringBootTest(properties = {"app.orders.expiry.enabled=false", "app.kafka.enabled=false"})
 @Testcontainers
 class CreditOutcomeHandlerIntegrationTest {
 

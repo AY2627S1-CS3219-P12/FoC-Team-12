@@ -62,6 +62,7 @@ import com.sun.net.httpserver.HttpServer;
                         + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                         + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
                 "app.orders.expiry.enabled=false",
+                "app.kafka.enabled=false",
                 "app.security.jwt.issuer=" + OrderSecurityIntegrationTest.ISSUER,
                 "app.security.jwt.audience=" + OrderSecurityIntegrationTest.AUDIENCE
         })

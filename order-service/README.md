@@ -234,9 +234,27 @@ Each event is validated, deduplicated by `eventId` in the `processed_events`
 inbox, and matched to the Order command it answers by `operationId`, all in one
 transaction.
 
-Events are stored in `outbox_events` but **not yet sent to Kafka**: the outbox
-relay and the `credit.events` listener are the next iteration
-(`order-kafka-messaging` in [`DESIGN.md`](DESIGN.md)).
+**Kafka transport.** An outbox relay sends pending `outbox_events` rows to
+`order.events` every second, keyed by the order UUID and reusing each row's stored
+`eventId` and payload; a row is marked `published_at` only after Kafka
+acknowledges, and a failed send stays pending with `attempts` increased. Once an
+order's event fails, that order's later events wait, so they are never published
+out of order. A listener consumes `credit.events` as group `order-service` and
+acknowledges a record only after `CreditOutcomeHandler` commits; transient
+failures are retried three times with backoff, then the original record goes to
+`credit.events.DLT` (contract violations go there without retries).
+
+| Setting | Env var | Default |
+| --- | --- | --- |
+| Turn Kafka on/off | `ORDER_KAFKA_ENABLED` | `true` (`false` runs without a broker; events wait unpublished) |
+| Bootstrap servers | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` (Compose sets `kafka:9092`) |
+| Security protocol | `KAFKA_SECURITY_PROTOCOL` | `SASL_PLAINTEXT` |
+| SASL mechanism | `KAFKA_SASL_MECHANISM` | `PLAIN` |
+| Identity | `KAFKA_USERNAME` / `KAFKA_PASSWORD` | `order_service` / (none) |
+
+Order does not create topics or ACLs; the shared `kafka-init` does
+([`deploy/kafka/README.md`](../deploy/kafka/README.md)). The full round trip also
+needs Credit Service to consume `order.events` and publish `credit.events`.
 
 ## Lifecycle
 

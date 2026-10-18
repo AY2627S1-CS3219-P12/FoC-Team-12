@@ -45,7 +45,7 @@ import com.friendoncampus.order.support.MutableClock;
  * Phase 2 against a real PostgreSQL: acceptance races, lazy and scheduled expiry, and withdrawal
  * either side of the deadline. Race tests run real concurrent transactions. Requires Docker.
  */
-@SpringBootTest(properties = "app.orders.expiry.enabled=false")
+@SpringBootTest(properties = {"app.orders.expiry.enabled=false", "app.kafka.enabled=false"})
 @Testcontainers
 class OrderAcceptExpiryIntegrationTest {
 
