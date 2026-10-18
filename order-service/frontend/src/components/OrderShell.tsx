@@ -61,6 +61,7 @@ export function OrderShell({ children }: { children: ReactNode }) {
             <a aria-current="page" href="/errands/browse">
               Errands
             </a>
+            <a href="/errands/new">Request a hand</a>
             <a href="/errands/mine">My errands</a>
             <a href="/credits">Credits</a>
             <a href={suppliersPath}>Locations</a>

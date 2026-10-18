@@ -7,7 +7,12 @@ export default defineConfig(({ command }) => ({
   build: { outDir: 'dist/order-assets' },
   server: {
     port: 5176,
-    proxy: { '/api': 'http://localhost:8082' },
+    // Mirrors the gateway: each API prefix goes to the service that owns it.
+    proxy: {
+      '/api/orders': 'http://localhost:8082',
+      '/api/suppliers': 'http://localhost:8080',
+      '/api/credits': 'http://localhost:8083',
+    },
   },
   test: {
     environment: 'jsdom',

@@ -307,13 +307,15 @@ Rules that apply to every transition:
 
 A React frontend in `frontend/` is packaged inside the service, like the Credit dashboard. The
 service serves it at `/errands` with assets under `/order-assets/**`; it reuses the shared-origin
-login (`sessionStorage["foc.user-session"]`) and calls `/api/orders`. Design source and API
+login (`sessionStorage["foc.user-session"]`) and calls `/api/orders`. The "Request a hand" form also
+reads active locations from Supplier's public `GET /api/suppliers` and the caller's balance from
+Credit's `GET /api/credits/me`, both from the browser; Order Service itself never calls them. Design source and API
 adaptations: [`frontend/docs/design-source.md`](frontend/docs/design-source.md).
 
 ```sh
 cd frontend
 npm ci
-npm run dev          # http://localhost:5176, proxies /api to the service on 8082
+npm run dev          # http://localhost:5176; proxies /api/orders, /api/suppliers, /api/credits
 npm run lint && npm run typecheck && npm test && npm run build
 ```
 

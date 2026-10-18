@@ -10,7 +10,7 @@ The frames were shared as screenshots, so node IDs are not recorded yet.
 | Courier active order ("You're the courier") | `/errands/:orderId` (viewer is the courier) | Pick up, deliver, withdraw |
 | Requester active order ("Have you received…") | `/errands/:orderId` (viewer is the requester) | Confirm receipt, cancel |
 | My errands (no frame; uses the same cards) | `/errands/mine` | F9 history lists |
-| Create errand ("Request a hand") | not in this iteration | |
+| Create errand ("Request a hand") | `/errands/new` | Post an errand; "Your credits" card |
 
 ## Visual language
 
@@ -30,5 +30,13 @@ The backend contract wins over example data in Figma:
 - **"Requested by Mei Lin" / "Alex marked…"** need usernames, which Order Service does not store
   (it only has user IDs), so the UI says "the requester" / "your courier".
 - **Chat, Notifications and "Report an issue"** have no backend yet and are not shown.
+- **Locations are picked from a list, not typed.** The form loads active locations from Supplier's
+  public `GET /api/suppliers` in the browser and sends both the ID and name; Order Service still
+  never calls Supplier.
+- **No "Deliver by" field.** Orders have only a pickup deadline. A **reward** field is added: the
+  design shows "Reserve for this errand: 3 credits" but has no input for it.
+- **"Your credits"** reads the caller's own balance from Credit's `GET /api/credits/me` in the
+  browser. If the reward is more than the available balance the form warns that the errand won't
+  open (Credit rejects the reservation); it does not block posting, because Credit is the authority.
 - **Requester/Courier tabs** ("Request help" / "Run errands") map to the session role switch in the
   header, because the API authorises actions by the session role.
