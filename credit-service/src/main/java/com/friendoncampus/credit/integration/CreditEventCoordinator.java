@@ -33,8 +33,8 @@ public class CreditEventCoordinator {
         }
 
         try {
-            boolean changed = processing.process(envelope.eventId(), handler);
-            ProcessingOutcome outcome = changed ? ProcessingOutcome.PROCESSED : ProcessingOutcome.DUPLICATE;
+            CreditInboxProcessingService.ProcessingResult result = processing.process(envelope, handler);
+            ProcessingOutcome outcome = ProcessingOutcome.valueOf(result.name());
             LOGGER.info("Credit event outcome={} eventId={} eventType={} producer={} correlationId={}",
                     outcome, envelope.eventId(), envelope.eventType(), envelope.producer(), envelope.correlationId());
             return outcome;
@@ -52,6 +52,7 @@ public class CreditEventCoordinator {
 
     public enum ProcessingOutcome {
         PROCESSED,
-        DUPLICATE
+        DUPLICATE,
+        STALE
     }
 }

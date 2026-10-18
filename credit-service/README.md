@@ -9,9 +9,8 @@ Local cluster setup: [Kubernetes deployment](k8s/README.md).
 
 The Spring Boot foundation runs on port `8083` with PostgreSQL/Flyway configuration, User Service
 RS256/JWKS validation, Actuator health, OpenAPI and a non-root multi-stage Docker image. The shared
-Compose stack and gateway expose the packaged dashboard and query API. A broker-independent durable
-inbox/outbox foundation and the version-1 User/Order event handlers are implemented. Kafka listener
-and publisher adapters remain coordinated follow-up work.
+Compose stack and gateway expose the packaged dashboard and query API. A durable inbox/outbox,
+version-1 User/Order event handlers, Kafka listeners and Credit-outcome publisher are implemented.
 
 ## Architecture
 
@@ -48,9 +47,16 @@ The domain effect, durable operation result, inbox completion and outcome outbox
 database transaction. Unexpected failures roll that transaction back and leave a failed inbox
 receipt for retry. Repeated event IDs are suppressed, conflicting event content is rejected, and
 rejected reservation operations remain durable by `operationId` so a redelivery with a new event ID
-returns the same rejection rather than applying a later balance change. No Kafka API appears in the
-domain handler; the future adapter only deserializes broker records, calls the handler and publishes
-pending outbox rows.
+returns the same rejection rather than applying a later balance change. Kafka remains outside the
+domain handler: the listener validates the keyed envelope, invokes the handler and acknowledges only
+after processing succeeds. Unexpected failures are retried twice and then published to the source
+topic's `.DLT`. The outbox relay publishes keyed outcomes to `credit.events` and marks them published
+only after broker acknowledgement.
+
+Credit also persists the latest processed version for each Order. A lower version is marked stale
+without applying another ledger effect, and a different event reusing the latest version is rejected.
+Higher-version gaps are allowed because Order transitions with no credit effect are intentionally not
+published; Kafka's Order-UUID key preserves the order of the credit-changing events that are published.
 
 ## Persistence model
 
@@ -62,7 +68,7 @@ reserved integer balances by User UUID. `credit_reservations` stores one order-l
 
 `credit_inbox_events` records incoming event identity, payload fingerprint, processing state,
 attempts and failures. Identical redelivery can be ignored; reuse of an event UUID with different
-content is rejected. `credit_outbox_events` durably stores canonical JSON outcomes until a future
+content is rejected. `credit_outbox_events` durably stores canonical JSON outcomes until the
 broker publisher records acknowledgement. Inbox receipt/failure transactions make delayed or failed
 work discoverable without coupling the domain to Kafka.
 
@@ -77,11 +83,10 @@ The configured team policy grants 10 credits once per activated User UUID. The t
 `InitialCreditAllocationService` accepts a durable operation UUID, creates the account if needed,
 locks it, records the allocation operation and writes an immutable ledger entry in one transaction.
 Replaying the same operation returns the existing balance; a different operation for an already
-allocated user records `ALREADY_ALLOCATED` without increasing the economy. Until the User activation
-event and broker integration are available, the authenticated dashboard transparently calls
-`POST /api/credits/me` with a deterministic operation identity. This makes the account and welcome
-credits available on first use without exposing a manual setup action, and retries cannot allocate
-the credits twice.
+allocated user records `ALREADY_ALLOCATED` without increasing the economy. User verification now
+publishes `UserActivated`; Credit consumes it and allocates the account without a user action.
+`POST /api/credits/me` remains an idempotent compatibility fallback for local environments where
+Kafka is intentionally disabled; it does not expose a manual setup action in the UI.
 
 ## Reservation lifecycle
 
@@ -137,11 +142,11 @@ deployment documentation; direct frontend development does not share session sto
 
 ## Opt-in demo scenario
 
-For an assessor demo before User and Order publish their Kafka events, the `demo` Spring profile can
+For an isolated assessor demo without Kafka, the `demo` Spring profile can
 prepare one deterministic local scenario. It grants the configured registered user the normal 10
 initial credits and reserves 3, producing visible balance and ledger history. The identifiers are
 stable, so restarting does not duplicate credits or reservations. This fixture calls the same domain
-services as future event consumers; it does not add an unsecured mutation API.
+services as the event consumers; it does not add an unsecured mutation API.
 
 Set these values in the root `.env`, then rebuild `credit-service`:
 
@@ -151,8 +156,7 @@ CREDIT_DEMO_USER_ID=<UUID from the registered User account>
 ```
 
 Leave both values blank for normal operation. The fixture is disabled unless the `demo` profile is
-explicitly active. It is presentation scaffolding, not a replacement for the pending Kafka
-integration.
+explicitly active. It is presentation scaffolding, not a replacement for the Kafka integration.
 
 ## Verification
 

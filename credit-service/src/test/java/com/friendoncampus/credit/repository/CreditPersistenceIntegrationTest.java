@@ -22,6 +22,7 @@ import com.friendoncampus.credit.integration.CreditEventCoordinator;
 import com.friendoncampus.credit.integration.CreditEventEnvelope;
 import com.friendoncampus.credit.integration.CreditEventHandler;
 import com.friendoncampus.credit.integration.CreditOutboxService;
+import com.friendoncampus.credit.integration.EventVersionConflictException;
 import com.friendoncampus.credit.service.CreditReservationService;
 import com.friendoncampus.credit.service.InitialCreditAllocationService;
 
@@ -170,8 +171,8 @@ class CreditPersistenceIntegrationTest {
         assertThat(eventHandler.handle(event))
                 .isEqualTo(CreditEventCoordinator.ProcessingOutcome.PROCESSED);
         CreditEventEnvelope replayWithNewEventId = orderSubmittedEvent(operationId, orderId, userId, 11);
-        assertThat(eventHandler.handle(replayWithNewEventId))
-                .isEqualTo(CreditEventCoordinator.ProcessingOutcome.PROCESSED);
+        assertThatThrownBy(() -> eventHandler.handle(replayWithNewEventId))
+                .isInstanceOf(EventVersionConflictException.class);
 
         assertThat(reservations.findByOrderId(orderId)).isEmpty();
         assertThat(operations.findById(operationId)).isPresent().get().satisfies(operation ->
@@ -187,11 +188,8 @@ class CreditPersistenceIntegrationTest {
             assertThat(outcome.getCausationId()).isEqualTo(event.eventId());
             assertThat(outcome.getPayloadJson()).contains("INSUFFICIENT_CREDITS");
         });
-        assertThat(outboxService.pending(100)).anySatisfy(outcome -> {
-            assertThat(outcome.getEventType()).isEqualTo("CreditReservationRejected");
-            assertThat(outcome.getCausationId()).isEqualTo(replayWithNewEventId.eventId());
-            assertThat(outcome.getPayloadJson()).contains("INSUFFICIENT_CREDITS");
-        });
+        assertThat(outboxService.pending(100))
+                .noneSatisfy(outcome -> assertThat(outcome.getCausationId()).isEqualTo(replayWithNewEventId.eventId()));
     }
 
     @Test

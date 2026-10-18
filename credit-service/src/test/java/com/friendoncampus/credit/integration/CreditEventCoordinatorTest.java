@@ -30,13 +30,13 @@ class CreditEventCoordinatorTest {
         CreditEventEnvelope event = event();
         when(receipts.register(event)).thenReturn(
                 new CreditInboxReceiptService.Receipt(InboxEventStatus.RECEIVED, false));
-        when(processing.process(event.eventId(), handler)).thenReturn(true);
+        when(processing.process(event, handler)).thenReturn(CreditInboxProcessingService.ProcessingResult.PROCESSED);
         CreditEventCoordinator coordinator = new CreditEventCoordinator(receipts, processing, failures);
 
         assertThat(coordinator.process(event, handler))
                 .isEqualTo(CreditEventCoordinator.ProcessingOutcome.PROCESSED);
 
-        verify(processing).process(event.eventId(), handler);
+        verify(processing).process(event, handler);
         verify(failures, never()).recordFailure(event.eventId(), null);
     }
 
@@ -50,7 +50,7 @@ class CreditEventCoordinatorTest {
         assertThat(coordinator.process(event, handler))
                 .isEqualTo(CreditEventCoordinator.ProcessingOutcome.DUPLICATE);
 
-        verify(processing, never()).process(event.eventId(), handler);
+        verify(processing, never()).process(event, handler);
     }
 
     @Test
@@ -59,7 +59,7 @@ class CreditEventCoordinatorTest {
         IllegalStateException failure = new IllegalStateException("temporary database problem");
         when(receipts.register(event)).thenReturn(
                 new CreditInboxReceiptService.Receipt(InboxEventStatus.RECEIVED, false));
-        doThrow(failure).when(processing).process(event.eventId(), handler);
+        doThrow(failure).when(processing).process(event, handler);
         CreditEventCoordinator coordinator = new CreditEventCoordinator(receipts, processing, failures);
 
         assertThatThrownBy(() -> coordinator.process(event, handler)).isSameAs(failure);
