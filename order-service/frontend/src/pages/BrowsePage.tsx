@@ -2,6 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { fetchOpenPool, type PoolQuery, type PoolSort } from '../api/orderApi'
+import { ErrandTabs } from '../components/ErrandTabs'
 import { StateBadge } from '../components/StateBadge'
 import { formatDeadline, locationName } from '../utils/orderFormatting'
 
@@ -16,7 +17,9 @@ const SORTS: { value: PoolSort; label: string }[] = [
 /** F4.4: the filter and sort survive leaving the list and coming back (same browser tab). */
 function loadQuery(): PoolQuery {
   try {
-    const saved = JSON.parse(sessionStorage.getItem(FILTER_KEY) ?? 'null') as Partial<PoolQuery> | null
+    const saved = JSON.parse(
+      sessionStorage.getItem(FILTER_KEY) ?? 'null',
+    ) as Partial<PoolQuery> | null
     if (saved && SORTS.some((sort) => sort.value === saved.sort)) {
       return {
         minReward: saved.minReward || undefined,
@@ -53,7 +56,10 @@ export function BrowsePage() {
     event.preventDefault()
     const min = draft.minReward ? Number(draft.minReward) : undefined
     const max = draft.maxReward ? Number(draft.maxReward) : undefined
-    if ((min !== undefined && !(Number.isInteger(min) && min > 0)) || (max !== undefined && !(Number.isInteger(max) && max > 0))) {
+    if (
+      (min !== undefined && !(Number.isInteger(min) && min > 0)) ||
+      (max !== undefined && !(Number.isInteger(max) && max > 0))
+    ) {
       setFormError('Rewards must be whole numbers of credits, 1 or more.')
       return
     }
@@ -62,7 +68,12 @@ export function BrowsePage() {
       return
     }
     setFormError('')
-    const next: PoolQuery = { minReward: min, maxReward: max, sort: draft.sort, page: 0 }
+    const next: PoolQuery = {
+      minReward: min,
+      maxReward: max,
+      sort: draft.sort,
+      page: 0,
+    }
     saveQuery(next)
     setQuery(next)
   }
@@ -76,14 +87,7 @@ export function BrowsePage() {
           <p>Find a campus errand that fits your trip.</p>
         </div>
       </div>
-      <nav aria-label="Errand mode" className="tabs">
-        <Link className="tab tab-link" to="/errands/new">
-          Request help
-        </Link>
-        <Link aria-current="page" className="tab tab-link" to="/errands/browse">
-          Run errands
-        </Link>
-      </nav>
+      <ErrandTabs />
       <div className="two-column">
         <section aria-labelledby="results-heading">
           <h2 className="visually-hidden" id="results-heading">
@@ -98,13 +102,16 @@ export function BrowsePage() {
           {page && page.items.length === 0 && (
             <div className="card state-panel">
               <h2>No matching errands</h2>
-              <p>No open errands match these filters. Try a wider reward range.</p>
+              <p>
+                No open errands match these filters. Try a wider reward range.
+              </p>
             </div>
           )}
           {page && page.items.length > 0 && (
             <>
               <p className="subtle" aria-live="polite">
-                {page.totalItems} open {page.totalItems === 1 ? 'errand' : 'errands'}
+                {page.totalItems} open{' '}
+                {page.totalItems === 1 ? 'errand' : 'errands'}
               </p>
               <ul className="errand-list">
                 {page.items.map((order) => (
@@ -114,12 +121,17 @@ export function BrowsePage() {
                       <span className="reward">{order.creditReward} cr</span>
                     </div>
                     <p>
-                      {locationName(order.pickupLocationName)} → {locationName(order.dropoffLocationName)}
+                      {locationName(order.pickupLocationName)} →{' '}
+                      {locationName(order.dropoffLocationName)}
                     </p>
                     <p>Pick up by {formatDeadline(order.pickupDeadline)}</p>
                     <div className="errand-card-foot">
                       <StateBadge state={order.state} />
-                      <Link aria-label={`View ${order.title}`} className="text-link" to={`/errands/${order.id}`}>
+                      <Link
+                        aria-label={`View ${order.title}`}
+                        className="text-link"
+                        to={`/errands/${order.id}`}
+                      >
                         View →
                       </Link>
                     </div>
@@ -160,7 +172,9 @@ export function BrowsePage() {
               id="min-reward"
               inputMode="numeric"
               min={1}
-              onChange={(event) => setDraft({ ...draft, minReward: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, minReward: event.target.value })
+              }
               placeholder="Any credits"
               type="number"
               value={draft.minReward}
@@ -170,7 +184,9 @@ export function BrowsePage() {
               id="max-reward"
               inputMode="numeric"
               min={1}
-              onChange={(event) => setDraft({ ...draft, maxReward: event.target.value })}
+              onChange={(event) =>
+                setDraft({ ...draft, maxReward: event.target.value })
+              }
               placeholder="Any credits"
               type="number"
               value={draft.maxReward}
@@ -178,7 +194,9 @@ export function BrowsePage() {
             <label htmlFor="sort">Sort by</label>
             <select
               id="sort"
-              onChange={(event) => setDraft({ ...draft, sort: event.target.value as PoolSort })}
+              onChange={(event) =>
+                setDraft({ ...draft, sort: event.target.value as PoolSort })
+              }
               value={draft.sort}
             >
               {SORTS.map((sort) => (
@@ -194,7 +212,10 @@ export function BrowsePage() {
             )}
             <button type="submit">Apply filters</button>
           </form>
-          <p>Only OPEN errands can be accepted. Your filter and sort choices stay when you return from an errand.</p>
+          <p>
+            Only OPEN errands can be accepted. Your filter and sort choices stay
+            when you return from an errand.
+          </p>
         </aside>
       </div>
     </>

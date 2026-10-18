@@ -58,14 +58,12 @@ export function OrderShell({ children }: { children: ReactNode }) {
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className="main-nav">
+            <a href="/">Profile</a>
+            <a href={suppliersPath}>Suppliers</a>
+            <a href="/credits">Credits</a>
             <a aria-current="page" href="/errands/browse">
               Errands
             </a>
-            <a href="/errands/new">Request a hand</a>
-            <a href="/errands/mine">My errands</a>
-            <a href="/credits">Credits</a>
-            <a href={suppliersPath}>Locations</a>
-            <a href="/">Account</a>
           </nav>
           <nav aria-label="Account and workspace" className="header-actions">
             {session && session.role !== 'ADMIN' && (

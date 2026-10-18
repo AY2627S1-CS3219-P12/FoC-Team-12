@@ -171,3 +171,7 @@ dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
 .balance-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; padding: 1rem 1.25rem; border-radius: 0.6rem; background: var(--action-soft); }
 .balance-tiles strong { display: block; color: var(--action); font-size: 1.5rem; }
 .balance-tiles span { color: var(--action); font-size: 0.8rem; }
+
+/* Errands section tabs (Request help / Run errands / My errands) */
+.errand-tabs { grid-template-columns: repeat(3, 1fr); }
+.tab-link.active { border-color: var(--action-soft); background: var(--action-soft); color: var(--action); }
