@@ -1,0 +1,2 @@
+# Kafka scripts are bind-mounted into Linux containers, including on Windows hosts.
+deploy/kafka/*.sh text eol=lf

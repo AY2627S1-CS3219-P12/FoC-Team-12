@@ -96,7 +96,9 @@ The Kubernetes setup additionally deploys Order Service at `/api/orders/**`, wit
 document at `/docs/order/openapi.json`. Order is not yet part of the Compose stack and has no
 packaged frontend. The shared local Kafka broker, topics, ACLs and verification workflow are
 documented in [`deploy/kafka/README.md`](deploy/kafka/README.md); application adapters remain
-separate owner-reviewed work.
+separate owner-reviewed work. Its authenticated, read-only local Kafka dashboard is available at
+`http://localhost:8090` when the `kafka-ui` Compose service is running. This dashboard is local
+operational tooling and is not routed through the application gateway.
 
 Keeping the packaged frontends on `8088` lets their browser code share the validated
 `sessionStorage["foc.user-session"]` login session. Direct ports `8080`, `8081` and `8083` remain exposed

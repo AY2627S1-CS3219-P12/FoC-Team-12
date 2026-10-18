@@ -44,21 +44,40 @@ add_topic_acl() {
 
 add_group_acl() {
   local principal=$1
-  local group=$2
+  local operation=$2
+  local group=$3
   kafka_command kafka-acls.sh \
     --bootstrap-server "$bootstrap_servers" \
     --command-config "$admin_properties" \
     --add --allow-principal "User:$principal" \
-    --operation Read --group "$group"
+    --operation "$operation" --group "$group"
+}
+
+add_prefixed_group_acl() {
+  local principal=$1
+  local operation=$2
+  local group_prefix=$3
+  kafka_command kafka-acls.sh \
+    --bootstrap-server "$bootstrap_servers" \
+    --command-config "$admin_properties" \
+    --add --allow-principal "User:$principal" \
+    --operation "$operation" --group "$group_prefix" \
+    --resource-pattern-type prefixed
+}
+
+add_cluster_acl() {
+  local principal=$1
+  local operation=$2
+  kafka_command kafka-acls.sh \
+    --bootstrap-server "$bootstrap_servers" \
+    --command-config "$admin_properties" \
+    --add --allow-principal "User:$principal" \
+    --operation "$operation" --cluster
 }
 
 add_idempotent_write_acl() {
   local principal=$1
-  kafka_command kafka-acls.sh \
-    --bootstrap-server "$bootstrap_servers" \
-    --command-config "$admin_properties" \
-    --add --allow-principal "User:$principal" \
-    --operation IdempotentWrite --cluster
+  add_cluster_acl "$principal" IdempotentWrite
 }
 
 for topic in user.events order.events credit.events; do
@@ -79,7 +98,7 @@ add_topic_acl order_service Write order.events
 add_topic_acl order_service Describe order.events
 add_topic_acl order_service Read credit.events
 add_topic_acl order_service Describe credit.events
-add_group_acl order_service order-service
+add_group_acl order_service Read order-service
 add_topic_acl order_service Write credit.events.DLT
 add_topic_acl order_service Describe credit.events.DLT
 add_idempotent_write_acl order_service
@@ -89,11 +108,24 @@ for topic in user.events order.events; do
   add_topic_acl credit_service Read "$topic"
   add_topic_acl credit_service Describe "$topic"
 done
-add_group_acl credit_service credit-service
+add_group_acl credit_service Read credit-service
 for topic in credit.events user.events.DLT order.events.DLT; do
   add_topic_acl credit_service Write "$topic"
   add_topic_acl credit_service Describe "$topic"
 done
 add_idempotent_write_acl credit_service
+
+# Kafka UI can inspect this local cluster but cannot mutate topics, data or business offsets.
+for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT; do
+  add_topic_acl kafka_ui Read "$topic"
+  add_topic_acl kafka_ui Describe "$topic"
+  add_topic_acl kafka_ui DescribeConfigs "$topic"
+done
+add_cluster_acl kafka_ui Describe
+add_cluster_acl kafka_ui DescribeConfigs
+add_group_acl kafka_ui Describe order-service
+add_group_acl kafka_ui Describe credit-service
+add_prefixed_group_acl kafka_ui Read kafka-ui-browser
+add_prefixed_group_acl kafka_ui Describe kafka-ui-browser
 
 echo "Kafka topics and ACLs are initialized. Re-running this initializer is safe."
