@@ -324,17 +324,17 @@ Confirmed by XueTing (2026-10-18):
 - **Late pickup is allowed:** a courier may pick up an `ACCEPTED` order after the pickup deadline
   (rule 3).
 - **Re-acceptance is allowed:** a courier who withdrew may accept the same order again (rule 9).
-
-Still to confirm:
 - **Edits are a full form, not single-field updates.** `PATCH /api/orders/{id}` takes every editable
   field (title, description, both locations, pickup deadline, reward) plus `version`, the way the
   edit form sends the whole errand back. The order keeps its ID, history and state; only those
   fields change.
-- **Cancelling while a reward change is waiting for Credit is allowed.** After a reward edit the
+- **The requester may cancel while a reward change is waiting for Credit.** After a reward edit the
   order stays `OPEN` with `pending_credit_reward` set until Credit replies. A cancel (or expiry) in
   that window clears the pending value and Credit releases the whole reservation; a late
   `CreditAdjusted` / `CreditAdjustmentRejected` is recorded as `IGNORED`. Credit must release the
   *adjusted* amount if it applied the adjustment before seeing `OrderCancelled`.
+
+Still to confirm:
 - `RESERVATION_FAILED` orders are left out of the requester history list (F9.1).
 
 Implementation details (no decision needed):
