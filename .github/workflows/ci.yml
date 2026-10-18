@@ -131,6 +131,9 @@ jobs:
       CREDIT_DB_NAME: credit_db
       CREDIT_DB_USER: credit_user
       CREDIT_DB_PASSWORD: ci-credit-password
+      ORDER_DB_NAME: order_db
+      ORDER_DB_USER: order_user
+      ORDER_DB_PASSWORD: ci-order-password
       MAIL_PROVIDER: noop
       KAFKA_ADMIN_PASSWORD: ci-kafka-admin-password
       KAFKA_BROKER_PASSWORD: ci-kafka-broker-password
@@ -306,6 +309,9 @@ jobs:
       CREDIT_DB_NAME: credit_db
       CREDIT_DB_USER: credit_user
       CREDIT_DB_PASSWORD: ci-credit-password
+      ORDER_DB_NAME: order_db
+      ORDER_DB_USER: order_user
+      ORDER_DB_PASSWORD: ci-order-password
       MAIL_PROVIDER: noop
       KAFKA_ADMIN_PASSWORD: ci-kafka-admin-password
       KAFKA_BROKER_PASSWORD: ci-kafka-broker-password
