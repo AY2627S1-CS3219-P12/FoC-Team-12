@@ -26,6 +26,11 @@ spring:
               predicates:
                 - Path=/credits,/credits/**,/credit-assets/**
                 - Method=GET
+            - id: order-ui
+              uri: ${ORDER_SERVICE_URL:http://localhost:8082}
+              predicates:
+                - Path=/errands,/errands/**,/order-assets/**
+                - Method=GET
             - id: user-api
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:

@@ -7,6 +7,7 @@ services:
       USER_SERVICE_URL: http://user-service:8081
       SUPPLIER_SERVICE_URL: http://supplier-service:8080
       CREDIT_SERVICE_URL: http://credit-service:8083
+      ORDER_SERVICE_URL: http://order-service:8082
     depends_on:
       user-service:
         condition: service_healthy
@@ -14,6 +15,8 @@ services:
         condition: service_started
       credit-service:
         condition: service_healthy
+      order-service:
+        condition: service_started
     ports:
       - "8088:8088"
 
@@ -138,6 +141,46 @@ services:
     volumes:
       - credit-db-data:/var/lib/postgresql/data
 
+  order-service:
+    build:
+      context: ./order-service
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: order-db
+      DB_PORT: 5432
+      DB_NAME: ${ORDER_DB_NAME:?ORDER_DB_NAME must be set}
+      DB_USER: ${ORDER_DB_USER:?ORDER_DB_USER must be set}
+      DB_PASSWORD: ${ORDER_DB_PASSWORD:?ORDER_DB_PASSWORD must be set}
+      ORDER_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
+      ORDER_JWT_ISSUER: friend-on-campus-user-service
+      ORDER_JWT_AUDIENCE: friend-on-campus-api
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
+      KAFKA_SASL_MECHANISM: PLAIN
+      KAFKA_USERNAME: order_service
+      KAFKA_PASSWORD: ${KAFKA_ORDER_SERVICE_PASSWORD:?KAFKA_ORDER_SERVICE_PASSWORD must be set}
+    depends_on:
+      order-db:
+        condition: service_healthy
+    ports:
+      - "8082:8082"
+
+  order-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${ORDER_DB_NAME:?ORDER_DB_NAME must be set}
+      POSTGRES_USER: ${ORDER_DB_USER:?ORDER_DB_USER must be set}
+      POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD:?ORDER_DB_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ORDER_DB_USER} -d ${ORDER_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "127.0.0.1:5436:5432"
+    volumes:
+      - order-db-data:/var/lib/postgresql/data
+
   kafka:
     image: apache/kafka:4.3.1
     hostname: kafka
@@ -233,4 +276,5 @@ volumes:
   user-db-data:
   supplier-db-data:
   credit-db-data:
+  order-db-data:
   kafka-data:
