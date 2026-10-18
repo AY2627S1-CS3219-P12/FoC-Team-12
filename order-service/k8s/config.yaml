@@ -11,6 +11,9 @@ data:
   ORDER_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
   ORDER_JWT_ISSUER: friend-on-campus-user-service
   ORDER_JWT_AUDIENCE: friend-on-campus-api
-  # The local cluster has no Kafka broker yet; outbox events wait unpublished until it does.
-  ORDER_KAFKA_ENABLED: "false"
+  ORDER_KAFKA_ENABLED: "true"
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
+  KAFKA_SASL_MECHANISM: PLAIN
+  KAFKA_USERNAME: order_service
   JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"

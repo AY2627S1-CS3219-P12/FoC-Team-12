@@ -16,7 +16,14 @@ The helper preserves an existing Secret and never prints/saves the password. If 
 database claim has lost its Secret, recover its original credentials; do not generate a new
 password for an initialized database. In Git Bash, invoke the helper with `pwsh -File`.
 
-Deploy and wait for PostgreSQL before starting the application (Git Bash):
+Provision the shared Kafka broker and client Secrets first, then deploy and wait for PostgreSQL
+before starting the application:
+
+```powershell
+pwsh -File deploy/kafka/k8s/Apply-LocalKafka.ps1
+```
+
+From Git Bash:
 
 ```bash
 minikube -p foc-local kubectl -- --context=foc-local apply -f order-service/k8s/database.yaml
@@ -34,10 +41,10 @@ Verify health, documentation, authorization rejection and the database (PowerShe
 ```
 
 The deployed image includes the full order lifecycle API and the packaged errand UI at
-`/errands`. The local cluster has no Kafka broker yet, so `ORDER_KAFKA_ENABLED` is `"false"` in
-`config.yaml`: Order runs normally and stores events in its outbox, but does not publish them and
-new orders stay `PENDING_CREDIT`. Deploying Kafka (a reviewed shared change) and setting the
-`KAFKA_*` variables, then removing that flag, turns event delivery on.
+`/errands`. `config.yaml` enables its Kafka adapter at `kafka:9092`; the Deployment reads only the
+`order_service` password from `order-kafka-client`. Order publishes its outbox to `order.events`
+and consumes Credit outcomes from `credit.events`. The pod will not start successfully if the
+required client Secret is missing.
 
 The application reads only its own database and validates User JWTs via the internal public
 JWKS endpoint. No User signing key is copied here. The PostgreSQL StatefulSet uses a retained

@@ -229,26 +229,25 @@ rows and DLT records. Never log JWTs, credentials or complete personal-data payl
 
 ### User Service — Darryl
 
-- Add a transactional outbox.
-- Emit `UserActivated` once when verification changes a User to `ACTIVE`.
-- Generate and persist the activation `operationId`, `eventId` and `correlationId`.
-- Publish to `user.events` keyed by User UUID and retry pending outbox rows.
+- Implemented: persist `UserActivated` in a transactional outbox when verification activates a User.
+- Implemented: retain the activation `operationId`, `eventId`, `correlationId` and envelope.
+- Implemented: publish to `user.events` keyed by User UUID and retry pending outbox rows.
 
 ### Order Service — XueTing
 
-- Add/use a transactional outbox for the five Order events defined above.
-- Generate one UUID `operationId` per credit-changing transition and retain it in the outbox.
-- Publish to `order.events` keyed by Order UUID.
-- Consume `credit.events` with an inbox and apply only the Order behaviors in the outcome table.
-- Do not call Credit synchronously and do not calculate balances or compensation amounts.
+- Implemented: persist the five Order events in the transactional outbox with stable operation IDs.
+- Implemented: publish `order.events` keyed by Order UUID and consume `credit.events` with an inbox.
+- Implemented: apply only the Order behaviors in the outcome table without calculating balances or
+  compensation amounts.
 
 ### Credit Service — Eldridge
 
-- Consume `user.events` and `order.events` with the durable Credit inbox.
-- Map `operationId` to the existing allocation, reservation, adjustment, release, settlement and
+- Implemented: consume `user.events` and `order.events` with the durable Credit inbox.
+- Implemented: map `operationId` to allocation, reservation, adjustment, release, settlement and
   compensation services.
-- Commit ledger effects, inbox completion and the matching Credit outcome outbox row atomically.
-- Publish outcomes to `credit.events`; never expose internal mutation endpoints to student JWTs.
+- Implemented: commit ledger effects, inbox completion and matching outcome outbox rows atomically.
+- Implemented: publish outcomes to `credit.events`; no internal mutation endpoint is exposed to
+  student JWTs.
 
 ### Kafka/reliability — Jun Hui
 

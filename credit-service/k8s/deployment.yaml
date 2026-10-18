@@ -25,6 +25,8 @@ spec:
                 name: credit-service-config
             - secretRef:
                 name: credit-service-secrets
+            - secretRef:
+                name: credit-kafka-client
           startupProbe:
             httpGet:
               path: /actuator/health

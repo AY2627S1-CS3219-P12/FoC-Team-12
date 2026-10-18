@@ -99,7 +99,7 @@ User's new image must contain the approved `UserActivated` outbox publisher. Mer
 and obtain its verified CI-published SHA image first; the initial `d3-1` image cannot publish.
 Do not mistake an enabled environment variable or broker readiness for implemented integration.
 
-For User in the same namespace, after selecting that new image:
+For an ad-hoc User rollout in the same namespace, after selecting that new image:
 
 ```bash
 # Replace the image value with the exact Image from the successful CI run.
@@ -108,17 +108,15 @@ minikube -p foc-local kubectl -- --context=foc-local -n foc-local patch deployme
 minikube -p foc-local kubectl -- --context=foc-local -n foc-local rollout status deployment/user-service --timeout=300s
 ```
 
-Replace the placeholder; do not execute it literally. Keep the selected image and connection
-configuration in the service owner's reviewed deployment files before subsequent normal applies,
-otherwise reapplying the original manifest may revert the rollout. The optional patch preserves
-existing database/signing-key env entries and adds only User Kafka settings. Do not roll out a
-different application image merely to test Kafka. No application Deployment is changed by the
-Kafka helper itself.
+Replace the placeholder; do not execute it literally. The reviewed User, Credit and Order
+Deployment files now retain their connection configuration across normal applies; the optional
+User patch remains useful only for an older checkout. The Kafka helper itself never changes an
+application Deployment or chooses an application image.
 
-Future Credit/Order adapters use `kafka:9092`, `SASL_PLAINTEXT`, `PLAIN`, their own username
+Credit and Order use `kafka:9092`, `SASL_PLAINTEXT`, `PLAIN`, their own usernames
 (`credit_service` / `order_service`) and `KAFKA_PASSWORD` from `credit-kafka-client` /
-`order-kafka-client`. Their owners configure their actual adapter flags/group names; this task
-does not invent enable flags or change their code. Supplier has no v1 Kafka contract.
+`order-kafka-client`. User uses the equivalent `user-kafka-client` Secret. Supplier has no v1
+Kafka contract. Apply this Kafka setup before deploying any of those enabled clients.
 
 ## Verification and acceptance
 

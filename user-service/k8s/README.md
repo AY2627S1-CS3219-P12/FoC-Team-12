@@ -3,6 +3,8 @@
 This is the first verified increment of the course's Minikube/Docker workflow. The application
 image packages the User React frontend and Spring Boot backend. PostgreSQL has one StatefulSet
 replica and a retained 5Gi PVC; application replicas share that database and the same signing key.
+The checked-in `d3-1` image must be replaced with the exact Kafka-enabled User SHA tag from a
+successful `main` CI summary before demonstrating `UserActivated` delivery.
 
 ## Start or resume
 
@@ -29,6 +31,12 @@ The two `.key` files are ignored by Git. Generate a random password and Base64-e
 private key for a new environment; do not rotate them merely to redeploy. The database password
 must match the initialized PostgreSQL data. Never commit key files or exported Secret manifests.
 
+Provision Kafka and the `user-kafka-client` Secret before applying the User Deployment:
+
+```powershell
+pwsh -File deploy/kafka/k8s/Apply-LocalKafka.ps1
+```
+
 ```bash
 minikube -p foc-local kubectl -- --context=foc-local apply -f user-service/k8s/database.yaml
 minikube -p foc-local kubectl -- --context=foc-local -n foc-local rollout status statefulset/user-db --timeout=180s
@@ -41,6 +49,10 @@ minikube -p foc-local service user-service -n foc-local
 Keep the service tunnel open on Windows. Use one browser address throughout a login session;
 session storage belongs to its origin. This direct User NodePort supports the tutorial; use the
 gateway entry point once the shared stack is deployed.
+
+The Deployment enables the activation-event publisher at `kafka:9092` and reads only the
+`user_service` password from `user-kafka-client`. Verification still commits through the database
+when Kafka is temporarily unavailable; the durable outbox retries delivery after recovery.
 
 ## Verification and persistence
 

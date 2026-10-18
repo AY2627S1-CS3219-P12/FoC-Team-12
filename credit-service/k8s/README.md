@@ -3,8 +3,10 @@
 Owner review: Eldridge. Shared setup and Docker Hub publishing are in
 [the cluster guide](../../deploy/k8s/README.md). Complete its namespace, User and gateway steps first.
 
-The Deployment downloads `arkanian4/foc-credit-service:d3-1` from Docker Hub. No local build is
-needed to use the published release. Application port: 8083; the Service is cluster-internal.
+The checked-in Deployment image remains `arkanian4/foc-credit-service:d3-1` until the Kafka-enabled
+Credit image is published from `main`. Replace it with the exact SHA tag from the successful CI
+summary before demonstrating event processing. Application port: 8083; the Service is
+cluster-internal.
 
 From the repository root, create the private password once (PowerShell 7.2+):
 
@@ -16,7 +18,14 @@ The helper preserves an existing Secret and never prints/saves the password. If 
 database claim has lost its Secret, recover its original credentials; do not generate a new
 password for an initialized database. In Git Bash, invoke the helper with `pwsh -File`.
 
-Deploy and wait for PostgreSQL before starting the application (Git Bash):
+Provision the shared Kafka broker and client Secrets first, then deploy and wait for PostgreSQL
+before starting the application:
+
+```powershell
+pwsh -File deploy/kafka/k8s/Apply-LocalKafka.ps1
+```
+
+From Git Bash:
 
 ```bash
 minikube -p foc-local kubectl -- --context=foc-local apply -f credit-service/k8s/database.yaml
@@ -33,7 +42,11 @@ Verify health, documentation, authorization rejection and the database (PowerShe
 ./deploy/k8s/Test-LocalDeployment.ps1 -Service credit -CheckDatabaseRestart
 ```
 
-The `/credits` UI and protected query APIs are available through the gateway. Kafka adapters are not enabled; deploying the service does not connect User/Order events or allocate credits automatically.
+The `/credits` UI and protected query APIs are available through the gateway. The ConfigMap enables
+the Credit Kafka adapter at `kafka:9092`; the Deployment reads only the `credit_service` password
+from `credit-kafka-client`. Credit consumes `user.events` and `order.events`, then publishes its
+outcomes to `credit.events`. The pod will not start successfully if the required client Secret is
+missing; the event flow will not exist until the Kafka-enabled image has been selected.
 
 The application reads only its own database and validates User JWTs via the internal public
 JWKS endpoint. No User signing key is copied here. The PostgreSQL StatefulSet uses a retained

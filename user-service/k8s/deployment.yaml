@@ -39,6 +39,21 @@ spec:
                   key: JWT_PRIVATE_KEY
             - name: MAIL_PROVIDER
               value: noop
+            - name: USER_EVENTS_PUBLISHER_ENABLED
+              value: "true"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: KAFKA_SECURITY_PROTOCOL
+              value: SASL_PLAINTEXT
+            - name: KAFKA_SASL_MECHANISM
+              value: PLAIN
+            - name: KAFKA_USERNAME
+              value: user_service
+            - name: KAFKA_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: user-kafka-client
+                  key: KAFKA_PASSWORD
             - name: JAVA_TOOL_OPTIONS
               value: "-XX:MaxRAMPercentage=70.0"
           startupProbe:

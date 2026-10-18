@@ -11,4 +11,10 @@ data:
   CREDIT_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
   CREDIT_JWT_ISSUER: friend-on-campus-user-service
   CREDIT_JWT_AUDIENCE: friend-on-campus-api
+  KAFKA_ENABLED: "true"
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
+  KAFKA_SASL_MECHANISM: PLAIN
+  KAFKA_USERNAME: credit_service
+  KAFKA_CONSUMER_GROUP: credit-service
   JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
