@@ -2,16 +2,9 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { OrderShell } from './components/OrderShell'
 import { readSession } from './auth/session'
 import { signInPath } from './navigation'
-
-/** Placeholder until the screen's own iteration lands. */
-function ComingSoon({ title }: { title: string }) {
-  return (
-    <section className="state-panel">
-      <h2>{title}</h2>
-      <p>This screen is coming in the next iteration.</p>
-    </section>
-  )
-}
+import { BrowsePage } from './pages/BrowsePage'
+import { ErrandPage } from './pages/ErrandPage'
+import { MyErrandsPage } from './pages/MyErrandsPage'
 
 function SignedOut() {
   return (
@@ -31,9 +24,9 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route element={<Navigate replace to="/errands/browse" />} path="/errands" />
-      <Route element={<ComingSoon title="Run an errand" />} path="/errands/browse" />
-      <Route element={<ComingSoon title="My errands" />} path="/errands/mine" />
-      <Route element={<ComingSoon title="Errand" />} path="/errands/:orderId" />
+      <Route element={<BrowsePage />} path="/errands/browse" />
+      <Route element={<MyErrandsPage />} path="/errands/mine" />
+      <Route element={<ErrandPage />} path="/errands/:orderId" />
       <Route element={<Navigate replace to="/errands/browse" />} path="*" />
     </Routes>
   )

@@ -134,3 +134,25 @@ dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
   .main-nav { order: 3; width: 100%; overflow-x: auto; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* Browse errands */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* My errands */
+.errand-list { display: grid; gap: 1rem; margin: 0.75rem 0 0; padding: 0; list-style: none; }
+.errand-card p { margin: 0.2rem 0; }
+.errand-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; }
+.errand-card-head h3 { margin: 0; color: var(--ink); font-size: 1rem; }
+.reward { color: var(--action); font-weight: 700; white-space: nowrap; }
+.errand-card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 0.5rem; }
+.filter-form { display: grid; gap: 0.4rem; margin-bottom: 1rem; }
+.filter-form label { margin-top: 0.4rem; color: var(--ink); font-size: 0.82rem; font-weight: 600; }
+.filter-form input, .filter-form select { min-height: 2.75rem; padding: 0 0.75rem; border: 1px solid var(--line); border-radius: 0.5rem; background: var(--surface); color: var(--ink); font: inherit; }
+.filter-form button { justify-self: start; margin-top: 0.75rem; }
+/* Errand detail and active orders */
+.errand-heading h1 { margin: 0; color: var(--ink); font-size: clamp(1.6rem, 3.5vw, 2rem); letter-spacing: -0.03em; }
+.errand-heading { margin-bottom: 0.75rem; }
+.section-title { margin: 0 0 0.5rem; color: var(--ink); font-size: 1rem; }
+.description { margin: 0; color: var(--ink); line-height: 1.6; white-space: pre-line; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
+.tab { border-color: var(--line); background: var(--surface); color: var(--ink); font-weight: 600; }
+.tab[aria-selected='true'] { border-color: var(--action-soft); background: var(--action-soft); color: var(--action); }
