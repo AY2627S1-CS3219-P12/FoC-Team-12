@@ -21,16 +21,22 @@ export KAFKA_BROKER_PASSWORD=${KAFKA_BROKER_PASSWORD:-smoke-broker-password}
 export KAFKA_USER_SERVICE_PASSWORD=${KAFKA_USER_SERVICE_PASSWORD:-smoke-user-password}
 export KAFKA_ORDER_SERVICE_PASSWORD=${KAFKA_ORDER_SERVICE_PASSWORD:-smoke-order-password}
 export KAFKA_CREDIT_SERVICE_PASSWORD=${KAFKA_CREDIT_SERVICE_PASSWORD:-smoke-credit-password}
+export KAFKA_UI_BROKER_PASSWORD=${KAFKA_UI_BROKER_PASSWORD:-smoke-ui-broker-password}
+export KAFKA_UI_LOGIN_USERNAME=${KAFKA_UI_LOGIN_USERNAME:-kafka-smoke-viewer}
+export KAFKA_UI_LOGIN_PASSWORD=${KAFKA_UI_LOGIN_PASSWORD:-smoke-ui-login-password}
 
 compose() {
   docker compose --project-directory "$repository_root" -p "$project_name" "$@"
 }
 
 cleanup() {
+  if [ -n "${ui_cookie_jar:-}" ]; then
+    rm -f "$ui_cookie_jar"
+  fi
   if [ "$failed" -ne 0 ]; then
     echo "Kafka smoke verification failed; broker and initializer logs follow." >&2
     compose ps >&2 || true
-    compose logs --no-color --tail=200 kafka kafka-init >&2 || true
+    compose logs --no-color --tail=200 kafka kafka-init kafka-ui >&2 || true
   fi
   if [ "$keep_stack" != 1 ]; then
     compose down --volumes --remove-orphans >/dev/null 2>&1 || true
@@ -40,15 +46,68 @@ cleanup() {
 }
 trap cleanup EXIT
 
+ui_cookie_jar=$(mktemp)
+
+login_to_kafka_ui() {
+  local login_page
+  local csrf_token
+  local login_status
+  local login_args
+
+  login_page=$(curl --fail --silent --show-error \
+    --cookie-jar "$ui_cookie_jar" http://localhost:8090/login)
+  csrf_token=$(sed -n 's/.*name="_csrf"[^>]*value="\([^"]*\)".*/\1/p' <<< "$login_page" | head -n 1)
+  login_args=(
+    --silent --show-error --output /dev/null --write-out '%{http_code}'
+    --cookie "$ui_cookie_jar" --cookie-jar "$ui_cookie_jar"
+    --data-urlencode "username=$KAFKA_UI_LOGIN_USERNAME"
+    --data-urlencode "password=$KAFKA_UI_LOGIN_PASSWORD"
+  )
+  if [ -n "$csrf_token" ]; then
+    login_args+=(--data-urlencode "_csrf=$csrf_token")
+  fi
+  login_status=$(curl "${login_args[@]}" http://localhost:8090/login)
+  if [ "$login_status" != 302 ]; then
+    echo "Kafka UI login returned HTTP $login_status instead of 302" >&2
+    return 1
+  fi
+}
+
+wait_for_kafka_ui_cluster() {
+  local response
+  for _ in $(seq 1 30); do
+    response=$(curl --silent --show-error --cookie "$ui_cookie_jar" \
+      http://localhost:8090/api/clusters 2>/dev/null || true)
+    if [[ "$response" == *'"name":"foc-local"'* ]]; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Kafka UI did not expose the foc-local cluster" >&2
+  return 1
+}
+
 compose config --quiet
 compose up -d --wait kafka
 compose run --rm kafka-init
 compose run --rm kafka-init
 compose exec -T kafka /bin/bash /opt/foc-kafka/verify.sh before-restart
+compose up -d --wait kafka-ui
+
+curl --fail --silent --show-error http://localhost:8090/actuator/health | grep --quiet '"status":"UP"'
+unauthenticated_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  --max-redirs 0 http://localhost:8090/)
+if [ "$unauthenticated_status" != 302 ] && [ "$unauthenticated_status" != 401 ]; then
+  echo "Kafka UI did not require login; received HTTP $unauthenticated_status" >&2
+  exit 1
+fi
+login_to_kafka_ui
+wait_for_kafka_ui_cluster
 
 compose restart kafka
 compose up -d --wait kafka
 compose exec -T kafka /bin/bash /opt/foc-kafka/verify.sh after-restart
+wait_for_kafka_ui_cluster
 
 failed=0
 echo "Kafka smoke verification passed for Compose project '$project_name'."

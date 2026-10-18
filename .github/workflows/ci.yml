@@ -137,6 +137,9 @@ jobs:
       KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
       KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
       KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
+      KAFKA_UI_BROKER_PASSWORD: ci-kafka-ui-broker-password
+      KAFKA_UI_LOGIN_USERNAME: ci-kafka-viewer
+      KAFKA_UI_LOGIN_PASSWORD: ci-kafka-ui-login-password
     steps:
       - uses: actions/checkout@v7
       - name: Set up Docker Buildx
@@ -309,6 +312,9 @@ jobs:
       KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
       KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
       KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
+      KAFKA_UI_BROKER_PASSWORD: ci-kafka-ui-broker-password
+      KAFKA_UI_LOGIN_USERNAME: ci-kafka-viewer
+      KAFKA_UI_LOGIN_PASSWORD: ci-kafka-ui-login-password
     steps:
       - uses: actions/checkout@v7
       - name: Generate a throwaway JWT signing key
