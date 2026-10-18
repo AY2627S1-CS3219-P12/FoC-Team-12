@@ -124,6 +124,8 @@ services:
     depends_on:
       credit-db:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     ports:
       - "8083:8083"
 
