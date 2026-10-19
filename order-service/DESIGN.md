@@ -10,10 +10,10 @@ gaps, and splits the work into `/foc-iterate-feature` iterations. Owner: XueTing
 > is the contract for topics, event names, envelopes and payloads. Where this document and the
 > blueprint differ, **the blueprint wins**. This document covers Order's internal design.
 
-**Status (2026-10-17):** every lifecycle transition is built (phases 1–3, PRs #56–#58), and the
-outbox payloads and Credit outcome handling follow the blueprint (`event-blueprint-alignment`).
-All Order iterations are built, including the Kafka relay and listener. The end-to-end round
-trip waits on Credit Service's Kafka adapter. See [Iterations](#iterations-each-one-is-a-foc-iterate-feature-order--run).
+**Status (2026-10-18):** iterations 1–8 are merged: the full lifecycle, blueprint events, the Kafka
+relay and listener, discovery/history, editing and reward changes, location names, the errand UI
+(`/errands`), Compose and gateway wiring, CI (backend, frontend, Compose environment check) and the
+Kubernetes image. The end-to-end round trip (iteration 9) waits on Credit Service's Kafka adapter. See [Iterations](#iterations-each-one-is-a-foc-iterate-feature-order--run).
 
 Decisions confirmed with XueTing:
 - **Reward editing stays in D3.** It goes through a Credit adjustment.
@@ -136,7 +136,7 @@ Consumer rules (`messaging/CreditOutcomeHandler`), in one transaction:
 3. **Only `OPEN` orders expire automatically** (F8.2/F8.3).
    - Accepted orders never expire automatically.
    - **Late pickup is allowed**: the courier may still pick up an `ACCEPTED` order after the deadline.
-   - The deadline only affects acceptance, expiry and withdrawal. *(Gap. Confirm against the backlog.)*
+   - The deadline only affects acceptance, expiry and withdrawal. *(Confirmed by XueTing, 2026-10-18.)*
 4. **Concurrency.**
    - Every transition runs in one transaction, loading the row with `PESSIMISTIC_WRITE`
      (`SELECT … FOR UPDATE`).
@@ -171,7 +171,7 @@ Consumer rules (`messaging/CreditOutcomeHandler`), in one transaction:
 9. **Re-acceptance.**
    - A courier who withdrew may accept the same order again.
    - The pool excludes the caller's own requests (self-acceptance is forbidden).
-   - *(Gap. Confirm.)*
+   - *(Confirmed by XueTing, 2026-10-18.)*
 
 ## States
 - **`PENDING_CREDIT`:** the order is saved and waiting for Credit to reserve the reward. It isn't
@@ -240,12 +240,12 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
     isn't revealed that the order exists.
 - **`GET /api/orders/{id}/history`:** the transition history, visible to participants only.
 - **`GET /api/orders/me/requested`:** R's orders in `COMPLETED`, `CANCELLED` or `EXPIRED` (F9.1).
-  - `RESERVATION_FAILED` is excluded. *(Gap. Confirm.)*
+  - `RESERVATION_FAILED` is excluded. *(Confirmed by XueTing, 2026-10-18.)*
 - **`GET /api/orders/me/delivered`:** `COMPLETED` orders where the caller was the courier (F9.2).
 - **Client-only requirements:**
   - F1.1.1 form validation, F4.4 remembering filters, and the F5.1.1/F5.1.2 confirmation popup;
   - the API supports them, but the server can't enforce them;
-  - **gap: who owns the Order UI** (Order Service has no frontend).
+  - the Order UI is built in `order-service/frontend` and enforces them.
 
 ## Data model (applied migrations are never edited)
 - **V1 `orders`:** the order aggregate and its lifecycle columns.
@@ -310,32 +310,41 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | 2 | `order-lifecycle-accept-expiry`: `expire` (job + lazy), `accept`, `withdraw`, race tests | Done (PR #57) |
 | 3 | `order-lifecycle-delivery`: `pickUp`, `deliver`, `complete`, duplicate completion | Done (PR #58) |
 | 4 | `order-event-blueprint-alignment`: blueprint envelope/payloads, five published events, Credit outcome handler with inbox (V3) | Done (PR #59) |
-| 5 | `order-kafka-messaging`: outbox relay to `order.events`, `credit.events` listener and DLT; Order in `compose.yaml` (shared, Jun Hui reviews) | Done (Kafka adapters; Compose wiring in its own PR) |
+| 5 | `order-kafka-messaging`: outbox relay to `order.events`, `credit.events` listener and DLT; Order in `compose.yaml` | Done (PRs #74, #75) |
 | 6 | `order-discovery-history`: open-order pool (filters, sorting, paging), "my orders" history (F4, F9) | Done (PR #65) |
-| 7 | `order-location-snapshot`: client-supplied location names on create (edit comes with iteration 8) | Done |
+| 7 | `order-location-snapshot`: client-supplied location names on create (edit comes with iteration 8) | Done (PR #62) |
 | 8 | `order-edit-reward`: edit details (T4) and reward through `OrderRewardChangeRequested` / `CreditAdjusted` (T5, T5a, T5b) | Done (PR #65) |
-| 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | |
+| UI | Errand UI: browse, errand detail and active orders, my errands, request a hand, aligned header; Order frontend CI | Done (PRs #66, #73, #77, #79) |
+| k8s | Kubernetes image bump to the latest Order image; Kafka off in the cluster until a broker is deployed | Done (PR #80) |
+| 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Waiting on Credit's Kafka adapter |
 
-## Open items to confirm (flag to the backlog and owners)
-- Late pickup after the deadline is allowed (rule 3). Built in phase 3.
-- A courier who withdrew may re-accept the same order (rule 9). Built in phase 2.
-- `RESERVATION_FAILED` is excluded from F9.1 history.
-- Ownership of the Order UI (F1.1.1, F4.2–F4.5, F5.1.1/2).
-- **Reward editing (iteration 8) decisions to confirm:**
-  - `PATCH /api/orders/{id}` is a full replace: every editable field and `version` are required.
-  - Cancelling while a reward change is pending is allowed (Credit releases the whole reservation);
-    cancel and expiry clear `pending_credit_reward`, and a later `CreditAdjusted` /
-    `CreditAdjustmentRejected` is recorded as `IGNORED`. Credit must release the *adjusted*
-    reservation if it applied the adjustment before seeing `OrderCancelled`.
-  - Resending the order's current values (pending reward counted as the reward) is a `200`
-    duplicate even with an old `version` or while the change is pending.
-  - The guard order puts the duplicate check after the state guard, because an edit has no
-    distinct target state.
-  - A rejected adjustment is visible only through the history (`REWARD_CHANGE_REJECTED`); the
-    Credit `reasonCode` is not stored.
+## Decisions
+
+Confirmed by XueTing (2026-10-18):
+- **Late pickup is allowed:** a courier may pick up an `ACCEPTED` order after the pickup deadline
+  (rule 3).
+- **Re-acceptance is allowed:** a courier who withdrew may accept the same order again (rule 9).
+- **Edits are a full form, not single-field updates.** `PATCH /api/orders/{id}` takes every editable
+  field (title, description, both locations, pickup deadline, reward) plus `version`, the way the
+  edit form sends the whole errand back. The order keeps its ID, history and state; only those
+  fields change.
+- **The requester may cancel while a reward change is waiting for Credit.** After a reward edit the
+  order stays `OPEN` with `pending_credit_reward` set until Credit replies. A cancel (or expiry) in
+  that window clears the pending value and Credit releases the whole reservation; a late
+  `CreditAdjusted` / `CreditAdjustmentRejected` is recorded as `IGNORED`. Credit must release the
+  *adjusted* amount if it applied the adjustment before seeing `OrderCancelled`.
+
+- **`RESERVATION_FAILED` orders are not shown in the requester's history** (F9.1); history lists
+  only `COMPLETED`, `CANCELLED` and `EXPIRED` errands.
+
+Implementation details (no decision needed):
+- Resending the order's current values (pending reward counted as the reward) is a `200`
+  duplicate even with an old `version` or while the change is pending; the duplicate check comes
+  after the state guard because an edit has no distinct target state.
+- A rejected adjustment is visible only through the history (`REWARD_CHANGE_REJECTED`); Credit's
+  `reasonCode` is not stored.
 - **Resolved by the blueprint:** topic and event names, payloads, `operationId`, compensation
-  (`ceil(reserved × 20 / 100)` to the courier, the rest released). Order Compose wiring is still a
-  shared-file change for Jun Hui.
+  (`ceil(reserved × 20 / 100)` to the courier, the rest released).
 
 ## Verification
 - **Every iteration:** `cd order-service && ./mvnw -B verify` with JDK 17.
