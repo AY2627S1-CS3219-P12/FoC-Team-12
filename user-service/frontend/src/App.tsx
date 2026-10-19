@@ -751,9 +751,13 @@ export function App() {
           <strong>View my credits</strong>
           <span>Check your available balance, reserved credits, and transaction history.</span>
         </a>
+        {!adminMode && <a className="service-card" href="/errands/new">
+          <strong>Request help</strong>
+          <span>Post an errand with a pickup, drop-off, deadline, and credit reward.</span>
+        </a>}
         {!adminMode && <a className="service-card" href="/errands/browse">
-          <strong>Find or request errands</strong>
-          <span>Post a task you need help with, or browse and accept errands from others.</span>
+          <strong>Find errands to run</strong>
+          <span>Browse open errands from other students and earn credits delivering them.</span>
         </a>}
       </nav>
       {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
