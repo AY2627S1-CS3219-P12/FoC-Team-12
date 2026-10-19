@@ -689,6 +689,7 @@ export function App() {
             <a aria-current={adminUsersPage ? undefined : 'page'} href="/">Profile</a>
             <a href={suppliersPath}>Suppliers</a>
             <a href="/credits">Credits</a>
+            <a href="/errands/browse">Errands</a>
           </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">
             {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">
@@ -750,6 +751,10 @@ export function App() {
           <strong>View my credits</strong>
           <span>Check your available balance, reserved credits, and transaction history.</span>
         </a>
+        {!adminMode && <a className="service-card" href="/errands/browse">
+          <strong>Find or request errands</strong>
+          <span>Post a task you need help with, or browse and accept errands from others.</span>
+        </a>}
       </nav>
       {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
       {profileMessage && <p role="alert" className="error">{profileMessage}</p>}
