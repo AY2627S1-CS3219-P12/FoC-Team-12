@@ -36,7 +36,10 @@ The backend contract wins over example data in Figma:
 - **No "Deliver by" field.** Orders have only a pickup deadline. A **reward** field is added: the
   design shows "Reserve for this errand: 3 credits" but has no input for it.
 - **"Your credits"** reads the caller's own balance from Credit's `GET /api/credits/me` in the
-  browser. If the reward is more than the available balance the form warns that the errand won't
-  open (Credit rejects the reservation); it does not block posting, because Credit is the authority.
+  browser (Order Service never calls Credit). **Post errand is disabled** unless that balance is
+  confirmed and covers the reward: while it loads, when Credit is unavailable, when the user has no
+  credit account yet, or when the reward is higher than the available credits. Credit still has the
+  final say: a reservation it rejects later (for example two errands posted at once) shows as
+  "Not enough credits" on the errand.
 - **Requester/Courier tabs** ("Request help" / "Run errands") map to the session role switch in the
   header, because the API authorises actions by the session role.
