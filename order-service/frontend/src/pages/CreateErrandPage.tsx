@@ -19,6 +19,8 @@ import {
   locationLabel,
   TITLE_MAX,
   validate,
+  type BalanceStatus,
+  creditCheck,
 } from '../utils/errandForm'
 
 /** Server field names map back to the form's own (both locations report on the drop-off picker). */
@@ -73,12 +75,35 @@ export function CreateErrandPage() {
     setErrors((current) => ({ ...current, [name]: undefined, form: undefined }))
   }
 
+  const reward = Number(fields.creditReward)
+  const rewardIsValid = Number.isInteger(reward) && reward > 0
+  const balanceStatus: BalanceStatus = balance.isPending
+    ? { kind: 'loading' }
+    : balance.isError
+      ? { kind: 'unavailable' }
+      : balance.data === null || balance.data === undefined
+        ? { kind: 'no-account' }
+        : { kind: 'loaded', available: balance.data.availableBalance }
+  const credit = creditCheck(balanceStatus, rewardIsValid ? reward : null)
+
   const submit = (event: FormEvent) => {
     event.preventDefault()
     const found = validate(fields)
     setErrors(found)
     if (Object.keys(found).length > 0) {
       document.getElementById(`field-${Object.keys(found)[0]}`)?.focus()
+      return
+    }
+    if (!credit.canPost) {
+      const blocked =
+        balanceStatus.kind === 'loaded'
+          ? { creditReward: credit.message ?? undefined }
+          : { form: credit.message ?? undefined }
+      setErrors(blocked)
+      // Other blocks keep the button disabled and are announced by the status message.
+      if (balanceStatus.kind === 'loaded') {
+        document.getElementById('field-creditReward')?.focus()
+      }
       return
     }
     const byId = new Map(
@@ -95,9 +120,6 @@ export function CreateErrandPage() {
       pickupDeadline: new Date(fields.pickupDeadline).toISOString(),
     })
   }
-
-  const reward = Number(fields.creditReward)
-  const rewardIsValid = Number.isInteger(reward) && reward > 0
 
   return (
     <>
@@ -179,6 +201,7 @@ export function CreateErrandPage() {
               aria-invalid={Boolean(errors.creditReward)}
               id="field-creditReward"
               inputMode="numeric"
+              max={balance.data?.availableBalance}
               min={1}
               onChange={(event) => update('creditReward')(event.target.value)}
               placeholder="3"
@@ -207,17 +230,39 @@ export function CreateErrandPage() {
             </p>
           )}
           <div className="actions">
-            <button disabled={create.isPending} type="submit">
+            <button
+              aria-describedby={
+                credit.message ? 'credit-check-message' : undefined
+              }
+              disabled={create.isPending || !credit.canPost}
+              id="submit-errand"
+              type="submit"
+            >
               {create.isPending ? 'Posting…' : 'Post errand'}
             </button>
           </div>
+          {credit.message && (
+            <p
+              className="notice notice-warn"
+              id="credit-check-message"
+              role="status"
+            >
+              {credit.message}
+              {balanceStatus.kind === 'no-account' && (
+                <>
+                  {' '}
+                  <a className="text-link" href="/credits">
+                    Set up your credits
+                  </a>
+                </>
+              )}
+            </p>
+          )}
         </form>
         <aside aria-labelledby="credits-heading" className="card">
           <h2 id="credits-heading">Your credits</h2>
           {balance.isPending && <p>Loading your balance…</p>}
-          {balance.isError && (
-            <p>Your balance is unavailable right now. You can still post.</p>
-          )}
+          {balance.isError && <p>Your balance is unavailable right now.</p>}
           {balance.isSuccess && balance.data === null && (
             <p>Your credit account isn't set up yet.</p>
           )}
@@ -239,16 +284,12 @@ export function CreateErrandPage() {
                 <dt>Available after posting</dt>
                 <dd>
                   {rewardIsValid
-                    ? credits(balance.data.availableBalance - reward)
+                    ? credits(
+                        Math.max(0, balance.data.availableBalance - reward),
+                      )
                     : '—'}
                 </dd>
               </dl>
-              {rewardIsValid && reward > balance.data.availableBalance && (
-                <p className="notice notice-warn" role="status">
-                  You don't have enough available credits for this reward, so
-                  the errand won't open.
-                </p>
-              )}
             </>
           )}
         </aside>

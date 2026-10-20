@@ -55,3 +55,45 @@ export function validate(fields: Fields, now: Date = new Date()): Errors {
     errors.description = `Keep the description to ${DESCRIPTION_MAX} characters.`
   return errors
 }
+
+/** What the balance query returned: still loading, failed, no account (null), or a balance. */
+export type BalanceStatus =
+  | { kind: 'loading' }
+  | { kind: 'unavailable' }
+  | { kind: 'no-account' }
+  | { kind: 'loaded'; available: number }
+
+/**
+ * Whether the requester may post, given their balance (read in the browser from Credit's public
+ * API; Order Service never calls Credit). Posting is allowed only once the balance is confirmed and
+ * covers the reward. Credit still has the final say: a reservation it rejects later shows as "Not
+ * enough credits" on the errand.
+ */
+export function creditCheck(
+  balance: BalanceStatus,
+  reward: number | null,
+): { canPost: boolean; message: string | null } {
+  switch (balance.kind) {
+    case 'loading':
+      return { canPost: false, message: 'Checking your credits…' }
+    case 'unavailable':
+      return {
+        canPost: false,
+        message:
+          "We can't check your credits right now, so posting is paused. Try again shortly.",
+      }
+    case 'no-account':
+      return {
+        canPost: false,
+        message: "Your credit account isn't set up yet.",
+      }
+    case 'loaded':
+      if (reward !== null && reward > balance.available) {
+        return {
+          canPost: false,
+          message: `You have ${balance.available} ${balance.available === 1 ? 'credit' : 'credits'} available. Lower the reward to ${balance.available} or less.`,
+        }
+      }
+      return { canPost: true, message: null }
+  }
+}
