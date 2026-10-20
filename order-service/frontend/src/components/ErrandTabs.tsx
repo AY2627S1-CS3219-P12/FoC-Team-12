@@ -1,16 +1,21 @@
 import { NavLink } from 'react-router-dom'
+import { useSessionRole } from '../hooks/useSessionRole'
 
-/** The Figma "Request help / Run errands" switch, plus My errands, shared by the errand screens. */
+/** Errand screens for the header role: Request help (Requester) or Run errands (Courier), plus My errands. */
 export function ErrandTabs() {
+  const role = useSessionRole()
   return (
-    <nav aria-label="Errands" className="tabs errand-tabs">
-      <NavLink className="tab tab-link" to="/errands/new">
-        Request help
-      </NavLink>
-      <NavLink className="tab tab-link" to="/errands/browse">
-        Run errands
-      </NavLink>
-      <NavLink className="tab tab-link" to="/errands/mine">
+    <nav aria-label="Errands" className="errand-tabs">
+      {role === 'REQUESTER' ? (
+        <NavLink className="errand-tab" to="/errands/new">
+          Request help
+        </NavLink>
+      ) : (
+        <NavLink className="errand-tab" to="/errands/browse">
+          Run errands
+        </NavLink>
+      )}
+      <NavLink className="errand-tab" to="/errands/mine">
         My errands
       </NavLink>
     </nav>

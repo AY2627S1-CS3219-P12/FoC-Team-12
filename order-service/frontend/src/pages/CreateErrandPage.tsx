@@ -8,7 +8,6 @@ import {
   fetchCampusLocations,
   fetchMyCredits,
 } from '../api/sharedApi'
-import { readSession } from '../auth/session'
 import { credits } from '../utils/orderFormatting'
 import {
   DESCRIPTION_MAX,
@@ -40,7 +39,6 @@ function serverErrors(error: OrderApiError): Errors {
 
 /** Figma "Create errand" ("Request a hand"). */
 export function CreateErrandPage() {
-  const session = readSession()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [fields, setFields] = useState<Fields>(EMPTY)
@@ -130,12 +128,6 @@ export function CreateErrandPage() {
         </div>
       </div>
       <ErrandTabs />
-      {session?.role !== 'REQUESTER' && (
-        <div className="notice notice-next">
-          Posting errands needs a Requester session. Switch to Requester in the
-          header.
-        </div>
-      )}
       <div className="two-column">
         <form
           aria-labelledby="create-heading"

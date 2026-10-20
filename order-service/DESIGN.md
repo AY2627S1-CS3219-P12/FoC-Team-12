@@ -239,9 +239,16 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   - In other states, only R or the current courier can see the order. Anyone else gets 404, so it
     isn't revealed that the order exists.
 - **`GET /api/orders/{id}/history`:** the transition history, visible to participants only.
-- **`GET /api/orders/me/requested`:** R's orders in `COMPLETED`, `CANCELLED` or `EXPIRED` (F9.1).
-  - `RESERVATION_FAILED` is excluded. *(Confirmed by XueTing, 2026-10-18.)*
-- **`GET /api/orders/me/delivered`:** `COMPLETED` orders where the caller was the courier (F9.2).
+- **`GET /api/orders/me/requested`:** R's own orders (F9.1).
+  - `status=past` (default): `COMPLETED`, `CANCELLED` or `EXPIRED`. `status=active`: `PENDING_CREDIT`,
+    `OPEN`, `ACCEPTED`, `PICKED_UP` or `DELIVERED`, so an errand in progress is never lost.
+  - An optional `state` narrows either list to one of its own states.
+  - `RESERVATION_FAILED` is never listed: such an errand was not posted. *(Confirmed by XueTing,
+    2026-10-18 and 2026-10-20.)*
+- **`GET /api/orders/me/delivered`:** orders the caller runs as courier (F9.2).
+  - `status=past` (default): `COMPLETED`. `status=active`: `ACCEPTED`, `PICKED_UP` or `DELIVERED`.
+  - Past shows completed deliveries only: an order the courier withdrew from, or that was cancelled
+    after acceptance, no longer stores them as courier. *(Confirmed by XueTing, 2026-10-20.)*
 - **Client-only requirements:**
   - F1.1.1 form validation, F4.4 remembering filters, and the F5.1.1/F5.1.2 confirmation popup;
   - the API supports them, but the server can't enforce them;

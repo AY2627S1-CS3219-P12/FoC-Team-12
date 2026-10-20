@@ -176,8 +176,8 @@ returns a page:
 | Endpoint | Returns | Order |
 | --- | --- | --- |
 | `GET /api/orders` | The open pool: `OPEN` orders whose `pickupDeadline` is still in the future, with no reward change pending, excluding the caller's own requests (F4.1) | `sort` below |
-| `GET /api/orders/me/requested` | The caller's own orders in `COMPLETED`, `CANCELLED` or `EXPIRED` (F9.1); `RESERVATION_FAILED` is left out | Latest state change first, then `id` |
-| `GET /api/orders/me/delivered` | `COMPLETED` orders the caller delivered as courier (F9.2) | Latest state change first, then `id` |
+| `GET /api/orders/me/requested` | The caller's own orders (F9.1). `status=past` (default): `COMPLETED`, `CANCELLED` or `EXPIRED`. `status=active`: `PENDING_CREDIT`, `OPEN`, `ACCEPTED`, `PICKED_UP` or `DELIVERED`. `RESERVATION_FAILED` is never listed (the errand was not posted) | Past: latest state change first. Active: nearest pickup deadline first. Then `id` |
+| `GET /api/orders/me/delivered` | Orders the caller runs as courier (F9.2). `status=past` (default): `COMPLETED`. `status=active`: `ACCEPTED`, `PICKED_UP` or `DELIVERED` while still assigned to the caller | As above |
 
 An `OPEN` order whose deadline has passed is never offered, even before the
 expiry job has expired it.
@@ -189,6 +189,8 @@ Query parameters (all optional; filters combine with AND, a blank value is ignor
 | `minReward`, `maxReward` | pool | Positive whole credits, inclusive; `minReward` must not exceed `maxReward` (F4.2) |
 | `pickupLocationId`, `dropoffLocationId` | pool | Supplier location UUID (F4.2) |
 | `sort` | pool | `deadline` (nearest pickup deadline first, the default), `reward` (highest first, then nearest deadline) or `pickupLocationName` (A to Z ignoring case, orders without a stored name last, then nearest deadline). `id` breaks any remaining tie so paging is stable (F4.3) |
+| `status` | my lists | `active` or `past` (default), case-insensitive |
+| `state` | my lists | One order state; must be one the chosen `status` list contains (e.g. `status=past&state=CANCELLED`) |
 | `page` | all | Zero-based, default `0` |
 | `size` | all | `1`–`50`, default `20` |
 

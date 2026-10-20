@@ -270,8 +270,8 @@ class OrderSecurityIntegrationTest {
     void listReadsNeedAValidTokenButAnyRole() throws Exception {
         org.springframework.data.domain.Page<Order> empty = org.springframework.data.domain.Page.empty();
         when(orderQueryService.findOpenPool(any(), any())).thenReturn(empty);
-        when(orderQueryService.findRequestedHistory(any(), any())).thenReturn(empty);
-        when(orderQueryService.findDeliveredHistory(any(), any())).thenReturn(empty);
+        when(orderQueryService.findRequested(any(), any(), any())).thenReturn(empty);
+        when(orderQueryService.findDelivered(any(), any(), any())).thenReturn(empty);
         for (String path : List.of("/api/orders", "/api/orders/me/requested", "/api/orders/me/delivered")) {
             HttpResponse<String> anonymous = http.send(HttpRequest.newBuilder()
                     .uri(URI.create("http://localhost:" + port + path))

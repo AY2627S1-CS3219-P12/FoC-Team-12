@@ -38,6 +38,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.friendoncampus.order.domain.Order;
 import com.friendoncampus.order.domain.OrderState;
+import com.friendoncampus.order.service.MyOrdersFilter;
 import com.friendoncampus.order.service.OrderPaging;
 import com.friendoncampus.order.service.OrderPoolQuery;
 import com.friendoncampus.order.service.OrderPoolSort;
@@ -76,8 +77,8 @@ class OrderListControllerTest {
                 new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_COURIER"))));
         Page<Order> empty = Page.empty(PageRequest.of(0, 20));
         when(queryService.findOpenPool(any(), any())).thenReturn(empty);
-        when(queryService.findRequestedHistory(any(), any())).thenReturn(empty);
-        when(queryService.findDeliveredHistory(any(), any())).thenReturn(empty);
+        when(queryService.findRequested(any(), any(), any())).thenReturn(empty);
+        when(queryService.findDelivered(any(), any(), any())).thenReturn(empty);
     }
 
     @AfterEach
@@ -200,14 +201,37 @@ class OrderListControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items").isArray())
                 .andExpect(jsonPath("$.totalItems").value(0));
-        verify(queryService).findRequestedHistory(CALLER, new OrderPaging(0, 20));
+        verify(queryService).findRequested(CALLER, MyOrdersFilter.PAST, new OrderPaging(0, 20));
     }
 
     @Test
     void deliveredHistoryUsesTheCallerAndRequestedPaging() throws Exception {
         mockMvc.perform(get("/api/orders/me/delivered").param("page", "2").param("size", "50"))
                 .andExpect(status().isOk());
-        verify(queryService).findDeliveredHistory(CALLER, new OrderPaging(2, 50));
+        verify(queryService).findDelivered(CALLER, MyOrdersFilter.PAST, new OrderPaging(2, 50));
+    }
+
+    @Test
+    void myListsPassTheStatusAndStateFilter() throws Exception {
+        mockMvc.perform(get("/api/orders/me/requested").param("status", "active").param("state", "open"))
+                .andExpect(status().isOk());
+        verify(queryService).findRequested(CALLER,
+                new MyOrdersFilter(MyOrdersFilter.Status.ACTIVE, OrderState.OPEN), new OrderPaging(0, 20));
+        mockMvc.perform(get("/api/orders/me/delivered").param("status", "ACTIVE"))
+                .andExpect(status().isOk());
+        verify(queryService).findDelivered(CALLER,
+                new MyOrdersFilter(MyOrdersFilter.Status.ACTIVE, null), new OrderPaging(0, 20));
+    }
+
+    @Test
+    void myListsRejectAnUnknownStatusOrState() throws Exception {
+        mockMvc.perform(get("/api/orders/me/requested").param("status", "finished"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+        mockMvc.perform(get("/api/orders/me/delivered").param("state", "LOST"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+        verifyNoInteractions(queryService);
     }
 
     @Test

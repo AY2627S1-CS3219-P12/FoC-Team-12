@@ -62,7 +62,7 @@ export function ErrandPage() {
       <section className="card state-panel">
         <h2>{notFound ? 'Errand not found' : "We couldn't load this errand"}</h2>
         <p>{notFound ? 'It may have been taken or it is no longer open.' : errand.error.message}</p>
-        <Link className="text-link" to="/errands/browse">
+        <Link className="text-link" to="/errands">
           Back to errands
         </Link>
       </section>
