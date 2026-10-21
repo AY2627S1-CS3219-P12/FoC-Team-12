@@ -63,6 +63,7 @@ export function CreditShell({ children }: { children: ReactNode }) {
             <a aria-current="page" href="/credits">
               Credits
             </a>
+            <a href="/errands/browse">Errands</a>
           </nav>
           <nav aria-label="Account and workspace" className="header-actions">
             {session && session.role !== 'ADMIN' && (

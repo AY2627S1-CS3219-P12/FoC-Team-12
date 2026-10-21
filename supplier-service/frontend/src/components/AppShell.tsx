@@ -47,6 +47,7 @@ export function AppShell() {
               Suppliers
             </Link>
             <a href="/credits">Credits</a>
+            <a href="/errands/browse">Errands</a>
           </nav>
           <nav
             aria-label="Account and workspace"
