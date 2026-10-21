@@ -164,6 +164,10 @@ describe('Public supplier directory', () => {
       'href',
       '/credits',
     )
+    expect(screen.getByRole('link', { name: 'Errands' })).toHaveAttribute(
+      'href',
+      '/errands/browse',
+    )
     expect(
       screen.queryByRole('link', { name: 'Admin' }),
     ).not.toBeInTheDocument()
