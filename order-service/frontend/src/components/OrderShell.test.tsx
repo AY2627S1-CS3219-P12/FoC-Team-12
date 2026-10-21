@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
-import { REQUESTER_ID, signIn } from '../test/fixtures'
+import { COURIER_ID, REQUESTER_ID, signIn } from '../test/fixtures'
 import { ErrandTabs } from './ErrandTabs'
 import { OrderShell } from './OrderShell'
 
@@ -26,21 +26,34 @@ describe('OrderShell', () => {
 })
 
 describe('ErrandTabs', () => {
-  it('links the three errand screens and marks the current one', () => {
+  afterEach(() => sessionStorage.clear())
+
+  const tabs = (path: string) => {
     render(
-      <MemoryRouter initialEntries={['/errands/mine']}>
+      <MemoryRouter initialEntries={[path]}>
         <ErrandTabs />
       </MemoryRouter>,
     )
+    return within(screen.getByRole('navigation', { name: 'Errands' }))
+  }
 
-    const tabs = screen.getByRole('navigation', { name: 'Errands' })
-    expect(
-      within(tabs)
-        .getAllByRole('link')
-        .map((link) => link.getAttribute('href')),
-    ).toEqual(['/errands/new', '/errands/browse', '/errands/mine'])
-    expect(
-      within(tabs).getByRole('link', { name: 'My errands' }),
-    ).toHaveAttribute('aria-current', 'page')
+  it('shows Request help and My errands to a requester, marking the current one', () => {
+    signIn(REQUESTER_ID, 'REQUESTER')
+    const nav = tabs('/errands/mine')
+
+    expect(nav.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['Request help', '/errands/new'],
+      ['My errands', '/errands/mine'],
+    ])
+    expect(nav.getByRole('link', { name: 'My errands' })).toHaveAttribute('aria-current', 'page')
+    expect(nav.getByRole('link', { name: 'Request help' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('shows Run errands and My errands to a courier', () => {
+    signIn(COURIER_ID, 'COURIER')
+    const nav = tabs('/errands/browse')
+
+    expect(nav.getAllByRole('link').map((link) => link.textContent)).toEqual(['Run errands', 'My errands'])
+    expect(nav.getByRole('link', { name: 'Run errands' })).toHaveAttribute('aria-current', 'page')
   })
 })

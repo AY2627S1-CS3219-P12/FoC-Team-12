@@ -187,16 +187,6 @@ describe('CreateErrandPage', () => {
     expect(await screen.findByText('must not be blank')).toBeInTheDocument()
   })
 
-  it('tells a courier session to switch to Requester', async () => {
-    signIn(REQUESTER_ID, 'COURIER')
-    vi.stubGlobal('fetch', api().fetchMock)
-    renderPage()
-
-    expect(
-      await screen.findByText(/needs a Requester session/),
-    ).toBeInTheDocument()
-  })
-
   it('validate rejects a past deadline and non-whole rewards', () => {
     const base = {
       title: 't',

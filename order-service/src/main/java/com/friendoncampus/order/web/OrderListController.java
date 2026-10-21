@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.friendoncampus.order.service.MyOrdersFilter;
 import com.friendoncampus.order.service.OrderPaging;
 import com.friendoncampus.order.service.OrderPoolQuery;
 import com.friendoncampus.order.service.OrderQueryService;
@@ -90,22 +91,29 @@ public class OrderListController {
 
     @Operation(
             operationId = "listMyRequestedOrders",
-            summary = "My finished requests",
-            description = "The caller's own orders in COMPLETED, CANCELLED or EXPIRED, newest state "
-                    + "change first.")
+            summary = "My requests",
+            description = "The caller's own orders. status=past (default): COMPLETED, CANCELLED or "
+                    + "EXPIRED, newest state change first. status=active: PENDING_CREDIT, OPEN, ACCEPTED, "
+                    + "PICKED_UP or DELIVERED, soonest pickup deadline first. RESERVATION_FAILED is never "
+                    + "listed.")
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Page of the caller's finished requests",
+                    description = "Page of the caller's requests",
                     content = @Content(schema = @Schema(implementation = OrderPageResponse.class))),
             @ApiResponse(
                     responseCode = "400",
-                    description = "INVALID_QUERY: malformed or out-of-range paging value",
+                    description = "INVALID_QUERY: malformed status, state or paging value",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
     })
     @GetMapping("/me/requested")
     public OrderPageResponse listMyRequestedOrders(
             @AuthenticationPrincipal Jwt jwt,
+            @Parameter(description = "past (default): finished orders, newest first; active: in progress, soonest deadline first",
+                    schema = @Schema(type = "string", allowableValues = {"active", "past"}, defaultValue = "past"))
+            @RequestParam(required = false) String status,
+            @Parameter(description = "Only this state; must be one the chosen list contains")
+            @RequestParam(required = false) String state,
             @Parameter(description = "Zero-based page number",
                     schema = @Schema(type = "integer", minimum = "0", defaultValue = "0"))
             @RequestParam(required = false) String page,
@@ -113,26 +121,34 @@ public class OrderListController {
                     schema = @Schema(type = "integer", minimum = "1", maximum = "50", defaultValue = "20"))
             @RequestParam(required = false) String size) {
         return OrderPageResponse.from(
-                orderQueryService.findRequestedHistory(callerId(jwt), OrderPaging.from(page, size)));
+                orderQueryService.findRequested(callerId(jwt), MyOrdersFilter.from(status, state),
+                        OrderPaging.from(page, size)));
     }
 
     @Operation(
             operationId = "listMyDeliveredOrders",
-            summary = "My completed deliveries",
-            description = "COMPLETED orders the caller delivered as courier, newest completion first.")
+            summary = "My deliveries",
+            description = "Orders the caller runs as courier. status=past (default): COMPLETED, newest "
+                    + "completion first. status=active: ACCEPTED, PICKED_UP or DELIVERED, soonest pickup "
+                    + "deadline first.")
     @ApiResponses({
             @ApiResponse(
                     responseCode = "200",
-                    description = "Page of the caller's completed deliveries",
+                    description = "Page of the caller's deliveries",
                     content = @Content(schema = @Schema(implementation = OrderPageResponse.class))),
             @ApiResponse(
                     responseCode = "400",
-                    description = "INVALID_QUERY: malformed or out-of-range paging value",
+                    description = "INVALID_QUERY: malformed status, state or paging value",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
     })
     @GetMapping("/me/delivered")
     public OrderPageResponse listMyDeliveredOrders(
             @AuthenticationPrincipal Jwt jwt,
+            @Parameter(description = "past (default): finished orders, newest first; active: in progress, soonest deadline first",
+                    schema = @Schema(type = "string", allowableValues = {"active", "past"}, defaultValue = "past"))
+            @RequestParam(required = false) String status,
+            @Parameter(description = "Only this state; must be one the chosen list contains")
+            @RequestParam(required = false) String state,
             @Parameter(description = "Zero-based page number",
                     schema = @Schema(type = "integer", minimum = "0", defaultValue = "0"))
             @RequestParam(required = false) String page,
@@ -140,7 +156,8 @@ public class OrderListController {
                     schema = @Schema(type = "integer", minimum = "1", maximum = "50", defaultValue = "20"))
             @RequestParam(required = false) String size) {
         return OrderPageResponse.from(
-                orderQueryService.findDeliveredHistory(callerId(jwt), OrderPaging.from(page, size)));
+                orderQueryService.findDelivered(callerId(jwt), MyOrdersFilter.from(status, state),
+                        OrderPaging.from(page, size)));
     }
 
     private static UUID callerId(Jwt jwt) {

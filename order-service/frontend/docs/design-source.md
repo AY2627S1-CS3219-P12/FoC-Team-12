@@ -9,7 +9,7 @@ The frames were shared as screenshots, so node IDs are not recorded yet.
 | Errand details | `/errands/:orderId` (viewer is not a participant) | Accept with confirmation |
 | Courier active order ("You're the courier") | `/errands/:orderId` (viewer is the courier) | Pick up, deliver, withdraw |
 | Requester active order ("Have you received…") | `/errands/:orderId` (viewer is the requester) | Confirm receipt, cancel |
-| My errands (no frame; uses the same cards) | `/errands/mine` | F9 history lists |
+| My errands (no frame; uses the same cards) | `/errands/mine` | F9: Active and Past errands for the header role (Requester: posted; Courier: running and delivered) |
 | Create errand ("Request a hand") | `/errands/new` | Post an errand; "Your credits" card |
 
 ## Visual language
@@ -41,5 +41,8 @@ The backend contract wins over example data in Figma:
   credit account yet, or when the reward is higher than the available credits. Credit still has the
   final say: a reservation it rejects later (for example two errands posted at once) shows as
   "Not enough credits" on the errand.
-- **Requester/Courier tabs** ("Request help" / "Run errands") map to the session role switch in the
-  header, because the API authorises actions by the session role.
+- **Requester/Courier tabs** follow the session role switch in the header, because the API
+  authorises actions by the session role. A Requester sees **Request help · My errands**, a Courier
+  **Run errands · My errands**, as side-by-side text tabs with an underline on the current one.
+  Opening the other role's screen, or switching role while on one, goes to the current role's own
+  screen (`/errands/new` for Requester, `/errands/browse` for Courier).

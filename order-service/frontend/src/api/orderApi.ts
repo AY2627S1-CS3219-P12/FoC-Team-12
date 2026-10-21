@@ -126,8 +126,16 @@ export function fetchHistory(id: string): Promise<OrderTransition[]> {
   return request<OrderTransition[]>(`/api/orders/${encodeURIComponent(id)}/history`)
 }
 
-export function fetchMyOrders(kind: 'requested' | 'delivered', page: number): Promise<OrderPage> {
-  return request<OrderPage>(`/api/orders/me/${kind}?page=${page}&size=20`)
+/** The caller's own errands: `active` (in progress) or `past` (finished), optionally one state. */
+export function fetchMyOrders(
+  kind: 'requested' | 'delivered',
+  status: 'active' | 'past',
+  page: number,
+  state?: OrderState,
+): Promise<OrderPage> {
+  const params = new URLSearchParams({ status, page: String(page), size: '20' })
+  if (state) params.set('state', state)
+  return request<OrderPage>(`/api/orders/me/${kind}?${params}`)
 }
 
 export function performAction(id: string, action: OrderAction): Promise<Order> {

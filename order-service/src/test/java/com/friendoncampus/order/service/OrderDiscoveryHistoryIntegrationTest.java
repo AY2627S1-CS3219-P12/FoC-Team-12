@@ -1,6 +1,7 @@
 package com.friendoncampus.order.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -265,16 +266,16 @@ class OrderDiscoveryHistoryIntegrationTest {
         CLOCK.advance(Duration.ofSeconds(1));
         UUID someoneElses = completedBy(OTHER_REQUESTER, COURIER);
 
-        Page<Order> history = queryService.findRequestedHistory(REQUESTER, OrderPaging.from(null, null));
+        Page<Order> history = queryService.findRequested(REQUESTER, MyOrdersFilter.PAST, OrderPaging.from(null, null));
 
         assertThat(ids(history)).containsExactly(completed, cancelled, expired);
         assertThat(ids(history)).doesNotContain(open, failed, pending, accepted, someoneElses);
         assertThat(history.getTotalElements()).isEqualTo(3);
 
-        Page<Order> firstPage = queryService.findRequestedHistory(REQUESTER, OrderPaging.from("0", "2"));
+        Page<Order> firstPage = queryService.findRequested(REQUESTER, MyOrdersFilter.PAST, OrderPaging.from("0", "2"));
         assertThat(ids(firstPage)).containsExactly(completed, cancelled);
         assertThat(firstPage.getTotalPages()).isEqualTo(2);
-        assertThat(ids(queryService.findRequestedHistory(OTHER_REQUESTER, OrderPaging.from(null, null))))
+        assertThat(ids(queryService.findRequested(OTHER_REQUESTER, MyOrdersFilter.PAST, OrderPaging.from(null, null))))
                 .containsExactly(someoneElses);
     }
 
@@ -292,14 +293,76 @@ class OrderDiscoveryHistoryIntegrationTest {
         orderService.accept(cancelledAfterAccept, COURIER);
         orderService.cancel(cancelledAfterAccept, REQUESTER);
 
-        Page<Order> history = queryService.findDeliveredHistory(COURIER, OrderPaging.from(null, null));
+        Page<Order> history = queryService.findDelivered(COURIER, MyOrdersFilter.PAST, OrderPaging.from(null, null));
 
         assertThat(ids(history)).containsExactly(newer, older);
         assertThat(ids(history)).doesNotContain(byOtherCourier, inProgress, cancelledAfterAccept);
-        assertThat(ids(queryService.findDeliveredHistory(OTHER_COURIER, OrderPaging.from(null, null))))
+        assertThat(ids(queryService.findDelivered(OTHER_COURIER, MyOrdersFilter.PAST, OrderPaging.from(null, null))))
                 .containsExactly(byOtherCourier);
         // A requester is never a courier of their own order, so their delivered list is empty.
-        assertThat(queryService.findDeliveredHistory(REQUESTER, OrderPaging.from(null, null)).getContent())
+        assertThat(queryService.findDelivered(REQUESTER, MyOrdersFilter.PAST, OrderPaging.from(null, null)).getContent())
                 .isEmpty();
+    }
+
+    @Test
+    void requesterActiveListHasTheirInProgressOrdersSoonestDeadlineFirst() {
+        UUID later = open(10, Duration.ofHours(3));
+        UUID pending = createOrder(REQUESTER, "COM1", UUID.randomUUID(), UUID.randomUUID(), 10, Duration.ofHours(2));
+        UUID soonest = open(10, Duration.ofHours(1));
+        orderService.accept(soonest, COURIER);
+        UUID failed = createOrder(REQUESTER, "COM1", UUID.randomUUID(), UUID.randomUUID(), 10, Duration.ofMinutes(30));
+        orderService.rejectReservation(failed);
+        UUID cancelled = open(10, Duration.ofMinutes(20));
+        orderService.cancel(cancelled, REQUESTER);
+        UUID someoneElses = open(OTHER_REQUESTER, "COM1", UUID.randomUUID(), UUID.randomUUID(), 10, Duration.ofMinutes(10));
+
+        MyOrdersFilter active = MyOrdersFilter.from("active", null);
+        assertThat(ids(queryService.findRequested(REQUESTER, active, OrderPaging.from(null, null))))
+                .containsExactly(soonest, pending, later);
+        assertThat(ids(queryService.findRequested(REQUESTER, MyOrdersFilter.from("active", "OPEN"),
+                OrderPaging.from(null, null)))).containsExactly(later);
+        assertThat(ids(queryService.findRequested(REQUESTER, active, OrderPaging.from(null, null))))
+                .doesNotContain(failed, cancelled, someoneElses);
+    }
+
+    @Test
+    void pastListCanBeNarrowedToOneFinishedState() {
+        UUID cancelled = open(10, Duration.ofHours(1));
+        orderService.cancel(cancelled, REQUESTER);
+        UUID completed = completedBy(REQUESTER, COURIER);
+
+        assertThat(ids(queryService.findRequested(REQUESTER, MyOrdersFilter.from("past", "CANCELLED"),
+                OrderPaging.from(null, null)))).containsExactly(cancelled);
+        assertThat(ids(queryService.findRequested(REQUESTER, MyOrdersFilter.from(null, "COMPLETED"),
+                OrderPaging.from(null, null)))).containsExactly(completed);
+        assertThatThrownBy(() -> queryService.findRequested(REQUESTER, MyOrdersFilter.from("past", "OPEN"),
+                OrderPaging.from(null, null))).isInstanceOf(InvalidOrderQueryException.class);
+        assertThatThrownBy(() -> queryService.findRequested(REQUESTER,
+                MyOrdersFilter.from("past", "RESERVATION_FAILED"), OrderPaging.from(null, null)))
+                .isInstanceOf(InvalidOrderQueryException.class);
+    }
+
+    @Test
+    void courierActiveListHasErrandsStillAssignedToThem() {
+        UUID accepted = open(10, Duration.ofHours(3));
+        orderService.accept(accepted, COURIER);
+        UUID pickedUp = open(10, Duration.ofHours(2));
+        orderService.accept(pickedUp, COURIER);
+        orderService.pickUp(pickedUp, COURIER);
+        UUID delivered = open(10, Duration.ofHours(1));
+        orderService.accept(delivered, COURIER);
+        orderService.pickUp(delivered, COURIER);
+        orderService.deliver(delivered, COURIER);
+        UUID withdrawn = open(10, Duration.ofMinutes(50));
+        orderService.accept(withdrawn, COURIER);
+        orderService.withdraw(withdrawn, COURIER);
+        UUID completed = completedBy(REQUESTER, COURIER);
+        UUID otherCouriers = open(10, Duration.ofMinutes(40));
+        orderService.accept(otherCouriers, OTHER_COURIER);
+
+        assertThat(ids(queryService.findDelivered(COURIER, MyOrdersFilter.from("active", null),
+                OrderPaging.from(null, null)))).containsExactly(delivered, pickedUp, accepted);
+        assertThat(ids(queryService.findDelivered(COURIER, MyOrdersFilter.from("active", null),
+                OrderPaging.from(null, null)))).doesNotContain(withdrawn, completed, otherCouriers);
     }
 }
