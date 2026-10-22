@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: user-service
-          image: arkanian4/foc-user-service:sha-4b846e8ef3113ca5cea3182b40bfdcbea383ad57-r39123715582-1
+          image: arkanian4/foc-user-service:sha-45c857fbb7f4eb5eac2014f916540346e8e171c0-r39280499271-1
           ports:
             - containerPort: 8081
           env:
