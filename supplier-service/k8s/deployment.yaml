@@ -16,7 +16,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: supplier-service
-          image: arkanian4/foc-supplier-service:d3-1
+          image: arkanian4/foc-supplier-service:sha-7ff7340a86c4db7defae41b25267c53964066c86-r39623111914-1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080
