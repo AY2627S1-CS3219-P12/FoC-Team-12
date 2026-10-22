@@ -235,6 +235,26 @@ class OrderListControllerTest {
     }
 
     @Test
+    void adminListsUseThePathUserWithTheSameFilters() throws Exception {
+        UUID user = UUID.randomUUID();
+        mockMvc.perform(get("/api/orders/admin/users/{id}/requested", user).param("status", "active"))
+                .andExpect(status().isOk());
+        verify(queryService).findRequested(user,
+                new MyOrdersFilter(MyOrdersFilter.Status.ACTIVE, null), new OrderPaging(0, 20));
+        mockMvc.perform(get("/api/orders/admin/users/{id}/delivered", user).param("page", "1"))
+                .andExpect(status().isOk());
+        verify(queryService).findDelivered(user, MyOrdersFilter.PAST, new OrderPaging(1, 20));
+    }
+
+    @Test
+    void adminListsRejectAMalformedUserId() throws Exception {
+        mockMvc.perform(get("/api/orders/admin/users/not-a-uuid/requested"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+        verifyNoInteractions(queryService);
+    }
+
+    @Test
     void historyRejectsInvalidPaging() throws Exception {
         mockMvc.perform(get("/api/orders/me/requested").param("size", "100"))
                 .andExpect(status().isBadRequest())

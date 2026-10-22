@@ -291,6 +291,46 @@ class OrderSecurityIntegrationTest {
     }
 
     @Test
+    void onlyAnAdminSessionMayListAnotherUsersOrders() throws Exception {
+        org.springframework.data.domain.Page<Order> empty = org.springframework.data.domain.Page.empty();
+        when(orderQueryService.findRequested(any(), any(), any())).thenReturn(empty);
+        when(orderQueryService.findDelivered(any(), any(), any())).thenReturn(empty);
+        UUID requester = UUID.randomUUID();
+        for (String path : List.of("/api/orders/admin/users/" + requester + "/requested",
+                "/api/orders/admin/users/" + requester + "/delivered")) {
+            HttpResponse<String> anonymous = http.send(HttpRequest.newBuilder()
+                    .uri(URI.create("http://localhost:" + port + path))
+                    .GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(anonymous.statusCode()).as(path).isEqualTo(401);
+            for (String role : List.of("REQUESTER", "COURIER")) {
+                assertThat(getAs(path, role).statusCode()).as(path + " as " + role).isEqualTo(403);
+            }
+            assertThat(getAs(path, "ADMIN").statusCode()).as(path + " as ADMIN").isEqualTo(200);
+        }
+        verify(orderQueryService).findRequested(org.mockito.ArgumentMatchers.eq(requester), any(), any());
+        verify(orderQueryService).findDelivered(org.mockito.ArgumentMatchers.eq(requester), any(), any());
+    }
+
+    @Test
+    void adminRoutesAcceptNoWrites() throws Exception {
+        HttpResponse<String> response = http.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/api/orders/admin/users/" + UUID.randomUUID()
+                        + "/requested"))
+                .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, "ADMIN",
+                        Instant.now().plusSeconds(600)))
+                .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(403);
+    }
+
+    private HttpResponse<String> getAs(String path, String role) throws Exception {
+        return http.send(HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + path))
+                .header("Authorization", "Bearer " + token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role,
+                        Instant.now().plusSeconds(600)))
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
     void anUnexpectedServerErrorIsReportedAs500NotForbidden() throws Exception {
         when(orderService.getOrder(any(), any())).thenThrow(new IllegalStateException("boom"));
 

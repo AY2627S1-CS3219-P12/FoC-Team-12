@@ -248,6 +248,10 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   - An optional `state` narrows either list to one of its own states.
   - `RESERVATION_FAILED` is never listed: such an errand was not posted. *(Confirmed by XueTing,
     2026-10-18 and 2026-10-20.)*
+- **`GET /api/orders/admin/users/{userId}/requested` and `/delivered`:** an ADMIN-session,
+  read-only support view of another user's requested or delivered orders, with the same
+  `status`/`state`/paging rules as the caller's own lists. Requester and Courier sessions get `403`,
+  and the admin routes accept no writes. Admins act on orders only through these reads.
 - **`GET /api/orders/me/delivered`:** orders the caller runs as courier (F9.2).
   - `status=past` (default): `COMPLETED`. `status=active`: `ACCEPTED`, `PICKED_UP` or `DELIVERED`.
   - Past shows completed deliveries only: an order the courier withdrew from, or that was cancelled
