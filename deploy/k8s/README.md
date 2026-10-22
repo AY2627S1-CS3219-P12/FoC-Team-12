@@ -156,6 +156,11 @@ mail provider with local Secrets before testing new-account login; do not bypass
 
 ## Recovery and data
 
+For enforced pod-to-pod restrictions, see [NetworkPolicies](network/README.md). The normal
+Kindnet cluster needs a policy enforcement provider; creating policy objects alone is not proof.
+The optional helper validates a disposable allow/deny test before isolating application pods,
+preserves existing storage/images, and documents rollback and administrative-access limitations.
+
 Each PostgreSQL StatefulSet remains at one replica and uses its own retained claim from Minikube's
 default StorageClass. Claim retention is not a backup: deleting a PVC/profile may remove data.
 Compose volumes are independent.

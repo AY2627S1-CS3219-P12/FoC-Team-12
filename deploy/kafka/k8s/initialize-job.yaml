@@ -7,6 +7,9 @@ spec:
   activeDeadlineSeconds: 1200
   ttlSecondsAfterFinished: 3600
   template:
+    metadata:
+      labels:
+        app: kafka-init
     spec:
       automountServiceAccountToken: false
       enableServiceLinks: false
