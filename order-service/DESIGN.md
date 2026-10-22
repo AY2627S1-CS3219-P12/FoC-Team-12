@@ -183,7 +183,10 @@ Consumer rules (`messaging/CreditOutcomeHandler`), in one transaction:
 - **Terminal states:** `COMPLETED`, `CANCELLED`, `EXPIRED`, `RESERVATION_FAILED`.
   - `terminal_reason` records why.
   - Values: `REQUESTER_CANCELLED_OPEN`, `REQUESTER_CANCELLED_ACCEPTED`, `PICKUP_DEADLINE_PASSED`,
-    `COURIER_WITHDREW_AFTER_DEADLINE`, `CREDIT_RESERVATION_REJECTED`.
+    `COURIER_WITHDREW_AFTER_DEADLINE`, and for `RESERVATION_FAILED` one of `INSUFFICIENT_CREDITS`,
+    `CREDIT_ACCOUNT_NOT_FOUND` (Credit's `reasonCode` of the same name) or
+    `CREDIT_RESERVATION_REJECTED` (any other or missing `reasonCode`).
+  - The client uses the reservation reason to explain why an errand could not be posted.
 
 ## Transition table
 
@@ -195,7 +198,7 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
 | T1 | ∅ → PENDING_CREDIT | `POST /api/orders` | Any user, REQUESTER session; becomes R | Valid fields (F1.1.2), including the client-supplied location IDs and names; deadline > now | Credit **reserves** `creditReward` | `OrderSubmitted` | 400 errors map, 403 |
 | T2 | PENDING_CREDIT → OPEN | `CreditReserved` reply | Sys | State is PENDING_CREDIT and now < deadline; store `credit_reservation_id` | none | history only | Duplicate reply is ignored |
 | T2b | PENDING_CREDIT → EXPIRED | `CreditReserved` reply arrives at or after the deadline | Sys | now ≥ deadline | **Release** the full reservation | `OrderExpired` (reason `PICKUP_DEADLINE_PASSED`) | — |
-| T3 | PENDING_CREDIT → RESERVATION_FAILED | `CreditReservationRejected` reply | Sys | State is PENDING_CREDIT | none | history only | — |
+| T3 | PENDING_CREDIT → RESERVATION_FAILED | `CreditReservationRejected` reply | Sys | State is PENDING_CREDIT; `terminal_reason` from `reasonCode` | none | history only | — |
 | T4 | OPEN → OPEN (details) | `PATCH /api/orders/{id}` with `version` | R | OPEN, no pending adjustment, version matches, valid fields, deadline > now | none (unless the reward changed, see T5) | history only | 400, 403 `NOT_ORDER_REQUESTER`, 409 `VERSION_CONFLICT` / `INVALID_STATE_TRANSITION` / `REWARD_ADJUSTMENT_PENDING` |
 | T5 | OPEN → OPEN (reward requested) | The same `PATCH` with a different `creditReward` | R | As T4; set `pending_credit_reward` and leave `credit_reward` unchanged | Credit **adjusts**: reserves the extra if affordable, or releases the difference | `OrderRewardChangeRequested` | As T4 |
 | T5a | OPEN → OPEN (reward applied) | `CreditAdjusted` reply | Sys | Pending value matches the reply | Already applied by Credit | history only | Ignored if the order is no longer OPEN |

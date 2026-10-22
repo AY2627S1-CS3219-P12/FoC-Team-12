@@ -277,7 +277,7 @@ courier (session role `COURIER`), **Sys** = the expiry scheduler or a Credit rep
 | — | PENDING_CREDIT | R | Valid fields; deadline in the future | Reserve the reward | `OrderSubmitted` |
 | PENDING_CREDIT | OPEN | Sys | `CreditReserved` before the deadline | — | (history only) |
 | PENDING_CREDIT | EXPIRED | Sys | `CreditReserved` at or after the deadline | Release in full | `OrderExpired` |
-| PENDING_CREDIT | RESERVATION_FAILED | Sys | `CreditReservationRejected` | — | (history only) |
+| PENDING_CREDIT | RESERVATION_FAILED | Sys | `CreditReservationRejected`; `terminalReason` is `INSUFFICIENT_CREDITS`, `CREDIT_ACCOUNT_NOT_FOUND` or `CREDIT_RESERVATION_REJECTED` (other reason codes) | — | (history only) |
 | OPEN | OPEN (edit) | R | No reward adjustment pending; `version` matches | Adjust if the reward changed; the new reward applies only after `CreditAdjusted` | `OrderRewardChangeRequested` if the reward changed |
 | OPEN | CANCELLED | R | — | Release in full, no compensation | `OrderCancelled` |
 | OPEN | EXPIRED | Sys | `now >= pickupDeadline` | Release in full | `OrderExpired` |

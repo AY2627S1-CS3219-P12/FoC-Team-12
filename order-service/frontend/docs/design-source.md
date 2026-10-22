@@ -38,9 +38,14 @@ The backend contract wins over example data in Figma:
 - **"Your credits"** reads the caller's own balance from Credit's `GET /api/credits/me` in the
   browser (Order Service never calls Credit). **Post errand is disabled** unless that balance is
   confirmed and covers the reward: while it loads, when Credit is unavailable, when the user has no
-  credit account yet, or when the reward is higher than the available credits. Credit still has the
-  final say: a reservation it rejects later (for example two errands posted at once) shows as
-  "Not enough credits" on the errand.
+  credit account yet, or when the reward is higher than the available credits.
+- **Posting waits for the reservation.** After Post errand the form locks ("Reserving your
+  credits…") and the page reads the new errand every second. It opens the errand once Credit
+  reserves the reward. If Credit rejects it (for example two errands posted at once), the form
+  stays filled in and explains why from the errand's `terminalReason`: not enough credits, no
+  credit account (with a link to set it up), or a generic retry message; a deadline that passes
+  while waiting is explained too. After 30 seconds without an answer the form unlocks and links to
+  the errand, which opens on its own once Credit answers.
 - **Requester/Courier tabs** follow the session role switch in the header, because the API
   authorises actions by the session role. A Requester sees **Request help · My errands**, a Courier
   **Run errands · My errands**, as side-by-side text tabs with an underline on the current one.

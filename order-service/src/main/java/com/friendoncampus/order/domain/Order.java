@@ -173,10 +173,10 @@ public class Order {
     }
 
     /** Credit rejected the reservation, for example because of insufficient credits. */
-    public OrderTransition failReservation(OffsetDateTime now) {
+    public OrderTransition failReservation(TerminalReason reason, OffsetDateTime now) {
         requireState(OrderAction.FAIL_RESERVATION, OrderState.PENDING_CREDIT);
         return moveTo(OrderAction.FAIL_RESERVATION, OrderState.RESERVATION_FAILED, null,
-                ActorRole.SYSTEM, null, TerminalReason.CREDIT_RESERVATION_REJECTED,
+                ActorRole.SYSTEM, null, reason,
                 CreditEffect.NONE, "OrderReservationFailed", now);
     }
 

@@ -97,3 +97,48 @@ export function creditCheck(
       return { canPost: true, message: null }
   }
 }
+
+/** How long Post errand waits for Credit to answer before handing over to the errand page. */
+export const RESERVATION_WAIT_MS = 30_000
+export const RESERVATION_POLL_MS = 1_000
+
+/** Where a just-posted errand's reservation stands, from the order's state and terminal reason. */
+export type ReservationOutcome =
+  | { kind: 'waiting' }
+  | { kind: 'reserved' }
+  | { kind: 'failed'; message: string; setUpCredits: boolean }
+
+export function reservationOutcome(
+  state: string,
+  terminalReason: string | null,
+  reward: number,
+): ReservationOutcome {
+  if (state === 'PENDING_CREDIT') return { kind: 'waiting' }
+  if (state === 'RESERVATION_FAILED') {
+    if (terminalReason === 'INSUFFICIENT_CREDITS')
+      return {
+        kind: 'failed',
+        message: `Not enough credits to reserve ${reward} ${reward === 1 ? 'credit' : 'credits'}. Lower the reward and post again.`,
+        setUpCredits: false,
+      }
+    if (terminalReason === 'CREDIT_ACCOUNT_NOT_FOUND')
+      return {
+        kind: 'failed',
+        message: "Your credit account isn't set up yet, so the errand wasn't posted.",
+        setUpCredits: true,
+      }
+    return {
+      kind: 'failed',
+      message: "We couldn't reserve your credits, so the errand wasn't posted. Please try again.",
+      setUpCredits: false,
+    }
+  }
+  if (state === 'EXPIRED')
+    return {
+      kind: 'failed',
+      message:
+        'The pickup time passed before your credits were reserved. Choose a later time and post again.',
+      setUpCredits: false,
+    }
+  return { kind: 'reserved' }
+}

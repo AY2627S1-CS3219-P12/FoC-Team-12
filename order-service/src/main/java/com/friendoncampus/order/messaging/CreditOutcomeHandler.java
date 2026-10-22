@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.friendoncampus.order.domain.CreditStatus;
 import com.friendoncampus.order.domain.Order;
+import com.friendoncampus.order.domain.TerminalReason;
 import com.friendoncampus.order.repository.OrderRepository;
 import com.friendoncampus.order.repository.OutboxEventRepository;
 import com.friendoncampus.order.repository.ProcessedEventRepository;
@@ -116,7 +117,8 @@ public class CreditOutcomeHandler {
             }
             case "CreditReservationRejected" -> {
                 requireCommand(command, "OrderSubmitted", eventType);
-                orderService.rejectReservation(orderId);
+                orderService.rejectReservation(orderId,
+                        TerminalReason.forReservationRejection(text(data, "reasonCode")));
             }
             case "CreditAdjusted", "CreditAdjustmentRejected" -> {
                 requireCommand(command, "OrderRewardChangeRequested", eventType);

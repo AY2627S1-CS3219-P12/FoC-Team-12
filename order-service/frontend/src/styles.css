@@ -181,3 +181,4 @@ dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
 .errand-tab:hover { color: var(--ink); }
 .errand-tab[aria-current='page'] { border-bottom-color: var(--action); color: var(--action); }
 .errand-tab:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; border-radius: 0.25rem; }
+.errand-fields { display: grid; gap: 1rem; margin: 0; padding: 0; border: 0; min-width: 0; }

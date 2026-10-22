@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -96,12 +97,22 @@ class OrderTest {
     void failReservationEndsAPendingOrder() {
         Order order = order(OrderState.PENDING_CREDIT);
 
-        OrderTransition transition = order.failReservation(NOW);
+        OrderTransition transition = order.failReservation(TerminalReason.INSUFFICIENT_CREDITS, NOW);
 
         assertThat(order.getState()).isEqualTo(OrderState.RESERVATION_FAILED);
-        assertThat(order.getTerminalReason()).isEqualTo(TerminalReason.CREDIT_RESERVATION_REJECTED);
+        assertThat(order.getTerminalReason()).isEqualTo(TerminalReason.INSUFFICIENT_CREDITS);
         assertThat(transition.creditEffect()).isEqualTo(CreditEffect.NONE);
         assertThat(transition.eventType()).isEqualTo("OrderReservationFailed");
+    }
+
+    @ParameterizedTest
+    @CsvSource(nullValues = "NULL", value = {
+            "INSUFFICIENT_CREDITS, INSUFFICIENT_CREDITS",
+            "CREDIT_ACCOUNT_NOT_FOUND, CREDIT_ACCOUNT_NOT_FOUND",
+            "REQUEST_CONFLICT, CREDIT_RESERVATION_REJECTED",
+            "NULL, CREDIT_RESERVATION_REJECTED"})
+    void reservationRejectionReasonCodesMapToTerminalReasons(String reasonCode, TerminalReason expected) {
+        assertThat(TerminalReason.forReservationRejection(reasonCode)).isEqualTo(expected);
     }
 
     @ParameterizedTest
@@ -109,7 +120,7 @@ class OrderTest {
     void failReservationIsRejectedOutsidePendingCredit(OrderState state) {
         Order order = order(state);
 
-        assertThatThrownBy(() -> order.failReservation(NOW))
+        assertThatThrownBy(() -> order.failReservation(TerminalReason.INSUFFICIENT_CREDITS, NOW))
                 .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
                         assertThat(exception.getCode()).isEqualTo(OrderErrorCode.INVALID_STATE_TRANSITION));
         assertThat(order.getState()).isEqualTo(state);

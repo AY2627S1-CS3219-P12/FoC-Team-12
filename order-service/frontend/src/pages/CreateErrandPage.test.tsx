@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -30,8 +30,11 @@ function api(
   overrides: {
     create?: { status?: number; body: unknown }
     credits?: { status?: number; body: unknown }
+    /** Successive GET /api/orders/{id} answers while the page waits; the last one repeats. */
+    reads?: unknown[]
   } = {},
 ) {
+  let read = 0
   return stubFetch((url, init) => {
     if (url.startsWith('/api/suppliers'))
       return { body: { items: [PICKUP, DROPOFF], totalPages: 1 } }
@@ -43,6 +46,11 @@ function api(
       )
     if (url === '/api/orders' && init?.method === 'POST')
       return overrides.create ?? { status: 201, body: order() }
+    if (overrides.reads) {
+      const body = overrides.reads[Math.min(read, overrides.reads.length - 1)]
+      read += 1
+      return { body }
+    }
     return { body: order() }
   })
 }
@@ -295,5 +303,129 @@ describe('CreateErrandPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       'Checking your credits',
     )
+  })
+
+  it('waits for Credit to reserve the reward, then opens the errand', async () => {
+    const pending = order({ state: 'PENDING_CREDIT', creditReward: 3 })
+    vi.stubGlobal(
+      'fetch',
+      api({
+        create: { status: 201, body: pending },
+        reads: [pending, pending, order({ state: 'OPEN', creditReward: 3 })],
+      }).fetchMock,
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    await fillValidForm(user)
+    await user.click(screen.getByRole('button', { name: 'Post errand' }))
+
+    expect(
+      await screen.findByRole('button', { name: 'Reserving your credits…' }),
+    ).toBeDisabled()
+    expect(screen.getByLabelText('Errand title')).toBeDisabled()
+    expect(
+      await screen.findByRole(
+        'heading',
+        { name: 'Errand page' },
+        { timeout: 4000 },
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('stays on the form and says when there are not enough credits', async () => {
+    const pending = order({ state: 'PENDING_CREDIT', creditReward: 3 })
+    vi.stubGlobal(
+      'fetch',
+      api({
+        create: { status: 201, body: pending },
+        reads: [
+          order({
+            state: 'RESERVATION_FAILED',
+            terminalReason: 'INSUFFICIENT_CREDITS',
+            creditReward: 3,
+          }),
+        ],
+      }).fetchMock,
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    await fillValidForm(user)
+    await user.click(screen.getByRole('button', { name: 'Post errand' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Not enough credits to reserve 3 credits. Lower the reward and post again.',
+    )
+    expect(
+      screen.queryByRole('heading', { name: 'Errand page' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Errand title')).toHaveValue(
+      'Collect my printed notes',
+    )
+    expect(screen.getByLabelText('Errand title')).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Post errand' })).toBeEnabled()
+
+    await user.clear(screen.getByLabelText('Reward (credits)'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('links to credit set-up when Credit has no account for the requester', async () => {
+    vi.stubGlobal(
+      'fetch',
+      api({
+        create: { status: 201, body: order({ state: 'PENDING_CREDIT' }) },
+        reads: [
+          order({
+            state: 'RESERVATION_FAILED',
+            terminalReason: 'CREDIT_ACCOUNT_NOT_FOUND',
+          }),
+        ],
+      }).fetchMock,
+    )
+    const user = userEvent.setup()
+    renderPage()
+
+    await fillValidForm(user)
+    await user.click(screen.getByRole('button', { name: 'Post errand' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent("Your credit account isn't set up yet")
+    expect(
+      screen.getByRole('link', { name: 'Set up your credits' }),
+    ).toHaveAttribute('href', '/credits')
+  })
+
+  it('hands over to the errand after 30 seconds without an answer', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      const pending = order({ state: 'PENDING_CREDIT' })
+      vi.stubGlobal(
+        'fetch',
+        api({ create: { status: 201, body: pending }, reads: [pending] })
+          .fetchMock,
+      )
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      renderPage()
+
+      await fillValidForm(user)
+      await user.click(screen.getByRole('button', { name: 'Post errand' }))
+      await screen.findByRole('button', { name: 'Reserving your credits…' })
+
+      await act(() => vi.advanceTimersByTimeAsync(30_000))
+
+      expect(
+        await screen.findByText(/Credit is taking longer than usual/),
+      ).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'View errand' })).toHaveAttribute(
+        'href',
+        `/errands/${pending.id}`,
+      )
+      expect(
+        screen.queryByRole('heading', { name: 'Errand page' }),
+      ).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
