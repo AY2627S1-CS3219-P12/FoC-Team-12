@@ -20,15 +20,27 @@ function Invoke-Kubectl {
     return $result
 }
 function Assert-Http {
-    param([string] $Url, [int] $Expected, [switch] $InvalidToken)
-    # Reuse curl already included in User's image; no extra diagnostic image or credentials.
-    $curl = @('exec', 'deployment/user-service', '--', 'curl', '--silent', '--show-error',
-        '--max-time', '20', '--output', '/dev/null', '--write-out', '%{http_code}')
-    if ($InvalidToken) { $curl += @('--header', 'Authorization: Bearer invalid-token') }
-    if ($Expected -eq 200) {
-        $curl += @('--fail', '--retry', '12', '--retry-delay', '2', '--retry-all-errors')
+    param([string] $Url, [int] $Expected, [switch] $InvalidToken,
+        [ValidateSet('GET','POST')][string] $Method = 'GET')
+    # Gateway is the authorized caller of backends under NetworkPolicies. Its JRE image
+    # has bash/coreutils, so no diagnostic container or cross-service exception is needed.
+    $uri = [Uri]$Url
+    if ($uri.Scheme -ne 'http') { throw 'This local smoke helper expects HTTP endpoints.' }
+    $target = if ($uri.Host -eq 'gateway') { '127.0.0.1' } else { $uri.Host }
+    $request = "$Method $($uri.PathAndQuery) HTTP/1.1`r`nHost: $($uri.Authority)`r`nConnection: close`r`n"
+    if ($Method -eq 'POST') { $request += "Content-Length: 0`r`n" }
+    if ($InvalidToken) { $request += "Authorization: Bearer invalid-token`r`n" }
+    $request += "`r`n"
+    $status = ''
+    $attempts = if ($Expected -eq 200) { 13 } else { 1 }
+    for ($attempt = 0; $attempt -lt $attempts; $attempt++) {
+        $line = $request | & $minikube -p $Profile kubectl -- "--context=$Profile" -n foc-local `
+            exec -i deployment/gateway -- timeout 20 bash -c `
+            'exec 3<>/dev/tcp/"$1"/"$2"; cat >&3; IFS= read -r response <&3; printf "%s" "$response"' bash $target "$($uri.Port)"
+        if ($LASTEXITCODE -eq 0 -and ($line -join '') -match '^HTTP/\S+\s+(\d{3})') { $status = $Matches[1] }
+        if ($status -eq "$Expected") { break }
+        if ($attempt + 1 -lt $attempts) { Start-Sleep -Seconds 2 }
     }
-    $status = Invoke-Kubectl ($curl + $Url)
     if ("$status" -ne "$Expected") { throw "$Url expected $Expected, received $status" }
     Write-Host "PASS $Expected $Url"
 }
@@ -65,18 +77,9 @@ switch ($Service) {
     order {
         Assert-Http "$base/api/orders" 401 -InvalidToken
         # An unauthenticated creation must fail before input validation or mutation.
-        $status = Invoke-Kubectl @('exec', 'deployment/user-service', '--', 'curl',
-            '--silent', '--show-error', '--max-time', '20', '--output', '/dev/null',
-            '--write-out', '%{http_code}', '--request', 'POST', "$base/api/orders")
-        if ("$status" -ne '401') { throw "Order creation without JWT returned $status" }
-        Write-Host 'PASS 401 unauthenticated Order creation'
+        Assert-Http "$base/api/orders" 401 -Method POST
         Assert-Http 'http://gateway:8088/docs/order/openapi.json' 200
-        $status = Invoke-Kubectl @('exec', 'deployment/user-service', '--', 'curl',
-            '--silent', '--show-error', '--max-time', '20', '--output', '/dev/null',
-            '--write-out', '%{http_code}', '--request', 'POST',
-            'http://gateway:8088/api/orders')
-        if ("$status" -ne '401') { throw "Gateway Order creation without JWT returned $status" }
-        Write-Host 'PASS 401 Order creation through the gateway'
+        Assert-Http 'http://gateway:8088/api/orders' 401 -Method POST
     }
 }
 
