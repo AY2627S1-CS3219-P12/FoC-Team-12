@@ -155,6 +155,17 @@ export type CreateOrderInput = {
   pickupDeadline: string
 }
 
+/** Body of PATCH /api/orders/{id} (UpdateOrderRequest): every editable field plus the version read. */
+export type UpdateOrderInput = CreateOrderInput & { version: number }
+
+export function updateOrder(id: string, input: UpdateOrderInput): Promise<Order> {
+  return request<Order>(`/api/orders/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+}
+
 export function createOrder(input: CreateOrderInput): Promise<Order> {
   return request<Order>('/api/orders', {
     method: 'POST',

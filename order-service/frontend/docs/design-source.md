@@ -11,6 +11,7 @@ The frames were shared as screenshots, so node IDs are not recorded yet.
 | Requester active order ("Have you received…") | `/errands/:orderId` (viewer is the requester) | Confirm receipt, cancel |
 | My errands (no frame; uses the same cards) | `/errands/mine` | F9: Active and Past errands for the header role (Requester: posted; Courier: running and delivered) |
 | Create errand ("Request a hand") | `/errands/new` | Post an errand; "Your credits" card |
+| Edit errand (no frame; reuses the Request a hand form) | `/errands/:orderId/edit` | Requester edits an OPEN errand (T4/T5) |
 
 ## Visual language
 
@@ -42,6 +43,12 @@ The backend contract wins over example data in Figma:
 - **A refused reservation names its reason** on the errand page and its status badge, from
   `terminalReason`: "Not enough credits", "Credit account not set up" (with a link to set it up) or
   "Credits couldn't be reserved" ("Not posted" badge) for any other reason.
+- **Editing an errand** is offered only to its requester, in a Requester session, while it is OPEN
+  with no reward change pending. Saving sends the whole form with the `version` that was read.
+  Detail changes apply at once. A new reward waits for Credit like posting does: raising it needs
+  the difference to be available (checked in the browser first), lowering it is always allowed;
+  if Credit refuses, the form stays and says the old reward stands. An errand accepted, expired or
+  edited elsewhere meanwhile is explained, with a reload, instead of being overwritten.
 - **Posting waits for the reservation.** After Post errand the form locks ("Reserving your
   credits…") and the page reads the new errand every second. It opens the errand once Credit
   reserves the reward. If Credit rejects it (for example two errands posted at once), the form

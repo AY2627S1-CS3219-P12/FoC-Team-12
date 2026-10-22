@@ -4,6 +4,7 @@ import { readSession } from './auth/session'
 import { signInPath } from './navigation'
 import { BrowsePage } from './pages/BrowsePage'
 import { CreateErrandPage } from './pages/CreateErrandPage'
+import { EditErrandPage } from './pages/EditErrandPage'
 import { ErrandPage } from './pages/ErrandPage'
 import { MyErrandsPage } from './pages/MyErrandsPage'
 import { type ErrandRole, homeFor, useSessionRole } from './hooks/useSessionRole'
@@ -40,6 +41,7 @@ export function AppRoutes() {
       <Route element={<MyErrandsPage />} path="/errands/mine" />
       <Route element={<ForRole role="REQUESTER"><CreateErrandPage /></ForRole>} path="/errands/new" />
       <Route element={<ErrandPage />} path="/errands/:orderId" />
+      <Route element={<ForRole role="REQUESTER"><EditErrandPage /></ForRole>} path="/errands/:orderId/edit" />
       <Route element={<RoleHome />} path="*" />
     </Routes>
   )

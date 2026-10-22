@@ -196,6 +196,38 @@ describe('ErrandPage', () => {
       expect(screen.getByRole('dialog')).toHaveTextContent('receive 20% of the reward as compensation')
     })
 
+    it('offers Edit errand while the errand is open', async () => {
+      signIn(REQUESTER_ID, 'REQUESTER')
+      vi.stubGlobal('fetch', serve(order({ state: 'OPEN' })).fetchMock)
+      renderErrand()
+
+      expect(await screen.findByRole('link', { name: 'Edit errand' })).toHaveAttribute(
+        'href',
+        '/errands/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64/edit',
+      )
+    })
+
+    it.each([
+      ['accepted', order({ state: 'ACCEPTED', courierId: COURIER_ID })],
+      ['waiting on a reward change', order({ state: 'OPEN', pendingCreditReward: 20 })],
+    ])('offers no Edit errand once %s', async (_, current) => {
+      signIn(REQUESTER_ID, 'REQUESTER')
+      vi.stubGlobal('fetch', serve(current).fetchMock)
+      renderErrand()
+
+      await screen.findByRole('heading', { level: 1 })
+      expect(screen.queryByRole('link', { name: 'Edit errand' })).not.toBeInTheDocument()
+    })
+
+    it('offers no Edit errand in a Courier session', async () => {
+      signIn(REQUESTER_ID, 'COURIER')
+      vi.stubGlobal('fetch', serve(order({ state: 'OPEN' })).fetchMock)
+      renderErrand()
+
+      await screen.findByRole('heading', { level: 1 })
+      expect(screen.queryByRole('link', { name: 'Edit errand' })).not.toBeInTheDocument()
+    })
+
     it('offers no cancel once the item is picked up (F3.4)', async () => {
       signIn(REQUESTER_ID, 'REQUESTER')
       vi.stubGlobal('fetch', serve(order({ state: 'PICKED_UP', courierId: COURIER_ID })).fetchMock)

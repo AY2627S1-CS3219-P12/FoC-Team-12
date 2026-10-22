@@ -165,6 +165,14 @@ export function ErrandPage() {
                 Confirm receipt · Transfer {credits(order.creditReward)}
               </button>
             )}
+            {view === 'requester' &&
+              session?.role === 'REQUESTER' &&
+              order.state === 'OPEN' &&
+              order.pendingCreditReward === null && (
+                <Link className="button-secondary" to={`/errands/${order.id}/edit`}>
+                  Edit errand
+                </Link>
+              )}
             {view === 'requester' && (order.state === 'OPEN' || order.state === 'ACCEPTED') && (
               <button
                 className="button-danger"
