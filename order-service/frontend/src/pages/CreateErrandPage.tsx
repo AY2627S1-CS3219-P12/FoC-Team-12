@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { ErrandTabs } from '../components/ErrandTabs'
-import { useNavigate } from 'react-router-dom'
-import { createOrder, OrderApiError } from '../api/orderApi'
+import { Link, useNavigate } from 'react-router-dom'
+import { createOrder, fetchOrder, OrderApiError } from '../api/orderApi'
 import {
   type CampusLocation,
   fetchCampusLocations,
@@ -20,6 +20,9 @@ import {
   validate,
   type BalanceStatus,
   creditCheck,
+  RESERVATION_POLL_MS,
+  RESERVATION_WAIT_MS,
+  reservationOutcome,
 } from '../utils/errandForm'
 
 /** Server field names map back to the form's own (both locations report on the drop-off picker). */
@@ -43,6 +46,11 @@ export function CreateErrandPage() {
   const queryClient = useQueryClient()
   const [fields, setFields] = useState<Fields>(EMPTY)
   const [errors, setErrors] = useState<Errors>({})
+  // The errand just posted while Credit decides on its reservation; the form stays until then.
+  const [posted, setPosted] = useState<{ id: string; reward: number } | null>(null)
+  const [slowId, setSlowId] = useState<string | null>(null)
+  // A failure message stays until the requester edits the form or posts again.
+  const [dismissedId, setDismissedId] = useState<string | null>(null)
   const locations = useQuery({
     queryKey: ['campus-locations'],
     queryFn: fetchCampusLocations,
@@ -56,7 +64,7 @@ export function CreateErrandPage() {
     mutationFn: createOrder,
     onSuccess: (order) => {
       void queryClient.invalidateQueries({ queryKey: ['orders'] })
-      navigate(`/errands/${order.id}`)
+      setPosted({ id: order.id, reward: order.creditReward })
     },
     onError: (error) =>
       setErrors(
@@ -68,9 +76,49 @@ export function CreateErrandPage() {
       ),
   })
 
+  const reservation = useQuery({
+    queryKey: ['orders', posted?.id],
+    queryFn: () => fetchOrder(posted!.id),
+    enabled: posted !== null && slowId === null,
+    refetchInterval: (query) =>
+      query.state.data && query.state.data.state !== 'PENDING_CREDIT'
+        ? false
+        : RESERVATION_POLL_MS,
+  })
+  const outcome =
+    posted && reservation.data?.id === posted.id
+      ? reservationOutcome(
+          reservation.data.state,
+          reservation.data.terminalReason,
+          posted.reward,
+        )
+      : null
+  const failure =
+    outcome?.kind === 'failed' && posted?.id !== dismissedId ? outcome : null
+  const waiting =
+    posted !== null &&
+    slowId === null &&
+    outcome?.kind !== 'failed' &&
+    outcome?.kind !== 'reserved'
+
+  useEffect(() => {
+    if (!waiting || !posted) return
+    const timer = setTimeout(() => setSlowId(posted.id), RESERVATION_WAIT_MS)
+    return () => clearTimeout(timer)
+  }, [waiting, posted])
+
+  const outcomeKind = outcome?.kind
+  useEffect(() => {
+    if (!posted) return
+    if (outcomeKind === 'reserved') navigate(`/errands/${posted.id}`)
+    else if (outcomeKind === 'failed')
+      void queryClient.invalidateQueries({ queryKey: ['credits', 'me'] })
+  }, [posted, outcomeKind, navigate, queryClient])
+
   const update = (name: FieldName) => (value: string) => {
     setFields((current) => ({ ...current, [name]: value }))
     setErrors((current) => ({ ...current, [name]: undefined, form: undefined }))
+    if (posted) setDismissedId(posted.id)
   }
 
   const reward = Number(fields.creditReward)
@@ -86,6 +134,9 @@ export function CreateErrandPage() {
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
+    if (waiting) return
+    if (posted) setDismissedId(posted.id)
+    setSlowId(null)
     const found = validate(fields)
     setErrors(found)
     if (Object.keys(found).length > 0) {
@@ -138,6 +189,7 @@ export function CreateErrandPage() {
           <h2 className="visually-hidden" id="create-heading">
             Errand details
           </h2>
+          <fieldset className="errand-fields" disabled={waiting}>
           <Field error={errors.title} id="field-title" label="Errand title">
             <input
               aria-describedby={errors.title ? 'field-title-error' : undefined}
@@ -216,9 +268,32 @@ export function CreateErrandPage() {
               value={fields.description}
             />
           </Field>
+          </fieldset>
           {errors.form && (
             <p className="notice notice-error" role="alert">
               {errors.form}
+            </p>
+          )}
+          {failure && (
+            <p className="notice notice-error" role="alert">
+              {failure.message}
+              {failure.setUpCredits && (
+                <>
+                  {' '}
+                  <a className="text-link" href="/credits">
+                    Set up your credits
+                  </a>
+                </>
+              )}
+            </p>
+          )}
+          {slowId && (
+            <p className="notice notice-next" role="status">
+              Credit is taking longer than usual. Your errand will open once your
+              credits are reserved.{' '}
+              <Link className="text-link" to={`/errands/${slowId}`}>
+                View errand
+              </Link>
             </p>
           )}
           <div className="actions">
@@ -226,11 +301,15 @@ export function CreateErrandPage() {
               aria-describedby={
                 credit.message ? 'credit-check-message' : undefined
               }
-              disabled={create.isPending || !credit.canPost}
+              disabled={create.isPending || waiting || !credit.canPost}
               id="submit-errand"
               type="submit"
             >
-              {create.isPending ? 'Posting…' : 'Post errand'}
+              {create.isPending
+                ? 'Posting…'
+                : waiting
+                  ? 'Reserving your credits…'
+                  : 'Post errand'}
             </button>
           </div>
           {credit.message && (

@@ -13,6 +13,7 @@ import com.friendoncampus.order.domain.OrderAction;
 import com.friendoncampus.order.domain.Order;
 import com.friendoncampus.order.domain.OrderDetails;
 import com.friendoncampus.order.domain.OrderState;
+import com.friendoncampus.order.domain.TerminalReason;
 import com.friendoncampus.order.domain.OrderTransition;
 import com.friendoncampus.order.domain.OrderTransitionRecord;
 import com.friendoncampus.order.messaging.OrderEventRecorder;
@@ -252,15 +253,15 @@ public class OrderService {
         return apply(order, order.open(reservationId, now()));
     }
 
-    /** Credit rejected the reservation. A repeated rejection is ignored. */
+    /** Credit rejected the reservation for {@code reason}. A repeated rejection is ignored. */
     @Transactional
-    public Order rejectReservation(UUID orderId) {
+    public Order rejectReservation(UUID orderId, TerminalReason reason) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getState() == OrderState.RESERVATION_FAILED) {
             return order;
         }
-        return apply(order, order.failReservation(now()));
+        return apply(order, order.failReservation(reason, now()));
     }
 
     private Order lockVisible(UUID orderId, UUID callerId) {

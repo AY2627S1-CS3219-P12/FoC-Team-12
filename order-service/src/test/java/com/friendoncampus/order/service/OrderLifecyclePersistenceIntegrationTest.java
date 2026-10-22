@@ -27,6 +27,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import com.friendoncampus.order.domain.OrderErrorCode;
 import com.friendoncampus.order.domain.OrderState;
 import com.friendoncampus.order.domain.OrderTransitionException;
+import com.friendoncampus.order.domain.TerminalReason;
 import com.friendoncampus.order.messaging.OutboxEvent;
 import com.friendoncampus.order.repository.OutboxEventRepository;
 
@@ -165,8 +166,8 @@ class OrderLifecyclePersistenceIntegrationTest {
     void aRejectedReservationEndsTheOrderAndARepeatIsIgnored() {
         UUID orderId = createOrder();
 
-        orderService.rejectReservation(orderId);
-        orderService.rejectReservation(orderId);
+        orderService.rejectReservation(orderId, TerminalReason.INSUFFICIENT_CREDITS);
+        orderService.rejectReservation(orderId, TerminalReason.INSUFFICIENT_CREDITS);
 
         assertThat(orderService.getOrder(orderId, REQUESTER).getState()).isEqualTo(OrderState.RESERVATION_FAILED);
         assertThat(count("order_transitions", orderId)).isEqualTo(2);

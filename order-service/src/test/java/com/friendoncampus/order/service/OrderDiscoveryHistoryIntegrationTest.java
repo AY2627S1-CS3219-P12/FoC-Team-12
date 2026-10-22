@@ -30,6 +30,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import com.friendoncampus.order.domain.Order;
 import com.friendoncampus.order.domain.OrderState;
+import com.friendoncampus.order.domain.TerminalReason;
 import com.friendoncampus.order.support.MutableClock;
 
 /**
@@ -134,7 +135,7 @@ class OrderDiscoveryHistoryIntegrationTest {
         UUID pendingCredit = createOrder(REQUESTER, "COM1", UUID.randomUUID(), UUID.randomUUID(), 10,
                 Duration.ofHours(2));
         UUID failed = createOrder(REQUESTER, "COM1", UUID.randomUUID(), UUID.randomUUID(), 10, Duration.ofHours(2));
-        orderService.rejectReservation(failed);
+        orderService.rejectReservation(failed, TerminalReason.INSUFFICIENT_CREDITS);
         UUID accepted = open(10, Duration.ofHours(2));
         orderService.accept(accepted, OTHER_COURIER);
         UUID cancelled = open(10, Duration.ofHours(2));
@@ -250,7 +251,7 @@ class OrderDiscoveryHistoryIntegrationTest {
     void requesterHistoryHasOnlyTheirFinishedOrdersNewestFirst() {
         UUID open = open(10, Duration.ofHours(1));
         UUID failed = createOrder(REQUESTER, "COM1", UUID.randomUUID(), UUID.randomUUID(), 10, Duration.ofHours(1));
-        orderService.rejectReservation(failed);
+        orderService.rejectReservation(failed, TerminalReason.INSUFFICIENT_CREDITS);
         UUID pending = createOrder(REQUESTER, "COM1", UUID.randomUUID(), UUID.randomUUID(), 10, Duration.ofHours(1));
         UUID accepted = open(10, Duration.ofHours(1));
         orderService.accept(accepted, COURIER);
@@ -311,7 +312,7 @@ class OrderDiscoveryHistoryIntegrationTest {
         UUID soonest = open(10, Duration.ofHours(1));
         orderService.accept(soonest, COURIER);
         UUID failed = createOrder(REQUESTER, "COM1", UUID.randomUUID(), UUID.randomUUID(), 10, Duration.ofMinutes(30));
-        orderService.rejectReservation(failed);
+        orderService.rejectReservation(failed, TerminalReason.INSUFFICIENT_CREDITS);
         UUID cancelled = open(10, Duration.ofMinutes(20));
         orderService.cancel(cancelled, REQUESTER);
         UUID someoneElses = open(OTHER_REQUESTER, "COM1", UUID.randomUUID(), UUID.randomUUID(), 10, Duration.ofMinutes(10));

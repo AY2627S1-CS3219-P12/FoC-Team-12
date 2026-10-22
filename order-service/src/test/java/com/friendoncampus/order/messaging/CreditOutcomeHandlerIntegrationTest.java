@@ -24,6 +24,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import com.friendoncampus.order.domain.CreditStatus;
 import com.friendoncampus.order.domain.Order;
 import com.friendoncampus.order.domain.OrderState;
+import com.friendoncampus.order.domain.TerminalReason;
 import com.friendoncampus.order.messaging.CreditOutcomeHandler.Outcome;
 import com.friendoncampus.order.repository.OutboxEventRepository;
 import com.friendoncampus.order.service.CreateOrderCommand;
@@ -160,6 +161,21 @@ class CreditOutcomeHandlerIntegrationTest {
                 Map.of("reasonCode", "INSUFFICIENT_CREDITS")));
 
         assertThat(order(orderId).getState()).isEqualTo(OrderState.RESERVATION_FAILED);
+        assertThat(order(orderId).getTerminalReason()).isEqualTo(TerminalReason.INSUFFICIENT_CREDITS);
+    }
+
+    @Test
+    void creditReservationRejectedKeepsTheAccountReasonAndFallsBackForOthers() {
+        UUID noAccount = createOrder();
+        handler.handle(outcome(published(noAccount, "OrderSubmitted"), "CreditReservationRejected",
+                Map.of("reasonCode", "CREDIT_ACCOUNT_NOT_FOUND")));
+        assertThat(order(noAccount).getTerminalReason()).isEqualTo(TerminalReason.CREDIT_ACCOUNT_NOT_FOUND);
+
+        UUID other = createOrder();
+        handler.handle(outcome(published(other, "OrderSubmitted"), "CreditReservationRejected",
+                Map.of("reasonCode", "REQUEST_CONFLICT")));
+        assertThat(order(other).getState()).isEqualTo(OrderState.RESERVATION_FAILED);
+        assertThat(order(other).getTerminalReason()).isEqualTo(TerminalReason.CREDIT_RESERVATION_REJECTED);
     }
 
     @Test
