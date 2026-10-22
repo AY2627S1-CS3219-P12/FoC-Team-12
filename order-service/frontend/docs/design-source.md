@@ -39,6 +39,9 @@ The backend contract wins over example data in Figma:
   browser (Order Service never calls Credit). **Post errand is disabled** unless that balance is
   confirmed and covers the reward: while it loads, when Credit is unavailable, when the user has no
   credit account yet, or when the reward is higher than the available credits.
+- **A refused reservation names its reason** on the errand page and its status badge, from
+  `terminalReason`: "Not enough credits", "Credit account not set up" (with a link to set it up) or
+  "Credits couldn't be reserved" ("Not posted" badge) for any other reason.
 - **Posting waits for the reservation.** After Post errand the form locks ("Reserving your
   credits…") and the page reads the new errand every second. It opens the errand once Credit
   reserves the reward. If Credit rejects it (for example two errands posted at once), the form

@@ -7,7 +7,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { ProgressCard } from '../components/ProgressCard'
 import { RouteSummary } from '../components/RouteSummary'
 import { StateBadge } from '../components/StateBadge'
-import { credits, errandReference, formatDeadline } from '../utils/orderFormatting'
+import { credits, errandReference, formatDeadline, reservationFailure } from '../utils/orderFormatting'
 
 /** Friendly text for the error codes in the Order README. */
 const ERROR_MESSAGES: Record<string, string> = {
@@ -91,7 +91,7 @@ export function ErrandPage() {
           {view === 'browser' && <BrowserHeading order={order} />}
           {view === 'courier' && <CourierHeading order={order} />}
           {view === 'requester' && <RequesterHeading order={order} />}
-          <StateBadge state={order.state} />
+          <StateBadge state={order.state} terminalReason={order.terminalReason} />
           <RouteSummary order={order} />
           <dl className="facts">
             <dt>Pick up by</dt>
@@ -238,15 +238,24 @@ function RequesterHeading({ order }: { order: Order }) {
     COMPLETED: ['Errand completed', 'You confirmed receipt and the reward was transferred.'],
     CANCELLED: ['Errand cancelled', 'This errand was cancelled.'],
     EXPIRED: ['Errand expired', 'Nobody picked it up before the deadline.'],
-    RESERVATION_FAILED: ['Not enough credits', "Your credits couldn't be reserved, so the errand didn't open."],
+    RESERVATION_FAILED: ['', ''],
   }
-  const [title, subtitle] = headings[order.state]
+  const failure = order.state === 'RESERVATION_FAILED' ? reservationFailure(order.terminalReason) : null
+  const [title, subtitle] = failure ? [failure.title, failure.detail] : headings[order.state]
   return (
     <header className="errand-heading">
       <h1 id="errand-title">{title}</h1>
       <p className="subtle">
         {subtitle} · {order.title}
       </p>
+      {failure?.setUpCredits && (
+        <div className="notice notice-next">
+          <a className="text-link" href="/credits">
+            Set up your credits
+          </a>{' '}
+          then post the errand again.
+        </div>
+      )}
       {order.state === 'DELIVERED' && (
         <div className="notice notice-warn">
           <strong>Confirm only after you receive the items</strong>
@@ -274,7 +283,7 @@ function SidePanel({ order, view }: { order: Order; view: View }) {
           <dd>{credits(order.creditReward)}</dd>
           <dt>Status</dt>
           <dd>
-            <StateBadge state={order.state} />
+            <StateBadge state={order.state} terminalReason={order.terminalReason} />
           </dd>
         </dl>
         <p>Item payments are handled outside this platform. Credits reward the errand itself.</p>
