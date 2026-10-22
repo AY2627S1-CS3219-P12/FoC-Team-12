@@ -352,12 +352,12 @@ runs the errand lifecycle end to end through the gateway (`baseUrl`, default
 | 1. Create, read and edit | `401`/`403`/`400` on create, `PENDING_CREDIT → OPEN` via Credit, raising the reward reserves only the difference, `409 VERSION_CONFLICT`, history |
 | 2. Discover and accept | Pool with filters, own errands hidden, `403 SELF_ACCEPTANCE_FORBIDDEN`, wrong-role `403`, accept, the race loser's `409 ORDER_ALREADY_ACCEPTED`, courier's active list |
 | 3. Deliver and complete | Wrong-role `403`s, `409 CANCELLATION_NOT_ALLOWED` after pickup, completion pays the courier the full reward, a repeated completion returns `200` with no second effect |
-| 4. Cancel, compensate and withdraw | `403 NOT_ASSIGNED_COURIER`, withdrawal reopens, re-acceptance, `403 NOT_ORDER_REQUESTER`, cancelling an accepted errand pays the courier `ceil(20%)`, a repeated cancel is a no-op |
+| 4. Cancel, compensate and withdraw | `403 NOT_ASSIGNED_COURIER`, withdrawal reopens, re-acceptance, `403 NOT_ORDER_REQUESTER`, cancelling an accepted 3-credit errand pays the courier `ceil(20%)` = 1, a repeated cancel is a no-op |
 | 5. Admin views | An ADMIN session reads another user's requested/delivered errands; a requester session gets `403` |
 
 Set `requesterEmail`/`requesterPassword`, `courierEmail`/`courierPassword` and
-`adminEmail`/`adminPassword` first: three different active accounts, the requester with at least
-7 available credits, the admin with the Admin role. Run the folders in order. Keep passwords and
+`adminEmail`/`adminPassword` first: three different active accounts, the requester with 10
+available credits (a new account's allocation covers errands of 7 and 3), the admin with the Admin role. Run the folders in order. Keep passwords and
 tokens in a local Postman environment; never commit or export them in the collection.
 
 ## Build and test
