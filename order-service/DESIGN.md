@@ -325,8 +325,14 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | 7 | `order-location-snapshot`: client-supplied location names on create (edit comes with iteration 8) | Done (PR #62) |
 | 8 | `order-edit-reward`: edit details (T4) and reward through `OrderRewardChangeRequested` / `CreditAdjusted` (T5, T5a, T5b) | Done (PR #65) |
 | UI | Errand UI: browse, errand detail and active orders, my errands, request a hand, aligned header; Order frontend CI | Done (PRs #66, #73, #77, #79) |
-| k8s | Kubernetes image bump to the latest Order image; Kafka off in the cluster until a broker is deployed | Done (PR #80) |
-| 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Waiting on Credit's Kafka adapter |
+| k8s | Kubernetes image bump to the latest Order image | Done (PR #80); Kafka enabled in the cluster by the shared Kafka change (#84) |
+| UI | Errand entry points on the User Profile page: header link and role-specific cards (User frontend, with the User owner's sign-off) | Done (PRs #85, #86) |
+| UI | `order-ui-credit-check`: Post errand disabled unless the browser-read balance covers the reward | Done (PR #87) |
+| UI | `order-my-errands-active`: My errands Active/Past for the header role (`status=active\|past`, `state` filter); role-based underline tabs | Done (PR #88) |
+| UI | `order-ui-await-reservation`: Post errand waits for Credit; rejection reason stored as `terminalReason` and explained on the form | Done (PR #90) |
+| k8s | Image bump after #87, #88 and #90 | Done (PR #91) |
+| UI | `order-ui-reason-heading`: errand page heading and status badge name the rejection reason | This change |
+| 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
 
 ## Decisions
 

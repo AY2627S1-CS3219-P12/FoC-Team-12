@@ -206,6 +206,22 @@ describe('ErrandPage', () => {
     })
   })
 
+  describe('for the requester of an errand Credit refused to reserve', () => {
+    it.each([
+      ['INSUFFICIENT_CREDITS', 'Not enough credits', /didn't have enough available credits/, false],
+      ['CREDIT_ACCOUNT_NOT_FOUND', 'Credit account not set up', /credit account wasn't set up/, true],
+      ['CREDIT_RESERVATION_REJECTED', "Credits couldn't be reserved", /Please post it again/, false],
+    ])('explains %s', async (terminalReason, heading, detail, setUp) => {
+      signIn(REQUESTER_ID, 'REQUESTER')
+      vi.stubGlobal('fetch', serve(order({ state: 'RESERVATION_FAILED', terminalReason })).fetchMock)
+      renderErrand()
+
+      expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument()
+      expect(screen.getByText(detail)).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Set up your credits' }) !== null).toBe(setUp)
+    })
+  })
+
   it('shows a not-found state for a hidden or missing errand', async () => {
     signIn(STRANGER_ID, 'COURIER')
     vi.stubGlobal('fetch', stubFetch(() => ({ status: 404, body: { code: 'ORDER_NOT_FOUND' } })).fetchMock)

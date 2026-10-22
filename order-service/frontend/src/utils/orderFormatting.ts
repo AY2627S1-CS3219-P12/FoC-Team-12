@@ -9,11 +9,40 @@ const STATE_LABELS: Record<OrderState, string> = {
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
   EXPIRED: 'Expired',
-  RESERVATION_FAILED: 'Not enough credits',
+  RESERVATION_FAILED: 'Not posted',
 }
 
 export function stateLabel(state: OrderState): string {
   return STATE_LABELS[state]
+}
+
+/** Why Credit refused the reservation of a RESERVATION_FAILED errand, from its terminalReason. */
+export function reservationFailure(terminalReason: string | null): {
+  label: string
+  title: string
+  detail: string
+  setUpCredits: boolean
+} {
+  if (terminalReason === 'INSUFFICIENT_CREDITS')
+    return {
+      label: 'Not enough credits',
+      title: 'Not enough credits',
+      detail: "You didn't have enough available credits to reserve the reward, so the errand wasn't posted.",
+      setUpCredits: false,
+    }
+  if (terminalReason === 'CREDIT_ACCOUNT_NOT_FOUND')
+    return {
+      label: 'No credit account',
+      title: 'Credit account not set up',
+      detail: "Your credit account wasn't set up yet, so the errand wasn't posted.",
+      setUpCredits: true,
+    }
+  return {
+    label: 'Not posted',
+    title: "Credits couldn't be reserved",
+    detail: "Credit couldn't reserve the reward, so the errand wasn't posted. Please post it again.",
+    setUpCredits: false,
+  }
 }
 
 /** Short reference shown in the design ("Errand FOC-1042"); derived from the UUID. */
