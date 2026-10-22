@@ -340,6 +340,26 @@ docker compose up -d --build
 The service listens on `8082` and verifies tokens with User Service's JWKS inside the Compose
 network. Its Kafka identity (`order_service`) is configured for the shared broker.
 
+## Postman walkthrough
+
+[`postman/Friend-on-Campus-Order-API.postman_collection.json`](postman/Friend-on-Campus-Order-API.postman_collection.json)
+runs the errand lifecycle end to end through the gateway (`baseUrl`, default
+`http://localhost:8088`), with real User, Supplier, Credit and Kafka:
+
+| Folder | Shows |
+| --- | --- |
+| 0. Setup | Sign-in for requester, courier and admin (tokens are stored automatically), credit allocation, two Supplier locations |
+| 1. Create, read and edit | `401`/`403`/`400` on create, `PENDING_CREDIT → OPEN` via Credit, raising the reward reserves only the difference, `409 VERSION_CONFLICT`, history |
+| 2. Discover and accept | Pool with filters, own errands hidden, `403 SELF_ACCEPTANCE_FORBIDDEN`, wrong-role `403`, accept, the race loser's `409 ORDER_ALREADY_ACCEPTED`, courier's active list |
+| 3. Deliver and complete | Wrong-role `403`s, `409 CANCELLATION_NOT_ALLOWED` after pickup, completion pays the courier the full reward, a repeated completion returns `200` with no second effect |
+| 4. Cancel, compensate and withdraw | `403 NOT_ASSIGNED_COURIER`, withdrawal reopens, re-acceptance, `403 NOT_ORDER_REQUESTER`, cancelling an accepted errand pays the courier `ceil(20%)`, a repeated cancel is a no-op |
+| 5. Admin views | An ADMIN session reads another user's requested/delivered errands; a requester session gets `403` |
+
+Set `requesterEmail`/`requesterPassword`, `courierEmail`/`courierPassword` and
+`adminEmail`/`adminPassword` first: three different active accounts, the requester with at least
+7 available credits, the admin with the Admin role. Run the folders in order. Keep passwords and
+tokens in a local Postman environment; never commit or export them in the collection.
+
 ## Build and test
 
 ```bash
