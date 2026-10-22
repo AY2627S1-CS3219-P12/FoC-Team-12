@@ -55,6 +55,9 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/orders/*/accept", "/api/orders/*/withdraw",
                                 "/api/orders/*/pickup", "/api/orders/*/deliver")
                         .hasRole("COURIER")
+                        // Read-only support views of another user's orders.
+                        .requestMatchers(HttpMethod.GET, "/api/orders/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/orders/admin/**").denyAll()
                         .requestMatchers("/api/orders", "/api/orders/**").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2

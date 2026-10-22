@@ -6,10 +6,12 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.friendoncampus.order.service.InvalidOrderQueryException;
 import com.friendoncampus.order.service.MyOrdersFilter;
 import com.friendoncampus.order.service.OrderPaging;
 import com.friendoncampus.order.service.OrderPoolQuery;
@@ -158,6 +160,74 @@ public class OrderListController {
         return OrderPageResponse.from(
                 orderQueryService.findDelivered(callerId(jwt), MyOrdersFilter.from(status, state),
                         OrderPaging.from(page, size)));
+    }
+
+    @Operation(
+            operationId = "listUserRequestedOrdersAsAdmin",
+            summary = "A user's requests (admin)",
+            description = "Read-only support view of another user's requests, with the same status, state "
+                    + "and paging rules as /me/requested. Requires an ADMIN session role.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Page of that user's requests",
+                    content = @Content(schema = @Schema(implementation = OrderPageResponse.class))),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "INVALID_QUERY: malformed user ID, status, state or paging value",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "The session role is not ADMIN",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @GetMapping("/admin/users/{userId}/requested")
+    public OrderPageResponse listUserRequestedOrdersAsAdmin(
+            @Parameter(description = "The user's ID (User Service UUID)") @PathVariable String userId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String page,
+            @RequestParam(required = false) String size) {
+        return OrderPageResponse.from(orderQueryService.findRequested(userId(userId),
+                MyOrdersFilter.from(status, state), OrderPaging.from(page, size)));
+    }
+
+    @Operation(
+            operationId = "listUserDeliveredOrdersAsAdmin",
+            summary = "A user's deliveries (admin)",
+            description = "Read-only support view of the orders another user runs as courier, with the same "
+                    + "rules as /me/delivered. Requires an ADMIN session role.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Page of that user's deliveries",
+                    content = @Content(schema = @Schema(implementation = OrderPageResponse.class))),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "INVALID_QUERY: malformed user ID, status, state or paging value",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "403",
+                    description = "The session role is not ADMIN",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @GetMapping("/admin/users/{userId}/delivered")
+    public OrderPageResponse listUserDeliveredOrdersAsAdmin(
+            @Parameter(description = "The user's ID (User Service UUID)") @PathVariable String userId,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String page,
+            @RequestParam(required = false) String size) {
+        return OrderPageResponse.from(orderQueryService.findDelivered(userId(userId),
+                MyOrdersFilter.from(status, state), OrderPaging.from(page, size)));
+    }
+
+    private static UUID userId(String value) {
+        try {
+            return UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            throw new InvalidOrderQueryException("userId must be a UUID");
+        }
     }
 
     private static UUID callerId(Jwt jwt) {
