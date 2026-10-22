@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "50fdef3f-a711-401f-82f6-ba886ebbe21c",
     "name": "Order Service",
-    "description": "Friend on Campus Order API through the gateway, following the errand lifecycle end to end.\n\nBefore running: set requesterEmail/requesterPassword, courierEmail/courierPassword and adminEmail/adminPassword (three different ACTIVE accounts; the requester needs at least 7 available credits, and the admin account must have the Admin role and may switch to Courier). Run folders in order (Collection Runner, or one request at a time). Tokens are filled in by the sign-in requests.\n\nNever commit real passwords or tokens: put them in a local environment, or clear the variables before exporting.",
+    "description": "Friend on Campus Order API through the gateway, following the errand lifecycle end to end.\n\nBefore running: set requesterEmail/requesterPassword, courierEmail/courierPassword and adminEmail/adminPassword (three different ACTIVE accounts; the requester needs 10 available credits - a new account's allocation - and the admin account must have the Admin role and may switch to Courier). Run folders in order (Collection Runner, or one request at a time). Tokens are filled in by the sign-in requests.\n\nNever commit real passwords or tokens: put them in a local environment, or clear the variables before exporting.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -319,7 +319,7 @@
                 "exec": [
                   "pm.test('200', () => pm.response.to.have.status(200));",
                   "pm.collectionVariables.set('requesterAvailableBefore', pm.response.json().availableBalance);",
-                  "pm.test('at least 7 credits available', () => pm.expect(pm.response.json().availableBalance).to.be.at.least(7));"
+                  "pm.test('at least 10 credits available (errands A = 7 and B = 3)', () => pm.expect(pm.response.json().availableBalance).to.be.at.least(10));"
                 ]
               }
             }
@@ -2164,7 +2164,7 @@
           "response": []
         },
         {
-          "name": "Create errand B",
+          "name": "Create errand B (reward 3)",
           "request": {
             "method": "POST",
             "header": [
@@ -2196,7 +2196,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Errand B\",\n  \"description\": \"A bound set of CS3219 lecture notes from the print shop.\",\n  \"pickupLocationId\": \"{{pickupLocationId}}\",\n  \"pickupLocationName\": \"{{pickupLocationName}}\",\n  \"dropoffLocationId\": \"{{dropoffLocationId}}\",\n  \"dropoffLocationName\": \"{{dropoffLocationName}}\",\n  \"creditReward\": 6,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
+              "raw": "{\n  \"title\": \"Errand B\",\n  \"description\": \"A bound set of CS3219 lecture notes from the print shop.\",\n  \"pickupLocationId\": \"{{pickupLocationId}}\",\n  \"pickupLocationName\": \"{{pickupLocationName}}\",\n  \"dropoffLocationId\": \"{{dropoffLocationId}}\",\n  \"dropoffLocationName\": \"{{dropoffLocationName}}\",\n  \"creditReward\": 3,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2528,7 +2528,7 @@
           "response": []
         },
         {
-          "name": "Cancel accepted errand (200, compensates the courier)",
+          "name": "Cancel accepted errand (200, courier gets ceil(20%) of 3 = 1)",
           "request": {
             "method": "POST",
             "header": [],
@@ -2571,7 +2571,7 @@
           "response": []
         },
         {
-          "name": "Courier credits - received ceil(20%)",
+          "name": "Courier credits - received ceil(20%) = 1",
           "request": {
             "method": "GET",
             "header": [],
@@ -2605,8 +2605,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "const tries = Number(pm.collectionVariables.get('tries') || 0); const got = pm.response.json().availableBalance - Number(pm.collectionVariables.get('courierBeforeCompensation'));",
-                  "if (got < 2 && tries < 15) { pm.collectionVariables.set('tries', tries + 1); setTimeout(() => {}, 1000); pm.execution.setNextRequest(pm.info.requestName); }",
-                  "else { pm.collectionVariables.set('tries', 0); pm.test('courier +2 = ceil(6 x 20%)', () => pm.expect(got).to.eql(2)); }"
+                  "if (got < 1 && tries < 15) { pm.collectionVariables.set('tries', tries + 1); setTimeout(() => {}, 1000); pm.execution.setNextRequest(pm.info.requestName); }",
+                  "else { pm.collectionVariables.set('tries', 0); pm.test('courier +1 = ceil(3 x 20%)', () => pm.expect(got).to.eql(1)); }"
                 ]
               }
             }
