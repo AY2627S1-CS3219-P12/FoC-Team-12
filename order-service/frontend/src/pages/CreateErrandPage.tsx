@@ -1,22 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useState } from 'react'
+import { ErrandFormFields } from '../components/ErrandFormFields'
 import { ErrandTabs } from '../components/ErrandTabs'
 import { Link, useNavigate } from 'react-router-dom'
 import { createOrder, fetchOrder, OrderApiError } from '../api/orderApi'
-import {
-  type CampusLocation,
-  fetchCampusLocations,
-  fetchMyCredits,
-} from '../api/sharedApi'
+import { fetchCampusLocations, fetchMyCredits } from '../api/sharedApi'
 import { credits } from '../utils/orderFormatting'
 import {
-  DESCRIPTION_MAX,
   EMPTY,
   type Errors,
   type FieldName,
   type Fields,
-  locationLabel,
-  TITLE_MAX,
   validate,
   type BalanceStatus,
   creditCheck,
@@ -190,84 +184,15 @@ export function CreateErrandPage() {
             Errand details
           </h2>
           <fieldset className="errand-fields" disabled={waiting}>
-          <Field error={errors.title} id="field-title" label="Errand title">
-            <input
-              aria-describedby={errors.title ? 'field-title-error' : undefined}
-              aria-invalid={Boolean(errors.title)}
-              id="field-title"
-              maxLength={TITLE_MAX}
-              onChange={(event) => update('title')(event.target.value)}
-              placeholder="Collect my printed notes"
-              value={fields.title}
-            />
-          </Field>
-          <LocationField
-            error={errors.pickupLocationId}
-            id="field-pickupLocationId"
-            label="Pickup location"
+          <ErrandFormFields
+            errors={errors}
+            fields={fields}
             locations={locations.data}
-            loadError={locations.isError}
-            onChange={update('pickupLocationId')}
-            value={fields.pickupLocationId}
+            locationsFailed={locations.isError}
+            maxReward={balance.data?.availableBalance}
+            onChange={update}
+            rewardHint="Reserved from your credits when you post."
           />
-          <LocationField
-            error={errors.dropoffLocationId}
-            id="field-dropoffLocationId"
-            label="Drop-off location"
-            locations={locations.data}
-            loadError={locations.isError}
-            onChange={update('dropoffLocationId')}
-            value={fields.dropoffLocationId}
-          />
-          <Field
-            error={errors.pickupDeadline}
-            hint="If nobody accepts by this time, your request expires."
-            id="field-pickupDeadline"
-            label="Pick up by"
-          >
-            <input
-              aria-describedby="field-pickupDeadline-hint"
-              aria-invalid={Boolean(errors.pickupDeadline)}
-              id="field-pickupDeadline"
-              onChange={(event) => update('pickupDeadline')(event.target.value)}
-              type="datetime-local"
-              value={fields.pickupDeadline}
-            />
-          </Field>
-          <Field
-            error={errors.creditReward}
-            hint="Reserved from your credits when you post."
-            id="field-creditReward"
-            label="Reward (credits)"
-          >
-            <input
-              aria-describedby="field-creditReward-hint"
-              aria-invalid={Boolean(errors.creditReward)}
-              id="field-creditReward"
-              inputMode="numeric"
-              max={balance.data?.availableBalance}
-              min={1}
-              onChange={(event) => update('creditReward')(event.target.value)}
-              placeholder="3"
-              type="number"
-              value={fields.creditReward}
-            />
-          </Field>
-          <Field
-            error={errors.description}
-            id="field-description"
-            label="Description"
-          >
-            <textarea
-              aria-invalid={Boolean(errors.description)}
-              id="field-description"
-              maxLength={DESCRIPTION_MAX}
-              onChange={(event) => update('description')(event.target.value)}
-              placeholder="What to collect, who to ask, where to meet."
-              rows={4}
-              value={fields.description}
-            />
-          </Field>
           </fieldset>
           {errors.form && (
             <p className="notice notice-error" role="alert">
@@ -366,82 +291,5 @@ export function CreateErrandPage() {
         </aside>
       </div>
     </>
-  )
-}
-
-function Field({
-  id,
-  label,
-  hint,
-  error,
-  children,
-}: {
-  id: string
-  label: string
-  hint?: string
-  error?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className="form-field">
-      <label htmlFor={id}>{label}</label>
-      {hint && (
-        <p className="field-hint" id={`${id}-hint`}>
-          {hint}
-        </p>
-      )}
-      {children}
-      {error && (
-        <p className="field-error" id={`${id}-error`}>
-          {error}
-        </p>
-      )}
-    </div>
-  )
-}
-
-function LocationField({
-  id,
-  label,
-  value,
-  onChange,
-  locations,
-  loadError,
-  error,
-}: {
-  id: string
-  label: string
-  value: string
-  onChange: (value: string) => void
-  locations: CampusLocation[] | undefined
-  loadError: boolean
-  error?: string
-}) {
-  return (
-    <Field
-      error={
-        error ??
-        (loadError ? 'Campus locations are unavailable right now.' : undefined)
-      }
-      id={id}
-      label={label}
-    >
-      <select
-        aria-invalid={Boolean(error)}
-        disabled={!locations}
-        id={id}
-        onChange={(event) => onChange(event.target.value)}
-        value={value}
-      >
-        <option value="">
-          {locations ? 'Choose a campus location' : 'Loading locations…'}
-        </option>
-        {locations?.map((location) => (
-          <option key={location.id} value={location.id}>
-            {locationLabel(location)}
-          </option>
-        ))}
-      </select>
-    </Field>
   )
 }

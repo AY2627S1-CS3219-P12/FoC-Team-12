@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { creditCheck, reservationOutcome } from './errandForm'
+import {
+  creditCheck,
+  fieldsFromOrder,
+  reservationOutcome,
+  rewardChangeCheck,
+  rewardChangeOutcome,
+} from './errandForm'
 
 describe('creditCheck', () => {
   it('allows posting when the reward fits, including exactly equal', () => {
@@ -64,6 +70,86 @@ describe('reservationOutcome', () => {
     expect(reservationOutcome('EXPIRED', 'PICKUP_DEADLINE_PASSED', 3)).toMatchObject({
       kind: 'failed',
       message: expect.stringContaining('pickup time passed'),
+    })
+  })
+})
+
+describe('rewardChangeCheck', () => {
+  const loaded = (available: number) => ({ kind: 'loaded' as const, available })
+
+  it('always allows lowering or keeping the reward', () => {
+    expect(rewardChangeCheck({ kind: 'unavailable' }, 5, 2).canSave).toBe(true)
+    expect(rewardChangeCheck({ kind: 'loading' }, 5, 5).canSave).toBe(true)
+  })
+
+  it('needs only the difference to be available when raising', () => {
+    expect(rewardChangeCheck(loaded(2), 3, 5).canSave).toBe(true)
+    expect(rewardChangeCheck(loaded(1), 3, 5)).toEqual({
+      canSave: false,
+      message: 'Raising the reward to 5 needs 2 more credits, but you have 1 available. Choose 4 or less.',
+    })
+  })
+
+  it('pauses raising until the balance is known', () => {
+    expect(rewardChangeCheck({ kind: 'loading' }, 3, 5).canSave).toBe(false)
+    expect(rewardChangeCheck({ kind: 'unavailable' }, 3, 5).canSave).toBe(false)
+  })
+})
+
+describe('rewardChangeOutcome', () => {
+  const open = (creditReward: number, pendingCreditReward: number | null = null) => ({
+    state: 'OPEN',
+    creditReward,
+    pendingCreditReward,
+  })
+
+  it('waits while the change is pending', () => {
+    expect(rewardChangeOutcome(open(3, 5), [], 5, 2)).toEqual({ kind: 'waiting' })
+  })
+
+  it('is applied once the reward equals the requested value', () => {
+    expect(
+      rewardChangeOutcome(open(5), [{ action: 'REWARD_CHANGE_APPLIED', orderVersion: 3 }], 5, 2),
+    ).toEqual({ kind: 'applied' })
+  })
+
+  it('is rejected when Credit refused and the old reward stands', () => {
+    expect(
+      rewardChangeOutcome(open(3), [{ action: 'REWARD_CHANGE_REJECTED', orderVersion: 3 }], 5, 2),
+    ).toEqual({
+      kind: 'rejected',
+      message: 'Not enough credits to change the reward to 5. The reward stays at 3.',
+    })
+  })
+
+  it('ignores answers to earlier changes and reports an errand that left OPEN', () => {
+    expect(
+      rewardChangeOutcome(open(5), [{ action: 'REWARD_CHANGE_REJECTED', orderVersion: 1 }], 5, 2),
+    ).toEqual({ kind: 'applied' })
+    expect(rewardChangeOutcome({ state: 'CANCELLED', creditReward: 3, pendingCreditReward: null }, [], 5, 2))
+      .toEqual({ kind: 'ended' })
+  })
+})
+
+describe('fieldsFromOrder', () => {
+  it('fills the form from the errand, with the deadline in local time', () => {
+    const deadline = new Date(2030, 0, 2, 9, 5)
+    expect(
+      fieldsFromOrder({
+        title: 'Notes',
+        description: 'Bound set',
+        pickupLocationId: 'p',
+        dropoffLocationId: 'd',
+        creditReward: 4,
+        pickupDeadline: deadline.toISOString(),
+      }),
+    ).toEqual({
+      title: 'Notes',
+      description: 'Bound set',
+      pickupLocationId: 'p',
+      dropoffLocationId: 'd',
+      creditReward: '4',
+      pickupDeadline: '2030-01-02T09:05',
     })
   })
 })

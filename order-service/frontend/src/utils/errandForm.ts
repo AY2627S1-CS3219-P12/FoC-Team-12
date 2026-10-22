@@ -142,3 +142,86 @@ export function reservationOutcome(
     }
   return { kind: 'reserved' }
 }
+
+/** The `datetime-local` value for an ISO instant, in the browser's time zone. */
+export function toLocalInput(iso: string): string {
+  const date = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+/** An existing errand as form values (the reward shown is the one currently reserved). */
+export function fieldsFromOrder(order: {
+  title: string
+  description: string
+  pickupLocationId: string
+  dropoffLocationId: string
+  creditReward: number
+  pickupDeadline: string
+}): Fields {
+  return {
+    title: order.title,
+    description: order.description,
+    pickupLocationId: order.pickupLocationId,
+    dropoffLocationId: order.dropoffLocationId,
+    creditReward: String(order.creditReward),
+    pickupDeadline: toLocalInput(order.pickupDeadline),
+  }
+}
+
+/**
+ * Whether a reward change is affordable. Only an increase needs more credits: Credit reserves the
+ * difference from the available balance. A decrease (or no change) is always allowed.
+ */
+export function rewardChangeCheck(
+  balance: BalanceStatus,
+  current: number,
+  next: number | null,
+): { canSave: boolean; message: string | null } {
+  if (next === null || next <= current) return { canSave: true, message: null }
+  const extra = next - current
+  switch (balance.kind) {
+    case 'loading':
+      return { canSave: false, message: 'Checking your credits…' }
+    case 'unavailable':
+      return {
+        canSave: false,
+        message: "We can't check your credits right now, so raising the reward is paused. Try again shortly.",
+      }
+    case 'no-account':
+      return { canSave: false, message: "Your credit account isn't set up yet." }
+    case 'loaded':
+      if (extra > balance.available)
+        return {
+          canSave: false,
+          message: `Raising the reward to ${next} needs ${extra} more ${extra === 1 ? 'credit' : 'credits'}, but you have ${balance.available} available. Choose ${current + balance.available} or less.`,
+        }
+      return { canSave: true, message: null }
+  }
+}
+
+/** How a requested reward change ended, from the errand and its history. */
+export type RewardChangeOutcome =
+  | { kind: 'waiting' }
+  | { kind: 'applied' }
+  | { kind: 'rejected'; message: string }
+  | { kind: 'ended' }
+
+export function rewardChangeOutcome(
+  order: { state: string; creditReward: number; pendingCreditReward: number | null },
+  history: { action: string; orderVersion: number }[],
+  requested: number,
+  sinceVersion: number,
+): RewardChangeOutcome {
+  if (order.pendingCreditReward !== null) return { kind: 'waiting' }
+  if (order.state !== 'OPEN') return { kind: 'ended' }
+  const answer = history
+    .filter((entry) => entry.orderVersion > sinceVersion)
+    .find((entry) => entry.action === 'REWARD_CHANGE_APPLIED' || entry.action === 'REWARD_CHANGE_REJECTED')
+  if (answer?.action === 'REWARD_CHANGE_REJECTED' || order.creditReward !== requested)
+    return {
+      kind: 'rejected',
+      message: `Not enough credits to change the reward to ${requested}. The reward stays at ${order.creditReward}.`,
+    }
+  return { kind: 'applied' }
+}
