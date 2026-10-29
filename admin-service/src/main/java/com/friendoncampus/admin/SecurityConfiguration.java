@@ -55,7 +55,10 @@ public class SecurityConfiguration {
         converter.setJwtGrantedAuthoritiesConverter(jwt -> List.of(new SimpleGrantedAuthority("ROLE_" + jwt.getClaimAsString("role"))));
         return http.authorizeHttpRequests(a -> a
                 .requestMatchers("/admin", "/admin/**", "/admin-assets/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/admin/session").hasRole("ADMIN").anyRequest().denyAll())
+                .requestMatchers(HttpMethod.GET, "/api/admin/session", "/api/admin/cases", "/api/admin/cases/*").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/admin/cases/*/claim").hasRole("ADMIN")
+                .requestMatchers("/api/admin/reports", "/api/admin/reports/*").hasAnyRole("REQUESTER", "COURIER")
+                .anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o.authenticationEntryPoint((q,r,e) -> problem(r,q,mapper,401))
                         .withObjectPostProcessor(new ObjectPostProcessor<BearerTokenAuthenticationFilter>() {
                             @Override public <O extends BearerTokenAuthenticationFilter> O postProcess(O filter) {
