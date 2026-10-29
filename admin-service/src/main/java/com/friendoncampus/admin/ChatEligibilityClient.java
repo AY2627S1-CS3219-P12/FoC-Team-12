@@ -42,9 +42,14 @@ public class ChatEligibilityClient {
             boolean complete = "COMPLETE".equals(coverage.path("status").asText()) && coverage.path("blockingGaps").isEmpty()
                     && !coverage.path("checkpoints").isEmpty();
             for (var checkpoint : coverage.path("checkpoints")) {
-                if (!checkpoint.path("committedSequence").canConvertToLong() || !checkpoint.path("projectedSequence").canConvertToLong()
+                if (!checkpoint.path("committedSequence").isIntegralNumber() || !checkpoint.path("projectedSequence").isIntegralNumber()
+                        || !checkpoint.path("committedSequence").canConvertToLong() || !checkpoint.path("projectedSequence").canConvertToLong()
+                        || checkpoint.path("source").asText().isBlank() || checkpoint.path("stream").asText().isBlank()
+                        || !checkpoint.path("aggregateId").isString() || !checkpoint.path("checkedAt").isString()
                         || checkpoint.path("committedSequence").asLong() < 0
                         || checkpoint.path("projectedSequence").asLong() < checkpoint.path("committedSequence").asLong()) complete = false;
+                UUID.fromString(checkpoint.path("aggregateId").asText());
+                Instant.parse(checkpoint.path("checkedAt").asText());
             }
             return new Eligibility(data.path("eligible").asBoolean(), complete, data.path("evidenceRevision").asText());
         } catch (Exception ex) {

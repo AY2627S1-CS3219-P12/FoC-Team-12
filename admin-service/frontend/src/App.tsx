@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react'
 import { AccessError, checkAccess, readSession } from './access'
 import { AdminShell } from './components/AdminShell'
+import { CaseWorkspace } from './CaseWorkspace'
 
 type State = 'loading' | 'signin' | 'denied' | 'unavailable' | 'ready'
 const signIn = '/?returnTo=%2Fadmin'
 
 export function App() {
+  return window.location.pathname.startsWith('/admin/reports') ||
+    window.location.pathname.startsWith('/admin/cases') ? (
+    <CaseWorkspace />
+  ) : (
+    <Dashboard />
+  )
+}
+
+function Dashboard() {
   const [session, setSession] = useState(readSession)
   const [attempt, setAttempt] = useState(0)
   const [access, setAccess] = useState<{ token?: string; state: State }>({
@@ -164,11 +174,14 @@ export function App() {
           <section className="case-panel" aria-labelledby="case-review-title">
             <div className="section-heading">
               <h2 id="case-review-title">Case review</h2>
-              <span className="role-chip">Coming later</span>
+              <a className="button" href="/admin/cases">
+                Open case queue
+              </a>
             </div>
             <p>
-              Participant reports, case evidence and review tools will appear
-              here when available.
+              Review participant statements and claim an open case. Evidence,
+              conversations and resolution tools are planned for later
+              iterations.
             </p>
           </section>
         </>

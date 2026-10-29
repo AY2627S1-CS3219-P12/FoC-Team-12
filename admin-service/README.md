@@ -1,8 +1,8 @@
-# Admin foundation
+# Admin Service
 
 Owner: Darryl. Java 17 / Spring Boot 4.1.1, PostgreSQL/Flyway, React/TypeScript/Vite.
-Scope approved in the foundation brief: Admin backend/database/dashboard, current User
-eligibility and service-authenticated case-access callback. See
+Scope: Admin backend/database/dashboard, current User eligibility, case-access callback,
+participant reporting/status and administrator queue/detail/claim. See
 [specification](../docs/integration/admin-service-spec.md) and
 [integration drafts](../docs/contracts/README.md). Approval of this iteration does not
 record Chat/transport owner sign-off or deploy the shared drafts.
@@ -27,9 +27,9 @@ record Chat/transport owner sign-off or deploy the shared drafts.
   access is 404. User failure is 503. User eligibility completes before the current case
   state is read, so a case resolved during that check cannot reuse an older writable
   snapshot. No Chat call, permission lock or DB transaction is held across the remote check.
-- Flyway creates only Admin-owned case/membership tables with unique order and participant
-  constraints. There is no production seed, case-creation endpoint or mutation in foundation.
-  Tests populate case fixtures; live cases arrive in the reporting iteration.
+- Flyway creates only Admin-owned tables. V2 adds immutable participant statements, durable
+  mutation receipts, case audit and lifecycle outbox. Existing V1 rows receive migration-time
+  metadata and source sequence zero; no historical audit or participants are fabricated.
 - `/admin` renders the shell. It uses the existing `foc.user-session` browser session,
   but trusts only the backend's check. It rechecks access every 30 seconds while open,
   clears protected UI on session replacement/expiry and distinguishes 401/403/503/network
@@ -40,8 +40,59 @@ record Chat/transport owner sign-off or deploy the shared drafts.
   with the returned token. A browser role selection never grants administrator access.
 
 No Chat/Order/Credit code, broker topics, root Compose/gateway/CI or Kubernetes policies
-are changed. Reports, claims, evidence adapters, conversations, actions and resolution
-are later iterations. Account/supplier tools link to their existing owners.
+are changed. Evidence timeline, conversations, actions and resolution are later iterations.
+Account/supplier tools link to their existing owners.
+
+## Cases behavior and APIs
+
+| Endpoint | Access and outcome |
+| --- | --- |
+| `POST /api/admin/reports` | Current active REQUESTER/COURIER; `{orderId,description}`; 201 `{case,ownStatement}` |
+| `GET /api/admin/reports/{caseId}` | Reporting participant only; own statement and case summary; unrelated users receive 404 |
+| `GET /api/admin/cases?status=&query=&page=&size=` | Current active ADMIN; status enum, optional exact case/order UUID, page 0+, size 1–100/default 20 |
+| `GET /api/admin/cases/{caseId}` | Current active ADMIN; `{case,statements,actions:[],resolution:null}` |
+| `POST /api/admin/cases/{caseId}/claim` | Current active ADMIN; `{expectedRevision}`; OPEN becomes UNDER_REVIEW with caller as reviewer |
+
+Reporting validates a trimmed 1–2000 character statement. It calls Chat's documented
+`GET /internal/chat/orders/{orderId}/report-eligibility?userId=` using an Admin service
+assertion plus the original JWT in `X-Actor-Token`. User ID comes from the JWT subject.
+Chat owns requester/historical-courier policy; Admin never derives participation from Order
+or reads other databases. Complete, nonempty producer checkpoints, no gaps and no projection
+lag are required. Missing/mismatched/malformed evidence or unavailable Chat returns 503
+without creating a case. Explicit complete ineligibility returns 403. No remote calls run
+while a case or receipt transaction lock is held.
+
+One case per errand and one statement per reporting participant are enforced by PostgreSQL
+constraints and transaction locks. Another eligible participant joins the existing case;
+another statement from the same participant conflicts. Resolved cases reject new reports.
+Each accepted statement increments revision. Claims lock the case and check revision/state:
+one competing claimant wins; stale/already claimed cases return 409. Other active admins
+may read; the case-access callback grants administrator writes only to the assigned reviewer
+while UNDER_REVIEW. No decision/conversation mutation endpoints are added here.
+
+Every mutation requires a UUID `Idempotency-Key`. Receipts retain actor, route, canonical
+body hash and original response in the same transaction. Same request replays that response
+even if case state changed; another actor/route/body using the key conflicts. Current role
+and account authorization are checked before replay. Validation and dependency failures
+do not create receipts. Database commit uncertainty is retried with the same key. Browser
+session storage retains uncertain operations per account and disables statement edits until
+a definitive response. Do not clear browser storage to retry an uncertain operation.
+Receipts have no automatic expiry in this iteration.
+
+Each mutation persists a revisioned local audit record atomically. CaseOpened and CaseClaimed
+also persist stable-ID `admin.events` envelope drafts in the outbox, keyed by case ID.
+sourceSequence counts events separately from case revision. Adding a statement has an audit
+record but no invented lifecycle event. No Kafka relay is implemented: outbox rows remain
+pending until a later approved transport/relay iteration. Topic/ACL, delivery, producer
+evidence export/backfill and Chat consumption are not verified here. Draft schemas remain
+subject to affected-owner review; local implementation is not Chat/transport sign-off.
+
+UI routes: `/admin/reports/new`, `/admin/reports/{caseId}`, `/admin/cases` and
+`/admin/cases/{caseId}`. Reports works in Requester/Courier mode; Admin mode does not grant
+participant access. Save the returned case ID to revisit a report; there is no report-list
+API. Queue filters/pagination, loading/empty/error/retry states and revision-aware claiming
+use live Admin APIs. Timeline evidence is explicitly deferred; statements are not a complete
+evidence timeline.
 
 ## Local configuration and startup
 
@@ -87,6 +138,7 @@ Configuration:
 | `ADMIN_DB_HOST/PORT/NAME/USER/PASSWORD` | Admin-only database; defaults localhost/5432/admin_db/admin_user, password required |
 | `ADMIN_PORT` | Backend local port, default 8084 |
 | `ADMIN_USER_URL` | Private User base URL, default http://localhost:8081 |
+| `ADMIN_CHAT_URL` | Chat eligibility base URL; local default http://localhost:8085; configure the actual producer, otherwise reporting fails closed |
 | `ADMIN_USER_JWKS` | User JWKS URL; issuer friend-on-campus-user-service, audience friend-on-campus-api |
 | `ADMIN_SERVICE_PRIVATE_KEY`, `ADMIN_SERVICE_KEY_ID` | Separate Base64 PKCS#8 RSA signing key and kid for outgoing service assertions |
 | `ADMIN_SERVICE_TRUSTED_KEYS` | Public-only JSON trust map for incoming Chat assertions; default `{}` denies all |
@@ -129,5 +181,43 @@ inside `user-service`. Callback tests use test-only case fixtures; Chat has no r
 Manual: open `/admin` without a session, with Requester/Courier mode, then with active
 Admin mode. Check sign-in/denied/authorized states and account links. Revoke Admin access
 or ban the account and verify recheck denial. Interrupt User access and verify unavailable
-with retry. Check keyboard focus/skip link, mobile width and desktop layout. No case counts,
-successful case workflows or cross-service deployment readiness are claimed.
+with retry. Check keyboard focus/skip link, mobile width and desktop layout. These foundation
+checks do not establish case workflow or cross-service deployment readiness.
+
+Cases tests cover PostgreSQL first-report/same-key/competing-claim races, one case/statement,
+stale revisions, revoked access, private status, rollback on outbox failure, receipt conflicts
+and ordered lifecycle envelopes. HTTP tests check role separation, validation and private
+wire shape. Chat client tests serve a test-owned HTTP fixture using the documented eligibility
+shape and check delegation, coverage, lag, gaps, malformed responses and outages. These
+fixtures do not verify real historical assignments or deploy a replacement Chat service.
+
+Manual cases acceptance: with an owner-provided Chat runtime/contract fixture, submit in
+Requester/Courier mode, save the case ID, join as a second eligible participant and confirm
+each sees only their own statement. Check unrelated/ADMIN-mode participant denial, duplicates,
+empty/filtered/paged queue and two admins claiming the same revision. Refresh after 409;
+verify only the winner is reviewer. Interrupt Chat before reporting and User before protected
+operations; confirm unavailable/denied feedback without success. Check a dropped response,
+reload with a pending request, keyboard/focus, desktop and mobile layouts. Real Chat integration
+and manual visual acceptance remain pending when that runtime or browser access is unavailable.
+
+### Explicit local eligibility fixture
+
+For manual UI testing before Chat exists, the test source `ReportEligibilityFixture` serves
+only the documented eligibility route for one supplied errand UUID and participant allowlist.
+It validates Admin service assertions and original User JWTs, but its eligibility/checkpoint
+facts are synthetic. It never reads Order or changes User/Chat data. It is outside component
+scanning and excluded from the application jar; no runtime fixture mode exists in Admin.
+
+Run the Admin tests first, then in a shell with the same local Admin signing configuration
+and User JWKS configuration as the backend:
+
+```powershell
+./admin-service/Start-EligibilityFixture.ps1 -OrderId <fixture-errand-uuid> -ParticipantIds <requester-user-uuid>,<courier-user-uuid>
+```
+
+Obtain User IDs from your own local accounts. Use a dedicated synthetic errand UUID, not a
+real errand. Set `ADMIN_CHAT_URL=http://127.0.0.1:18085` in the Admin startup shell and restart
+Admin. Open the normal report UI and use that errand ID. Accounts outside the allowlist are
+ineligible. `-Incomplete` deliberately returns lagging coverage; stop/restart the fixture to
+test Chat outages. Stop with Ctrl+C. Remove the override before connecting real Chat.
+Success against this fixture is local UI/API verification only, never Chat integration sign-off.

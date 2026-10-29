@@ -153,7 +153,7 @@ public class CaseService {
                         key, actor, route, hash, outcome.status(), outcome.body());
                 return outcome;
             });
-        } catch (DataAccessException ex) { throw unavailable("The case could not be saved. Retry using the same request key."); }
+        } catch (DataAccessException | org.springframework.transaction.TransactionException ex) { throw unavailable("The case could not be saved. Retry using the same request key."); }
     }
     private Mutation receipt(UUID key, UUID actor, String route, String hash) {
         if (key == null) throw invalid("An Idempotency-Key UUID is required.");

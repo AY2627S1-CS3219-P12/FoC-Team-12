@@ -13,6 +13,11 @@ class AdminSpaController {
 
 @RestControllerAdvice
 class ApiProblems {
+    @ExceptionHandler({org.springframework.dao.DataAccessException.class, org.springframework.transaction.TransactionException.class})
+    ResponseEntity<ProblemDetail> unavailable(Exception ex) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).cacheControl(CacheControl.noStore()).body(
+                ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, "Case storage is temporarily unavailable. Retry with the same request key if a submission is pending."));
+    }
     @ExceptionHandler({org.springframework.web.bind.MethodArgumentNotValidException.class,
             org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
             org.springframework.web.bind.MissingRequestHeaderException.class,

@@ -37,7 +37,7 @@ it('opens tools only after live authorization', async () => {
   render(<App />)
   expect(await screen.findByText('Access verified')).toBeVisible()
   expect(screen.getByRole('heading', { name: /Manage users/ })).toBeVisible()
-  expect(screen.getByText('Coming later')).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Open case queue' })).toBeVisible()
 })
 it('denies a participant without exposing administrative tools', async () => {
   session('REQUESTER')

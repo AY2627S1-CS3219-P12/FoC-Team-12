@@ -109,6 +109,12 @@ class CaseWorkflowTest {
         UUID loser=winner.equals(reviewer)?other:reviewer;
         assertFalse(access.check(id,loser,reporter).canWriteConversation());
     }
+    @Test void concurrentDistinctKeysCannotAddTwoStatementsForOneReporter() throws Exception {
+        var results=race(()->report(reporter,UUID.randomUUID()),()->report(reporter,UUID.randomUUID()));
+        assertEquals(List.of(201,409),results.stream().map(CaseViews.Mutation::status).sorted().toList());
+        assertEquals(1,count("admin_cases")); assertEquals(1,count("admin_statements"));
+        assertEquals(1,count("admin_case_audit")); assertEquals(1,count("admin_case_outbox"));
+    }
     @Test void staleRevisionAfterJoinAndRevokedAdminAreDenied() {
         UUID id=caseId(report(reporter,UUID.randomUUID())); report(courier,UUID.randomUUID());
         assertEquals(409,service.claim(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,1).status());
