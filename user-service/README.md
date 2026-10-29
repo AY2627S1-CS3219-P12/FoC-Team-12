@@ -343,6 +343,9 @@ Invoke-RestMethod http://localhost:8081/api/users/me -Headers @{ Authorization =
 
 Account-management success feedback appears as small status text and clears after three
 seconds, matching the profile feedback timing. Account status badges remain visible.
+User cards distinguish administrator access from account access, with labelled shield
+controls, a red ban action and a green reactivation action. Icons supplement visible
+text labels; confirmation and self/final-administrator protections remain unchanged.
 
 Admin foundation also adds private `GET /internal/users/{userId}/admin-eligibility`.
 It accepts only Admin/Chat/Credit service assertions pinned by `USER_SERVICE_TRUSTED_KEYS`,

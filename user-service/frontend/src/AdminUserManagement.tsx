@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 
 import { ApiError, api, type AdminAccount, type AdminAccountPage } from './api/client'
+import { AccountIcon } from './AccountIcon'
 
 type Props = {
   currentUserId: string
@@ -96,7 +97,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
       <label htmlFor="admin-user-query">Search by email or username</label>
       <span>
         <input id="admin-user-query" value={queryDraft} onChange={event => setQueryDraft(event.target.value)} />
-        <button disabled={loading}>Search</button>
+        <button disabled={loading}><AccountIcon name="search" />Search</button>
       </span>
     </form>
 
@@ -110,29 +111,41 @@ export function AdminUserManagement({ currentUserId }: Props) {
         const isSelf = account.userId === currentUserId
         const isAdmin = account.roles.includes('ADMIN')
         const changing = changingUserId === account.userId
-        return <article className="admin-user-card" key={account.userId}>
+        return <article className={`admin-user-card${isSelf ? ' admin-user-card-self' : ''}`} key={account.userId}>
           <div className="admin-user-summary">
-            <div>
-              <h2>{account.username}</h2>
-              <p>{account.email}</p>
+            <div className="admin-user-identity">
+              <span className={`admin-user-avatar${isAdmin ? ' administrator' : ''}`} aria-hidden="true">{account.username.trim().charAt(0).toUpperCase()}</span>
+              <div className="admin-user-name">
+                <h2>{account.username}</h2>
+                <p>{account.email}</p>
+              </div>
             </div>
-            <span className={`account-status account-status-${account.status.toLowerCase()}`}>{account.status}</span>
+            <span className={`account-status account-status-${account.status.toLowerCase()}`}><span className="account-status-dot" aria-hidden="true" />{account.status}</span>
           </div>
           <div className="admin-user-roles" aria-label={`Roles for ${account.username}`}>
-            {account.roles.map(role => <span key={role}>{role}</span>)}
+            {account.roles.map(role => <span className={role === 'ADMIN' ? 'administrator-role' : 'participant-role'} key={role}>
+              {role === 'ADMIN' && <AccountIcon name="shield" />}
+              {role === 'ADMIN' ? 'Administrator' : role === 'REQUESTER' ? 'Requester' : 'Courier'}
+            </span>)}
           </div>
           <div className="admin-user-actions">
             {isSelf
-              ? <span className="admin-self-label">Current account</span>
+              ? <div className="admin-self-label"><AccountIcon name="lock" /><div><strong>Current account</strong><span>Your own access is protected.</span></div></div>
               : <>
-                <button type="button" className={isAdmin ? 'secondary' : ''} disabled={changing || account.status !== 'ACTIVE'}
+                <div className="admin-action-group"><span className="admin-action-label">Administrator access</span>
+                <button type="button" className={`admin-account-action ${isAdmin ? 'access-remove' : 'access-grant'}`} disabled={changing || account.status !== 'ACTIVE'}
                   onClick={() => { void changeAdministrator(account, !isAdmin) }}>
+                  <AccountIcon name={isAdmin ? 'shield-minus' : 'shield-plus'} />
                   {changing ? 'Updating…' : isAdmin ? 'Remove Admin' : 'Promote to Admin'}
                 </button>
-                <button type="button" className="secondary" disabled={changing || account.status === 'UNVERIFIED'}
+                </div>
+                <div className="admin-action-group"><span className="admin-action-label">Account access</span>
+                <button type="button" className={`admin-account-action ${account.status === 'BANNED' ? 'account-restore' : 'account-ban'}`} disabled={changing || account.status === 'UNVERIFIED'}
                   onClick={() => { void changeStatus(account, account.status === 'BANNED' ? 'ACTIVE' : 'BANNED') }}>
+                  <AccountIcon name={account.status === 'BANNED' ? 'restore' : 'ban'} />
                   {account.status === 'BANNED' ? 'Reactivate' : 'Ban account'}
                 </button>
+                </div>
               </>}
           </div>
         </article>
