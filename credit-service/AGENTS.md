@@ -28,3 +28,11 @@ migrations. Resolve Chat privacy/retention independently from ledger work.
 
 Read [README](README.md) architecture/verification sections as needed and the relevant
 [checklist](IMPLEMENTATION_CHECKLIST.md) item when scoping D3 work.
+
+Admin N2H handoffs: [correction commands](../docs/integration/admin-command-contract.md) and
+[Chat timeline/conversation contract](../docs/integration/chat-admin-contract.md). Eldridge owns
+both Credit's authoritative ledger adapter and Chat's separate projection; keep their databases
+and responsibilities separate. Review proposed interfaces before independent implementation.
+
+Eldridge's [Chat blueprint](../chat-service/README.md) covers messaging, images, translation and
+timeline work. Implement it in `chat-service/`, not inside Credit.

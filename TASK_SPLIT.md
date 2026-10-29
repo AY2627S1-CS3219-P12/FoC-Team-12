@@ -2,10 +2,10 @@
 
 | Owner | Service guidance | Additional responsibility |
 | --- | --- | --- |
-| Darryl | [User](user-service/AGENTS.md) | Admin Dashboard |
-| Jun Hui | [Supplier](supplier-service/AGENTS.md) | Logging, broker reliability, observability; initial API Gateway foundation |
-| XueTing | [Order](order-service/AGENTS.md) | Notifications, lifecycle event definitions and transitions |
-| Eldridge | [Credit](credit-service/AGENTS.md) | Chat and Translation |
+| Darryl | [User](user-service/AGENTS.md) | Admin Service and Dashboard |
+| Jun Hui | [Supplier](supplier-service/AGENTS.md) | Broker reliability, timeline delivery/recovery tooling, observability; initial API Gateway foundation |
+| XueTing | [Order](order-service/AGENTS.md) | [Notifications](notification-service/README.md), lifecycle event definitions and transitions |
+| Eldridge | [Credit](credit-service/AGENTS.md) | [Chat and Translation](chat-service/README.md), including Chat-owned activity timeline |
 
 Service instructions define detailed scope. User owns identity/roles, Supplier owns location
 master data, Order owns lifecycle facts, and Credit owns balance/ledger effects.
@@ -16,3 +16,8 @@ responsive end-to-end flows, demos and final submission are shared.
 
 Working and contract-review rules are in [root AGENTS.md](AGENTS.md). Product requirements come
 from the approved backlog and wireframes, not this ownership table.
+
+The [Admin N2H specification](docs/integration/admin-service-spec.md) defines the new
+`admin-service/` boundary and owner handoffs. There is no separate Logging Service in this design;
+Chat persists timeline evidence and Jun Hui owns delivery/recovery infrastructure. User keeps
+existing account administration. New integration wire formats require affected-producer review.

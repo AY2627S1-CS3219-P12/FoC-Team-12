@@ -26,9 +26,12 @@ The User activation/allocation and Order reservation, reward-adjustment, release
 contracts are defined by the shared event blueprint. Credit applies the financial effects of those
 facts and emits outcomes; it does not infer lifecycle transitions.
 
-Retain authoritative ledger history locally. The backlog's user-visible transfer history depends
-on Logging-owned retrieval; agree that integration before exposing it. Chat/Translation needs
-separate approved privacy, retention and participant-authorization decisions.
+Retain authoritative ledger history locally and serve the existing user transaction API from
+Credit. The separate Logging Service dependency is superseded by the planned Chat-owned timeline.
+See [Admin correction commands](../docs/integration/admin-command-contract.md) and
+[Chat evidence/backfill](../docs/integration/chat-admin-contract.md). Credit owns corrective
+ledger effects and evidence export; Chat owns the derived case timeline. New wire formats still
+require owner review; these links do not indicate implemented adapters.
 
 The cross-service event envelope, payloads, recovery rules and implementation responsibilities are
 defined in the shared

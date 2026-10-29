@@ -6,7 +6,8 @@
 students can request items to be collected from stores or facilities on
 campus, and other students can fulfil (and deliver) those requests. The
 platform runs on a closed credit economy — credits cannot be bought,
-withdrawn, or exchanged for money, and only circulate within the platform.
+withdrawn, or exchanged for money. Normal transfers circulate within the platform; the agreed
+Admin N2H additionally permits audited corrective issuance/removal by authorized administrators.
 
 ---
 
@@ -14,13 +15,23 @@ withdrawn, or exchanged for money, and only circulate within the platform.
 
 | Name | Mandatory service | Additional ownership |
 | ---- | ----------------- | -------------------- |
-| Darryl | User Service | Admin Dashboard |
-| Jun Hui | Supplier Service | Logging, event-broker reliability, observability |
+| Darryl | User Service | Admin Service and Dashboard |
+| Jun Hui | Supplier Service | Event-broker reliability, timeline delivery/recovery, observability |
 | XueTing | Order Service | Notifications, event definitions and transitions |
-| Eldridge | Credit Service | Chat and Translation |
+| Eldridge | Credit Service | Chat and Translation, including activity timeline |
 
 Cloud infrastructure, integration, CI/CD, and demonstrations are shared responsibilities.
 The detailed task boundaries are in [`TASK_SPLIT.md`](TASK_SPLIT.md).
+
+Admin N2H implementation starts with the [Admin specification](docs/integration/admin-service-spec.md),
+[Chat evidence/conversation contract](docs/integration/chat-admin-contract.md) and
+[Kafka administrative actions](docs/integration/admin-command-contract.md). These describe planned
+work and affected-owner review requirements; they do not indicate deployed services. The previous
+separate Logging Service plan is replaced by a Chat-owned event timeline.
+
+Owner-ready N2H blueprints: [Notification Service](notification-service/README.md) (XueTing)
+and [Chat Service](chat-service/README.md) (Eldridge). Their folders currently contain documentation
+and agent boundaries only; they are not runnable services yet.
 
 ---
 
@@ -50,6 +61,9 @@ microservice (`user-service/`, `supplier-service/`, `order-service/`,
   one-service-per-folder skeleton** for core implementation.
 
 ## Working with agents
+
+The [N2H contract package](docs/contracts/README.md) contains machine-readable OpenAPI/JSON
+schemas, shared examples and validation commands for owner review before integration work.
 
 | Document | Responsibility |
 | --- | --- |
@@ -92,9 +106,9 @@ the Credit dashboard at `/credits`, and the current APIs from the same origin:
 /api/credits/**              -> Credit Service
 ```
 
-The Kubernetes setup additionally deploys Order Service at `/api/orders/**`, with its OpenAPI
-document at `/docs/order/openapi.json`. Order is not yet part of the Compose stack and has no
-packaged frontend. The shared local Kafka broker, topics, ACLs and verification workflow are
+Order Service is deployed through Compose and Kubernetes at `/api/orders/**`, with packaged
+frontend `/errands/**`, assets `/order-assets/**` and OpenAPI `/docs/order/openapi.json`.
+The shared local Kafka broker, topics, ACLs and verification workflow are
 documented in [`deploy/kafka/README.md`](deploy/kafka/README.md); application adapters remain
 separate owner-reviewed work. Its authenticated, read-only local Kafka dashboard is available at
 `http://localhost:8090` when the `kafka-ui` Compose service is running. This dashboard is local
