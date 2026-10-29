@@ -132,14 +132,14 @@ export function AdminUserManagement({ currentUserId }: Props) {
             {isSelf
               ? <div className="admin-self-label"><AccountIcon name="lock" /><div><strong>Current account</strong><span>Your own access is protected.</span></div></div>
               : <>
-                <div className="admin-action-group"><span className="admin-action-label">Administrator access</span>
+                <div className="admin-action-group">
                 <button type="button" className={`admin-account-action ${isAdmin ? 'access-remove' : 'access-grant'}`} disabled={changing || account.status !== 'ACTIVE'}
                   onClick={() => { void changeAdministrator(account, !isAdmin) }}>
                   <AccountIcon name={isAdmin ? 'shield-minus' : 'shield-plus'} />
                   {changing ? 'Updating…' : isAdmin ? 'Remove Admin' : 'Promote to Admin'}
                 </button>
                 </div>
-                <div className="admin-action-group"><span className="admin-action-label">Account access</span>
+                <div className="admin-action-group">
                 <button type="button" className={`admin-account-action ${account.status === 'BANNED' ? 'account-restore' : 'account-ban'}`} disabled={changing || account.status === 'UNVERIFIED'}
                   onClick={() => { void changeStatus(account, account.status === 'BANNED' ? 'ACTIVE' : 'BANNED') }}>
                   <AccountIcon name={account.status === 'BANNED' ? 'restore' : 'ban'} />

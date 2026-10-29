@@ -131,7 +131,6 @@ label { display: grid; gap: 0.45rem; color: var(--foc-ink); font-size: 0.9rem; f
 .admin-user-roles { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .admin-user-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.75rem; margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--foc-line); }
 .admin-action-group { display: grid; align-content: start; gap: 0.45rem; min-width: 0; }
-.admin-action-label { color: var(--foc-muted); font-size: 0.67rem; font-weight: 600; }
 .admin-user-actions .admin-account-action { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; min-height: 2.75rem; padding: 0.55rem 0.6rem; border-radius: 0.5rem; font-size: 0.75rem; line-height: 1.4; }
 .account-icon { flex-shrink: 0; }
 .admin-user-actions .access-remove { border-color: var(--foc-line); background: var(--foc-surface); color: var(--foc-ink); }
