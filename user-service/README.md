@@ -341,6 +341,14 @@ Invoke-RestMethod http://localhost:8081/api/users/me -Headers @{ Authorization =
 
 ## Administrator role and lifecycle API
 
+Admin foundation also adds private `GET /internal/users/{userId}/admin-eligibility`.
+It accepts only Admin/Chat/Credit service assertions pinned by `USER_SERVICE_TRUSTED_KEYS`,
+independently of User JWT keys, and returns `{userId, active, administrator}` from current
+persisted state (404 if absent). User/browser tokens cannot access it. The trust map defaults
+to empty, denying all callers. See [Admin foundation setup](../admin-service/README.md) for
+the key format, local setup and service-token validation rules. This route is not public
+gateway scope; shared network/TLS configuration remains a deployment prerequisite.
+
 The User frontend provides account administration at `/?view=users` through **Manage users**
 in Admin mode. The broader dispute/case dashboard remains future N2H work. Every endpoint below
 requires an `Authorization: Bearer <access-token>` for an account that is currently
