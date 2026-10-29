@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitForElementToBeRemoved } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import { AdminUserManagement } from './AdminUserManagement'
@@ -37,4 +37,6 @@ test('lets an administrator promote an active account without developer tools', 
   expect(await screen.findByText('Alice is now an administrator.')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Remove Admin' })).toBeInTheDocument()
   expect(fetch).toHaveBeenLastCalledWith(`/api/users/admin/accounts/${requesterId}/role`, expect.objectContaining({ method: 'PATCH' }))
+  await waitForElementToBeRemoved(() => screen.queryByText('Alice is now an administrator.'), { timeout: 4000 })
+  expect(screen.getByRole('button', { name: 'Remove Admin' })).toBeInTheDocument()
 })

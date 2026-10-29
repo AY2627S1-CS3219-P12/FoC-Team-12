@@ -22,6 +22,12 @@ export function AdminUserManagement({ currentUserId }: Props) {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    if (!message) return
+    const timer = window.setTimeout(() => setMessage(''), 3000)
+    return () => window.clearTimeout(timer)
+  }, [message])
+
+  useEffect(() => {
     let cancelled = false
     void api.listAdminAccounts(query, pageNumber)
       .then(result => { if (!cancelled) setAccounts(result) })
@@ -94,7 +100,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
       </span>
     </form>
 
-    {message && <p className="admin-user-notice success" role="status">{message}</p>}
+    {message && <p className="admin-user-success" role="status">{message}</p>}
     {error && <p className="admin-user-notice error" role="alert">{error}</p>}
     {loading && <p role="status">Loading accounts…</p>}
     {!loading && accounts.content.length === 0 && <p>No accounts match your search.</p>}

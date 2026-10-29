@@ -108,6 +108,7 @@ label { display: grid; gap: 0.45rem; color: var(--foc-ink); font-size: 0.9rem; f
 .admin-user-search input { flex: 1; }
 .admin-user-search button { min-width: 7rem; }
 .admin-user-notice { background: var(--foc-action-soft); color: var(--foc-action); }
+.admin-user-success { margin: 0.75rem 0; color: var(--foc-action); font-size: 0.75rem; font-weight: 400; }
 .admin-user-notice.error { border-color: #e8c5bf; background: var(--foc-danger-soft); color: var(--foc-danger); }
 .admin-user-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .admin-user-card { display: grid; align-content: start; gap: 0.875rem; min-width: 0; padding: 1.1rem; border: 1px solid var(--foc-line); border-radius: 0.75rem; background: var(--foc-surface); }

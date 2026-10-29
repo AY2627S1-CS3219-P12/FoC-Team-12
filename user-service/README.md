@@ -341,6 +341,9 @@ Invoke-RestMethod http://localhost:8081/api/users/me -Headers @{ Authorization =
 
 ## Administrator role and lifecycle API
 
+Account-management success feedback appears as small status text and clears after three
+seconds, matching the profile feedback timing. Account status badges remain visible.
+
 Admin foundation also adds private `GET /internal/users/{userId}/admin-eligibility`.
 It accepts only Admin/Chat/Credit service assertions pinned by `USER_SERVICE_TRUSTED_KEYS`,
 independently of User JWT keys, and returns `{userId, active, administrator}` from current
