@@ -24,3 +24,11 @@ Use Java 17, Spring Boot, Maven Wrapper, PostgreSQL, JPA transactions, Flyway, v
 Actuator, OpenAPI and User-contract RS256/JWKS validation. Never edit applied migrations.
 Read [README](README.md) architecture/verification sections as needed and the relevant
 [checklist](IMPLEMENTATION_CHECKLIST.md) item when scoping D3 work.
+
+For Admin/Chat evidence read [timeline contract](../docs/integration/chat-admin-contract.md).
+Order owns historical assignments, complete lifecycle evidence and checkpoint/backfill exports;
+Chat owns projection/querying. Do not modify the core credit event schema to fill timeline gaps.
+Case notifications are deferred until a recipient/event contract is separately agreed.
+
+XueTing's separate [Notification blueprint](../notification-service/README.md) defines the D3
+recipient mapping and consumer scope; implement its code in `notification-service/`, not Order.

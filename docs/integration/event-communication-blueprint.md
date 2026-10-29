@@ -3,6 +3,17 @@
 Version: **1**
 Applies to: **User, Order, Credit and Kafka infrastructure**
 
+Planned Admin/Chat extensions are in [Admin specification](admin-service-spec.md),
+[Chat evidence integration](chat-admin-contract.md) and [administrative commands](admin-command-contract.md).
+They use separate topics/catalogues and require affected-owner review. This version-1 core
+wire contract remains unchanged. Do not send administrative correction commands into existing
+Order reservation handlers or reuse `CreditAdjusted` for administrative issuance/removal.
+The topic/consumer table below covers the core workflow, not all planned N2H subscriptions.
+
+N2H owners start from [Notification blueprint](../../notification-service/README.md) and
+[Chat blueprint](../../chat-service/README.md). These require independent consumer groups and
+full Order lifecycle coverage in addition to this core credit-operation stream.
+
 This is the implementation contract for D3 event communication. If a service-specific design uses
 different topic names, event names or payload fields, this blueprint takes precedence for the
 cross-service wire format. Do not reinterpret a version-1 event in place: make a documented
