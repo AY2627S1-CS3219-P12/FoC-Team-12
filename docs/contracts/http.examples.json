@@ -1,0 +1,463 @@
+[
+  {
+    "operationId": "chat_get__internal_chat_orders_orderId_report_eligibility",
+    "status": 200,
+    "body": {
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "userId": "11111111-1111-4111-8111-111111111111",
+      "eligible": true,
+      "evidenceRevision": "example",
+      "coverage": {
+        "status": "COMPLETE",
+        "asOf": "2026-10-29T12:00:00Z",
+        "checkpoints": [],
+        "blockingGaps": []
+      }
+    }
+  },
+  {
+    "operationId": "chat_get__internal_chat_cases_caseId_timeline",
+    "status": 200,
+    "body": {
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "evidenceRevision": "example",
+      "order": {
+        "orderId": "11111111-1111-4111-8111-111111111111",
+        "requesterId": "11111111-1111-4111-8111-111111111111",
+        "courierId": "11111111-1111-4111-8111-111111111111",
+        "status": "PENDING_CREDIT",
+        "title": "example",
+        "description": "example",
+        "creditReward": 1,
+        "pickupDeadline": "2026-10-29T12:00:00Z",
+        "pickupLocationId": "11111111-1111-4111-8111-111111111111",
+        "dropoffLocationId": "11111111-1111-4111-8111-111111111111",
+        "pickupLocationName": "example",
+        "dropoffLocationName": "example"
+      },
+      "participants": [],
+      "records": [],
+      "coverage": {
+        "status": "COMPLETE",
+        "asOf": "2026-10-29T12:00:00Z",
+        "checkpoints": [],
+        "blockingGaps": []
+      },
+      "nextCursor": "example"
+    }
+  },
+  {
+    "operationId": "chat_post__internal_chat_cases_caseId_conversations",
+    "status": 200,
+    "body": {
+      "conversationId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "participantUserId": "11111111-1111-4111-8111-111111111111",
+      "readOnly": true
+    },
+    "requestBody": {
+      "participantUserId": "11111111-1111-4111-8111-111111111111"
+    }
+  },
+  {
+    "operationId": "user_get__internal_users_userId_admin_eligibility",
+    "status": 200,
+    "body": {
+      "userId": "11111111-1111-4111-8111-111111111111",
+      "active": true,
+      "administrator": true
+    }
+  },
+  {
+    "operationId": "admin_get__internal_admin_cases_caseId_access",
+    "status": 200,
+    "body": {
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "state": "OPEN",
+      "reviewerId": "11111111-1111-4111-8111-111111111111",
+      "allowedParticipantIds": [],
+      "canReadEvidence": true,
+      "canReadConversation": true,
+      "canWriteConversation": true
+    }
+  },
+  {
+    "operationId": "orders_get__internal_orders_orders_orderId_evidence",
+    "status": 200,
+    "body": {
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "snapshotId": "example",
+      "checkpoint": {
+        "source": "example",
+        "stream": "example",
+        "aggregateId": "11111111-1111-4111-8111-111111111111",
+        "committedSequence": 1,
+        "checkedAt": "2026-10-29T12:00:00Z"
+      },
+      "records": [],
+      "nextCursor": "example"
+    }
+  },
+  {
+    "operationId": "credits_get__internal_credits_orders_orderId_evidence",
+    "status": 200,
+    "body": {
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "snapshotId": "example",
+      "checkpoint": {
+        "source": "example",
+        "stream": "example",
+        "aggregateId": "11111111-1111-4111-8111-111111111111",
+        "committedSequence": 1,
+        "checkedAt": "2026-10-29T12:00:00Z"
+      },
+      "records": [],
+      "nextCursor": "example"
+    }
+  },
+  {
+    "operationId": "admin_get__internal_admin_orders_orderId_evidence",
+    "status": 200,
+    "body": {
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "snapshotId": "example",
+      "checkpoint": {
+        "source": "example",
+        "stream": "example",
+        "aggregateId": "11111111-1111-4111-8111-111111111111",
+        "committedSequence": 1,
+        "checkedAt": "2026-10-29T12:00:00Z"
+      },
+      "records": [],
+      "nextCursor": "example"
+    }
+  },
+  {
+    "operationId": "chat_get__api_chat_orders_orderId_conversation",
+    "status": 200,
+    "body": {
+      "conversationId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "participantUserId": "11111111-1111-4111-8111-111111111111",
+      "readOnly": true
+    }
+  },
+  {
+    "operationId": "chat_get__api_chat_conversations_conversationId",
+    "status": 200,
+    "body": {
+      "conversationId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "participantUserId": "11111111-1111-4111-8111-111111111111",
+      "readOnly": true
+    }
+  },
+  {
+    "operationId": "chat_get__api_chat_conversations_conversationId_messages",
+    "status": 200,
+    "body": {
+      "content": [],
+      "nextCursor": "example"
+    }
+  },
+  {
+    "operationId": "chat_post__api_chat_conversations_conversationId_messages",
+    "status": 201,
+    "body": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "conversationId": "11111111-1111-4111-8111-111111111111",
+      "senderUserId": "11111111-1111-4111-8111-111111111111",
+      "sequence": 1,
+      "createdAt": "2026-10-29T12:00:00Z",
+      "text": "example",
+      "attachment": null
+    },
+    "requestBody": {
+      "clientMessageId": "11111111-1111-4111-8111-111111111111",
+      "text": "example"
+    }
+  },
+  {
+    "operationId": "chat_post__api_chat_ws_tickets",
+    "status": 201,
+    "body": {
+      "ticket": "example",
+      "expiresAt": "2026-10-29T12:00:00Z"
+    },
+    "requestBody": {
+      "conversationId": "11111111-1111-4111-8111-111111111111"
+    }
+  },
+  {
+    "operationId": "chat_post__api_chat_conversations_conversationId_messages_messageId_translations",
+    "status": 202,
+    "body": {
+      "messageId": "11111111-1111-4111-8111-111111111111",
+      "targetLanguage": "example",
+      "status": "PENDING",
+      "text": "example"
+    },
+    "requestBody": {
+      "targetLanguage": "example"
+    }
+  },
+  {
+    "operationId": "chat_get__api_chat_conversations_conversationId_messages_messageId_translations_language",
+    "status": 200,
+    "body": {
+      "messageId": "11111111-1111-4111-8111-111111111111",
+      "targetLanguage": "example",
+      "status": "PENDING",
+      "text": "example"
+    }
+  },
+  {
+    "operationId": "chat_post__api_chat_conversations_conversationId_attachments",
+    "status": 201,
+    "body": {
+      "attachmentId": "11111111-1111-4111-8111-111111111111",
+      "uploadUrl": "https://example.invalid/resource",
+      "expiresAt": "2026-10-29T12:00:00Z",
+      "requiredHeaders": {}
+    },
+    "requestBody": {
+      "mediaType": "image/jpeg",
+      "sizeBytes": 1
+    }
+  },
+  {
+    "operationId": "chat_post__api_chat_conversations_conversationId_attachments_attachmentId_complete",
+    "status": 200,
+    "body": {
+      "attachmentId": "11111111-1111-4111-8111-111111111111",
+      "mediaType": "image/jpeg",
+      "sizeBytes": 1
+    }
+  },
+  {
+    "operationId": "chat_get__api_chat_conversations_conversationId_attachments_attachmentId_download",
+    "status": 200,
+    "body": {
+      "downloadUrl": "https://example.invalid/resource",
+      "expiresAt": "2026-10-29T12:00:00Z"
+    }
+  },
+  {
+    "operationId": "notification_get__api_notifications_me",
+    "status": 200,
+    "body": {
+      "content": [],
+      "page": 1,
+      "size": 1,
+      "totalElements": 1,
+      "totalPages": 1
+    }
+  },
+  {
+    "operationId": "notification_patch__api_notifications_me_id_read",
+    "status": 200,
+    "body": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "type": "ORDER_OPENED",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "message": "example",
+      "occurredAt": "2026-10-29T12:00:00Z",
+      "readAt": "2026-10-29T12:00:00Z"
+    }
+  },
+  {
+    "operationId": "admin_post__api_admin_reports",
+    "status": 201,
+    "body": {
+      "case": {
+        "caseId": "11111111-1111-4111-8111-111111111111",
+        "orderId": "11111111-1111-4111-8111-111111111111",
+        "state": "OPEN",
+        "reviewerId": "11111111-1111-4111-8111-111111111111",
+        "revision": 1,
+        "createdAt": "2026-10-29T12:00:00Z"
+      },
+      "ownStatement": {
+        "reporterId": "11111111-1111-4111-8111-111111111111",
+        "description": "example",
+        "submittedAt": "2026-10-29T12:00:00Z"
+      }
+    },
+    "requestBody": {
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "description": "example"
+    }
+  },
+  {
+    "operationId": "admin_get__api_admin_reports_caseId",
+    "status": 200,
+    "body": {
+      "case": {
+        "caseId": "11111111-1111-4111-8111-111111111111",
+        "orderId": "11111111-1111-4111-8111-111111111111",
+        "state": "OPEN",
+        "reviewerId": "11111111-1111-4111-8111-111111111111",
+        "revision": 1,
+        "createdAt": "2026-10-29T12:00:00Z"
+      },
+      "ownStatement": {
+        "reporterId": "11111111-1111-4111-8111-111111111111",
+        "description": "example",
+        "submittedAt": "2026-10-29T12:00:00Z"
+      }
+    }
+  },
+  {
+    "operationId": "admin_get__api_admin_cases",
+    "status": 200,
+    "body": {
+      "content": [],
+      "page": 1,
+      "size": 1,
+      "totalElements": 1,
+      "totalPages": 1
+    }
+  },
+  {
+    "operationId": "admin_get__api_admin_cases_caseId",
+    "status": 200,
+    "body": {
+      "case": {
+        "caseId": "11111111-1111-4111-8111-111111111111",
+        "orderId": "11111111-1111-4111-8111-111111111111",
+        "state": "OPEN",
+        "reviewerId": "11111111-1111-4111-8111-111111111111",
+        "revision": 1,
+        "createdAt": "2026-10-29T12:00:00Z"
+      },
+      "statements": [],
+      "actions": [],
+      "resolution": "example"
+    }
+  },
+  {
+    "operationId": "admin_post__api_admin_cases_caseId_claim",
+    "status": 200,
+    "body": {
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "state": "OPEN",
+      "reviewerId": "11111111-1111-4111-8111-111111111111",
+      "revision": 1,
+      "createdAt": "2026-10-29T12:00:00Z"
+    },
+    "requestBody": {
+      "expectedRevision": 1
+    }
+  },
+  {
+    "operationId": "admin_get__api_admin_cases_caseId_timeline",
+    "status": 200,
+    "body": {
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "evidenceRevision": "example",
+      "order": {
+        "orderId": "11111111-1111-4111-8111-111111111111",
+        "requesterId": "11111111-1111-4111-8111-111111111111",
+        "courierId": "11111111-1111-4111-8111-111111111111",
+        "status": "PENDING_CREDIT",
+        "title": "example",
+        "description": "example",
+        "creditReward": 1,
+        "pickupDeadline": "2026-10-29T12:00:00Z",
+        "pickupLocationId": "11111111-1111-4111-8111-111111111111",
+        "dropoffLocationId": "11111111-1111-4111-8111-111111111111",
+        "pickupLocationName": "example",
+        "dropoffLocationName": "example"
+      },
+      "participants": [],
+      "records": [],
+      "coverage": {
+        "status": "COMPLETE",
+        "asOf": "2026-10-29T12:00:00Z",
+        "checkpoints": [],
+        "blockingGaps": []
+      },
+      "nextCursor": "example"
+    }
+  },
+  {
+    "operationId": "admin_post__api_admin_cases_caseId_conversations",
+    "status": 200,
+    "body": {
+      "conversationId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "participantUserId": "11111111-1111-4111-8111-111111111111",
+      "readOnly": true
+    },
+    "requestBody": {
+      "participantUserId": "11111111-1111-4111-8111-111111111111"
+    }
+  },
+  {
+    "operationId": "admin_post__api_admin_cases_caseId_actions",
+    "status": 202,
+    "body": {
+      "operationId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "targetUserId": "11111111-1111-4111-8111-111111111111",
+      "type": "CREDIT_ADJUSTMENT",
+      "amount": 1,
+      "reason": "example",
+      "status": "PENDING",
+      "reasonCode": "example",
+      "createdAt": "2026-10-29T12:00:00Z",
+      "completedAt": "2026-10-29T12:00:00Z"
+    },
+    "requestBody": {
+      "type": "CREDIT_ADJUSTMENT",
+      "targetUserId": "11111111-1111-4111-8111-111111111111",
+      "reason": "example",
+      "amount": 1
+    }
+  },
+  {
+    "operationId": "admin_get__api_admin_cases_caseId_actions_operationId",
+    "status": 200,
+    "body": {
+      "operationId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "targetUserId": "11111111-1111-4111-8111-111111111111",
+      "type": "CREDIT_ADJUSTMENT",
+      "amount": 1,
+      "reason": "example",
+      "status": "PENDING",
+      "reasonCode": "example",
+      "createdAt": "2026-10-29T12:00:00Z",
+      "completedAt": "2026-10-29T12:00:00Z"
+    }
+  },
+  {
+    "operationId": "admin_post__api_admin_cases_caseId_resolve",
+    "status": 200,
+    "body": {
+      "case": {
+        "caseId": "11111111-1111-4111-8111-111111111111",
+        "orderId": "11111111-1111-4111-8111-111111111111",
+        "state": "OPEN",
+        "reviewerId": "11111111-1111-4111-8111-111111111111",
+        "revision": 1,
+        "createdAt": "2026-10-29T12:00:00Z"
+      },
+      "statements": [],
+      "actions": [],
+      "resolution": "example"
+    },
+    "requestBody": {
+      "resolution": "example",
+      "expectedRevision": 1
+    }
+  }
+]
