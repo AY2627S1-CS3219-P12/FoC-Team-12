@@ -128,8 +128,20 @@ responses are 503; Chat snapshot conflicts become 409 with an explicit restart i
 Responses use no-store. User access failures remain denied/unavailable rather than being
 converted into evidence completeness claims.
 
-Case detail shows the order snapshot, historical participants, paginated records with both
-occurrence and ingestion times, checkpoints, projected/committed progress and known gaps.
+All Admin display timestamps use a shared formatter fixed to `Asia/Singapore`, with a readable
+date, 12-hour time including seconds and an explicit SGT label, independent of device timezone.
+This covers queue/case creation, statements, participant status, assignment periods, deadlines,
+activity, ingestion and coverage checks. API timestamps and machine-readable time attributes
+retain their original instants.
+
+Case detail leads with readable activity summaries, Singapore occurrence times,
+and participant relationship labels. Names/emails are not supplied by the timeline contract;
+Requester and numbered Courier labels identify accounts within this snapshot, including repeated
+assignment periods. Unknown actors remain explicitly outside supplied participant history; a
+missing actor is not assumed to be a system action. Expandable technical details retain raw IDs,
+broker streams, source sequences, ingestion times, revision and coverage checkpoints. These are
+collapsed by default even for incomplete evidence; known gaps and projection lag remain visible
+in plain language. No additional API or identity lookup is introduced.
 COMPLETE also requires that the snapshot requester/current courier appear in the supplied
 participants. It is accepted only with no blocking gaps, no lag and checkpoints for the documented
 Order, Credit and Admin streams/aggregates. The label says complete *through those

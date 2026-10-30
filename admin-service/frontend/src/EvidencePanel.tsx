@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CaseError, request } from './cases'
+import { formatSingaporeTime as date } from './time'
 
 type Checkpoint = {
   source: string
@@ -96,7 +97,82 @@ export type Timeline = {
   nextCursor: string | null
 }
 
-const date = (value: string) => new Date(value).toLocaleString()
+const readable = (value: string) => {
+  const words = value
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+    .replaceAll('_', ' ')
+    .toLowerCase()
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+const historyName = (source: string) => {
+  const names: Record<string, string> = {
+    'order-service': 'Errand history',
+    'credit-service': 'Credit history',
+    'admin-service': 'Case history',
+  }
+  return Object.hasOwn(names, source) ? names[source] : 'Other history source'
+}
+const categoryName = {
+  ORDER: 'Errand',
+  CREDIT: 'Credits',
+  ADMIN: 'Case review',
+}
+function activityTitle(record: EvidenceRecord) {
+  const orderActions: Record<string, string> = {
+    SUBMIT: 'Errand submitted',
+    OPEN: 'Errand opened',
+    FAIL_RESERVATION: 'Credit reservation failed',
+    CANCEL: 'Errand cancelled',
+    EXPIRE: 'Errand expired',
+    ACCEPT: 'Errand accepted',
+    WITHDRAW: 'Courier withdrew',
+    PICK_UP: 'Errand picked up',
+    DELIVER: 'Errand delivered',
+    COMPLETE: 'Errand completed',
+    EDIT: 'Errand details updated',
+    REWARD_CHANGE_APPLIED: 'Reward change applied',
+    REWARD_CHANGE_REJECTED: 'Reward change rejected',
+  }
+  const caseActions: Record<string, string> = {
+    CaseOpened: 'Case opened',
+    CaseClaimed: 'Case claimed',
+    CaseActionCompleted: 'Case action completed',
+    CaseResolved: 'Case resolved',
+  }
+  const actions =
+    record.data.kind === 'ORDER'
+      ? orderActions
+      : record.data.kind === 'ADMIN'
+        ? caseActions
+        : {}
+  return Object.hasOwn(actions, record.action)
+    ? actions[record.action]
+    : readable(record.action)
+}
+function participantLabels(participants: Participant[]) {
+  const couriers = [
+    ...new Set(
+      participants
+        .filter((p) => p.relationship === 'HISTORICAL_COURIER')
+        .map((p) => p.userId),
+    ),
+  ].sort()
+  return (id: string) => {
+    const roles: string[] = []
+    if (
+      participants.some(
+        (p) => p.userId === id && p.relationship === 'REQUESTER',
+      )
+    )
+      roles.push('Requester')
+    const courier = couriers.indexOf(id)
+    if (courier >= 0) roles.push(`Courier ${courier + 1}`)
+    return roles.join(' · ') || 'Account outside supplied participant history'
+  }
+}
+function EvidenceTime({ value }: { value: string }) {
+  return <time dateTime={value}>{date(value)}</time>
+}
 function compare(a: EvidenceRecord, b: EvidenceRecord) {
   return (
     Date.parse(a.occurredAt) - Date.parse(b.occurredAt) ||
@@ -125,22 +201,26 @@ function failure(error: unknown) {
   }
   return 'The evidence service is unavailable. We cannot verify whether the evidence is complete. Please retry.'
 }
-function EvidenceData({ record }: { record: EvidenceRecord }) {
+function EvidenceData({
+  record,
+  participant,
+}: {
+  record: EvidenceRecord
+  participant: (id: string) => string
+}) {
   const data = record.data
   if (data.kind === 'ORDER')
     return (
       <div className="evidence-data">
         <p>
-          {data.fromState
-            ? data.fromState.replaceAll('_', ' ')
-            : 'Initial state'}{' '}
-          → {data.toState.replaceAll('_', ' ')}
+          {data.fromState ? readable(data.fromState) : 'Initial state'} →{' '}
+          {readable(data.toState)}
         </p>
-        <p>Requester: {data.requesterId}</p>
+        <p>Requester: {participant(data.requesterId)}</p>
         <p>
-          Courier: {data.courierId || 'Unassigned'}
+          Courier: {data.courierId ? participant(data.courierId) : 'Unassigned'}
           {data.previousCourierId &&
-            ` · Previous courier: ${data.previousCourierId}`}
+            ` · Previous courier: ${participant(data.previousCourierId)}`}
         </p>
         <details>
           <summary>Errand snapshot at this event</summary>
@@ -161,15 +241,14 @@ function EvidenceData({ record }: { record: EvidenceRecord }) {
     return (
       <div className="evidence-data">
         <p>
-          {data.result}
-          {data.reasonCode && ` · ${data.reasonCode}`}
+          Outcome: {readable(data.result)}
+          {data.reasonCode && ` · ${readable(data.reasonCode)}`}
         </p>
-        <p>Operation: {data.operationId}</p>
         {data.ledgerEntries.length ? (
           <ul>
             {data.ledgerEntries.map((entry) => (
               <li key={entry.ledgerEntryId}>
-                <p>Account {entry.userId}</p>
+                <p>{participant(entry.userId)}</p>
                 <p>
                   Available: {entry.availableDelta > 0 ? '+' : ''}
                   {entry.availableDelta} (balance {entry.availableBalance}) ·
@@ -186,11 +265,114 @@ function EvidenceData({ record }: { record: EvidenceRecord }) {
     )
   return (
     <div className="evidence-data">
-      <p>Case {data.caseId}</p>
-      {data.operationId && <p>Operation: {data.operationId}</p>}
-      {data.targetUserId && <p>Target: {data.targetUserId}</p>}
-      {data.result && <p>Result: {data.result}</p>}
+      {data.targetUserId && (
+        <p>Affected account: {participant(data.targetUserId)}</p>
+      )}
+      {data.result && <p>Outcome: {readable(data.result)}</p>}
     </div>
+  )
+}
+
+function RecordDetails({ record }: { record: EvidenceRecord }) {
+  const data = record.data
+  return (
+    <details className="evidence-technical">
+      <summary>Technical details</summary>
+      <dl className="evidence-identifiers">
+        <div>
+          <dt>Event ID</dt>
+          <dd>{record.eventId}</dd>
+        </div>
+        <div>
+          <dt>Action</dt>
+          <dd>{record.action}</dd>
+        </div>
+        <div>
+          <dt>Source / broker stream</dt>
+          <dd>
+            {record.source} / {record.stream}
+          </dd>
+        </div>
+        <div>
+          <dt>Source sequence</dt>
+          <dd>{record.sourceSequence}</dd>
+        </div>
+        <div>
+          <dt>Errand ID</dt>
+          <dd>{record.orderId}</dd>
+        </div>
+        <div>
+          <dt>Actor ID</dt>
+          <dd>{record.actorUserId || 'Not recorded'}</dd>
+        </div>
+        <div>
+          <dt>Added to evidence</dt>
+          <dd>
+            <EvidenceTime value={record.ingestedAt} />
+          </dd>
+        </div>
+        {data.kind === 'ORDER' && (
+          <>
+            <div>
+              <dt>Requester ID</dt>
+              <dd>{data.requesterId}</dd>
+            </div>
+            <div>
+              <dt>Courier ID</dt>
+              <dd>{data.courierId || 'Unassigned'}</dd>
+            </div>
+            <div>
+              <dt>Previous courier ID</dt>
+              <dd>{data.previousCourierId || 'Not recorded'}</dd>
+            </div>
+            <div>
+              <dt>Pickup location ID</dt>
+              <dd>{data.snapshot.pickupLocationId}</dd>
+            </div>
+            <div>
+              <dt>Drop-off location ID</dt>
+              <dd>{data.snapshot.dropoffLocationId}</dd>
+            </div>
+          </>
+        )}
+        {data.kind === 'ADMIN' && (
+          <>
+            <div>
+              <dt>Case ID</dt>
+              <dd>{data.caseId}</dd>
+            </div>
+            <div>
+              <dt>Operation ID</dt>
+              <dd>{data.operationId || 'Not supplied'}</dd>
+            </div>
+            <div>
+              <dt>Target account ID</dt>
+              <dd>{data.targetUserId || 'Not supplied'}</dd>
+            </div>
+          </>
+        )}
+        {data.kind === 'CREDIT' && (
+          <>
+            <div>
+              <dt>Operation ID</dt>
+              <dd>{data.operationId}</dd>
+            </div>
+            <div>
+              <dt>Reason code</dt>
+              <dd>{data.reasonCode || 'Not supplied'}</dd>
+            </div>
+            {data.ledgerEntries.map((entry) => (
+              <div key={entry.ledgerEntryId}>
+                <dt>Ledger entry / account ID</dt>
+                <dd>
+                  {entry.ledgerEntryId} / {entry.userId}
+                </dd>
+              </div>
+            ))}
+          </>
+        )}
+      </dl>
+    </details>
   )
 }
 
@@ -348,6 +530,7 @@ export function EvidencePanel({
   }
   const trustworthy =
     snapshot && !error && !restartRequired && complete(snapshot)
+  const participant = participantLabels(snapshot?.participants || [])
   return (
     <section
       className="case-panel evidence-panel"
@@ -370,8 +553,8 @@ export function EvidencePanel({
         </button>
       </div>
       <p>
-        Evidence is supplied by Chat from producer history. Its coverage is
-        separate from the number of records loaded.
+        Review errand, credit and case activity. Loading all pages does not by
+        itself establish a complete history.
       </p>
       {loading && (
         <p role="status">
@@ -412,7 +595,7 @@ export function EvidencePanel({
           >
             <h3 id="coverage-title">
               {trustworthy
-                ? 'Complete through the displayed checkpoints'
+                ? 'Complete through verified coverage limits'
                 : error || restartRequired
                   ? 'Coverage cannot currently be verified'
                   : snapshot.coverage.status === 'UNKNOWN'
@@ -421,12 +604,11 @@ export function EvidencePanel({
             </h3>
             <p>
               {trustworthy
-                ? 'This confirms coverage only through those producer checkpoints. It does not mean the evidence is current forever.'
+                ? 'All history is accounted for through the coverage limits supplied by each service. Newer activity may not be included. See coverage technical details for the exact limits.'
                 : 'Missing or unverified evidence must not be treated as a complete case history.'}
             </p>
             <p>
-              Coverage checked {date(snapshot.coverage.asOf)} · Snapshot
-              revision {snapshot.evidenceRevision}
+              Coverage checked <EvidenceTime value={snapshot.coverage.asOf} />
             </p>
           </section>
           <section className="evidence-section">
@@ -436,7 +618,7 @@ export function EvidencePanel({
             <dl className="case-facts">
               <div>
                 <dt>State</dt>
-                <dd>{snapshot.order.status.replaceAll('_', ' ')}</dd>
+                <dd>{readable(snapshot.order.status)}</dd>
               </div>
               <div>
                 <dt>Reward</dt>
@@ -468,23 +650,33 @@ export function EvidencePanel({
               <ul className="evidence-participants">
                 {snapshot.participants.map((p, index) => (
                   <li key={`${p.userId}:${p.assignedAt}:${index}`}>
-                    <span className="role-chip">
-                      {p.relationship === 'REQUESTER'
-                        ? 'Requester'
-                        : 'Historical courier'}
-                    </span>
-                    <strong>{p.userId}</strong>
+                    <strong>{participant(p.userId)}</strong>
+                    {p.relationship === 'HISTORICAL_COURIER' && (
+                      <span className="role-chip">Historical courier</span>
+                    )}
                     {p.relationship === 'HISTORICAL_COURIER' && (
                       <span>
-                        {p.assignedAt
-                          ? 'Assigned ' + date(p.assignedAt)
-                          : 'Assignment start unavailable'}{' '}
+                        {p.assignedAt ? (
+                          <>
+                            Assigned <EvidenceTime value={p.assignedAt} />
+                          </>
+                        ) : (
+                          'Assignment start unavailable'
+                        )}{' '}
                         ·{' '}
-                        {p.unassignedAt
-                          ? 'Unassigned ' + date(p.unassignedAt)
-                          : 'No end recorded in this snapshot'}
+                        {p.unassignedAt ? (
+                          <>
+                            Unassigned <EvidenceTime value={p.unassignedAt} />
+                          </>
+                        ) : (
+                          'No end recorded in this snapshot'
+                        )}
                       </span>
                     )}
+                    <details className="evidence-technical">
+                      <summary>Participant technical details</summary>
+                      <p>Account ID: {p.userId}</p>
+                    </details>
                   </li>
                 ))}
               </ul>
@@ -494,14 +686,43 @@ export function EvidencePanel({
                 that no historical participants exist.
               </p>
             )}
+            <p className="evidence-meta">
+              Labels identify accounts within this timeline; names are not
+              supplied. A numbered courier can have more than one assignment
+              period.
+            </p>
           </section>
-          <details
-            className="evidence-section"
-            open={snapshot.coverage.status !== 'COMPLETE'}
-          >
-            <summary>
+          <details className="evidence-section evidence-technical">
+            <summary>Coverage technical details</summary>
+            <dl className="evidence-identifiers">
+              <div>
+                <dt>Snapshot revision</dt>
+                <dd>{snapshot.evidenceRevision}</dd>
+              </div>
+              <div>
+                <dt>Case ID</dt>
+                <dd>{snapshot.caseId}</dd>
+              </div>
+              <div>
+                <dt>Errand ID</dt>
+                <dd>{snapshot.orderId}</dd>
+              </div>
+              <div>
+                <dt>Reported coverage status</dt>
+                <dd>{snapshot.coverage.status}</dd>
+              </div>
+              <div>
+                <dt>Pickup location ID</dt>
+                <dd>{snapshot.order.pickupLocationId}</dd>
+              </div>
+              <div>
+                <dt>Drop-off location ID</dt>
+                <dd>{snapshot.order.dropoffLocationId}</dd>
+              </div>
+            </dl>
+            <h4>
               Coverage checkpoints ({snapshot.coverage.checkpoints.length})
-            </summary>
+            </h4>
             {snapshot.coverage.checkpoints.length ? (
               <div className="evidence-table-scroll">
                 <table>
@@ -551,12 +772,21 @@ export function EvidencePanel({
               <ul className="evidence-gaps">
                 {snapshot.coverage.blockingGaps.map((gap, index) => (
                   <li key={index}>
-                    <strong>{gap.reason.replaceAll('_', ' ')}</strong>
-                    <p>
-                      {gap.source} / {gap.stream} · Sequences {gap.fromSequence}
-                      –{gap.toSequence}
-                    </p>
-                    <p>Aggregate {gap.aggregateId}</p>
+                    <strong>
+                      {historyName(gap.source)}:{' '}
+                      {gap.reason === 'MISSING_SEQUENCE'
+                        ? 'Some activity is missing'
+                        : readable(gap.reason)}
+                    </strong>
+                    <details className="evidence-technical">
+                      <summary>Gap technical details</summary>
+                      <p>Reason: {gap.reason}</p>
+                      <p>
+                        {gap.source} / {gap.stream} · Sequences{' '}
+                        {gap.fromSequence}–{gap.toSequence}
+                      </p>
+                      <p>Aggregate ID: {gap.aggregateId}</p>
+                    </details>
                   </li>
                 ))}
               </ul>
@@ -566,10 +796,27 @@ export function EvidencePanel({
                 establish complete coverage.
               </p>
             )}
+            {snapshot.coverage.checkpoints.some(
+              (cp) => cp.projectedSequence < cp.committedSequence,
+            ) && (
+              <p className="evidence-lag">
+                Some history is still catching up:{' '}
+                {[
+                  ...new Set(
+                    snapshot.coverage.checkpoints
+                      .filter(
+                        (cp) => cp.projectedSequence < cp.committedSequence,
+                      )
+                      .map((cp) => historyName(cp.source)),
+                  ),
+                ].join(', ')}
+                . Review the coverage technical details for progress.
+              </p>
+            )}
           </section>
           <section className="evidence-section">
             <div className="section-heading">
-              <h3>Evidence records</h3>
+              <h3>Activity timeline</h3>
               <span>{records.length} loaded</span>
             </div>
             {records.length ? (
@@ -578,23 +825,21 @@ export function EvidencePanel({
                   <li key={record.eventId}>
                     <article>
                       <div className="section-heading">
-                        <h4>{record.action.replaceAll('_', ' ')}</h4>
-                        <span className="role-chip">{record.data.kind}</span>
+                        <h4>{activityTitle(record)}</h4>
+                        <span className="role-chip">
+                          {categoryName[record.data.kind]}
+                        </span>
                       </div>
-                      <p>
-                        {record.source} / {record.stream} · Sequence{' '}
-                        {record.sourceSequence}
+                      <p className="evidence-meta">
+                        Occurred <EvidenceTime value={record.occurredAt} />
                       </p>
-                      <p>
-                        Occurred {date(record.occurredAt)} · Ingested{' '}
-                        {date(record.ingestedAt)}
+                      <p className="evidence-meta">
+                        {record.actorUserId
+                          ? `Recorded actor: ${participant(record.actorUserId)}`
+                          : 'Actor not recorded'}
                       </p>
-                      <p>Actor: {record.actorUserId || 'Not recorded'}</p>
-                      <EvidenceData record={record} />
-                      <details>
-                        <summary>Record identity</summary>
-                        <p>{record.eventId}</p>
-                      </details>
+                      <EvidenceData record={record} participant={participant} />
+                      <RecordDetails record={record} />
                     </article>
                   </li>
                 ))}
@@ -615,8 +860,8 @@ export function EvidencePanel({
               </button>
             ) : (
               <p>
-                End of this snapshot. Coverage is determined by the checkpoints
-                and gaps above.
+                End of this snapshot. The coverage warnings and limits above
+                still apply.
               </p>
             )}
           </section>
