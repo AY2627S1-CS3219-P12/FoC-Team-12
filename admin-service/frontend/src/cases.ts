@@ -14,7 +14,23 @@ export type Statement = {
   submittedAt: string
 }
 export type Report = { case: Summary; ownStatement: Statement }
-export type Detail = { case: Summary; statements: Statement[] }
+export type CreditAction = {
+  operationId: string
+  caseId: string
+  targetUserId: string
+  type: 'CREDIT_ADJUSTMENT'
+  amount: number
+  reason: string
+  status: 'PENDING' | 'UNKNOWN' | 'SUCCEEDED' | 'REJECTED'
+  reasonCode: string | null
+  createdAt: string
+  completedAt: string | null
+}
+export type Detail = {
+  case: Summary
+  statements: Statement[]
+  actions?: CreditAction[]
+}
 export type Page = {
   content: Summary[]
   page: number

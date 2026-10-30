@@ -39,6 +39,14 @@ class ComposeEnvCheckTests(unittest.TestCase):
     def test_env_block_and_github_env_writes_both_provide_variables(self):
         self.assertEqual({"ORDER_DB_NAME", "JWT_PRIVATE_KEY"}, compose_env_check.compose_jobs(WORKFLOW)["stack"])
 
+    def test_delegated_admin_runtime_job_is_checked(self):
+        workflow = WORKFLOW.replace("docker compose config --quiet", "python3 admin-service/scripts/runtime_smoke.py")
+        self.assertEqual({"ORDER_DB_NAME", "JWT_PRIVATE_KEY"}, compose_env_check.compose_jobs(workflow)["stack"])
+
+    def test_comments_in_environment_do_not_hide_variables(self):
+        workflow = WORKFLOW.replace("    env:\n", "    env:\n      # Throwaway credentials\n\n")
+        self.assertEqual({"ORDER_DB_NAME", "JWT_PRIVATE_KEY"}, compose_env_check.compose_jobs(workflow)["stack"])
+
     def test_names_the_job_and_variable_that_are_missing(self):
         workflow = WORKFLOW.replace("      ORDER_DB_NAME: order_db\n", "      OTHER: x\n")
         jobs = compose_env_check.compose_jobs(workflow)

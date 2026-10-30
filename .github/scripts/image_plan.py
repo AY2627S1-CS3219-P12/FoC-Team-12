@@ -7,7 +7,7 @@ import re
 import subprocess
 
 
-SERVICES = ("gateway-service", "user-service", "supplier-service", "credit-service", "order-service")
+SERVICES = ("gateway-service", "user-service", "supplier-service", "credit-service", "order-service", "admin-service")
 
 
 def is_image_input(path, service):

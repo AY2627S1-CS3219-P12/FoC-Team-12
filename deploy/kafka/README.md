@@ -42,6 +42,7 @@ KAFKA_BROKER_PASSWORD=...
 KAFKA_USER_SERVICE_PASSWORD=...
 KAFKA_ORDER_SERVICE_PASSWORD=...
 KAFKA_CREDIT_SERVICE_PASSWORD=...
+KAFKA_ADMIN_SERVICE_PASSWORD=...
 KAFKA_UI_BROKER_PASSWORD=...
 KAFKA_UI_LOGIN_USERNAME=...
 KAFKA_UI_LOGIN_PASSWORD=...
@@ -62,9 +63,11 @@ KAFKA_USERNAME=<service identity>
 KAFKA_PASSWORD=<that service's secret>
 ```
 
-Host-side clients use `localhost:29092` instead. Compose already publishes the contract to the User
-and Credit containers, but the values are currently unused because this task adds no Kafka library
-or application adapter. Order is not part of the Compose stack yet.
+Host-side clients use `localhost:29092` instead. Compose configures the core service adapters and
+Admin. Admin uses Spring standard Kafka client properties, with the same local SASL/PLAIN settings
+and its dedicated `admin_service` identity. Credit administrative correction consumption is still
+pending; broker permissions alone do not implement it. See the
+[Admin runtime handoff](../../admin-service/RUNTIME_INTEGRATION.md) for the activation review gate.
 
 ## Topics
 
@@ -76,6 +79,10 @@ or application adapter. Order is not part of the Compose stack yet.
 | `user.events.DLT` | 1 | 30 days | Failed User-event delivery |
 | `order.events.DLT` | 1 | 30 days | Failed Order-event delivery |
 | `credit.events.DLT` | 1 | 30 days | Failed Credit-event delivery |
+| `admin.credit.commands` | 3 | 7 days | Admin correction requests; Credit consumer pending |
+| `credit.admin.events` | 3 | 7 days | Credit correction outcomes; producer pending |
+| `admin.credit.commands.DLT` | 1 | 30 days | Credit-owned command recovery |
+| `credit.admin.events.DLT` | 1 | 30 days | Admin-owned outcome recovery |
 
 All topics use `cleanup.policy=delete`. Keys and JSON envelopes must follow the shared blueprint:
 User UUID for User facts, Order UUID for Order facts, and the corresponding aggregate UUID for
@@ -86,10 +93,12 @@ production data-retention policy.
 
 | Identity | Allowed operations |
 | --- | --- |
+| `admin_service` | Write/describe `admin.credit.commands`, `credit.admin.events.DLT`; read/describe `credit.admin.events`; Read group `admin-service-credit`; cluster idempotent write |
+| `credit_service` (additional) | Read/describe `admin.credit.commands`; Read group `credit-service-admin`; write/describe `credit.admin.events`, `admin.credit.commands.DLT` |
 | `user_service` | Write/describe `user.events`; cluster idempotent write |
 | `order_service` | Write/describe `order.events`; read/describe `credit.events` as group `order-service`; write/describe `credit.events.DLT`; cluster idempotent write |
 | `credit_service` | Read/describe `user.events` and `order.events` as group `credit-service`; write/describe `credit.events`, `user.events.DLT` and `order.events.DLT`; cluster idempotent write |
-| `kafka_ui` | Read/describe the six project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
+| `kafka_ui` | Read/describe the ten project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
 | `foc_admin` | Broker initialization and local diagnosis (super-user) |
 | `foc_broker` | Broker-to-broker traffic (super-user) |
 
@@ -113,7 +122,7 @@ docker compose ps kafka
 ```
 
 Open `http://localhost:8090` and sign in with `KAFKA_UI_LOGIN_USERNAME` and
-`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the six
+`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the ten
 topics, partitions, configurations, message keys/envelopes, consumer groups and lag. The UI uses
 both Kafbat's read-only mode and broker ACLs: it cannot produce records, create/delete topics,
 change retention, reset business offsets or join a service's consumer group.

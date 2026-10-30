@@ -30,6 +30,8 @@ class CaseWorkflowTest {
     @Autowired CaseService service;
     @Autowired CaseAccessService access;
     @Autowired EvidenceExportService exports;
+    @Autowired CreditActionService creditActions;
+    @Autowired ActionDeliveryStore deliveries;
     @Autowired JdbcTemplate db;
     @MockitoBean UserEligibilityClient users;
     @MockitoBean ChatEligibilityClient chat;
@@ -38,13 +40,92 @@ class CaseWorkflowTest {
     final UUID order = UUID.randomUUID(), reporter=UUID.randomUUID(), courier=UUID.randomUUID(), reviewer=UUID.randomUUID();
     Jwt jwt(UUID id, String role) { return Jwt.withTokenValue("actor-jwt").header("alg","RS256").subject(id.toString()).claim("role",role).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build(); }
     @BeforeEach void prepare() {
-        db.execute("TRUNCATE admin_case_outbox,admin_case_audit,admin_mutation_receipts,admin_statements,admin_case_participants,admin_cases CASCADE");
+        db.execute("TRUNCATE admin_action_quarantine,admin_case_outbox,admin_case_audit,admin_mutation_receipts,admin_statements,admin_case_participants,admin_cases CASCADE");
         when(users.find(any())).thenAnswer(call -> new UserEligibilityClient.Eligibility(call.getArgument(0),true,true));
         when(chat.check(any(),any(),anyString())).thenReturn(new ChatEligibilityClient.Eligibility(true,true,"evidence-1"));
     }
     UUID caseId(CaseViews.Mutation response) { return UUID.fromString(json.readTree(response.body()).path("case").path("caseId").asText()); }
     long count(String table) { return db.queryForObject("SELECT count(*) FROM "+table,Long.class); }
     CaseViews.Mutation report(UUID actor, UUID key) { return service.report(jwt(actor,"REQUESTER"),key,order,"Pickup issue"); }
+
+    CaseViews.Mutation correction(UUID id,UUID key,int amount){return creditActions.create(jwt(reviewer,"ADMIN"),id,key,"CREDIT_ADJUSTMENT",reporter,json.valueToTree(amount),"  Case correction  ");}
+    UUID operation(CaseViews.Mutation result){return UUID.fromString(json.readTree(result.body()).path("operationId").asText());}
+    @SuppressWarnings("unchecked") Map<String,Object> outcome(UUID operation,boolean success){
+        var a=db.queryForMap("SELECT * FROM admin_actions WHERE operation_id=?",operation);
+        Map<String,Object> data=new LinkedHashMap<>();data.put("operationId",operation);data.put("caseId",a.get("case_id"));data.put("orderId",order);data.put("targetUserId",reporter);data.put("requestedBy",reviewer);data.put("amount",a.get("amount"));data.put("completedAt","2026-10-30T10:00:00Z");data.put("result",success?"APPLIED":"REJECTED");
+        if(success){data.put("availableBalance",12);data.put("reservedBalance",7);data.put("ledgerEntryId",UUID.randomUUID());}else data.put("reasonCode","INSUFFICIENT_AVAILABLE_CREDITS");
+        return CreditActionService.envelope(UUID.randomUUID(),success?"AdminCreditCorrectionApplied":"AdminCreditCorrectionRejected","AdminAction",reporter,1,Instant.now(),"credit-service",(UUID)a.get("correlation_id"),(UUID)a.get("command_event_id"),reviewer,data);
+    }
+    void deliver(Map<String,Object> outcome){creditActions.outcome(reporter.toString(),json.writeValueAsString(outcome));}
+    @Test void correctionIsAtomicAndRetriesReturnOneOperationAndOriginalCommand(){
+        UUID id=reviewCase(),key=UUID.randomUUID();var accepted=correction(id,key,5);assertEquals(202,accepted.status());assertEquals(accepted,correction(id,key,5));
+        assertEquals(1,count("admin_actions"));assertEquals(1,count("admin_action_outbox"));assertEquals(3,count("admin_case_audit"));
+        var command=json.readTree(db.queryForObject("SELECT payload FROM admin_action_outbox",String.class));
+        assertEquals("AdminCreditCorrectionRequested",command.path("eventType").asText());assertEquals("Case correction",command.path("data").path("reason").asText());assertEquals(3,command.path("data").path("caseRevision").asLong());
+        assertThrows(ResponseStatusException.class,()->correction(id,key,-5));assertEquals(1,count("admin_actions"));
+        db.update("UPDATE admin_cases SET state='RESOLVED' WHERE id=?",id);assertEquals(accepted,correction(id,key,5));
+        assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->correction(id,UUID.randomUUID(),5)).getStatusCode());
+    }
+    @Test void correctionRequiresReviewerParticipantAndStrictWholeAmount(){
+        UUID id=reviewCase();
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(courier,"ADMIN"),id,UUID.randomUUID(),"CREDIT_ADJUSTMENT",reporter,json.valueToTree(5),"Reason")).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"CREDIT_ADJUSTMENT",courier,json.valueToTree(5),"Reason")).getStatusCode());
+        for(String input:List.of("0","1.5","2147483648","\"5\"","null"))assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"CREDIT_ADJUSTMENT",reporter,json.readTree(input),"Reason"));
+        assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"BAN",reporter,json.valueToTree(5),"Reason"));
+        assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"CREDIT_ADJUSTMENT",reporter,json.valueToTree(5)," "));
+        when(users.find(reviewer)).thenReturn(new UserEligibilityClient.Eligibility(reviewer,false,true));assertThrows(ResponseStatusException.class,()->correction(id,UUID.randomUUID(),5));assertEquals(0,count("admin_actions"));
+    }
+    @Test void actionOutboxFailureRollsBackActionReceiptAuditAndRevision(){
+        UUID id=reviewCase();db.execute("ALTER TABLE admin_action_outbox ADD CONSTRAINT test_command_failure CHECK (false)");
+        try{assertThrows(Exception.class,()->correction(id,UUID.randomUUID(),5));assertEquals(0,count("admin_actions"));assertEquals(2,count("admin_case_audit"));assertEquals(2,service.detail(jwt(reviewer,"ADMIN"),id).caseSummary().revision());}
+        finally{db.execute("ALTER TABLE admin_action_outbox DROP CONSTRAINT test_command_failure");}
+    }
+    @Test void concurrentIdenticalCorrectionSubmissionsHaveOneOutboxAndOperation()throws Exception{
+        UUID id=reviewCase(),key=UUID.randomUUID();var results=race(()->correction(id,key,5),()->correction(id,key,5));assertEquals(results.get(0),results.get(1));assertEquals(1,count("admin_actions"));assertEquals(1,count("admin_action_outbox"));
+    }
+    @Test void overdueActionRemainsUnknownUntilMatchingLateOutcomeAndCannotBeReversed()throws Exception{
+        UUID id=reviewCase();var accepted=correction(id,UUID.randomUUID(),5);UUID op=operation(accepted);
+        db.update("UPDATE admin_actions SET deadline_at=CURRENT_TIMESTAMP-INTERVAL '1 second' WHERE operation_id=?",op);
+        assertEquals("UNKNOWN",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());
+        var result=outcome(op,true);deliver(result);deliver(result);
+        assertEquals("SUCCEEDED",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());assertEquals(1,count("admin_action_inbox"));assertEquals(4,count("admin_case_audit"));assertEquals(3,count("admin_case_outbox"));
+        var export=exports.read(order,id,null,20);assertEquals(3,export.records().size());assertEquals(op.toString(),export.records().get(2).path("data").path("operationId").asText());
+        // Generated test-only artifacts permit external validation against the unmodified draft schemas.
+        var samples=java.nio.file.Path.of("target","credit-action-contract-samples");java.nio.file.Files.createDirectories(samples);
+        java.nio.file.Files.writeString(samples.resolve("command.json"),db.queryForObject("SELECT payload FROM admin_action_outbox WHERE operation_id=?",String.class,op));
+        java.nio.file.Files.writeString(samples.resolve("action.json"),accepted.body());
+        java.nio.file.Files.writeString(samples.resolve("outcome-test-only.json"),json.writeValueAsString(result));
+        java.nio.file.Files.writeString(samples.resolve("completion.json"),db.queryForObject("SELECT payload FROM admin_case_outbox WHERE event_type='CaseActionCompleted'",String.class));
+        java.nio.file.Files.writeString(samples.resolve("export.json"),json.writeValueAsString(export));
+        result.put("eventId",UUID.randomUUID());deliver(result);assertEquals(2,count("admin_action_inbox"));assertEquals(4,count("admin_case_audit"));
+        deliver(outcome(op,false));assertEquals("SUCCEEDED",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());assertEquals(1,count("admin_action_quarantine"));
+    }
+    @SuppressWarnings("unchecked") @Test void malformedMismatchedAndConflictingOutcomesNeverInventARejection(){
+        UUID id=reviewCase(),op=operation(correction(id,UUID.randomUUID(),-5));var result=outcome(op,true);
+        var data=(Map<String,Object>)result.get("data");data.put("amount",6);deliver(result);
+        assertEquals("PENDING",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());assertEquals(0,count("admin_action_inbox"));
+        data.put("amount",-5);result.put("producer","admin-service");deliver(result);result.put("producer","credit-service");
+        creditActions.outcome(courier.toString(),json.writeValueAsString(result));
+        creditActions.outcome(reporter.toString(),"not json");
+        assertEquals(4,count("admin_action_quarantine"));assertEquals("PENDING",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());
+        deliver(outcome(op,false));assertEquals("REJECTED",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());assertEquals("INSUFFICIENT_AVAILABLE_CREDITS",creditActions.read(jwt(reviewer,"ADMIN"),id,op).reasonCode());
+    }
+    @Test void outcomeCommitFailureRollsBackInboxAndTerminalResult(){
+        UUID id=reviewCase(),op=operation(correction(id,UUID.randomUUID(),5));var result=outcome(op,true);
+        db.execute("ALTER TABLE admin_case_outbox ADD CONSTRAINT test_completion_failure CHECK (event_type<>'CaseActionCompleted')");
+        try{assertThrows(Exception.class,()->deliver(result));assertEquals(0,count("admin_action_inbox"));assertEquals("PENDING",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());}
+        finally{db.execute("ALTER TABLE admin_case_outbox DROP CONSTRAINT test_completion_failure");}
+        deliver(result);assertEquals("SUCCEEDED",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());
+    }
+    @Test void deliveryLeasesRecoverWithoutChangingCommandIdentityAndStopAfterOutcome(){
+        UUID id=reviewCase(),op=operation(correction(id,UUID.randomUUID(),5));var first=deliveries.claim().get(0);assertTrue(deliveries.claim().isEmpty());deliveries.failed(first);
+        db.update("UPDATE admin_action_outbox SET next_attempt_at=CURRENT_TIMESTAMP-INTERVAL '1 second'");
+        var retry=deliveries.claim().get(0);assertEquals(first.eventId(),retry.eventId());assertEquals(first.payload(),retry.payload());assertNotEquals(first.lease(),retry.lease());
+        deliveries.confirmed(retry,10);assertTrue(deliveries.claim().isEmpty());
+        db.update("UPDATE admin_action_outbox SET next_attempt_at=CURRENT_TIMESTAMP-INTERVAL '1 second'");assertEquals(first.eventId(),deliveries.claim().get(0).eventId());
+        db.update("UPDATE admin_action_outbox SET lease_until=CURRENT_TIMESTAMP-INTERVAL '1 second'");assertEquals(first.payload(),deliveries.claim().get(0).payload());
+        deliver(outcome(op,false));assertTrue(deliveries.claim().isEmpty());
+    }
 
     UUID reviewCase() {
         UUID id=caseId(report(reporter,UUID.randomUUID()));

@@ -2,7 +2,8 @@
 
 Owner: Darryl. Java 17 / Spring Boot 4.1.1, PostgreSQL/Flyway, React/TypeScript/Vite.
 Scope: Admin backend/database/dashboard, current User eligibility, case-access callback,
-participant reporting/status and administrator queue/detail/claim. See
+participant reporting/status, administrator queue/detail/claim, evidence/conversation consumers
+and durable credit-action tracking/Kafka adapters. See
 [specification](../docs/integration/admin-service-spec.md) and
 [integration drafts](../docs/contracts/README.md). Approval of this iteration does not
 record Chat/transport owner sign-off or deploy the shared drafts.
@@ -39,8 +40,10 @@ record Chat/transport owner sign-off or deploy the shared drafts.
   Workspace switching uses the existing User session-role API and rechecks Admin access
   with the returned token. A browser role selection never grants administrator access.
 
-No Chat/Order/Credit code, broker topics, root Compose/gateway/CI or Kubernetes policies
-are changed. Conversations, actions and resolution are later iterations.
+Shared Compose/gateway/broker/CI runtime wiring is prepared in the
+[runtime integration guide](RUNTIME_INTEGRATION.md), pending affected-owner activation review.
+Chat/Order/Credit domain code and Kubernetes policies are unchanged.
+Conversation adapters and credit tracking are implemented; real owner integrations and resolution remain pending.
 Account/supplier tools link to their existing owners.
 
 ## Cases behavior and APIs
@@ -68,7 +71,7 @@ another statement from the same participant conflicts. Resolved cases reject new
 Each accepted statement increments revision. Claims lock the case and check revision/state:
 one competing claimant wins; stale/already claimed cases return 409. Other active admins
 may read; the case-access callback grants administrator writes only to the assigned reviewer
-while UNDER_REVIEW. Decision mutations remain deferred; conversation preparation is described below.
+while UNDER_REVIEW. Credit correction tracking is described below; bans and resolution remain deferred.
 
 Every mutation requires a UUID `Idempotency-Key`. Receipts retain actor, route, canonical
 body hash and original response in the same transaction. Same request replays that response
@@ -82,7 +85,7 @@ Receipts have no automatic expiry in this iteration.
 Each mutation persists a revisioned local audit record atomically. CaseOpened and CaseClaimed
 also persist stable-ID `admin.events` envelope drafts in the outbox, keyed by case ID.
 sourceSequence counts events separately from case revision. Adding a statement has an audit
-record but no invented lifecycle event. No Kafka relay is implemented: outbox rows remain
+record but no invented lifecycle event. No lifecycle Kafka relay is implemented: those outbox rows remain
 pending until a later approved transport/relay iteration. Topic/ACL integration,
 broker delivery and Chat consumption are not verified here. Draft schemas remain
 subject to affected-owner review; local implementation is not Chat/transport sign-off.
@@ -110,6 +113,122 @@ testing; its use by Order still needs the affected owner's review. No Order code
 routes or service API contracts are changed. Save the returned case link to revisit a report;
 an errand-to-case lookup/list API has not been invented. Statements remain separate from
 Chat's evidence timeline and must not be treated as the complete history.
+
+## Credit corrections: Admin-owned tracking and Kafka adapter
+
+This iteration implements the Admin side of the existing **draft** administrative Kafka contract.
+Credit's correction consumer/ledger adapter is absent in this checkout. Topic/security/deployment
+approval and real financial acceptance are still required; see [integration readiness](INTEGRATION_READINESS.md).
+No balances or ledger rows are read/written by Admin and there is no synthetic live fallback.
+
+- `POST /api/admin/cases/{caseId}/actions` takes the existing `CREDIT_ADJUSTMENT` shape:
+  `targetUserId`, signed nonzero JSON-integer `amount`, trimmed `reason` (1–2000 characters),
+  and UUID `Idempotency-Key`; returns 202 with the durable Action. This iteration rejects BAN.
+  Supported amounts fit Credit's current signed 32-bit integer representation. Fractional, string,
+  zero and out-of-range amounts are rejected, never rounded or truncated.
+- `GET /api/admin/cases/{caseId}/actions/{operationId}` returns the persisted/derived current Action
+  with no-store. Current active administrators may read; case detail includes the same action list.
+  Participant report/status never includes actions, internal reasons or financial outcomes.
+- Creation checks effective ADMIN mode/current active admin before its local transaction, then
+  locks the case and requires assigned reviewer, UNDER_REVIEW and a verified reporting participant.
+  Historical non-reporters remain gated by the existing historical membership ambiguity. There is
+  no arbitrary target UUID input in the GUI. No HTTP or broker call holds a case database lock.
+- Migration V5 stores action, immutable command payload, outcome inbox and private quarantine.
+  One transaction commits operationId/eventId, case revision, audit, command outbox and original
+  request receipt. Same actor/route/canonical body/key replays the original accepted response even
+  if processing finished; status GET is authoritative afterwards. Different input/actor/route using
+  that key conflicts. A new intentional correction requires explicit new review/confirmation.
+
+State meanings:
+
+| State | Meaning |
+| --- | --- |
+| PENDING | Admin accepted and persisted the request; Credit has not confirmed an outcome. This does not imply broker publication or a balance change. |
+| UNKNOWN | The outcome deadline passed without confirmation. It may already have taken effect; it is not a rejection and must not be replaced automatically. |
+| SUCCEEDED | A matching Credit-owned APPLIED outcome was validated and committed. |
+| REJECTED | A matching Credit-owned REJECTED outcome was validated and committed, including its reason code. |
+
+Deadline defaults to 30 seconds from acceptance (`ADMIN_ACTION_OUTCOME_TIMEOUT_SECONDS`). Reads derive
+UNKNOWN from database time even with Kafka disabled; the publisher also persists overdue state.
+Neither broker acknowledgement, a timeout, malformed input, DLT routing nor a generic error invents
+a terminal financial outcome. A late valid result can finish PENDING/UNKNOWN; a recorded terminal
+result cannot be reversed by a duplicate or conflicting message.
+
+### Transport and reconciliation
+
+Standalone `ADMIN_KAFKA_ENABLED` defaults **false**. Shared Compose prepares it as **true** with
+authenticated broker access; activation requires affected-owner review as described in
+[runtime integration](RUNTIME_INTEGRATION.md). Accepted requests remain durably queued, then become
+UNKNOWN if no outcome arrives. The real Credit correction consumer/outcome producer remains pending;
+broker acknowledgement never establishes a financial effect.
+Admin service configuration accepts `KAFKA_BOOTSTRAP_SERVERS` (default localhost:9092) and standard
+Spring Kafka SASL/TLS properties. The runtime integration adds shared Compose/env/CI/gateway wiring.
+
+When explicitly enabled, the adapter publishes `AdminCreditCorrectionRequested` to
+`admin.credit.commands`, keyed by targetUserId. Database leases are claimed in short transactions;
+publication happens outside them. Acks=all/idempotent Kafka producer settings do not establish
+exactly-once financial effects. After acknowledgement only delivery metadata changes. A timeout,
+crash after acknowledgement or lease expiry can duplicate delivery; Credit must durably deduplicate
+by operationId as well as event identity before its ledger effect.
+
+The outbox retries failed/unconfirmed publication after 10 seconds. Unresolved commands are
+re-delivered after `ADMIN_KAFKA_RECONCILE_SECONDS` (default 60, minimum 10), retaining identical
+payload/event/operation identity. `ADMIN_KAFKA_OUTBOX_DELAY` defaults to 2000ms between batches;
+one 30-second lease is claimed per batch and each send waits at most 10 seconds. Terminal actions
+are excluded from new claims. No new operation or invented operation-lookup endpoint is created.
+**Definitive reconciliation requires Credit to republish its original persisted outcome even for
+a duplicate command whose effect was already committed.** If it only discards duplicate event IDs,
+the missing outcome remains UNKNOWN. This owner requirement is not implemented in Credit here.
+
+Admin consumes `credit.admin.events` in independent group `admin-service-credit`, manually
+acknowledging only after persistence. It checks topic/key, producer/type/version/aggregate,
+operation/case/order/target/requester/amount/correlation/causation, actor and typed outcome fields.
+Inbox eventId plus canonical content hash deduplicates delivery. Matching result republication with
+a new eventId is accepted without another terminal audit; a contradictory result is quarantined.
+The terminal update, inbox, case revision, private audit and `CaseActionCompleted` lifecycle outbox
+commit together. Producer evidence export now includes that fact with operation/target/result;
+it does not expose private reasons, raw commands or ledger payloads. The existing `admin.events`
+lifecycle relay remains a separate transport handoff; this adapter publishes only credit commands.
+
+Invalid/conflicting outcomes are retained in private `admin_action_quarantine` and generate a
+metadata-only `credit.admin.events.DLT` record before acknowledgement. Storage/DLT failures retry
+twice at one-second intervals using the existing service transport convention, then the standard
+recoverer routes the source record to the private DLT; failed DLT delivery must not advance offsets.
+DLT does not mark a correction rejected. Quarantine/source retention and manual redrive policy need
+owner agreement. The original source record remains identifiable by topic/partition/offset.
+Only Credit's broker principal may publish outcomes: validating its `producer` string alone is
+not authentication. Required ACLs, TLS/SASL and network policy remain shared-owner prerequisites.
+Application identities must not auto-create/administer topics (`allow.auto.create.topics=false`).
+
+Aggregate Micrometer meters track pending/unknown counts, oldest unconfirmed age, unpublished
+commands and quarantined outcomes; failed metric reads are NaN, not zero. Existing health-only
+Actuator exposure remains unchanged. Operational logs contain event/operation IDs and broker
+metadata, not reasons, tokens or full financial message bodies. Private DLT/quarantine requires
+restricted retention/access. Operators should investigate UNKNOWN age, delivery attempts,
+`last_error` and DLT before any controlled redrive using original identity.
+
+### GUI and verification boundary
+
+Case detail offers Add/Subtract, a whole-credit amount, reporting participant and mandatory reason,
+then a separate confirmation. It shows status and SGT timestamps. An uncertain browser submission
+retains the exact key/body per actor/case in session storage, locks editing, and offers same-request
+retry. Accepted actions are polled every five seconds by operationId; polling never submits another
+correction. Read failures preserve last-known status with a warning; access denial hides protected
+history/form. Other administrators can review history but cannot initiate. Changing case/account
+unmounts the action panel. Invalid history disables creation instead of pretending it is empty.
+
+Tests cover local atomicity/rollback, permissions, duplicate/concurrent creation, durable leases,
+deadline/late outcome recovery, poison/conflict handling, inbox replay and lifecycle recovery export.
+An isolated real Kafka/PostgreSQL test exercises command redelivery and the actual outcome listener
+using a clearly test-only outcome producer. It does not implement or certify Credit arithmetic.
+Financial-effect deduplication, insufficient-funds rejection and unchanged reserved credits must
+still be demonstrated against Eldridge's actual Credit correction adapter. No mock result is claimed
+as proof of a financial effect. Bans, resolution, shared infrastructure and Credit code are excluded.
+
+Manual checks: review an addition/subtraction before confirming, interrupt/retry the same submission,
+watch PENDING/UNKNOWN and late outcomes, switch participants/accounts, revoke access, verify only
+the assigned reviewer can act, and inspect desktop/mobile keyboard use. Enable real Credit only
+after the readiness gates; do not use an operator/manual financial correction as a recovery retry.
 
 ## Private case conversations: Admin-side preparation
 
@@ -284,8 +403,8 @@ In a separate terminal run `npm run dev` from `admin-service/frontend`, then ope
 query routes to their local services so login and Admin share a browser session origin.
 User must have its frontend built. Sign in, select Admin mode in the User profile, then
 return to `/admin`; the existing User login does not automatically redirect to Admin.
-Supplier links use the existing gateway on 8088. The packaged Admin shell expects the
-future shared gateway to route User/account/supplier links; direct backend hosting alone
+Supplier links use the existing gateway on 8088. The packaged Admin shell uses the
+prepared shared gateway routes for User/account/supplier links after runtime activation; direct backend hosting alone
 does not provide a second login system.
 Set `VITE_USER_URL` before starting Vite when testing a User instance on another local port.
 The preview forwards `/` (including query routes) to User and routes Supplier admin APIs
@@ -302,7 +421,7 @@ Editor: Darryl for this navigation integration; affected reviewers: Darryl (User
 Jun Hui (Supplier), Eldridge (Credit), XueTing (Order). These links do not grant access:
 Admin verifies the JWT and current administrator eligibility. No service APIs or gateway
 configuration change with the tab. Rebuild each owning frontend/container to display it;
-the shared gateway still needs its separately reviewed Admin routing/deployment integration.
+the prepared shared gateway integration still requires affected-owner review before activation.
 
 Configuration:
 

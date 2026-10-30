@@ -6,7 +6,9 @@ account eligibility; Chat owns evidence and conversations. Never read their data
 Cases own reporting, private status, administrator review/claims, evidence/conversation adapters,
 Chat reference confirmation, recovery exports and atomic audit/outbox. Chat owns conversations,
 messages, the historical timeline projection and coverage.
-Do not fabricate Chat eligibility/evidence or implement financial/sanction actions here.
+Admin owns durable credit-action tracking, command outbox and outcome inbox. Credit exclusively
+applies ledger/balance effects; never implement financial effects or fabricate producer outcomes
+here. Do not fabricate Chat eligibility/evidence. Sanctions and resolution remain later work.
 Shared gateway, deployment and CI changes require a separately nominated editor.
 
 Before final integration or acceptance, read `INTEGRATION_READINESS.md` for unresolved owner

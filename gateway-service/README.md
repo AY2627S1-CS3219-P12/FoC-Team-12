@@ -8,6 +8,9 @@ issue tokens, or replace downstream authorization.
 
 | Gateway path | Downstream service | Downstream path |
 | --- | --- | --- |
+| `GET /admin`, `GET /admin/**`, `GET /admin-assets/**` | Admin Service | unchanged; Supplier admin paths take precedence |
+| `/api/admin/**` | Admin Service | unchanged; `/api/admin/suppliers/**` remains Supplier-owned |
+| `GET /docs/admin/openapi.json` | Admin Service | `/v3/api-docs` |
 | `GET /` | User Service | unchanged |
 | `GET /user-assets/**` | User Service | unchanged |
 | `GET /suppliers` and `GET /suppliers/**` | Supplier Service | unchanged |
@@ -40,7 +43,8 @@ using gateway/downstream request logs and check the downstream health independen
 
 For Minikube deployment, follow [`../deploy/k8s/README.md`](../deploy/k8s/README.md).
 
-Java 17 is required. Start User, Supplier and Credit services first, then run:
+Java 17 is required. Start the downstream services needed for your routes (including Admin
+for `/admin`), then run:
 
 ```sh
 ./mvnw spring-boot:run
@@ -53,22 +57,25 @@ USER_SERVICE_URL=http://localhost:8081
 SUPPLIER_SERVICE_URL=http://localhost:8080
 CREDIT_SERVICE_URL=http://localhost:8083
 ORDER_SERVICE_URL=http://localhost:8082
+ADMIN_SERVICE_URL=http://localhost:8084
 ```
 
 Override the corresponding environment variable when a downstream service uses another address.
-Order is wired into the Kubernetes setup; the existing Compose stack does not yet deploy it.
+Order is included in Compose and Kubernetes. Admin Compose wiring is prepared, with shared
+activation pending the affected-owner reviews in [the runtime handoff](../admin-service/RUNTIME_INTEGRATION.md).
 
 To run the complete Docker stack from the repository root, first configure the root `.env`,
-including `JWT_PRIVATE_KEY`, and then run:
+including User/Admin keys, trust and broker credentials. After affected-owner review, run:
 
 ```sh
-docker compose up -d --build gateway
+docker compose up -d --build admin-service gateway
 ```
 
 Compose routes internally through each service name. Open `http://localhost:8088` to sign in, then
 open `http://localhost:8088/credits` for the packaged Credit dashboard.
 The SPAs share the validated `sessionStorage["foc.user-session"]` value while production assets
-remain collision-free under `/user-assets/**`, `/supplier-assets/**` and `/credit-assets/**`.
+remain collision-free under `/user-assets/**`, `/supplier-assets/**`, `/credit-assets/**`,
+`/order-assets/**` and `/admin-assets/**`.
 
 Use the shared `8088` origin by default for frontend clients, Postman, and cross-service testing.
 Direct ports `8080`, `8081` and `8083` remain available only for service-specific development and
