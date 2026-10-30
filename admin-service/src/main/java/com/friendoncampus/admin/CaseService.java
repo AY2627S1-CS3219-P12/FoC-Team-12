@@ -25,12 +25,14 @@ public class CaseService {
     private final JdbcTemplate db;
     private final UserEligibilityClient users;
     private final ChatEligibilityClient chat;
+    private final ChatConversationClient conversations;
     private final TransactionTemplate transaction;
     private final JsonMapper json = JsonMapper.builder().build();
     private static final String CASE_COLUMNS = "id, order_id, state, reviewer_id, revision, created_at, correlation_id, source_sequence";
 
-    public CaseService(JdbcTemplate db, UserEligibilityClient users, ChatEligibilityClient chat, PlatformTransactionManager manager) {
+    public CaseService(JdbcTemplate db, UserEligibilityClient users, ChatEligibilityClient chat, ChatConversationClient conversations, PlatformTransactionManager manager) {
         this.db = db; this.users = users; this.chat = chat;
+        this.conversations = conversations;
         transaction = new TransactionTemplate(manager);
         transaction.setTimeout(15);
     }
@@ -128,6 +130,51 @@ public class CaseService {
     public Summary evidenceCase(Jwt jwt,UUID caseId) {
         requireAdmin(jwt);
         return row(caseId).summary;
+    }
+
+    public Mutation openConversation(Jwt jwt, UUID key, UUID caseId, UUID participantId) {
+        UUID actor = requireAdmin(jwt);
+        if (participantId == null || key == null) throw invalid("A participant and Idempotency-Key UUID are required.");
+        var initial = conversationCase(actor, caseId, participantId);
+        String route = "/api/admin/cases/" + caseId + "/conversations";
+        String fingerprint = hash(List.of(participantId.toString()));
+        // Reserve global operation identity in a short transaction. 503 is provisional, not proof
+        // that Chat did not commit. Parallel/restarted retries delegate the identical key to Chat.
+        var reserved = mutate(key, actor, route, fingerprint,
+                () -> problem(503, "Conversation initiation is unconfirmed. Retry with the same request key.", route));
+        if (reserved.status() != 503) return reserved;
+        var reference = conversations.open(caseId, initial.orderId(), participantId, key, jwt.getTokenValue());
+        requireAdmin(jwt); // Revocation while Chat was responding must prevent disclosure.
+        try {
+            return transaction.execute(s -> {
+                db.execute("SET LOCAL lock_timeout='5s'");
+                lock("request:" + key);
+                db.query("SELECT id FROM admin_cases WHERE id=? FOR UPDATE", r -> null, caseId);
+                conversationCase(actor, caseId, participantId);
+                var previous = receipt(key, actor, route, fingerprint);
+                if (previous != null && previous.status() != 503) return previous;
+                var known = db.queryForList("SELECT conversation_id FROM admin_case_conversations WHERE case_id=? AND participant_user_id=?", UUID.class, caseId, participantId);
+                if (!known.isEmpty() && !known.get(0).equals(reference.conversationId())) throw unavailable("Chat returned a conflicting conversation reference. Retry with the same request key.");
+                if (known.isEmpty()) {
+                    db.update("INSERT INTO admin_case_conversations(case_id,participant_user_id,conversation_id) VALUES (?,?,?)", caseId, participantId, reference.conversationId());
+                    db.update("UPDATE admin_cases SET revision=revision+1 WHERE id=?", caseId);
+                    audit(row(caseId), actor, "CONVERSATION_OPENED", Instant.now());
+                }
+                var result = result(200, reference);
+                db.update("UPDATE admin_mutation_receipts SET response_status=200,response_body=? WHERE idempotency_key=?", result.body(), key);
+                return result;
+            });
+        } catch (DataAccessException | org.springframework.transaction.TransactionException ex) {
+            throw unavailable("Conversation confirmation could not be saved. Retry with the same request key.");
+        }
+    }
+    private Summary conversationCase(UUID actor, UUID caseId, UUID participantId) {
+        var summary = row(caseId).summary;
+        if (!actor.equals(summary.reviewerId())) throw forbidden("Only the assigned reviewer can initiate a conversation.");
+        if (summary.state() != AdminCase.State.UNDER_REVIEW) throw new ResponseStatusException(HttpStatus.CONFLICT, "This case is not open for conversation initiation.");
+        // Historical non-reporters are intentionally gated until owners agree callback membership.
+        if (!hasStatement(caseId, participantId)) throw hidden();
+        return summary;
     }
 
     private UUID requireParticipant(Jwt jwt) {

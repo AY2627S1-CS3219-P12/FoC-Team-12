@@ -36,6 +36,12 @@ public class CaseController {
         return ResponseEntity.status(result.status()).cacheControl(CacheControl.noStore())
                 .contentType(result.status() >= 400 ? MediaType.APPLICATION_PROBLEM_JSON : MediaType.APPLICATION_JSON).body(result.body());
     }
+    @PostMapping("/api/admin/cases/{caseId}/conversations")
+    public ResponseEntity<String> conversation(@AuthenticationPrincipal Jwt actor, @PathVariable UUID caseId,
+            @RequestHeader("Idempotency-Key") UUID key, @Valid @RequestBody ConversationRequest request) {
+        return mutation(cases.openConversation(actor, key, caseId, request.participantUserId()));
+    }
+    public record ConversationRequest(@NotNull UUID participantUserId) { }
     public record ReportRequest(@NotNull UUID orderId, @NotBlank @Size(max=2000) String description) { }
     public record ClaimRequest(@NotNull @Min(0) Long expectedRevision) { }
 }
