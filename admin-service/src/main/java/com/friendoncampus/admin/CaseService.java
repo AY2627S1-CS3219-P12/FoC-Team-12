@@ -26,13 +26,15 @@ public class CaseService {
     private final UserEligibilityClient users;
     private final ChatEligibilityClient chat;
     private final ChatConversationClient conversations;
+    private final CreditActionService creditActions;
     private final TransactionTemplate transaction;
     private final JsonMapper json = JsonMapper.builder().build();
     private static final String CASE_COLUMNS = "id, order_id, state, reviewer_id, revision, created_at, correlation_id, source_sequence";
 
-    public CaseService(JdbcTemplate db, UserEligibilityClient users, ChatEligibilityClient chat, ChatConversationClient conversations, PlatformTransactionManager manager) {
+    public CaseService(JdbcTemplate db, UserEligibilityClient users, ChatEligibilityClient chat, ChatConversationClient conversations, CreditActionService creditActions, PlatformTransactionManager manager) {
         this.db = db; this.users = users; this.chat = chat;
         this.conversations = conversations;
+        this.creditActions = creditActions;
         transaction = new TransactionTemplate(manager);
         transaction.setTimeout(15);
     }
@@ -125,7 +127,7 @@ public class CaseService {
         read.setReadOnly(true);
         read.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
         return read.execute(s -> new Detail(row(caseId).summary,
-                db.query("SELECT reporter_id,description,submitted_at FROM admin_statements WHERE case_id=? ORDER BY submitted_at,reporter_id", this::statementRow, caseId), List.of(), null));
+                db.query("SELECT reporter_id,description,submitted_at FROM admin_statements WHERE case_id=? ORDER BY submitted_at,reporter_id", this::statementRow, caseId), creditActions.list(caseId), null));
     }
     public Summary evidenceCase(Jwt jwt,UUID caseId) {
         requireAdmin(jwt);

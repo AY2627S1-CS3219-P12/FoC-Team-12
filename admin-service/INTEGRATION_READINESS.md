@@ -50,6 +50,38 @@ thread in session storage. No message content is stored in Admin's database.
 
 ## Final integration exit checks
 
+### Credit-actions iteration handoff
+
+Admin now implements the draft credit-action API, durable actions/command outbox/outcome inbox,
+reconciliation by original command redelivery, conditional Kafka transport, audit/lifecycle export,
+and reviewer GUI. This updates the Admin portion of A1; it does not close A1, E2, E3 or I2.
+Kafka is disabled by default; no topics/ACL/shared deployment configuration is provisioned here.
+Non-reporting historical targets remain gated by C3. Bans and resolution remain separate work.
+
+- **Eldridge / Credit:** approve and implement `AdminCreditCorrectionRequested` and its applied/
+  rejected outcomes, including all identity/correlation/amount fields, current actor eligibility,
+  target account validation, signed integer limits and authoritative ledger arithmetic. Confirm
+  the chosen int32 request representation against Credit's existing int balances.
+- **Eldridge / Credit recovery:** persist effect, operation hash/result, inbox and outcome outbox
+  atomically. Admin resends identical event/operation IDs. Credit must republish the original stored
+  outcome on duplicate commands, not merely drop a duplicate inbox entry. A lost outcome with a
+  committed effect must converge without a new effect or a new operation. No lookup API is assumed.
+- **Darryl + Eldridge:** agree deadline/reconciliation cadence and retention/redrive rules. Admin's
+  30-second UNKNOWN deadline is an engineering default, not failure proof. Agree conflicting-result
+  quarantine/DLT investigation and original completedAt preservation for result republication.
+- **Jun Hui / nominated shared editor:** provision the command/outcome/DLT topics and independent
+  consumer group ACLs (only Credit writes Credit outcomes), TLS/SASL/connectivity and runtime config.
+  Validate both directions of default-deny network policy and preserve existing core topics/groups.
+- **Darryl + Eldridge integration:** prove one ledger effect under duplicate events/operations,
+  insufficient available-credit rejection and unchanged reserved balance in the real Credit DB
+  through producer-owned tests/APIs. Admin's broker/fixture tests cannot establish these facts.
+- **Darryl / later resolution:** share the same case lock and forbid closure over PENDING/UNKNOWN.
+  Late matching outcomes finish their recorded actions; they never originate another command.
+- **Darryl + Jun Hui:** publish/recover CaseActionCompleted alongside existing lifecycle outbox.
+  The Admin correction transport intentionally does not introduce the wider admin.events relay.
+
+### End-to-end exit checks
+
 - Re-read this file and current producer contracts; mark an item complete only with owner agreement
   and actual implementation/test evidence. Record the agreed version/PR and any remaining gap.
 - Replace test-only servers with configured real producers and exercise requester, historical

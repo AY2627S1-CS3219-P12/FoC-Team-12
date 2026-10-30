@@ -4,6 +4,7 @@ import { readSession } from './auth/session'
 import { AccessError, checkAccess } from './access'
 import { EvidencePanel } from './EvidencePanel'
 import { formatSingaporeTime } from './time'
+import { CreditActions } from './CreditActions'
 import {
   CaseConversations,
   ParticipantConversationStatus,
@@ -811,6 +812,13 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           </article>
         ))}
       </section>
+      <CreditActions
+        key={`credit.${actor}.${id}`}
+        summary={value}
+        actorId={actor}
+        participantIds={state.data.statements.map((s) => s.reporterId)}
+        initialActions={state.data.actions}
+      />
       <EvidencePanel key={id} caseId={id} orderId={value.orderId} />
       <CaseConversations
         key={`${actor}.${id}`}
