@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { AdminShell } from './components/AdminShell'
 import { readSession } from './auth/session'
 import { AccessError, checkAccess } from './access'
+import { EvidencePanel } from './EvidencePanel'
+import { formatSingaporeTime } from './time'
 import {
   CaseError,
   isUuid,
@@ -260,7 +262,7 @@ function SummaryCard({ value }: { value: Summary }) {
       </div>
       <div>
         <dt>Opened</dt>
-        <dd>{new Date(value.createdAt).toLocaleString()}</dd>
+        <dd>{formatSingaporeTime(value.createdAt)}</dd>
       </div>
     </dl>
   )
@@ -441,8 +443,7 @@ function ReportStatusData({ id }: { id: string }) {
       <h3>Your statement</h3>
       <p className="statement-text">{state.data.ownStatement.description}</p>
       <p className="muted">
-        Submitted{' '}
-        {new Date(state.data.ownStatement.submittedAt).toLocaleString()}
+        Submitted {formatSingaporeTime(state.data.ownStatement.submittedAt)}
       </p>
       <button onClick={state.retry}>Refresh status</button>
     </section>
@@ -680,7 +681,7 @@ export function CaseQueue({ actor }: { actor: string }) {
                             : 'Ready to claim'}
                         </span>
                         <time dateTime={value.createdAt}>
-                          {new Date(value.createdAt).toLocaleString()}
+                          {formatSingaporeTime(value.createdAt)}
                         </time>
                       </div>
                       <span className="case-row-action">
@@ -799,16 +800,13 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           <article className="case-statement" key={statement.reporterId}>
             <h3>Participant {statement.reporterId}</h3>
             <p className="muted">
-              {new Date(statement.submittedAt).toLocaleString()}
+              {formatSingaporeTime(statement.submittedAt)}
             </p>
             <p className="statement-text">{statement.description}</p>
           </article>
         ))}
       </section>
-      <p className="case-scope-note">
-        This view contains participant statements. The evidence timeline and
-        conversation history are not available here yet.
-      </p>
+      <EvidencePanel key={id} caseId={id} orderId={value.orderId} />
     </>
   )
 }
