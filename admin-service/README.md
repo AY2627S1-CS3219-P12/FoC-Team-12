@@ -40,8 +40,10 @@ record Chat/transport owner sign-off or deploy the shared drafts.
   Workspace switching uses the existing User session-role API and rechecks Admin access
   with the returned token. A browser role selection never grants administrator access.
 
-No Chat/Order/Credit code, broker topics, root Compose/gateway/CI or Kubernetes policies
-are changed. Conversations, actions and resolution are later iterations.
+Shared Compose/gateway/broker/CI runtime wiring is prepared in the
+[runtime integration guide](RUNTIME_INTEGRATION.md), pending affected-owner activation review.
+Chat/Order/Credit domain code and Kubernetes policies are unchanged.
+Conversation adapters and credit tracking are implemented; real owner integrations and resolution remain pending.
 Account/supplier tools link to their existing owners.
 
 ## Cases behavior and APIs
@@ -154,11 +156,13 @@ result cannot be reversed by a duplicate or conflicting message.
 
 ### Transport and reconciliation
 
-`ADMIN_KAFKA_ENABLED` defaults **false** while producer contracts/infrastructure are unresolved.
-Accepted requests remain durably queued, then become UNKNOWN if not confirmed. Enable only after
-owners agree the contract and configure real broker access, topics and the Credit consumer.
+Standalone `ADMIN_KAFKA_ENABLED` defaults **false**. Shared Compose prepares it as **true** with
+authenticated broker access; activation requires affected-owner review as described in
+[runtime integration](RUNTIME_INTEGRATION.md). Accepted requests remain durably queued, then become
+UNKNOWN if no outcome arrives. The real Credit correction consumer/outcome producer remains pending;
+broker acknowledgement never establishes a financial effect.
 Admin service configuration accepts `KAFKA_BOOTSTRAP_SERVERS` (default localhost:9092) and standard
-Spring Kafka SASL/TLS properties; there are no shared Compose/env/CI/gateway edits in this iteration.
+Spring Kafka SASL/TLS properties. The runtime integration adds shared Compose/env/CI/gateway wiring.
 
 When explicitly enabled, the adapter publishes `AdminCreditCorrectionRequested` to
 `admin.credit.commands`, keyed by targetUserId. Database leases are claimed in short transactions;
@@ -399,8 +403,8 @@ In a separate terminal run `npm run dev` from `admin-service/frontend`, then ope
 query routes to their local services so login and Admin share a browser session origin.
 User must have its frontend built. Sign in, select Admin mode in the User profile, then
 return to `/admin`; the existing User login does not automatically redirect to Admin.
-Supplier links use the existing gateway on 8088. The packaged Admin shell expects the
-future shared gateway to route User/account/supplier links; direct backend hosting alone
+Supplier links use the existing gateway on 8088. The packaged Admin shell uses the
+prepared shared gateway routes for User/account/supplier links after runtime activation; direct backend hosting alone
 does not provide a second login system.
 Set `VITE_USER_URL` before starting Vite when testing a User instance on another local port.
 The preview forwards `/` (including query routes) to User and routes Supplier admin APIs
@@ -417,7 +421,7 @@ Editor: Darryl for this navigation integration; affected reviewers: Darryl (User
 Jun Hui (Supplier), Eldridge (Credit), XueTing (Order). These links do not grant access:
 Admin verifies the JWT and current administrator eligibility. No service APIs or gateway
 configuration change with the tab. Rebuild each owning frontend/container to display it;
-the shared gateway still needs its separately reviewed Admin routing/deployment integration.
+the prepared shared gateway integration still requires affected-owner review before activation.
 
 Configuration:
 

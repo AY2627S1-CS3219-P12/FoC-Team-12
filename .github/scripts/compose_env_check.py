@@ -34,7 +34,7 @@ def compose_jobs(workflow_text):
     jobs = {}
     for match in re.finditer(r"^  ([a-z0-9-]+):\n(.*?)(?=^  [a-z0-9-]+:\n|\Z)", workflow_text, re.M | re.S):
         name, body = match.group(1), match.group(2)
-        if "docker compose" not in body:
+        if "docker compose" not in body and "admin-service/scripts/runtime_smoke.py" not in body:
             continue
         provided = set()
         in_env = False
@@ -43,6 +43,8 @@ def compose_jobs(workflow_text):
                 in_env = True
                 continue
             if in_env:
+                if not line.strip() or line.lstrip().startswith("#"):
+                    continue
                 env_match = ENV_LINE.match(line)
                 if env_match:
                     provided.add(env_match.group(1))

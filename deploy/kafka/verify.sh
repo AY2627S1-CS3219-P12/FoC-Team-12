@@ -9,13 +9,14 @@ for variable in \
   KAFKA_USER_SERVICE_PASSWORD \
   KAFKA_ORDER_SERVICE_PASSWORD \
   KAFKA_CREDIT_SERVICE_PASSWORD \
+  KAFKA_ADMIN_SERVICE_PASSWORD \
   KAFKA_UI_BROKER_PASSWORD; do
   require_env "$variable"
 done
 
 mode=${1:-before-restart}
-consumer_timeout=${KAFKA_VERIFY_CONSUMER_TIMEOUT_SECONDS:-15}
-denial_timeout=${KAFKA_VERIFY_DENIAL_TIMEOUT_SECONDS:-10}
+consumer_timeout=${KAFKA_VERIFY_CONSUMER_TIMEOUT_SECONDS:-30}
+denial_timeout=${KAFKA_VERIFY_DENIAL_TIMEOUT_SECONDS:-20}
 for value in "$consumer_timeout" "$denial_timeout"; do
   [[ "$value" =~ ^[1-9][0-9]*$ ]] || { echo 'Verification timeouts must be positive seconds' >&2; exit 1; }
 done
@@ -27,6 +28,7 @@ write_client_properties "$work_dir/admin.properties" foc_admin "$KAFKA_ADMIN_PAS
 write_client_properties "$work_dir/user.properties" user_service "$KAFKA_USER_SERVICE_PASSWORD"
 write_client_properties "$work_dir/order.properties" order_service "$KAFKA_ORDER_SERVICE_PASSWORD"
 write_client_properties "$work_dir/credit.properties" credit_service "$KAFKA_CREDIT_SERVICE_PASSWORD"
+write_client_properties "$work_dir/admin-service.properties" admin_service "$KAFKA_ADMIN_SERVICE_PASSWORD"
 write_client_properties "$work_dir/ui.properties" kafka_ui "$KAFKA_UI_BROKER_PASSWORD"
 
 admin=(--bootstrap-server "$bootstrap_servers" --command-config "$work_dir/admin.properties")
@@ -135,20 +137,59 @@ verify_persisted_record() {
   set +e
   output=$(timeout "$consumer_timeout" "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
     --bootstrap-server "$bootstrap_servers" \
-    --consumer.config "$work_dir/admin.properties" \
+    --command-config "$work_dir/admin.properties" \
     --topic user.events --from-beginning \
     --group "foc-smoke-persistence-$event_id" \
-    --property print.key=true --property key.separator='|' 2>&1)
+    --formatter-property print.key=true --formatter-property key.separator='|' 2>&1)
   set -e
   assert_contains "$output" "$event_id" "test record after broker restart"
   echo "Kafka record and configuration survived the broker restart."
 }
 
-for topic in user.events order.events credit.events; do
-  verify_topic "$topic" 3 604800000
+# Bound independent metadata probes to five children; each failure must reach the parent.
+wait_checks() {
+  local failed=0
+  local pid
+  for pid in "$@"; do
+    wait "$pid" || failed=1
+  done
+  return "$failed"
+}
+
+pids=()
+for topic in user.events order.events credit.events admin.credit.commands credit.admin.events; do
+  verify_topic "$topic" 3 604800000 &
+  pids+=("$!")
 done
-for topic in user.events.DLT order.events.DLT credit.events.DLT; do
-  verify_topic "$topic" 1 2592000000
+wait_checks "${pids[@]}"
+pids=()
+for topic in user.events.DLT order.events.DLT credit.events.DLT admin.credit.commands.DLT credit.admin.events.DLT; do
+  verify_topic "$topic" 1 2592000000 &
+  pids+=("$!")
+done
+wait_checks "${pids[@]}"
+
+# Fetch exact-resource snapshots concurrently, then use the existing per-resource assertions.
+for topic_set in 'user.events order.events credit.events admin.credit.commands credit.admin.events' \
+  'user.events.DLT order.events.DLT credit.events.DLT admin.credit.commands.DLT credit.admin.events.DLT'; do
+  pids=()
+  for topic in $topic_set; do
+    kafka_command kafka-acls.sh "${admin[@]}" --list --topic "$topic" > "$work_dir/topic-$topic.acl" &
+    pids+=("$!")
+  done
+  wait_checks "${pids[@]}"
+  for topic in $topic_set; do
+    topic_acl_cache[$topic]=$(cat "$work_dir/topic-$topic.acl")
+  done
+done
+pids=()
+for group in order-service credit-service admin-service-credit credit-service-admin; do
+  kafka_command kafka-acls.sh "${admin[@]}" --list --group "$group" > "$work_dir/group-$group.acl" &
+  pids+=("$!")
+done
+wait_checks "${pids[@]}"
+for group in order-service credit-service admin-service-credit credit-service-admin; do
+  group_acl_cache[$group]=$(cat "$work_dir/group-$group.acl")
 done
 
 verify_topic_acl user_service WRITE user.events
@@ -164,8 +205,17 @@ verify_topic_acl credit_service WRITE user.events.DLT
 verify_topic_acl credit_service WRITE order.events.DLT
 verify_cluster_acl order_service IDEMPOTENT_WRITE
 verify_cluster_acl credit_service IDEMPOTENT_WRITE
+verify_topic_acl admin_service WRITE admin.credit.commands
+verify_topic_acl admin_service WRITE credit.admin.events.DLT
+verify_topic_acl admin_service READ credit.admin.events
+verify_group_acl admin_service READ admin-service-credit
+verify_cluster_acl admin_service IDEMPOTENT_WRITE
+verify_topic_acl credit_service READ admin.credit.commands
+verify_group_acl credit_service READ credit-service-admin
+verify_topic_acl credit_service WRITE credit.admin.events
+verify_topic_acl credit_service WRITE admin.credit.commands.DLT
 
-for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT; do
+for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT admin.credit.commands credit.admin.events admin.credit.commands.DLT credit.admin.events.DLT; do
   verify_topic_acl kafka_ui READ "$topic"
   verify_topic_acl kafka_ui DESCRIBE "$topic"
   verify_topic_acl kafka_ui DESCRIBE_CONFIGS "$topic"
@@ -190,10 +240,10 @@ event="{\"eventId\":\"$event_id\",\"eventType\":\"UserActivated\",\"eventVersion
 consumer_output="$work_dir/authorized-consumer.out"
 kafka_command kafka-console-consumer.sh \
   --bootstrap-server "$bootstrap_servers" \
-  --consumer.config "$work_dir/credit.properties" \
-  --consumer-property auto.offset.reset=latest \
+  --command-config "$work_dir/credit.properties" \
+  --command-property auto.offset.reset=earliest \
   --topic user.events --group credit-service --max-messages 1 \
-  --property print.key=true --property key.separator='|' \
+  --formatter-property print.key=true --formatter-property key.separator='|' \
   >"$consumer_output" 2>&1 &
 consumer_pid=$!
 sleep 4
@@ -206,7 +256,7 @@ printf '%s|%s\n' "$aggregate_id" "$event" | kafka_command kafka-console-producer
   --command-property enable.idempotence=true \
   --command-property acks=all
 
-for _ in $(seq 1 20); do
+for _ in $(seq 1 40); do
   if ! kill -0 "$consumer_pid" 2>/dev/null; then
     break
   fi
@@ -235,10 +285,10 @@ assert_contains "$ui_configuration" "retention.ms=604800000" "Kafka UI topic con
 
 ui_consumer_output=$(timeout "$consumer_timeout" "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
   --bootstrap-server "$bootstrap_servers" \
-  --consumer.config "$work_dir/ui.properties" \
+  --command-config "$work_dir/ui.properties" \
   --topic user.events --from-beginning \
   --group "kafka-ui-browser-$event_id" --max-messages 1 \
-  --property print.key=true --property key.separator='|' 2>&1)
+  --formatter-property print.key=true --formatter-property key.separator='|' 2>&1)
 assert_contains "$ui_consumer_output" "$aggregate_id|$event" "Kafka UI message read"
 
 ui_acl_listing=$(kafka_command kafka-acls.sh "${admin[@]}" \
@@ -260,6 +310,7 @@ ui_unauthorized_write=$(printf '%s|{}\n' "$aggregate_id" | kafka_command kafka-c
   --sync \
   --reader-property parse.key=true --reader-property key.separator='|' \
   --command-property max.block.ms=5000 \
+  --command-property request.timeout.ms=5000 \
   --command-property delivery.timeout.ms=10000 2>&1)
 ui_unauthorized_write_status=$?
 set -e
@@ -276,7 +327,7 @@ fi
 set +e
 ui_unauthorized_group=$(timeout "$denial_timeout" "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
   --bootstrap-server "$bootstrap_servers" \
-  --consumer.config "$work_dir/ui.properties" \
+  --command-config "$work_dir/ui.properties" \
   --topic user.events --group credit-service --max-messages 1 2>&1)
 set -e
 assert_contains "$ui_unauthorized_group" "GroupAuthorizationException" \
@@ -289,6 +340,7 @@ unauthorized_write=$(printf '%s|{}\n' "$aggregate_id" | kafka_command kafka-cons
   --topic user.events \
   --reader-property parse.key=true --reader-property key.separator='|' \
   --command-property max.block.ms=5000 \
+  --command-property request.timeout.ms=5000 \
   --command-property delivery.timeout.ms=10000 2>&1)
 unauthorized_write_status=$?
 set -e
@@ -301,9 +353,22 @@ assert_contains "$unauthorized_write" "TopicAuthorizationException" "unauthorize
 set +e
 unauthorized_group=$(timeout "$denial_timeout" "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
   --bootstrap-server "$bootstrap_servers" \
-  --consumer.config "$work_dir/credit.properties" \
+  --command-config "$work_dir/credit.properties" \
   --topic user.events --group order-service --max-messages 1 2>&1)
 set -e
 assert_contains "$unauthorized_group" "GroupAuthorizationException" "unauthorized consumer-group denial"
+
+set +e
+admin_forbidden_write=$(printf '%s|{}\n' "$aggregate_id" | kafka_command kafka-console-producer.sh \
+  --bootstrap-server "$bootstrap_servers" --command-config "$work_dir/admin-service.properties" \
+  --topic credit.admin.events --sync --reader-property parse.key=true --reader-property key.separator='|' \
+  --command-property max.block.ms=5000 --command-property request.timeout.ms=5000 \
+  --command-property delivery.timeout.ms=10000 2>&1)
+admin_forbidden_group=$(timeout "$denial_timeout" "$KAFKA_BIN_DIR/kafka-console-consumer.sh" \
+  --bootstrap-server "$bootstrap_servers" --command-config "$work_dir/admin-service.properties" \
+  --topic credit.admin.events --group credit-service-admin --max-messages 1 2>&1)
+set -e
+assert_contains "$admin_forbidden_write" "TopicAuthorizationException" "Admin cannot forge Credit outcomes"
+assert_contains "$admin_forbidden_group" "GroupAuthorizationException" "Admin cannot use Credit correction group"
 
 echo "Kafka topic, ACL, authorized-flow and denial checks passed."

@@ -21,6 +21,11 @@ spring:
               predicates:
                 - Path=/suppliers,/suppliers/**,/admin/suppliers,/admin/suppliers/**,/supplier-assets/**
                 - Method=GET
+            - id: admin-ui
+              uri: ${ADMIN_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/admin,/admin/**,/admin-assets/**
+                - Method=GET
             - id: credit-ui
               uri: ${CREDIT_SERVICE_URL:http://localhost:8083}
               predicates:
@@ -39,6 +44,10 @@ spring:
               uri: ${SUPPLIER_SERVICE_URL:http://localhost:8080}
               predicates:
                 - Path=/api/admin/suppliers,/api/admin/suppliers/**
+            - id: admin-api
+              uri: ${ADMIN_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/api/admin,/api/admin/**
             - id: supplier-api
               uri: ${SUPPLIER_SERVICE_URL:http://localhost:8080}
               predicates:
@@ -56,6 +65,13 @@ spring:
               predicates:
                 - Path=/.well-known/jwks.json
                 - Method=GET
+            - id: admin-openapi-json
+              uri: ${ADMIN_SERVICE_URL:http://localhost:8084}
+              predicates:
+                - Path=/docs/admin/openapi.json
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs
             - id: user-openapi-json
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:
@@ -111,6 +127,8 @@ management:
 springdoc:
   swagger-ui:
     urls:
+      - name: Admin Service
+        url: /docs/admin/openapi.json
       - name: User Service
         url: /docs/user/openapi.json
       - name: Supplier Service

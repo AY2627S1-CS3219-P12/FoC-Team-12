@@ -39,7 +39,7 @@ and agent boundaries only; they are not runnable services yet.
 
 This repository follows a **one-service-per-folder** structure: each
 microservice (`user-service/`, `supplier-service/`, `order-service/`,
-`credit-service/`) lives in its own top-level folder. The shared, stateless
+`credit-service/`, `admin-service/`) lives in its own top-level folder. The shared, stateless
 `gateway-service/` provides the public API entry point without owning domain data.
 
 ```text
@@ -100,6 +100,8 @@ the Credit dashboard at `/credits`, and the current APIs from the same origin:
 /suppliers/**                 -> Supplier public UI
 /admin/suppliers/**           -> Supplier administration UI
 /credits/**                   -> Credit dashboard
+/admin/**                     -> Admin dashboard (Supplier admin paths take precedence)
+/api/admin/**                 -> Admin Service (except /api/admin/suppliers/**)
 /api/users/**                -> User Service
 /api/suppliers/**            -> Supplier Service
 /api/admin/suppliers/**      -> Supplier Service
@@ -113,6 +115,10 @@ documented in [`deploy/kafka/README.md`](deploy/kafka/README.md); application ad
 separate owner-reviewed work. Its authenticated, read-only local Kafka dashboard is available at
 `http://localhost:8090` when the `kafka-ui` Compose service is running. This dashboard is local
 operational tooling and is not routed through the application gateway.
+
+Admin Compose/runtime setup, key handoff, owner-review gate and isolated verification are in
+[`admin-service/RUNTIME_INTEGRATION.md`](admin-service/RUNTIME_INTEGRATION.md). Its private database
+is not host-published. Real Credit corrections and Chat integrations remain owner dependencies.
 
 Keeping the packaged frontends on `8088` lets their browser code share the validated
 `sessionStorage["foc.user-session"]` login session. Direct ports `8080`, `8081` and `8083` remain exposed

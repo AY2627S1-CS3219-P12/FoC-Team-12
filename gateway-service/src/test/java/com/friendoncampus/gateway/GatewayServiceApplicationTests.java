@@ -37,6 +37,7 @@ class GatewayServiceApplicationTests {
     private static HttpServer supplierService;
     private static HttpServer creditService;
     private static HttpServer orderService;
+    private static HttpServer adminService;
 
     @LocalServerPort
     private int gatewayPort;
@@ -52,6 +53,7 @@ class GatewayServiceApplicationTests {
         supplierService.stop(0);
         creditService.stop(0);
         orderService.stop(0);
+        adminService.stop(0);
     }
 
     @DynamicPropertySource
@@ -61,6 +63,7 @@ class GatewayServiceApplicationTests {
         registry.add("SUPPLIER_SERVICE_URL", () -> serviceUrl(supplierService));
         registry.add("CREDIT_SERVICE_URL", () -> serviceUrl(creditService));
         registry.add("ORDER_SERVICE_URL", () -> serviceUrl(orderService));
+        registry.add("ADMIN_SERVICE_URL", () -> serviceUrl(adminService));
     }
 
     @Test
@@ -133,6 +136,9 @@ class GatewayServiceApplicationTests {
     @Test
     void routesPackagedFrontendsWithoutACatchAll() throws Exception {
         Map<String, String> expectedBackends = Map.ofEntries(
+                Map.entry("/admin", "admin"),
+                Map.entry("/admin/cases/test-id", "admin"),
+                Map.entry("/admin-assets/index.js", "admin"),
                 Map.entry("/", "user"),
                 Map.entry("/user-assets/index.js", "user"),
                 Map.entry("/suppliers", "supplier"),
@@ -189,6 +195,7 @@ class GatewayServiceApplicationTests {
     @Test
     void mapsServiceOpenApiDocuments() throws Exception {
         Map<String, String> expectedBodies = Map.ofEntries(
+                Map.entry("/docs/admin/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"admin\"}"),
                 Map.entry("/docs/user/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"user\"}"),
                 Map.entry("/docs/supplier/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"supplier\"}"),
                 Map.entry("/docs/supplier/openapi.yaml", "openapi: 3.1.0\\nservice: supplier\\n"),
@@ -247,11 +254,32 @@ class GatewayServiceApplicationTests {
         assertThat(index.body()).contains("Swagger UI");
         assertThat(configuration.statusCode()).isEqualTo(200);
         assertThat(configuration.body())
+                .contains("/docs/admin/openapi.json")
                 .contains("/docs/user/openapi.json")
                 .contains("/docs/supplier/openapi.json")
                 .contains("/docs/credit/openapi.json")
                 .contains("/docs/order/openapi.json")
                 .contains("Credit Service");
+    }
+
+    @Test
+    void forwardsAdminMutationAndPreservesDependencyUnavailableProblem() throws Exception {
+        var response = send(request("/api/admin/cases/example/actions?source=gateway")
+                .header("Authorization", "Bearer admin-token")
+                .header("Content-Type", "application/json")
+                .header("Idempotency-Key", "test-operation")
+                .header("X-Stub-Response-Status", "503")
+                .POST(HttpRequest.BodyPublishers.ofString("{\"amount\":-5}")) .build());
+        assertThat(response.statusCode()).isEqualTo(503);
+        assertThat(response.headers().firstValue("Content-Type").orElse("")).startsWith("application/problem+json");
+        assertThat(response.body()).contains("\"backend\":\"admin\"", "Bearer admin-token", "source=gateway", "amount");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/internal/admin/cases/test/access", "/internal/admin/orders/test/evidence",
+            "/internal/users/test/admin-eligibility"})
+    void neverExposesServiceOnlyCallbacks(String path) throws Exception {
+        assertThat(get(path).statusCode()).isEqualTo(404);
     }
 
     private HttpRequest.Builder request(String path) {
@@ -276,6 +304,7 @@ class GatewayServiceApplicationTests {
             supplierService = stubService("supplier");
             creditService = stubService("credit");
             orderService = stubService("order");
+            adminService = stubService("admin");
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to start gateway test downstreams", exception);
         }

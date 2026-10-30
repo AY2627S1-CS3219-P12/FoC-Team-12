@@ -28,6 +28,11 @@ export KAFKA_UI_BROKER_PASSWORD=${KAFKA_UI_BROKER_PASSWORD:-smoke-ui-broker-pass
 export KAFKA_UI_LOGIN_USERNAME=${KAFKA_UI_LOGIN_USERNAME:-kafka-smoke-viewer}
 export KAFKA_UI_LOGIN_PASSWORD=${KAFKA_UI_LOGIN_PASSWORD:-smoke-ui-login-password}
 
+export ADMIN_DB_PASSWORD=${ADMIN_DB_PASSWORD:-ci-admin-db-password}
+export ADMIN_SERVICE_PRIVATE_KEY=${ADMIN_SERVICE_PRIVATE_KEY:-not-used-by-this-job}
+export USER_SERVICE_TRUSTED_KEYS=${USER_SERVICE_TRUSTED_KEYS:-'{}'}
+export KAFKA_ADMIN_SERVICE_PASSWORD=${KAFKA_ADMIN_SERVICE_PASSWORD:-ci-kafka-admin-service-password}
+
 compose() {
   docker compose --project-directory "$repository_root" -p "$project_name" "$@"
 }
@@ -58,7 +63,7 @@ login_to_kafka_ui() {
   local login_args
 
   login_page=$(curl --fail --silent --show-error \
-    --cookie-jar "$ui_cookie_jar" http://localhost:8090/login)
+    --cookie-jar "$ui_cookie_jar" http://localhost:${KAFKA_UI_HOST_PORT:-8090}/login)
   csrf_token=$(sed -n 's/.*name="_csrf"[^>]*value="\([^"]*\)".*/\1/p' <<< "$login_page" | head -n 1)
   login_args=(
     --silent --show-error --output /dev/null --write-out '%{http_code}'
@@ -69,7 +74,7 @@ login_to_kafka_ui() {
   if [ -n "$csrf_token" ]; then
     login_args+=(--data-urlencode "_csrf=$csrf_token")
   fi
-  login_status=$(curl "${login_args[@]}" http://localhost:8090/login)
+  login_status=$(curl "${login_args[@]}" http://localhost:${KAFKA_UI_HOST_PORT:-8090}/login)
   if [ "$login_status" != 302 ]; then
     echo "Kafka UI login returned HTTP $login_status instead of 302" >&2
     return 1
@@ -80,7 +85,7 @@ wait_for_kafka_ui_cluster() {
   local response
   for _ in $(seq 1 30); do
     response=$(curl --silent --show-error --cookie "$ui_cookie_jar" \
-      http://localhost:8090/api/clusters 2>/dev/null || true)
+      http://localhost:${KAFKA_UI_HOST_PORT:-8090}/api/clusters 2>/dev/null || true)
     if [[ "$response" == *'"name":"foc-local"'* ]]; then
       return 0
     fi
@@ -97,9 +102,9 @@ compose run --rm kafka-init
 compose exec -T kafka /bin/bash /opt/foc-kafka/verify.sh before-restart
 compose up -d --wait kafka-ui
 
-curl --fail --silent --show-error http://localhost:8090/actuator/health | grep --quiet '"status":"UP"'
+curl --fail --silent --show-error http://localhost:${KAFKA_UI_HOST_PORT:-8090}/actuator/health | grep --quiet '"status":"UP"'
 unauthenticated_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
-  --max-redirs 0 http://localhost:8090/)
+  --max-redirs 0 http://localhost:${KAFKA_UI_HOST_PORT:-8090}/)
 if [ "$unauthenticated_status" != 302 ] && [ "$unauthenticated_status" != 401 ]; then
   echo "Kafka UI did not require login; received HTTP $unauthenticated_status" >&2
   exit 1

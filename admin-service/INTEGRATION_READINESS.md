@@ -55,8 +55,24 @@ thread in session storage. No message content is stored in Admin's database.
 Admin now implements the draft credit-action API, durable actions/command outbox/outcome inbox,
 reconciliation by original command redelivery, conditional Kafka transport, audit/lifecycle export,
 and reviewer GUI. This updates the Admin portion of A1; it does not close A1, E2, E3 or I2.
-Kafka is disabled by default; no topics/ACL/shared deployment configuration is provisioned here.
+Standalone Kafka is disabled by default. The shared runtime iteration now enables authenticated
+Admin transport in Compose and prepares topics/ACLs, gateway routing and CI. Activation remains
+gated on affected-owner review; see [runtime integration](RUNTIME_INTEGRATION.md).
 Non-reporting historical targets remain gated by C3. Bans and resolution remain separate work.
+
+The isolated runtime smoke now passes against packaged Admin/User/gateway images, private
+PostgreSQL and authenticated Kafka: real User JWT/current eligibility, internal-route isolation,
+command publishing, UNKNOWN/original retry identity, test-only duplicate rejected outcomes,
+restart persistence and User outage. This closes the local Admin transport/configuration portion
+of I2 only. It does not close shared activation review, Kubernetes/TLS/network-policy deployment,
+real Credit acceptance, Chat integration or the Admin lifecycle relay in E3. Test-only SQL fixtures
+and outcome producers are not live fallbacks and do not establish a Credit ledger result.
+
+The separate shared-broker smoke also passes topic/retention checks, repeated initialization,
+scoped producer/consumer access, denied Admin outcome forgery and foreign-group access,
+authenticated read-only operational UI, and record/configuration/ACL persistence after restart.
+These checks use a disposable broker. The existing shared broker is intentionally not activated;
+its administrative topics remain absent until affected-owner review and coordinated rollout.
 
 - **Eldridge / Credit:** approve and implement `AdminCreditCorrectionRequested` and its applied/
   rejected outcomes, including all identity/correlation/amount fields, current actor eligibility,
