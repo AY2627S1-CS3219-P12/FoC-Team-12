@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AdminShell } from './components/AdminShell'
 import { readSession } from './auth/session'
 import { AccessError, checkAccess } from './access'
+import { EvidencePanel } from './EvidencePanel'
 import {
   CaseError,
   isUuid,
@@ -805,10 +806,7 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           </article>
         ))}
       </section>
-      <p className="case-scope-note">
-        This view contains participant statements. The evidence timeline and
-        conversation history are not available here yet.
-      </p>
+      <EvidencePanel key={id} caseId={id} orderId={value.orderId} />
     </>
   )
 }

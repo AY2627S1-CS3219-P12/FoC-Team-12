@@ -29,6 +29,7 @@ class CaseWorkflowTest {
     }
     @Autowired CaseService service;
     @Autowired CaseAccessService access;
+    @Autowired EvidenceExportService exports;
     @Autowired JdbcTemplate db;
     @MockitoBean UserEligibilityClient users;
     @MockitoBean ChatEligibilityClient chat;
@@ -114,6 +115,38 @@ class CaseWorkflowTest {
         assertEquals(List.of(201,409),results.stream().map(CaseViews.Mutation::status).sorted().toList());
         assertEquals(1,count("admin_cases")); assertEquals(1,count("admin_statements"));
         assertEquals(1,count("admin_case_audit")); assertEquals(1,count("admin_case_outbox"));
+    }
+    @Test void evidenceExportPinsSnapshotPreservesIdsAndExcludesPrivateStatements() {
+        UUID id=caseId(report(reporter,UUID.randomUUID()));
+        service.claim(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,1);
+        var first=exports.read(order,id,null,1);
+        assertEquals(2,first.checkpoint().committedSequence());assertNotNull(first.nextCursor());assertEquals(1,first.records().size());
+        UUID event=db.queryForObject("SELECT event_id FROM admin_case_outbox WHERE case_id=? AND source_sequence=1",UUID.class,id);
+        assertEquals(event.toString(),first.records().get(0).path("eventId").asText());
+        assertFalse(json.writeValueAsString(first).contains("Pickup issue"));
+        var second=exports.read(order,id,first.nextCursor(),1);
+        assertEquals(first.snapshotId(),second.snapshotId());assertEquals(first.checkpoint(),second.checkpoint());assertNull(second.nextCursor());
+        assertEquals("CaseClaimed",second.records().get(0).path("action").asText());assertEquals(2,second.records().get(0).path("sourceSequence").asLong());
+        assertEquals(second,exports.read(order,id,first.nextCursor(),1));
+        assertEquals(HttpStatus.BAD_REQUEST,assertThrows(ResponseStatusException.class,()->exports.read(order,id,first.nextCursor(),2)).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND,assertThrows(ResponseStatusException.class,()->exports.read(UUID.randomUUID(),id,first.nextCursor(),1)).getStatusCode());
+    }
+    @Test void evidenceExportSnapshotDoesNotChangeWhenClaimCommitsAfterFirstRead() {
+        UUID id=caseId(report(reporter,UUID.randomUUID()));var before=exports.read(order,id,null,1);
+        assertNull(before.nextCursor());assertEquals(1,before.checkpoint().committedSequence());
+        service.claim(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,1);var after=exports.read(order,id,null,1);
+        assertNotEquals(before.snapshotId(),after.snapshotId());assertEquals(2,after.checkpoint().committedSequence());
+        assertEquals(1,before.checkpoint().committedSequence());assertEquals(before.records().get(0),after.records().get(0));
+    }
+    @Test void evidenceRecoveryDoesNotInventLegacyBaselineOrHideMissingEvents() {
+        UUID legacy=UUID.randomUUID(),legacyOrder=UUID.randomUUID();
+        db.update("INSERT INTO admin_cases(id,order_id,state,revision) VALUES (?,?,'OPEN',0)",legacy,legacyOrder);
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->exports.read(legacyOrder,legacy,null,20)).getStatusCode());
+        UUID id=caseId(report(reporter,UUID.randomUUID()));service.claim(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,1);
+        db.update("DELETE FROM admin_case_outbox WHERE case_id=? AND source_sequence=1",id);
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->exports.read(order,id,null,20)).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST,assertThrows(ResponseStatusException.class,()->exports.read(order,id,"bad-cursor",20)).getStatusCode());
+        assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->exports.read(order,id,UUID.randomUUID().toString(),20)).getStatusCode());
     }
     @Test void staleRevisionAfterJoinAndRevokedAdminAreDenied() {
         UUID id=caseId(report(reporter,UUID.randomUUID())); report(courier,UUID.randomUUID());

@@ -40,7 +40,7 @@ record Chat/transport owner sign-off or deploy the shared drafts.
   with the returned token. A browser role selection never grants administrator access.
 
 No Chat/Order/Credit code, broker topics, root Compose/gateway/CI or Kubernetes policies
-are changed. Evidence timeline, conversations, actions and resolution are later iterations.
+are changed. Conversations, actions and resolution are later iterations.
 Account/supplier tools link to their existing owners.
 
 ## Cases behavior and APIs
@@ -83,8 +83,8 @@ Each mutation persists a revisioned local audit record atomically. CaseOpened an
 also persist stable-ID `admin.events` envelope drafts in the outbox, keyed by case ID.
 sourceSequence counts events separately from case revision. Adding a statement has an audit
 record but no invented lifecycle event. No Kafka relay is implemented: outbox rows remain
-pending until a later approved transport/relay iteration. Topic/ACL, delivery, producer
-evidence export/backfill and Chat consumption are not verified here. Draft schemas remain
+pending until a later approved transport/relay iteration. Topic/ACL integration,
+broker delivery and Chat consumption are not verified here. Draft schemas remain
 subject to affected-owner review; local implementation is not Chat/transport sign-off.
 
 `/admin` opens the live report queue first; account/supplier tools follow below it.
@@ -108,8 +108,76 @@ The actual Report an issue entry in the errand detail screen belongs to Order (X
 is not wired by this Admin-only change. The Admin receiving URL is available for local
 testing; its use by Order still needs the affected owner's review. No Order code, gateway
 routes or service API contracts are changed. Save the returned case link to revisit a report;
-an errand-to-case lookup/list API has not been invented. Timeline evidence is explicitly
-deferred; statements are not a complete evidence timeline.
+an errand-to-case lookup/list API has not been invented. Statements remain separate from
+Chat's evidence timeline and must not be treated as the complete history.
+
+## Evidence timeline and recovery
+
+`GET /api/admin/cases/{caseId}/timeline?cursor=&limit=` requires effective ADMIN mode and
+current persisted active administrator eligibility on every request. Admin looks up its own
+case/order mapping, calls Chat's documented private timeline route with a short-lived service
+assertion and the original User JWT, then rechecks current eligibility before returning data.
+No transaction/permission lock spans the HTTP call. Limit defaults to 20, maximum 100. The
+opaque Chat cursor is URL-encoded without interpretation. Requests time out after three
+seconds (two-second connection limit); redirects/automatic retries are disabled.
+
+Admin validates case/order IDs, snapshots, historical assignment periods, typed evidence,
+source sequences, ordering, timestamps, coverage and gaps. Only documented redacted fields
+are returned; unknown producer fields are not forwarded. Mismatched/malformed/unavailable
+responses are 503; Chat snapshot conflicts become 409 with an explicit restart instruction.
+Responses use no-store. User access failures remain denied/unavailable rather than being
+converted into evidence completeness claims.
+
+Case detail shows the order snapshot, historical participants, paginated records with both
+occurrence and ingestion times, checkpoints, projected/committed progress and known gaps.
+COMPLETE also requires that the snapshot requester/current courier appear in the supplied
+participants. It is accepted only with no blocking gaps, no lag and checkpoints for the documented
+Order, Credit and Admin streams/aggregates. The label says complete *through those
+checkpoints*, never globally current forever. UNKNOWN/INCOMPLETE and empty evidence remain
+explicit. Loading fewer pages does not imply missing source coverage, and reaching the last
+page does not prove complete history. Snapshot revision/metadata changes, conflicting IDs,
+out-of-order pages or non-progressing cursors require restarting; overlapping identical IDs
+are deduplicated. Failed pagination keeps prior records marked unverified and retries the
+same cursor; authorization denial clears protected evidence.
+
+`GET /internal/admin/orders/{orderId}/evidence?caseId=&cursor=&limit=` is a private Chat-only
+producer export. Service identity is pinned using the existing separate service-key trust map;
+User JWTs and other services cannot authenticate. caseId is required and must match orderId.
+This read does not call Chat/User or depend on Kafka publication, preventing recovery cycles.
+
+The first read pins a repeatable PostgreSQL snapshot of the case's committed lifecycle
+outbox records and high-water mark. Stable event IDs/source sequences and occurrence/local
+persistence timestamps are preserved. Export ingestedAt denotes Admin's original local
+persistence time; it is not an invented Chat ingestion timestamp. EvidenceData uses the
+documented ADMIN shape. Internal statement text, eligibility revisions, request receipts,
+credentials and arbitrary outbox fields are excluded. Statement-only audits have no
+invented lifecycle event. This iteration exports CaseOpened/CaseClaimed; later producer
+event types must extend the adapter with their owning iteration.
+
+Migration V3 persists immutable recovery snapshots and opaque cursor UUIDs. Each next cursor
+binds the snapshot, offset and page limit; retries return the same snapshot/checkpoint/records
+and next cursor after new case mutations or restarts. Default page size 20, maximum 100;
+keep the same limit on subsequent pages. A fresh cursorless request obtains a new snapshot.
+Producer checkpoints expose committedSequence, never projectedSequence. Unknown cursor is
+409, malformed cursor/limit is 400, cross-case/order lookup is 404. Cases lacking a trustworthy
+CaseOpened baseline or contiguous durable events return 503: legacy history is never
+fabricated, and recovery remains incomplete. Snapshot/cursor expiry or cleanup is not automatic
+in this iteration; retention requires a separately agreed recovery policy.
+
+All producer/consumer schemas remain the repository review drafts until affected owners sign
+off. Chat still has no runnable repository implementation. HTTP fixtures verify the Admin
+adapter and UI only; they are not proof of real historical participation, producer coverage,
+broker delivery or operational recovery. No Chat code, contract schema, gateway, Compose,
+broker or other service is changed by this iteration.
+
+Evidence verification: run the backend/frontend commands below. Tests cover current access,
+revocation during HTTP, cross-case rejection, incomplete/unknown/contradictory coverage,
+snapshot paging/retry, HTTP failure mapping, redaction and PostgreSQL export consistency,
+stable identities, unavailable legacy baselines and gaps. Manual: open a case in ADMIN mode,
+inspect participant periods/checkpoints/gaps, load multiple pages, interrupt Chat and retry,
+change snapshot revision between pages, revoke administrator access, and check keyboard/focus,
+375px and desktop layouts. Real Chat integration and visual acceptance remain pending when
+the producer runtime or browser access is unavailable.
 
 ## Local configuration and startup
 
@@ -254,3 +322,10 @@ product entry belongs on the errand screen. Accounts outside the allowlist are
 ineligible. `-Incomplete` deliberately returns lagging coverage; stop/restart the fixture to
 test Chat outages. Stop with Ctrl+C. Remove the override before connecting real Chat.
 Success against this fixture is local UI/API verification only, never Chat integration sign-off.
+
+After creating a synthetic case, the same launcher accepts `-CaseId <case-uuid>` to serve
+an explicitly labelled, 25-record synthetic timeline for that one case/order. Both service
+and original Admin User JWTs are checked. The fixture is still test-only and excluded from
+the packaged application. Use `-Incomplete` to show projection lag and known gaps, and stop
+it to verify unavailable/retry behavior. This synthetic timeline is not derived from real
+Order/Credit history and must not be used to make real case decisions.

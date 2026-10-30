@@ -125,6 +125,10 @@ public class CaseService {
         return read.execute(s -> new Detail(row(caseId).summary,
                 db.query("SELECT reporter_id,description,submitted_at FROM admin_statements WHERE case_id=? ORDER BY submitted_at,reporter_id", this::statementRow, caseId), List.of(), null));
     }
+    public Summary evidenceCase(Jwt jwt,UUID caseId) {
+        requireAdmin(jwt);
+        return row(caseId).summary;
+    }
 
     private UUID requireParticipant(Jwt jwt) {
         if (!Set.of("REQUESTER", "COURIER").contains(jwt.getClaimAsString("role"))) throw forbidden("Select Requester or Courier mode to access participant reports.");

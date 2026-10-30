@@ -317,10 +317,12 @@ it('claims using the displayed revision and explains conflicts without claiming 
   vi.stubGlobal('fetch', fetcher)
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: 'Claim case' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'This case has changed',
-  )
-  const call = fetcher.mock.calls[2]!
+  expect(
+    await screen.findByText(
+      'This case has changed. Refresh it before claiming.',
+    ),
+  ).toBeVisible()
+  const call = fetcher.mock.calls.find((call) => call[1]?.method === 'POST')!
   expect(call[0]).toBe('/api/admin/cases/' + id + '/claim')
   expect(JSON.parse(call[1].body)).toEqual({ expectedRevision: 1 })
   expect(screen.queryByText('Case assigned to you.')).not.toBeInTheDocument()
