@@ -33,6 +33,7 @@ class CaseWorkflowTest {
     @Autowired JdbcTemplate db;
     @MockitoBean UserEligibilityClient users;
     @MockitoBean ChatEligibilityClient chat;
+    @MockitoBean ChatConversationClient conversations;
     final JsonMapper json = JsonMapper.builder().build();
     final UUID order = UUID.randomUUID(), reporter=UUID.randomUUID(), courier=UUID.randomUUID(), reviewer=UUID.randomUUID();
     Jwt jwt(UUID id, String role) { return Jwt.withTokenValue("actor-jwt").header("alg","RS256").subject(id.toString()).claim("role",role).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build(); }
@@ -44,6 +45,77 @@ class CaseWorkflowTest {
     UUID caseId(CaseViews.Mutation response) { return UUID.fromString(json.readTree(response.body()).path("case").path("caseId").asText()); }
     long count(String table) { return db.queryForObject("SELECT count(*) FROM "+table,Long.class); }
     CaseViews.Mutation report(UUID actor, UUID key) { return service.report(jwt(actor,"REQUESTER"),key,order,"Pickup issue"); }
+
+    UUID reviewCase() {
+        UUID id=caseId(report(reporter,UUID.randomUUID()));
+        service.claim(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,1);
+        return id;
+    }
+    ChatConversationClient.Conversation reference(UUID id) { return new ChatConversationClient.Conversation(UUID.randomUUID(),id,order,reporter,false); }
+    @Test void onlyAssignedReviewerCanInitiateForVerifiedReportingParticipants() {
+        UUID id=caseId(report(reporter,UUID.randomUUID()));
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,reporter)).getStatusCode());
+        service.claim(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,1);
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(courier,"ADMIN"),UUID.randomUUID(),id,reporter)).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(reviewer,"COURIER"),UUID.randomUUID(),id,reporter)).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND,assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,courier)).getStatusCode());
+        verifyNoInteractions(conversations);
+    }
+    @Test void conversationRetriesRetainIdentityAndAuditEachReferenceOnlyOnce() {
+        UUID id=reviewCase(), key=UUID.randomUUID(); var ref=reference(id);
+        when(conversations.open(eq(id),eq(order),eq(reporter),any(),any())).thenReturn(ref);
+        var first=service.openConversation(jwt(reviewer,"ADMIN"),key,id,reporter);
+        assertEquals(200,first.status()); assertEquals(first,service.openConversation(jwt(reviewer,"ADMIN"),key,id,reporter));
+        verify(conversations,times(1)).open(id,order,reporter,key,"actor-jwt");
+        assertEquals(first,service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,reporter));
+        assertEquals(1,count("admin_case_conversations")); assertEquals(3,count("admin_case_audit")); assertEquals(2,count("admin_case_outbox"));
+        assertEquals(3,service.detail(jwt(reviewer,"ADMIN"),id).caseSummary().revision());
+        assertEquals(409,service.claim(jwt(reviewer,"ADMIN"),key,id,3).status());
+    }
+    @Test void uncertainInitiationRetriesOriginalKeyAfterChatOutage() {
+        UUID id=reviewCase(),key=UUID.randomUUID();var ref=reference(id);
+        when(conversations.open(id,order,reporter,key,"actor-jwt")).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE)).thenReturn(ref);
+        assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(reviewer,"ADMIN"),key,id,reporter));
+        assertEquals(0,count("admin_case_conversations"));
+        assertEquals(503,db.queryForObject("SELECT response_status FROM admin_mutation_receipts WHERE idempotency_key=?",Integer.class,key));
+        assertEquals(200,service.openConversation(jwt(reviewer,"ADMIN"),key,id,reporter).status());
+        verify(conversations,times(2)).open(id,order,reporter,key,"actor-jwt");
+    }
+    @Test void conflictingConversationReferenceOrReusedKeyCannotChangeTargetOrAudit() {
+        UUID id=reviewCase(),key=UUID.randomUUID();var original=reference(id);
+        service.report(jwt(courier,"COURIER"),UUID.randomUUID(),order,"Historical courier statement");
+        when(conversations.open(eq(id),eq(order),eq(reporter),any(),any())).thenReturn(original);
+        assertEquals(200,service.openConversation(jwt(reviewer,"ADMIN"),key,id,reporter).status());
+        assertEquals(409,service.openConversation(jwt(reviewer,"ADMIN"),key,id,courier).status());
+        verify(conversations,never()).open(eq(id),eq(order),eq(courier),any(),any());
+        when(conversations.open(eq(id),eq(order),eq(reporter),any(),any())).thenReturn(reference(id));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,reporter)).getStatusCode());
+        assertEquals(original.conversationId(),db.queryForObject("SELECT conversation_id FROM admin_case_conversations",UUID.class));
+        assertEquals(4,count("admin_case_audit"));
+    }
+    @Test void revocationOrClosureDuringChatCallPreventsDisclosureAndConfirmation() {
+        UUID id=reviewCase(),key=UUID.randomUUID();var ref=reference(id);
+        when(conversations.open(eq(id),eq(order),eq(reporter),any(),any())).thenAnswer(call->{
+            when(users.find(reviewer)).thenReturn(new UserEligibilityClient.Eligibility(reviewer,true,false));return ref;});
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(reviewer,"ADMIN"),key,id,reporter)).getStatusCode());
+        assertEquals(0,count("admin_case_conversations"));
+        when(users.find(reviewer)).thenReturn(new UserEligibilityClient.Eligibility(reviewer,true,true));
+        when(conversations.open(eq(id),eq(order),eq(reporter),any(),any())).thenAnswer(call->{db.update("UPDATE admin_cases SET state='RESOLVED' WHERE id=?",id);return ref;});
+        assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(reviewer,"ADMIN"),key,id,reporter)).getStatusCode());
+        assertEquals(0,count("admin_case_conversations"));assertEquals(2,count("admin_case_audit"));
+    }
+    @Test void concurrentInitiationHasOneReferenceAndOneAuditDespiteMultipleRequestKeys() throws Exception {
+        UUID id=reviewCase();var ref=reference(id);
+        when(conversations.open(eq(id),eq(order),eq(reporter),any(),any())).thenReturn(ref);
+        var pool=Executors.newFixedThreadPool(2);
+        try {
+            var results=pool.invokeAll(List.of(
+                ()->service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,reporter),
+                ()->service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,reporter)));
+            for(var result:results)assertEquals(200,((CaseViews.Mutation)result.get()).status());
+        } finally {pool.shutdownNow();}
+        assertEquals(1,count("admin_case_conversations"));assertEquals(3,count("admin_case_audit"));
+    }
 
     @Test void createsCaseStatementAuditAndEventInOneTransactionAndPinsEligibility() {
         var response=report(reporter,UUID.randomUUID()); assertEquals(201,response.status());

@@ -56,7 +56,7 @@ public class SecurityConfiguration {
         return http.authorizeHttpRequests(a -> a
                 .requestMatchers("/admin", "/admin/**", "/admin-assets/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/admin/session", "/api/admin/cases", "/api/admin/cases/*", "/api/admin/cases/*/timeline").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/admin/cases/*/claim").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.POST, "/api/admin/cases/*/claim", "/api/admin/cases/*/conversations").hasRole("ADMIN")
                 .requestMatchers("/api/admin/reports", "/api/admin/reports/*").hasAnyRole("REQUESTER", "COURIER")
                 .anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o.authenticationEntryPoint((q,r,e) -> problem(r,q,mapper,401))

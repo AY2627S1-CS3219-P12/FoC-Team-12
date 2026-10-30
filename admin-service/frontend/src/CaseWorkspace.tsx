@@ -5,6 +5,10 @@ import { AccessError, checkAccess } from './access'
 import { EvidencePanel } from './EvidencePanel'
 import { formatSingaporeTime } from './time'
 import {
+  CaseConversations,
+  ParticipantConversationStatus,
+} from './CaseConversations'
+import {
   CaseError,
   isUuid,
   request,
@@ -446,6 +450,7 @@ function ReportStatusData({ id }: { id: string }) {
         Submitted {formatSingaporeTime(state.data.ownStatement.submittedAt)}
       </p>
       <button onClick={state.retry}>Refresh status</button>
+      <ParticipantConversationStatus summary={state.data.case} />
     </section>
   )
 }
@@ -807,6 +812,12 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         ))}
       </section>
       <EvidencePanel key={id} caseId={id} orderId={value.orderId} />
+      <CaseConversations
+        key={`${actor}.${id}`}
+        summary={value}
+        actorId={actor}
+        participantIds={state.data.statements.map((s) => s.reporterId)}
+      />
     </>
   )
 }

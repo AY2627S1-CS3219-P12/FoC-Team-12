@@ -15,6 +15,7 @@ export default defineConfig(({ command }) => ({
       '/api/suppliers': 'http://127.0.0.1:8088',
       '/api/credits': 'http://127.0.0.1:8088',
       '/api/orders': 'http://127.0.0.1:8088',
+      '/api/chat': 'http://127.0.0.1:8088',
       '/api/admin': 'http://127.0.0.1:8084',
       '/api/users': userUrl,
       '/admin/suppliers': 'http://127.0.0.1:8088',

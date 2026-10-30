@@ -68,7 +68,7 @@ another statement from the same participant conflicts. Resolved cases reject new
 Each accepted statement increments revision. Claims lock the case and check revision/state:
 one competing claimant wins; stale/already claimed cases return 409. Other active admins
 may read; the case-access callback grants administrator writes only to the assigned reviewer
-while UNDER_REVIEW. No decision/conversation mutation endpoints are added here.
+while UNDER_REVIEW. Decision mutations remain deferred; conversation preparation is described below.
 
 Every mutation requires a UUID `Idempotency-Key`. Receipts retain actor, route, canonical
 body hash and original response in the same transaction. Same request replays that response
@@ -110,6 +110,67 @@ testing; its use by Order still needs the affected owner's review. No Order code
 routes or service API contracts are changed. Save the returned case link to revisit a report;
 an errand-to-case lookup/list API has not been invented. Statements remain separate from
 Chat's evidence timeline and must not be treated as the complete history.
+
+## Private case conversations: Admin-side preparation
+
+Read [integration readiness](INTEGRATION_READINESS.md) before the final integration pass. It tracks
+contract ambiguities, responsible owners, blocked iterations and completion checks across Chat,
+Credit, Order, User and shared infrastructure. It is not approval of proposed interfaces.
+
+`POST /api/admin/cases/{caseId}/conversations` consumes the existing documented Chat initiation
+shape: required UUID `Idempotency-Key`, body `{participantUserId}` and a Chat-owned `Conversation`
+response. Effective ADMIN mode, current active administrator eligibility, assigned reviewer and
+UNDER_REVIEW state are required. The target must currently be a reporting participant, including
+historical couriers who reported. Historical non-reporters are intentionally hidden until the
+producer membership/callback contract is agreed. Browser IDs never establish participation.
+
+Admin delegates to `/internal/chat/cases/{caseId}/conversations` using separate service auth,
+the original User JWT and the same operation key/body. No database lock spans this call. A short
+local transaction reserves global actor/route/body identity first; a provisional 503 receipt means
+the outcome is unconfirmed. Retry after timeout/restart uses the same key. Chat owns deduplicating
+that operation and its unique (case, participant) thread. After Chat responds Admin rechecks current
+eligibility and locks/rechecks case permissions before confirming. A revoked actor or concurrently
+closed case receives no conversation reference. A future reconciliation/read contract is still
+needed for that accepted-but-unconfirmed Chat outcome; see the readiness file.
+
+Migration V4 stores only Chat reference IDs keyed by case/reporting participant, never messages,
+Chat memberships or read-only flags. First reference confirmation increments case revision and
+atomically writes CONVERSATION_OPENED to the private audit. Repeated/concurrent confirmations
+do not add duplicate references/audit entries. No new lifecycle event is invented. Successful
+operation receipts replay only after current reviewer/state/target checks. A conflicting Chat
+reference fails unavailable. 401/403/404/409 from Chat remain failures; malformed/redirect/network/
+other responses are 503. Requests use two-second connect/three-second request bounds with no
+automatic retries, redirects, logging of credentials, or synthetic fallback. Responses are no-store.
+
+Assigned reviewers can select a reporting participant in case detail and initiate/open that
+private thread. Other administrators and participants see honest pending-discovery states:
+the contracts contain no case-to-existing-conversation lookup, and no such interface is invented.
+Participant report status still exposes only its existing safe data and never another thread.
+Historical non-reporter discovery/entry also awaits the agreed authorization path. Real Chat
+does not yet exist in this checkout, so this is preparation, not verified live messaging.
+
+The reusable thread UI consumes the documented Chat public reference/history/send APIs directly
+with the User token. It validates case/order/participant/thread identity, message fields and ordered
+pages, deduplicates identical overlap, and rejects conflicting/repeated/non-progressing pages.
+Conversation changes unmount private history; denied access clears it. Read-only cases/current
+Chat permission disable replies; permissions are re-fetched before sends. Original message text
+and clientMessageId are held per account/case/thread in session storage for uncertain retries;
+no optimistic delivery is shown. Text is displayed as text, never HTML. SGT timestamps use the
+shared formatter. A refresh reloads authoritative REST history; browser retries retain opaque
+cursors. The Admin-only Vite proxy forwards `/api/chat` to the existing gateway, whose actual Chat
+routes still need a nominated shared editor. No gateway/shared config or Chat code is changed here.
+
+WebSocket live notifications/reconnect, discovery, private image viewing/uploads and translation
+are not implemented. Image messages show a non-downloadable attachment notice. Proposed limits,
+cursor direction/catch-up boundaries and WebSocket ticket behavior require producer agreement.
+Tests use explicitly test-only HTTP mocks; they cannot prove actual Chat persistence, access or
+delivery. Final verification must use Eldridge's producer through real routing/trust configuration.
+
+Manual checks when Chat is available: select each reporting participant as the assigned reviewer;
+verify isolated messages and safe same-key initiation/send retries; refresh/load multiple pages;
+revoke access/resolve during a request; confirm private history disappears on denial and replies
+disable on read-only. Check narrow mobile layout, keyboard selection/composer, and SGT timestamps.
+Participant and other-admin lookup must remain unavailable until the readiness gates are resolved.
 
 ## Evidence timeline and recovery
 

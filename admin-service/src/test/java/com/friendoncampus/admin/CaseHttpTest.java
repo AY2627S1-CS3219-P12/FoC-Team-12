@@ -22,6 +22,14 @@ class CaseHttpTest {
     @MockitoBean CaseService cases;
     UUID actor=UUID.randomUUID(), id=UUID.randomUUID(), order=UUID.randomUUID(), key=UUID.randomUUID();
     void role(String role){when(userJwtDecoder.decode("user")).thenReturn(Jwt.withTokenValue("user").header("alg","RS256").subject(actor.toString()).claim("role",role).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build());}
+    @Test void conversationInitiationRequiresAdminValidTargetAndRequestKey() throws Exception {
+        role("REQUESTER");
+        mvc.perform(post("/api/admin/cases/{id}/conversations",id).header("Authorization","Bearer user").header("Idempotency-Key",key).contentType("application/json").content("{\"participantUserId\":\""+actor+"\"}")).andExpect(status().isForbidden());
+        role("ADMIN");
+        mvc.perform(post("/api/admin/cases/{id}/conversations",id).header("Authorization","Bearer user").header("Idempotency-Key",key).contentType("application/json").content("{}")).andExpect(status().isBadRequest());
+        when(cases.openConversation(any(),eq(key),eq(id),eq(actor))).thenReturn(new CaseViews.Mutation(200,"{\"conversationId\":\""+order+"\"}"));
+        mvc.perform(post("/api/admin/cases/{id}/conversations",id).header("Authorization","Bearer user").header("Idempotency-Key",key).contentType("application/json").content("{\"participantUserId\":\""+actor+"\"}")).andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"));
+    }
     @Test void separatesParticipantAndAdministratorRoutes() throws Exception {
         mvc.perform(get("/api/admin/cases")).andExpect(status().isUnauthorized()); role("REQUESTER");
         mvc.perform(get("/api/admin/cases").header("Authorization","Bearer user")).andExpect(status().isForbidden());
