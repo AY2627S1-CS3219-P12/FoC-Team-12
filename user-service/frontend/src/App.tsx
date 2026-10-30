@@ -690,6 +690,7 @@ export function App() {
             <a href={suppliersPath}>Suppliers</a>
             <a href="/credits">Credits</a>
             <a href="/errands/browse">Errands</a>
+            {adminMode && <a href="/admin">Admin</a>}
           </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">
             {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">

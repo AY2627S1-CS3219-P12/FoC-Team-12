@@ -1,11 +1,21 @@
 import { useEffect, useState } from 'react'
 import { AccessError, checkAccess, readSession } from './access'
 import { AdminShell } from './components/AdminShell'
+import { CaseQueue, CaseWorkspace } from './CaseWorkspace'
 
 type State = 'loading' | 'signin' | 'denied' | 'unavailable' | 'ready'
 const signIn = '/?returnTo=%2Fadmin'
 
 export function App() {
+  return window.location.pathname.startsWith('/admin/reports') ||
+    /^\/admin\/cases\/[^/]+/.test(window.location.pathname) ? (
+    <CaseWorkspace />
+  ) : (
+    <Dashboard />
+  )
+}
+
+function Dashboard() {
   const [session, setSession] = useState(readSession)
   const [attempt, setAttempt] = useState(0)
   const [access, setAccess] = useState<{ token?: string; state: State }>({
@@ -13,15 +23,19 @@ export function App() {
   })
   useEffect(() => {
     const refresh = () => setSession(readSession())
+    const recheck = () => {
+      refresh()
+      setAttempt((n) => n + 1)
+    }
     const timer = window.setInterval(refresh, 15_000)
     window.addEventListener('foc:session-changed', refresh)
     window.addEventListener('foc:session-expired', refresh)
-    window.addEventListener('focus', refresh)
+    window.addEventListener('focus', recheck)
     return () => {
       clearInterval(timer)
       window.removeEventListener('foc:session-changed', refresh)
       window.removeEventListener('foc:session-expired', refresh)
-      window.removeEventListener('focus', refresh)
+      window.removeEventListener('focus', recheck)
     }
   }, [])
   const token = session?.accessToken
@@ -63,7 +77,6 @@ export function App() {
   useEffect(() => {
     if (state !== 'ready') return
     const timer = window.setTimeout(() => {
-      setAccess({ state: 'loading' })
       setAttempt((n) => n + 1)
     }, 30_000)
     return () => clearTimeout(timer)
@@ -79,7 +92,8 @@ export function App() {
           <p className="eyebrow">Administration</p>
           <h1>Admin dashboard</h1>
           <p>
-            Manage accounts and campus suppliers from their dedicated spaces.
+            Review reported errands, claim a case and follow up with
+            participants.
           </p>
         </div>
         {state === 'ready' && (
@@ -147,29 +161,27 @@ export function App() {
       )}
       {state === 'ready' && (
         <>
-          <nav className="service-grid" aria-label="Administration tools">
-            <a className="service-card admin-card" href="/?view=users">
-              <h2>Manage users</h2>
-              <p>
-                Review accounts, administrator assignments and account access.
-              </p>
-              <span className="service-action">Open account management →</span>
-            </a>
-            <a className="service-card admin-card" href="/admin/suppliers">
-              <h2>Campus suppliers</h2>
-              <p>Manage the campus locations used by your community.</p>
-              <span className="service-action">Open supplier management →</span>
-            </a>
-          </nav>
-          <section className="case-panel" aria-labelledby="case-review-title">
-            <div className="section-heading">
-              <h2 id="case-review-title">Case review</h2>
-              <span className="role-chip">Coming later</span>
-            </div>
-            <p>
-              Participant reports, case evidence and review tools will appear
-              here when available.
-            </p>
+          <CaseQueue key={token} actor={userId!} />
+          <section className="admin-tools" aria-labelledby="admin-tools-title">
+            <h2 id="admin-tools-title">Administration tools</h2>
+            <nav className="service-grid" aria-label="Administration tools">
+              <a className="service-card admin-card" href="/?view=users">
+                <h3>Manage users</h3>
+                <p>
+                  Review accounts, administrator assignments and account access.
+                </p>
+                <span className="service-action">
+                  Open account management →
+                </span>
+              </a>
+              <a className="service-card admin-card" href="/admin/suppliers">
+                <h3>Campus suppliers</h3>
+                <p>Manage the campus locations used by your community.</p>
+                <span className="service-action">
+                  Open supplier management →
+                </span>
+              </a>
+            </nav>
           </section>
         </>
       )}

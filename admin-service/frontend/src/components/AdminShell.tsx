@@ -80,7 +80,14 @@ export function AdminShell({
             <a href={suppliersPath}>Suppliers</a>
             <a href="/credits">Credits</a>
             <a href="/errands/browse">Errands</a>
-            <a aria-current="page" href="/admin">
+            <a
+              aria-current={
+                window.location.pathname.startsWith('/admin/reports')
+                  ? undefined
+                  : 'page'
+              }
+              href="/admin"
+            >
               Admin
             </a>
           </nav>
