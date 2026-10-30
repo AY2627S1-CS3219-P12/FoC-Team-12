@@ -46,6 +46,8 @@ export function CaseWorkspace() {
 function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
   const participant = window.location.pathname.startsWith('/admin/reports')
   const id = window.location.pathname.split('/')[3] || ''
+  const suppliedOrder =
+    new URLSearchParams(window.location.search).get('orderId') || ''
   const [verified, setVerified] = useState(false)
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
@@ -74,11 +76,10 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
   useEffect(() => {
     if (!verified) return
     const timer = window.setTimeout(() => {
-      setVerified(false)
       setAttempt((n) => n + 1)
     }, 30_000)
     return () => clearTimeout(timer)
-  }, [verified])
+  }, [verified, attempt])
   const allowed =
     session &&
     (participant
@@ -91,7 +92,13 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
           <p className="eyebrow">
             {participant ? 'Participant reports' : 'Administration'}
           </p>
-          <h1>{participant ? 'Report an errand issue' : 'Case review'}</h1>
+          <h1>
+            {participant
+              ? id && id !== 'new'
+                ? 'Your report'
+                : 'Report an errand issue'
+              : 'Case review'}
+          </h1>
           <p>
             {participant
               ? 'Submit your own statement and privately check your report.'
@@ -99,17 +106,29 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
           </p>
         </div>
       </div>
-      <nav className="case-links" aria-label="Case navigation">
-        <a href="/admin">Dashboard</a>
-        <a href="/admin/reports/new">Participant reports</a>
-        {verified && <a href="/admin/cases">Case queue</a>}
-      </nav>
+      {!participant && (
+        <a className="back-link" href={'/admin' + window.location.search}>
+          <Arrow direction="back" />
+          Back to report queue
+        </a>
+      )}
+      {participant && id === 'new' && isUuid(suppliedOrder) && (
+        <a className="back-link" href={'/errands/' + suppliedOrder}>
+          <Arrow direction="back" />
+          Back to errand
+        </a>
+      )}
       {!session ? (
         <section className="message-card">
           <h2>Sign in to continue</h2>
           <a
             className="button"
-            href={'/?returnTo=' + encodeURIComponent(window.location.pathname)}
+            href={
+              '/?returnTo=' +
+              encodeURIComponent(
+                window.location.pathname + window.location.search,
+              )
+            }
           >
             Sign in to FoC
           </a>
@@ -137,14 +156,35 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
         id && id !== 'new' ? (
           <ReportStatus id={id} />
         ) : (
-          <ReportForm actor={session.userId} />
+          <ReportEntry actor={session.userId} orderId={suppliedOrder} />
         )
       ) : id ? (
         <CaseDetail id={id} actor={session.userId} />
       ) : (
-        <Queue />
+        <CaseQueue actor={session.userId} />
       )}
     </AdminShell>
+  )
+}
+
+function Arrow({ direction = 'forward' }: { direction?: 'forward' | 'back' }) {
+  return (
+    <svg
+      className="ui-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <path
+        d={
+          direction === 'back'
+            ? 'M19 12H5m6 6-6-6 6-6'
+            : 'M5 12h14m-6-6 6 6-6 6'
+        }
+      />
+    </svg>
   )
 }
 
@@ -274,15 +314,44 @@ function useMutation<T>(storageKey: string) {
   return { pending, busy, error, result, submit }
 }
 
-function ReportForm({ actor }: { actor: string }) {
+function ReportEntry({ actor, orderId }: { actor: string; orderId: string }) {
+  if (!isUuid(orderId))
+    return (
+      <section className="message-card">
+        <h2>Choose an errand to report</h2>
+        <p>A report must be linked to a specific errand you participated in.</p>
+        <a className="button" href="/errands/mine">
+          Go to my errands
+        </a>
+      </section>
+    )
+  return <ReportForm key={orderId} actor={actor} orderId={orderId} />
+}
+function ReportForm({ actor, orderId }: { actor: string; orderId: string }) {
   const mutation = useMutation<Report>('foc.report-pending.' + actor)
-  const [order, setOrder] = useState(
-    String(mutation.pending?.body.orderId || ''),
-  )
+  const order = orderId
   const [description, setDescription] = useState(
     String(mutation.pending?.body.description || ''),
   )
-  const [lookup, setLookup] = useState('')
+  if (mutation.pending && mutation.pending.body.orderId !== orderId)
+    return (
+      <section className="message-card">
+        <h2>Finish your pending report</h2>
+        <p>
+          A previous submission still needs confirmation. Retry it before
+          starting a report for another errand.
+        </p>
+        <a
+          className="button"
+          href={
+            '/admin/reports/new?orderId=' +
+            encodeURIComponent(String(mutation.pending.body.orderId))
+          }
+        >
+          Resume pending report
+        </a>
+      </section>
+    )
   if (mutation.result)
     return (
       <section className="case-panel" role="status">
@@ -298,89 +367,60 @@ function ReportForm({ actor }: { actor: string }) {
       </section>
     )
   return (
-    <div className="case-layout">
-      <section className="case-panel">
-        <h2>Submit a statement</h2>
-        <p>
-          You can submit one statement per errand. Chat must confirm that you
-          participated and that the eligibility evidence is complete.
-        </p>
-        <form
-          className="case-form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void mutation.submit('reports', {
-              orderId: order.trim(),
-              description: description.trim(),
-            })
-          }}
-        >
-          <label htmlFor="order">Errand ID</label>
-          <input
-            id="order"
-            required
-            pattern={uuidPattern}
-            value={order}
-            disabled={mutation.busy || !!mutation.pending}
-            onChange={(e) => setOrder(e.target.value)}
-            placeholder="Paste the errand UUID"
-          />
-          <label htmlFor="description">What happened?</label>
-          <textarea
-            id="description"
-            required
-            maxLength={2000}
-            rows={7}
-            value={description}
-            disabled={mutation.busy || !!mutation.pending}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-          <small>
-            {description.length}/2000 characters. Your statement cannot be
-            edited after submission.
-          </small>
-          {mutation.error && (
-            <p role="alert" className="workspace-error">
-              {mutation.error}
-            </p>
-          )}
-          {mutation.pending && (
-            <p role="status">
-              A request is pending. Retry to confirm its outcome using the same
-              statement.
-            </p>
-          )}
-          <button disabled={mutation.busy || !description.trim()}>
-            {mutation.busy
-              ? 'Submitting…'
-              : mutation.pending
-                ? 'Retry submission'
-                : 'Submit report'}
-          </button>
-        </form>
-      </section>
-      <section className="case-panel">
-        <h2>Check an existing report</h2>
-        <p>Only your own statement and the case status are visible here.</p>
-        <form
-          className="case-form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            window.location.assign('/admin/reports/' + lookup)
-          }}
-        >
-          <label htmlFor="lookup">Case ID</label>
-          <input
-            id="lookup"
-            required
-            pattern={uuidPattern}
-            value={lookup}
-            onChange={(e) => setLookup(e.target.value)}
-          />
-          <button>View my report</button>
-        </form>
-      </section>
-    </div>
+    <section className="case-panel report-form-panel">
+      <h2>Submit a statement</h2>
+      <p>
+        Tell us what happened with this errand. You can submit one statement;
+        only you and authorized administrators can read it.
+      </p>
+      <form
+        className="case-form"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void mutation.submit('reports', {
+            orderId: order.trim(),
+            description: description.trim(),
+          })
+        }}
+      >
+        <div className="report-context">
+          <span>Reporting this errand</span>
+          <strong>{order}</strong>
+        </div>
+        <label htmlFor="description">What happened?</label>
+        <textarea
+          id="description"
+          required
+          maxLength={2000}
+          rows={7}
+          value={description}
+          disabled={mutation.busy || !!mutation.pending}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+        <small>
+          {description.length}/2000 characters. Your statement cannot be edited
+          after submission.
+        </small>
+        {mutation.error && (
+          <p role="alert" className="workspace-error">
+            {mutation.error}
+          </p>
+        )}
+        {mutation.pending && (
+          <p role="status">
+            A request is pending. Retry to confirm its outcome using the same
+            statement.
+          </p>
+        )}
+        <button disabled={mutation.busy || !description.trim()}>
+          {mutation.busy
+            ? 'Submitting…'
+            : mutation.pending
+              ? 'Retry submission'
+              : 'Submit report'}
+        </button>
+      </form>
+    </section>
   )
 }
 function ReportStatus({ id }: { id: string }) {
@@ -392,7 +432,11 @@ function ReportStatusData({ id }: { id: string }) {
   if (!state.data) return <Feedback {...state} />
   return (
     <section className="case-panel">
-      <h2>Your report</h2>
+      <a className="back-link" href={'/errands/' + state.data.case.orderId}>
+        <Arrow direction="back" />
+        Back to errand
+      </a>
+      <h2>Report status</h2>
       <SummaryCard value={state.data.case} />
       <h3>Your statement</h3>
       <p className="statement-text">{state.data.ownStatement.description}</p>
@@ -404,100 +448,289 @@ function ReportStatusData({ id }: { id: string }) {
     </section>
   )
 }
-function Queue() {
-  const [filter, setFilter] = useState('')
-  const [query, setQuery] = useState('')
-  const [params, setParams] = useState('page=0&size=20')
+type QueueFilter = { status: string; query: string; page: number }
+const statuses = [
+  { value: 'OPEN', label: 'Open' },
+  { value: 'UNDER_REVIEW', label: 'Under review' },
+  { value: 'RESOLVED', label: 'Resolved' },
+  { value: '', label: 'All reports' },
+]
+function initialFilters(): QueueFilter {
+  const params = new URLSearchParams(window.location.search)
+  const status =
+    params.get('status') === 'ALL' ? '' : (params.get('status') ?? 'OPEN')
+  const query = params.get('query') || ''
+  const page = Number(params.get('page') || 0)
+  return {
+    status: statuses.some((item) => item.value === status) ? status : 'OPEN',
+    query: isUuid(query) ? query : '',
+    page:
+      Number.isSafeInteger(page) && page >= 0 && page <= 2147483647 ? page : 0,
+  }
+}
+function queueParams(filters: QueueFilter) {
+  return new URLSearchParams({
+    page: String(filters.page),
+    size: '20',
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.query ? { query: filters.query } : {}),
+  }).toString()
+}
+function queueLocation(filters: QueueFilter) {
+  return queueParams(filters) + (filters.status ? '' : '&status=ALL')
+}
+export function CaseQueue({ actor }: { actor: string }) {
+  const [filters, setFilters] = useState(initialFilters)
+  const [query, setQuery] = useState(filters.query)
+  const params = queueParams(filters)
   const state = useRemote<Page>('cases?' + params)
-  function navigate(page: number) {
-    setParams(
-      new URLSearchParams({
-        page: String(page),
-        size: '20',
-        ...(filter ? { status: filter } : {}),
-        ...(query.trim() ? { query: query.trim() } : {}),
-      }).toString(),
+  function apply(next: QueueFilter) {
+    setFilters(next)
+    window.history.replaceState(
+      null,
+      '',
+      window.location.pathname + '?' + queueLocation(next),
     )
   }
+  function clear() {
+    setQuery('')
+    apply({ status: '', query: '', page: 0 })
+  }
+  const emptyOpen = filters.status === 'OPEN' && !filters.query
   return (
-    <>
+    <section
+      className="case-panel report-queue"
+      aria-labelledby="report-queue-title"
+    >
+      <div className="section-heading queue-heading">
+        <div>
+          <h2 id="report-queue-title">
+            Report queue{' '}
+            {state.data && (
+              <span className="queue-count">{state.data.totalElements}</span>
+            )}
+          </h2>
+          <p>Review participant reports and claim an open case to begin.</p>
+        </div>
+        <button
+          className="button-secondary"
+          onClick={state.retry}
+          type="button"
+        >
+          <svg
+            className="ui-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden="true"
+          >
+            <path d="M20 7v5h-5M4 17v-5h5M5.5 8a7 7 0 0 1 11.8-2L20 9M4 15l2.7 3A7 7 0 0 0 18.5 16" />
+          </svg>
+          Refresh
+        </button>
+      </div>
+      <div
+        className="queue-statuses"
+        role="group"
+        aria-label="Filter reports by status"
+      >
+        {statuses.map((status) => (
+          <button
+            key={status.value}
+            type="button"
+            aria-pressed={filters.status === status.value}
+            onClick={() => apply({ ...filters, status: status.value, page: 0 })}
+          >
+            {status.label}
+          </button>
+        ))}
+      </div>
       <form
-        className="case-panel case-filters"
+        className="queue-search"
         onSubmit={(e) => {
           e.preventDefault()
-          navigate(0)
+          apply({ ...filters, query: query.trim(), page: 0 })
         }}
       >
-        <label>
-          Status
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="">All statuses</option>
-            <option value="OPEN">Open</option>
-            <option value="UNDER_REVIEW">Under review</option>
-            <option value="RESOLVED">Resolved</option>
-          </select>
-        </label>
-        <label>
-          Case or errand ID
+        <label htmlFor="queue-search">Find a case or errand</label>
+        <div className="queue-search-row">
           <input
+            id="queue-search"
             pattern={uuidPattern}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Optional UUID"
+            placeholder="Enter a case or errand ID"
           />
-        </label>
-        <button>Apply filters</button>
-      </form>
-      {!state.data ? (
-        <Feedback {...state} />
-      ) : (
-        <section className="case-panel">
-          <div className="section-heading">
-            <h2>Cases ({state.data.totalElements})</h2>
-            <button onClick={state.retry}>Refresh</button>
-          </div>
-          {state.data.content.length === 0 ? (
-            <p>No cases match these filters.</p>
-          ) : (
-            <ul className="case-list">
-              {state.data.content.map((value) => (
-                <li key={value.caseId}>
-                  <a href={'/admin/cases/' + value.caseId}>
-                    <strong>{value.state.replaceAll('_', ' ')}</strong>
-                    <span>Case {value.caseId}</span>
-                    <span>Errand {value.orderId}</span>
-                    <small>
-                      {value.reviewerId
-                        ? 'Assigned reviewer: ' + value.reviewerId
-                        : 'Available to claim'}{' '}
-                      · {new Date(value.createdAt).toLocaleString()}
-                    </small>
-                    <span className="service-action">Review case →</span>
-                  </a>
-                </li>
-              ))}
-            </ul>
+          <button type="submit">
+            <svg
+              className="ui-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              aria-hidden="true"
+            >
+              <circle cx="10.5" cy="10.5" r="6.5" />
+              <path d="m16 16 5 5" />
+            </svg>
+            Search
+          </button>
+          {filters.query && (
+            <button
+              className="button-secondary"
+              type="button"
+              onClick={() => {
+                setQuery('')
+                apply({ ...filters, query: '', page: 0 })
+              }}
+            >
+              Clear search
+            </button>
           )}
-          <div className="case-pagination">
-            <button
-              disabled={state.data.page === 0}
-              onClick={() => navigate(state.data!.page - 1)}
-            >
-              Previous
-            </button>
-            <span>
-              Page {state.data.page + 1} of {Math.max(1, state.data.totalPages)}
-            </span>
-            <button
-              disabled={state.data.page + 1 >= state.data.totalPages}
-              onClick={() => navigate(state.data!.page + 1)}
-            >
-              Next
-            </button>
-          </div>
-        </section>
-      )}
-    </>
+        </div>
+      </form>
+      <div aria-busy={!state.data && !state.error}>
+        {!state.data ? (
+          state.error ? (
+            <div className="queue-state" role="alert">
+              <h3>Reports could not be loaded</h3>
+              <p>{state.error}</p>
+              <button onClick={state.retry} type="button">
+                Try again
+              </button>
+            </div>
+          ) : (
+            <div className="queue-state" role="status">
+              <p>Loading report queue…</p>
+            </div>
+          )
+        ) : (
+          <>
+            {state.data.content.length === 0 ? (
+              <div className="queue-state">
+                <span className="empty-queue-icon" aria-hidden="true">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="ui-icon"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  >
+                    <path d="M8 5h-2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 3h6v4H9zM8 12h8M8 16h5" />
+                  </svg>
+                </span>
+                <h3>
+                  {emptyOpen
+                    ? 'No open reports'
+                    : 'No reports match these filters'}
+                </h3>
+                <p>
+                  {emptyOpen
+                    ? 'New participant reports will appear here when they are ready for review.'
+                    : 'Try another status or clear the search to see more reports.'}
+                </p>
+                {!emptyOpen && (
+                  <button
+                    className="button-secondary"
+                    type="button"
+                    onClick={clear}
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            ) : (
+              <ul className="case-list">
+                {state.data.content.map((value) => (
+                  <li key={value.caseId}>
+                    <a
+                      className="case-row"
+                      href={
+                        '/admin/cases/' +
+                        value.caseId +
+                        '?' +
+                        queueLocation(filters)
+                      }
+                      aria-label={'Review case ' + value.caseId}
+                    >
+                      <div className="case-row-main">
+                        <span
+                          className={
+                            'case-status status-' + value.state.toLowerCase()
+                          }
+                        >
+                          <span aria-hidden="true" />
+                          {
+                            statuses.find((item) => item.value === value.state)
+                              ?.label
+                          }
+                        </span>
+                        <strong>Case {value.caseId}</strong>
+                        <span className="case-row-errand">
+                          Errand {value.orderId}
+                        </span>
+                      </div>
+                      <div className="case-row-meta">
+                        <span>
+                          {value.reviewerId
+                            ? value.reviewerId === actor
+                              ? 'Assigned to you'
+                              : 'Assigned to another reviewer'
+                            : 'Ready to claim'}
+                        </span>
+                        <time dateTime={value.createdAt}>
+                          {new Date(value.createdAt).toLocaleString()}
+                        </time>
+                      </div>
+                      <span className="case-row-action">
+                        Review
+                        <Arrow />
+                      </span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="case-pagination">
+              <span className="queue-range">
+                {state.data.totalElements
+                  ? `Showing ${state.data.page * state.data.size + 1}–${Math.min((state.data.page + 1) * state.data.size, state.data.totalElements)} of ${state.data.totalElements}`
+                  : '0 reports'}
+              </span>
+              <div className="queue-page-controls">
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={state.data.page === 0}
+                  onClick={() =>
+                    apply({ ...filters, page: state.data!.page - 1 })
+                  }
+                >
+                  <Arrow direction="back" />
+                  Previous
+                </button>
+                <span>
+                  Page {state.data.page + 1} of{' '}
+                  {Math.max(1, state.data.totalPages)}
+                </span>
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={state.data.page + 1 >= state.data.totalPages}
+                  onClick={() =>
+                    apply({ ...filters, page: state.data!.page + 1 })
+                  }
+                >
+                  Next
+                  <Arrow />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </section>
   )
 }
 function CaseDetail({ id, actor }: { id: string; actor: string }) {
@@ -572,14 +805,10 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           </article>
         ))}
       </section>
-      <section className="case-panel">
-        <h2>Further review tools</h2>
-        <p>
-          Timeline evidence, participant conversations, actions and resolution
-          are planned for later iterations. These statements do not represent a
-          complete evidence timeline.
-        </p>
-      </section>
+      <p className="case-scope-note">
+        This view contains participant statements. The evidence timeline and
+        conversation history are not available here yet.
+      </p>
     </>
   )
 }

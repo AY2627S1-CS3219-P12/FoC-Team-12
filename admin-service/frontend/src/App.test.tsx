@@ -1,6 +1,22 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { App } from './App'
+function mockFetch(fetcher: (url: string, options?: RequestInit) => unknown) {
+  vi.stubGlobal('fetch', (url: string, options?: RequestInit) =>
+    url.startsWith('/api/admin/cases?')
+      ? Promise.resolve({
+          ok: true,
+          json: async () => ({
+            content: [],
+            page: 0,
+            size: 20,
+            totalElements: 0,
+            totalPages: 0,
+          }),
+        })
+      : fetcher(url, options),
+  )
+}
 function session(role = 'ADMIN') {
   sessionStorage.setItem(
     'foc.user-session',
@@ -18,7 +34,7 @@ function session(role = 'ADMIN') {
 afterEach(() => vi.unstubAllGlobals())
 it('shows sign-in without loading protected data', () => {
   const fetcher = vi.fn()
-  vi.stubGlobal('fetch', fetcher)
+  mockFetch(fetcher)
   render(<App />)
   expect(
     screen.getByRole('heading', { name: 'Sign in to continue' }),
@@ -27,8 +43,7 @@ it('shows sign-in without loading protected data', () => {
 })
 it('opens tools only after live authorization', async () => {
   session()
-  vi.stubGlobal(
-    'fetch',
+  mockFetch(
     vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ userId: 'actor', role: 'ADMIN' }),
@@ -37,7 +52,18 @@ it('opens tools only after live authorization', async () => {
   render(<App />)
   expect(await screen.findByText('Access verified')).toBeVisible()
   expect(screen.getByRole('heading', { name: /Manage users/ })).toBeVisible()
-  expect(screen.getByRole('link', { name: 'Open case queue' })).toBeVisible()
+  const queue = screen.getByRole('heading', { name: /Report queue/ })
+  const tools = screen.getByRole('heading', { name: 'Administration tools' })
+  expect(queue).toBeVisible()
+  expect(
+    queue.compareDocumentPosition(tools) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy()
+  expect(
+    screen.queryByRole('link', { name: 'Participant reports' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: 'Reports' }),
+  ).not.toBeInTheDocument()
 })
 it('denies a participant without exposing administrative tools', async () => {
   session('REQUESTER')
@@ -56,7 +82,7 @@ it('distinguishes an expired session from dependency failure and retries', async
     .fn()
     .mockResolvedValueOnce({ ok: false, status: 503 })
     .mockResolvedValueOnce({ ok: false, status: 401 })
-  vi.stubGlobal('fetch', fetcher)
+  mockFetch(fetcher)
   render(<App />)
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'We couldn’t verify your access',
@@ -66,8 +92,7 @@ it('distinguishes an expired session from dependency failure and retries', async
 })
 it('removes successful access when the identity changes', async () => {
   session()
-  vi.stubGlobal(
-    'fetch',
+  mockFetch(
     vi
       .fn()
       .mockResolvedValueOnce({
@@ -106,7 +131,7 @@ it('switches workspace through User and rechecks Admin access with the replaceme
       ok: true,
       json: async () => ({ userId: 'actor', role: 'ADMIN' }),
     })
-  vi.stubGlobal('fetch', fetcher)
+  mockFetch(fetcher)
   render(<App />)
   await screen.findByText('This workspace is for administrators')
   fireEvent.click(screen.getByLabelText('Open account menu for Darryl'))
@@ -131,8 +156,7 @@ it('switches workspace through User and rechecks Admin access with the replaceme
 })
 it('keeps access denied when User cannot change the workspace', async () => {
   session('REQUESTER')
-  vi.stubGlobal(
-    'fetch',
+  mockFetch(
     vi
       .fn()
       .mockResolvedValueOnce({ ok: false, status: 403 })

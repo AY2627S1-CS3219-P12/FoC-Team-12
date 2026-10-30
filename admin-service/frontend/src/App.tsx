@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { AccessError, checkAccess, readSession } from './access'
 import { AdminShell } from './components/AdminShell'
-import { CaseWorkspace } from './CaseWorkspace'
+import { CaseQueue, CaseWorkspace } from './CaseWorkspace'
 
 type State = 'loading' | 'signin' | 'denied' | 'unavailable' | 'ready'
 const signIn = '/?returnTo=%2Fadmin'
 
 export function App() {
   return window.location.pathname.startsWith('/admin/reports') ||
-    window.location.pathname.startsWith('/admin/cases') ? (
+    /^\/admin\/cases\/[^/]+/.test(window.location.pathname) ? (
     <CaseWorkspace />
   ) : (
     <Dashboard />
@@ -23,15 +23,19 @@ function Dashboard() {
   })
   useEffect(() => {
     const refresh = () => setSession(readSession())
+    const recheck = () => {
+      refresh()
+      setAttempt((n) => n + 1)
+    }
     const timer = window.setInterval(refresh, 15_000)
     window.addEventListener('foc:session-changed', refresh)
     window.addEventListener('foc:session-expired', refresh)
-    window.addEventListener('focus', refresh)
+    window.addEventListener('focus', recheck)
     return () => {
       clearInterval(timer)
       window.removeEventListener('foc:session-changed', refresh)
       window.removeEventListener('foc:session-expired', refresh)
-      window.removeEventListener('focus', refresh)
+      window.removeEventListener('focus', recheck)
     }
   }, [])
   const token = session?.accessToken
@@ -73,7 +77,6 @@ function Dashboard() {
   useEffect(() => {
     if (state !== 'ready') return
     const timer = window.setTimeout(() => {
-      setAccess({ state: 'loading' })
       setAttempt((n) => n + 1)
     }, 30_000)
     return () => clearTimeout(timer)
@@ -89,7 +92,8 @@ function Dashboard() {
           <p className="eyebrow">Administration</p>
           <h1>Admin dashboard</h1>
           <p>
-            Manage accounts and campus suppliers from their dedicated spaces.
+            Review reported errands, claim a case and follow up with
+            participants.
           </p>
         </div>
         {state === 'ready' && (
@@ -157,32 +161,27 @@ function Dashboard() {
       )}
       {state === 'ready' && (
         <>
-          <nav className="service-grid" aria-label="Administration tools">
-            <a className="service-card admin-card" href="/?view=users">
-              <h2>Manage users</h2>
-              <p>
-                Review accounts, administrator assignments and account access.
-              </p>
-              <span className="service-action">Open account management →</span>
-            </a>
-            <a className="service-card admin-card" href="/admin/suppliers">
-              <h2>Campus suppliers</h2>
-              <p>Manage the campus locations used by your community.</p>
-              <span className="service-action">Open supplier management →</span>
-            </a>
-          </nav>
-          <section className="case-panel" aria-labelledby="case-review-title">
-            <div className="section-heading">
-              <h2 id="case-review-title">Case review</h2>
-              <a className="button" href="/admin/cases">
-                Open case queue
+          <CaseQueue key={token} actor={userId!} />
+          <section className="admin-tools" aria-labelledby="admin-tools-title">
+            <h2 id="admin-tools-title">Administration tools</h2>
+            <nav className="service-grid" aria-label="Administration tools">
+              <a className="service-card admin-card" href="/?view=users">
+                <h3>Manage users</h3>
+                <p>
+                  Review accounts, administrator assignments and account access.
+                </p>
+                <span className="service-action">
+                  Open account management →
+                </span>
               </a>
-            </div>
-            <p>
-              Review participant statements and claim an open case. Evidence,
-              conversations and resolution tools are planned for later
-              iterations.
-            </p>
+              <a className="service-card admin-card" href="/admin/suppliers">
+                <h3>Campus suppliers</h3>
+                <p>Manage the campus locations used by your community.</p>
+                <span className="service-action">
+                  Open supplier management →
+                </span>
+              </a>
+            </nav>
           </section>
         </>
       )}

@@ -87,12 +87,29 @@ pending until a later approved transport/relay iteration. Topic/ACL, delivery, p
 evidence export/backfill and Chat consumption are not verified here. Draft schemas remain
 subject to affected-owner review; local implementation is not Chat/transport sign-off.
 
-UI routes: `/admin/reports/new`, `/admin/reports/{caseId}`, `/admin/cases` and
-`/admin/cases/{caseId}`. Reports works in Requester/Courier mode; Admin mode does not grant
-participant access. Save the returned case ID to revisit a report; there is no report-list
-API. Queue filters/pagination, loading/empty/error/retry states and revision-aware claiming
-use live Admin APIs. Timeline evidence is explicitly deferred; statements are not a complete
-evidence timeline.
+`/admin` opens the live report queue first; account/supplier tools follow below it.
+Open reports are selected by default. Status filters, exact case/errand ID search and page
+are retained in the URL and in the case-detail return link. The UI-only `status=ALL` marker
+represents the API's absent status filter; it is not sent to the API. `/admin/cases` remains
+a compatible queue entry. `/admin/cases/{caseId}` has one styled return link to the queue.
+Background eligibility rechecks preserve the current filters and page while successful;
+denial/unavailability removes protected content. Every API request still authorizes locally.
+
+Participant reporting is an errand workflow, not an administration tool. There is no Reports
+item in Admin navigation, no mixed participant/admin subnavigation and no standalone UUID
+entry or report lookup form. `/admin/reports/new?orderId={uuid}` accepts the selected errand
+context and displays it without an editable ID field. Missing/invalid context shows a return
+to My errands. This URL is context, never proof of participation: Chat must still authorize
+the signed-in participant. Requester/Courier mode is required; Admin mode does not grant
+participant access. A pending report for another errand must be resumed before a new report.
+`/admin/reports/{caseId}` preserves the private status route and links back to its errand.
+
+The actual Report an issue entry in the errand detail screen belongs to Order (XueTing) and
+is not wired by this Admin-only change. The Admin receiving URL is available for local
+testing; its use by Order still needs the affected owner's review. No Order code, gateway
+routes or service API contracts are changed. Save the returned case link to revisit a report;
+an errand-to-case lookup/list API has not been invented. Timeline evidence is explicitly
+deferred; statements are not a complete evidence timeline.
 
 ## Local configuration and startup
 
@@ -217,7 +234,8 @@ and User JWKS configuration as the backend:
 
 Obtain User IDs from your own local accounts. Use a dedicated synthetic errand UUID, not a
 real errand. Set `ADMIN_CHAT_URL=http://127.0.0.1:18085` in the Admin startup shell and restart
-Admin. Open the normal report UI and use that errand ID. Accounts outside the allowlist are
+Admin. For local testing open `/admin/reports/new?orderId={fixture-errand-uuid}`. The normal
+product entry belongs on the errand screen. Accounts outside the allowlist are
 ineligible. `-Incomplete` deliberately returns lagging coverage; stop/restart the fixture to
 test Chat outages. Stop with Ctrl+C. Remove the override before connecting real Chat.
 Success against this fixture is local UI/API verification only, never Chat integration sign-off.
