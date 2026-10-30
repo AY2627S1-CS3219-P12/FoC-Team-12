@@ -147,6 +147,21 @@ Supplier links use the existing gateway on 8088. The packaged Admin shell expect
 future shared gateway to route User/account/supplier links; direct backend hosting alone
 does not provide a second login system.
 Set `VITE_USER_URL` before starting Vite when testing a User instance on another local port.
+The preview forwards `/` (including query routes) to User and routes Supplier admin APIs
+before the general Admin API prefix. Supplier/Credit/Order APIs use the existing gateway.
+All participating services must trust the same User signing identity. A disposable User
+on another port with a different key can verify Admin in isolation, but its tokens cannot
+authenticate to Supplier configured against the normal User JWKS. Do not weaken validation
+or copy signing keys to hide this mismatch; use one consistent User runtime for integrated
+testing. Supplier's own navigation/header changes remain Supplier-owned work.
+
+The user-requested shared navigation update adds an `Admin` link to `/admin` in the
+User, Supplier, Credit and Order top navigation while the effective role is ADMIN.
+Editor: Darryl for this navigation integration; affected reviewers: Darryl (User/Admin),
+Jun Hui (Supplier), Eldridge (Credit), XueTing (Order). These links do not grant access:
+Admin verifies the JWT and current administrator eligibility. No service APIs or gateway
+configuration change with the tab. Rebuild each owning frontend/container to display it;
+the shared gateway still needs its separately reviewed Admin routing/deployment integration.
 
 Configuration:
 

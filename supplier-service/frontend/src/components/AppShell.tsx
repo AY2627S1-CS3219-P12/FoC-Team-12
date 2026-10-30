@@ -48,6 +48,7 @@ export function AppShell() {
             </Link>
             <a href="/credits">Credits</a>
             <a href="/errands/browse">Errands</a>
+            {session?.role === 'ADMIN' && <a href="/admin">Admin</a>}
           </nav>
           <nav
             aria-label="Account and workspace"

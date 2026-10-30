@@ -248,6 +248,7 @@ describe('Credit dashboard', () => {
       '/errands/browse',
     )
     const accountMenuButton = screen.getByLabelText('Open account menu for admin')
+    expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin')
     const accountMenu = accountMenuButton.closest('details')
     await user.click(accountMenuButton)
     expect(accountMenu).toHaveAttribute('open')

@@ -582,6 +582,8 @@ describe('Other frontend routes', () => {
       within(screen.getByRole('navigation', { name: 'Main navigation' }))
         .getByRole('link', { name: 'Suppliers' }),
     ).toHaveAttribute('href', '/admin/suppliers')
+    expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
+      .getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin')
     await user.click(screen.getByLabelText('Open account menu for Admin'))
     expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute(
       'href',
