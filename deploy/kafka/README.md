@@ -83,6 +83,7 @@ pending; broker permissions alone do not implement it. See the
 | `credit.admin.events` | 3 | 7 days | Credit correction outcomes; producer pending |
 | `admin.credit.commands.DLT` | 1 | 30 days | Credit-owned command recovery |
 | `credit.admin.events.DLT` | 1 | 30 days | Admin-owned outcome recovery |
+| `admin.events` | 3 | 7 days | Original Admin case lifecycle facts, keyed by case ID |
 
 All topics use `cleanup.policy=delete`. Keys and JSON envelopes must follow the shared blueprint:
 User UUID for User facts, Order UUID for Order facts, and the corresponding aggregate UUID for
@@ -93,12 +94,12 @@ production data-retention policy.
 
 | Identity | Allowed operations |
 | --- | --- |
-| `admin_service` | Write/describe `admin.credit.commands`, `credit.admin.events.DLT`; read/describe `credit.admin.events`; Read group `admin-service-credit`; cluster idempotent write |
+| `admin_service` | Write/describe `admin.credit.commands`, `credit.admin.events.DLT`, `admin.events`; read/describe `credit.admin.events`; Read group `admin-service-credit`; cluster idempotent write; Write/Describe transactional IDs with prefix `admin-case-events-` |
 | `credit_service` (additional) | Read/describe `admin.credit.commands`; Read group `credit-service-admin`; write/describe `credit.admin.events`, `admin.credit.commands.DLT` |
 | `user_service` | Write/describe `user.events`; cluster idempotent write |
 | `order_service` | Write/describe `order.events`; read/describe `credit.events` as group `order-service`; write/describe `credit.events.DLT`; cluster idempotent write |
 | `credit_service` | Read/describe `user.events` and `order.events` as group `credit-service`; write/describe `credit.events`, `user.events.DLT` and `order.events.DLT`; cluster idempotent write |
-| `kafka_ui` | Read/describe the fourteen project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
+| `kafka_ui` | Read/describe the fifteen project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
 | `foc_admin` | Broker initialization and local diagnosis (super-user) |
 | `foc_broker` | Broker-to-broker traffic (super-user) |
 
@@ -122,7 +123,7 @@ docker compose ps kafka
 ```
 
 Open `http://localhost:8090` and sign in with `KAFKA_UI_LOGIN_USERNAME` and
-`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the fourteen
+`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the fifteen
 topics, partitions, configurations, message keys/envelopes, consumer groups and lag. The UI uses
 both Kafbat's read-only mode and broker ACLs: it cannot produce records, create/delete topics,
 change retention, reset business offsets or join a service's consumer group.

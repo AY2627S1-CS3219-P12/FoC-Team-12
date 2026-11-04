@@ -84,7 +84,7 @@ limit_jobs() {
 }
 
 pids=()
-for topic in user.events order.events credit.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events; do
+for topic in user.events order.events credit.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
   create_topic "$topic" 3 604800000 &
   pids+=("$!")
   limit_jobs
@@ -153,6 +153,10 @@ add_acl user_service --operation Write --operation Describe --topic user.admin.e
 pids+=("$!")
 limit_jobs
 
+# Stored lifecycle facts only. A stable transaction identity fences obsolete relay processes.
+add_acl admin_service --operation Write --operation Describe --topic admin.events
+add_acl admin_service --operation Write --operation Describe --transactional-id admin-case-events- --resource-pattern-type prefixed
+
 # Kafka UI can inspect this local cluster but cannot mutate topics, data or business offsets.
 {
 add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfigs \
@@ -160,7 +164,7 @@ add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfi
   --topic user.events.DLT --topic order.events.DLT --topic credit.events.DLT \
   --topic admin.credit.commands --topic credit.admin.events \
   --topic admin.credit.commands.DLT --topic credit.admin.events.DLT \
-  --topic admin.user.commands --topic user.admin.events --topic admin.user.commands.DLT --topic user.admin.events.DLT
+  --topic admin.user.commands --topic user.admin.events --topic admin.user.commands.DLT --topic user.admin.events.DLT --topic admin.events
 add_acl kafka_ui --operation Describe --operation DescribeConfigs --cluster
 add_acl kafka_ui --operation Describe --group order-service --group credit-service --group admin-service-credit --group credit-service-admin --group admin-service-user --group user-service-admin
 add_acl kafka_ui --operation Read --operation Describe --group kafka-ui-browser --resource-pattern-type prefixed

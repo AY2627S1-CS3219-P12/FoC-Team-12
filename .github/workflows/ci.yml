@@ -54,6 +54,8 @@ jobs:
         run: chmod +x deploy/kafka/*.sh
       - name: Verify topics, ACLs, authorization and persistence
         run: ./deploy/kafka/Test-LocalKafka.sh
+      - name: Verify initializer retry and concurrency behavior with test-only CLI mocks
+        run: docker run --rm --entrypoint bash -e KAFKA_INITIALIZER_TEST_ONLY=true -v "$PWD/deploy/kafka:/opt/foc-kafka:ro" apache/kafka:4.3.1 /opt/foc-kafka/k8s/test-initialize.sh
 
   gateway:
     name: API gateway
@@ -471,6 +473,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      - name: Verify packaged lifecycle delivery with private PostgreSQL and authenticated Kafka
+        env:
+          ADMIN_RUNTIME_CASE_EVENTS_ONLY: "true"
+        run: python3 admin-service/scripts/runtime_smoke.py
       - name: Build and verify isolated Admin runtime (test-only outcomes)
         run: python3 admin-service/scripts/runtime_smoke.py
 
