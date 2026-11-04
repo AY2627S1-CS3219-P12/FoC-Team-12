@@ -26,10 +26,15 @@ export type CreditAction = {
   createdAt: string
   completedAt: string | null
 }
+export type BanAction = Omit<CreditAction, 'type' | 'amount'> & {
+  type: 'BAN'
+  amount: null
+}
+export type AdminAction = CreditAction | BanAction
 export type Detail = {
   case: Summary
   statements: Statement[]
-  actions?: CreditAction[]
+  actions?: AdminAction[]
 }
 export type Page = {
   content: Summary[]

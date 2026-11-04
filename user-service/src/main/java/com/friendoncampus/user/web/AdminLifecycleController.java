@@ -40,6 +40,13 @@ public class AdminLifecycleController {
         this.lifecycle = lifecycle;
     }
 
+    // Return validation problems directly; a servlet /error dispatch is intentionally not public.
+    @org.springframework.web.bind.annotation.ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
+    public org.springframework.http.ProblemDetail invalidLifecycleRequest() {
+        return org.springframework.http.ProblemDetail.forStatusAndDetail(org.springframework.http.HttpStatus.BAD_REQUEST,
+                "Provide valid account-management fields. Reactivation requires a reason of 1–2000 characters.");
+    }
+
     @GetMapping
     @Operation(summary = "List accounts for a future administrator client")
     @ApiResponse(responseCode = "200", description = "Paged account summaries")
@@ -76,7 +83,7 @@ public class AdminLifecycleController {
             @Valid @RequestBody StatusRequest request) {
         User user = switch (request.status()) {
             case BANNED -> lifecycle.ban(actorId(jwt), id);
-            case ACTIVE -> lifecycle.reactivate(actorId(jwt), id);
+            case ACTIVE -> lifecycle.reactivate(actorId(jwt), id, request.reason());
             case UNVERIFIED -> throw new AdminLifecycleException("Administrators cannot set an account to UNVERIFIED");
         };
         return AccountResponse.from(user);
@@ -89,7 +96,9 @@ public class AdminLifecycleController {
     public record RoleRequest(@NotNull Boolean administrator) {
     }
 
-    public record StatusRequest(@NotNull UserStatus status) {
+    public record StatusRequest(@NotNull UserStatus status, @jakarta.validation.constraints.Size(max=2000) String reason) {
+        @jakarta.validation.constraints.AssertTrue(message="A reason is required to reactivate an account")
+        public boolean isReactivationReasonValid() { return status != UserStatus.ACTIVE || reason != null && !reason.isBlank(); }
     }
 
     public record AccountResponse(UUID userId, String email, String username, java.util.Set<UserRole> roles, String status,

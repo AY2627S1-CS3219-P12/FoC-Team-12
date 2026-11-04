@@ -198,10 +198,10 @@ export const api = {
       body: JSON.stringify({ administrator }),
     })
   },
-  setAccountStatus(userId: string, status: 'ACTIVE' | 'BANNED') {
+  setAccountStatus(userId: string, status: 'ACTIVE' | 'BANNED', reason?: string) {
     return request<AdminAccount>(`/api/users/admin/accounts/${encodeURIComponent(userId)}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...(reason !== undefined ? { reason } : {}) }),
     })
   },
 }

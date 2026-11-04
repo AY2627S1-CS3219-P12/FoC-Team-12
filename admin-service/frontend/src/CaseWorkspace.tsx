@@ -819,6 +819,14 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         participantIds={state.data.statements.map((s) => s.reporterId)}
         initialActions={state.data.actions}
       />
+      <CreditActions
+        key={`ban.${actor}.${id}`}
+        kind="BAN"
+        summary={value}
+        actorId={actor}
+        participantIds={state.data.statements.map((s) => s.reporterId)}
+        initialActions={state.data.actions}
+      />
       <EvidencePanel key={id} caseId={id} orderId={value.orderId} />
       <CaseConversations
         key={`${actor}.${id}`}

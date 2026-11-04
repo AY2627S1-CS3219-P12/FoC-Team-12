@@ -16,7 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Tracks instructions and Credit-owned results. Never reads or mutates a Credit balance. */
+/** Shared case-action tracking. Credit owns balances; User owns account status. */
 @Service
 public class CreditActionService {
     private final JdbcTemplate db;
@@ -29,14 +29,16 @@ public class CreditActionService {
         if(deadlineSeconds<1)throw new IllegalArgumentException("Outcome timeout must be positive");
         this.db=db;this.users=users;this.tx=new TransactionTemplate(manager);tx.setTimeout(15);this.deadlineSeconds=deadlineSeconds;
     }
-    public record Action(UUID operationId,UUID caseId,UUID targetUserId,String type,int amount,String reason,String status,String reasonCode,Instant createdAt,Instant completedAt) { }
+    public record Action(UUID operationId,UUID caseId,UUID targetUserId,String type,Integer amount,String reason,String status,String reasonCode,Instant createdAt,Instant completedAt) { }
     public CaseViews.Mutation create(Jwt jwt,UUID caseId,UUID key,String type,UUID target,JsonNode amount,String reason){
         UUID actor=authorize(jwt);
         String text=reason==null?"":reason.strip();
-        if(key==null||target==null||!"CREDIT_ADJUSTMENT".equals(type)||amount==null||!amount.isIntegralNumber()||!amount.canConvertToInt()||amount.asInt()==0||text.isEmpty()||text.length()>2000)
-            throw problem(400,"Choose a participant, a nonzero whole-credit amount within the supported integer range, and a reason of 1–2000 characters.");
-        int delta=amount.asInt();String route="/api/admin/cases/"+caseId+"/actions";
-        String fingerprint=hash(json.writeValueAsString(List.of(type,target.toString(),delta,text)));
+        boolean ban="BAN".equals(type);
+        if(key==null||target==null||(!ban&&!"CREDIT_ADJUSTMENT".equals(type))||
+            (ban?amount!=null&&!amount.isNull():amount==null||!amount.isIntegralNumber()||!amount.canConvertToInt()||amount.asInt()==0)||text.isEmpty()||text.length()>2000)
+            throw problem(400,"Choose a participant and a reason of 1–2000 characters. Credit corrections require nonzero whole credits; bans must omit the amount.");
+        Integer delta=ban?null:amount.asInt();String route="/api/admin/cases/"+caseId+"/actions";
+        String fingerprint=hash(json.writeValueAsString(Arrays.asList(type,target.toString(),delta,text)));
         return tx.execute(status->{
             db.execute("SET LOCAL lock_timeout='5s'");
             db.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",r->null,"request:"+key);
@@ -50,19 +52,19 @@ public class CreditActionService {
             var cases=db.queryForList("SELECT order_id,state,reviewer_id,correlation_id FROM admin_cases WHERE id=? FOR UPDATE",caseId);
             if(cases.isEmpty())throw problem(404,"Case not found.");
             var c=cases.get(0);
-            if(!actor.equals(c.get("reviewer_id")))throw problem(403,"Only the assigned reviewer can request credit corrections.");
-            if(!"UNDER_REVIEW".equals(c.get("state")))throw problem(409,"Credit corrections require a case under review.");
+            if(!actor.equals(c.get("reviewer_id")))throw problem(403,"Only the assigned reviewer can request case actions.");
+            if(!"UNDER_REVIEW".equals(c.get("state")))throw problem(409,"Case actions require a case under review.");
             if(!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_statements WHERE case_id=? AND reporter_id=?)",Boolean.class,caseId,target)))throw problem(404,"Eligible case participant not found.");
             UUID operation=UUID.randomUUID(),eventId=UUID.randomUUID(),order=(UUID)c.get("order_id"),correlation=(UUID)c.get("correlation_id");Instant now=Instant.now();
             db.update("UPDATE admin_cases SET revision=revision+1 WHERE id=?",caseId);
             long revision=db.queryForObject("SELECT revision FROM admin_cases WHERE id=?",Long.class,caseId);
-            db.update("INSERT INTO admin_actions(operation_id,case_id,order_id,target_user_id,requested_by,amount,reason,status,created_at,deadline_at,command_event_id,correlation_id) VALUES (?,?,?,?,?,?,?,'PENDING',?,?,?,?)",
-                operation,caseId,order,target,actor,delta,text,at(now),at(now.plusSeconds(deadlineSeconds)),eventId,correlation);
-            Map<String,Object> data=new LinkedHashMap<>();data.put("operationId",operation);data.put("caseId",caseId);data.put("orderId",order);data.put("caseRevision",revision);data.put("targetUserId",target);data.put("requestedBy",actor);data.put("reason",text);data.put("amount",delta);
-            String payload=json.writeValueAsString(envelope(eventId,"AdminCreditCorrectionRequested","AdminAction",target,1,now,"admin-service",correlation,null,actor,data));
-            db.update("INSERT INTO admin_action_outbox(event_id,operation_id,target_user_id,payload,created_at,next_attempt_at) VALUES (?,?,?,?,?,?)",eventId,operation,target,payload,at(now),at(now));
-            audit(caseId,revision,actor,"CREDIT_ACTION_REQUESTED",now);
-            Action result=new Action(operation,caseId,target,"CREDIT_ADJUSTMENT",delta,text,"PENDING",null,now,null);
+            db.update("INSERT INTO admin_actions(operation_id,case_id,order_id,target_user_id,requested_by,amount,reason,status,created_at,deadline_at,command_event_id,correlation_id,type) VALUES (?,?,?,?,?,?,?,'PENDING',?,?,?,?,?)",
+                operation,caseId,order,target,actor,delta,text,at(now),at(now.plusSeconds(deadlineSeconds)),eventId,correlation,type);
+            Map<String,Object> data=new LinkedHashMap<>();data.put("operationId",operation);data.put("caseId",caseId);data.put("orderId",order);data.put("caseRevision",revision);data.put("targetUserId",target);data.put("requestedBy",actor);data.put("reason",text);if(!ban)data.put("amount",delta);
+            String payload=json.writeValueAsString(envelope(eventId,ban?"AdminUserBanRequested":"AdminCreditCorrectionRequested","AdminAction",target,1,now,"admin-service",correlation,null,actor,data));
+            db.update("INSERT INTO admin_action_outbox(event_id,operation_id,target_user_id,payload,created_at,next_attempt_at,topic) VALUES (?,?,?,?,?,?,?)",eventId,operation,target,payload,at(now),at(now),ban?"admin.user.commands":"admin.credit.commands");
+            audit(caseId,revision,actor,ban?"BAN_REQUESTED":"CREDIT_ACTION_REQUESTED",now);
+            Action result=new Action(operation,caseId,target,type,delta,text,"PENDING",null,now,null);
             String body=json.writeValueAsString(result);
             db.update("INSERT INTO admin_mutation_receipts(idempotency_key,actor_id,route,request_hash,response_status,response_body) VALUES (?,?,?,?,202,?)",key,actor,route,fingerprint,body);
             return new CaseViews.Mutation(202,body);
@@ -76,32 +78,37 @@ public class CreditActionService {
     }
     public List<Action> list(UUID caseId){return db.query("SELECT *, CASE WHEN status='PENDING' AND deadline_at<=CURRENT_TIMESTAMP THEN 'UNKNOWN' ELSE status END AS visible_status FROM admin_actions WHERE case_id=? ORDER BY created_at,operation_id",this::action,caseId);}
     private Action find(UUID caseId,UUID operation){return list(caseId).stream().filter(a->a.operationId().equals(operation)).findFirst().orElseThrow(()->problem(404,"Action not found."));}
-    private Action action(ResultSet r,int n)throws SQLException{return new Action(r.getObject("operation_id",UUID.class),r.getObject("case_id",UUID.class),r.getObject("target_user_id",UUID.class),"CREDIT_ADJUSTMENT",r.getInt("amount"),r.getString("reason"),r.getString("visible_status"),r.getString("reason_code"),r.getObject("created_at",OffsetDateTime.class).toInstant(),r.getObject("completed_at",OffsetDateTime.class)==null?null:r.getObject("completed_at",OffsetDateTime.class).toInstant());}
+    private Action action(ResultSet r,int n)throws SQLException{return new Action(r.getObject("operation_id",UUID.class),r.getObject("case_id",UUID.class),r.getObject("target_user_id",UUID.class),r.getString("type"),(Integer)r.getObject("amount"),r.getString("reason"),r.getString("visible_status"),r.getString("reason_code"),r.getObject("created_at",OffsetDateTime.class).toInstant(),r.getObject("completed_at",OffsetDateTime.class)==null?null:r.getObject("completed_at",OffsetDateTime.class).toInstant());}
 
     /** Returns only after an inbox/result/audit transaction commits, or quarantines invalid input. */
-    public boolean outcome(String key,String raw){
+    public boolean outcome(String key,String raw){return outcome(key,raw,"credit-service");}
+    public boolean outcome(String key,String raw,String owner){
         if(raw==null)raw="null";
-        try { applyOutcome(key,raw); return true; }
+        try { applyOutcome(key,raw,owner); return true; }
         catch(IllegalArgumentException e){
             db.update("INSERT INTO admin_action_quarantine(content_hash,payload,failure_code) VALUES (?,?,'INVALID_OR_CONFLICTING_OUTCOME') ON CONFLICT DO NOTHING",hash(key+":"+raw),raw);
             return false; // Retained poison is also signalled to the metadata-only DLT by transport.
         }
     }
-    private void applyOutcome(String key,String raw){
+    private void applyOutcome(String key,String raw,String owner){
         final JsonNode e;try{e=json.readTree(raw);}catch(Exception ex){throw new IllegalArgumentException("Invalid outcome");}
-        JsonNode d=e.path("data");String type=e.path("eventType").asText();boolean applied="AdminCreditCorrectionApplied".equals(type);
-        require(applied||"AdminCreditCorrectionRejected".equals(type));require("credit-service".equals(e.path("producer").asText()));require("AdminAction".equals(e.path("aggregateType").asText()));
+        JsonNode d=e.path("data");String type=e.path("eventType").asText();boolean ban="user-service".equals(owner);
+        require(ban||"credit-service".equals(owner));
+        boolean applied=(ban?"AdminUserBanApplied":"AdminCreditCorrectionApplied").equals(type);
+        require(applied||(ban?"AdminUserBanRejected":"AdminCreditCorrectionRejected").equals(type));require(owner.equals(e.path("producer").asText()));require("AdminAction".equals(e.path("aggregateType").asText()));
         require(e.path("eventVersion").isIntegralNumber()&&e.path("eventVersion").asInt()==1);require(e.path("aggregateVersion").isIntegralNumber()&&e.path("aggregateVersion").asLong()==1);
         UUID event=id(e,"eventId"),operation=id(d,"operationId"),caseId=id(d,"caseId"),target=id(d,"targetUserId"),actor=id(d,"requestedBy");
         require(target.equals(id(e,"aggregateId"))&&target.toString().equals(key));require("USER".equals(e.path("actor").path("type").asText())&&"ADMIN".equals(e.path("actor").path("role").asText())&&actor.equals(id(e.path("actor"),"userId")));
-        time(e,"occurredAt");Instant completed=time(d,"completedAt");require(d.path("amount").isIntegralNumber()&&d.path("amount").canConvertToInt()&&d.path("amount").asInt()!=0);
-        require((applied?"APPLIED":"REJECTED").equals(d.path("result").asText()));
+        time(e,"occurredAt");Instant completed=time(d,"completedAt");if(!ban)require(d.path("amount").isIntegralNumber()&&d.path("amount").canConvertToInt()&&d.path("amount").asInt()!=0);else require(!d.hasNonNull("amount"));
+        require(applied?(ban?Set.of("APPLIED","NO_CHANGE").contains(d.path("result").asText()):"APPLIED".equals(d.path("result").asText())):"REJECTED".equals(d.path("result").asText()));
         Set<String> reasons=Set.of("ACTOR_NOT_AUTHORIZED","ACCOUNT_NOT_FOUND","INVALID_REQUEST","INSUFFICIENT_AVAILABLE_CREDITS","NUMERIC_LIMIT","SELF_SANCTION_FORBIDDEN","LAST_ADMIN_PROTECTED","INVALID_ACCOUNT_STATE");
-        if(applied){id(d,"ledgerEntryId");for(String f:List.of("availableBalance","reservedBalance"))require(d.path(f).isIntegralNumber()&&d.path(f).canConvertToInt()&&d.path(f).asInt()>=0);}else require(reasons.contains(d.path("reasonCode").asText()));
+        if(ban&&applied){require("BANNED".equals(d.path("status").asText()));require(("NO_CHANGE".equals(d.path("result").asText())?"BANNED":"ACTIVE").equals(d.path("previousStatus").asText()));}
+        else if(applied){id(d,"ledgerEntryId");for(String f:List.of("availableBalance","reservedBalance"))require(d.path(f).isIntegralNumber()&&d.path(f).canConvertToInt()&&d.path(f).asInt()>=0);}else require((ban?Set.of("ACTOR_NOT_AUTHORIZED","ACCOUNT_NOT_FOUND","INVALID_REQUEST","SELF_SANCTION_FORBIDDEN","LAST_ADMIN_PROTECTED","INVALID_ACCOUNT_STATE"):reasons).contains(d.path("reasonCode").asText()));
         String content=hash(json.writeValueAsString(canonical(e)));
         // Ignore extra producer fields for terminal comparison, but preserve original completion time.
         Map<String,Object> terminalData=new TreeMap<>();
-        for(String field:applied?List.of("operationId","caseId","orderId","targetUserId","requestedBy","amount","completedAt","result","availableBalance","reservedBalance","ledgerEntryId"):List.of("operationId","caseId","orderId","targetUserId","requestedBy","amount","completedAt","result","reasonCode"))terminalData.put(field,d.path(field));
+        for(String field:List.of("operationId","caseId","orderId","targetUserId","requestedBy","completedAt","result"))terminalData.put(field,d.path(field));
+        for(String field:ban?(applied?List.of("previousStatus","status"):List.of("reasonCode")):(applied?List.of("amount","availableBalance","reservedBalance","ledgerEntryId"):List.of("amount","reasonCode")))terminalData.put(field,d.path(field));
         String terminal=hash(json.writeValueAsString(terminalData));
         tx.executeWithoutResult(s->{
             db.execute("SET LOCAL lock_timeout='5s'");
@@ -111,13 +118,13 @@ public class CreditActionService {
             // Case lock comes first on every mutation; resolution must share this lock in its iteration.
             var locked=db.queryForList("SELECT id FROM admin_cases WHERE id=? FOR UPDATE",caseId);require(!locked.isEmpty());
             var actions=db.queryForList("SELECT * FROM admin_actions WHERE operation_id=? FOR UPDATE",operation);require(!actions.isEmpty());var a=actions.get(0);
-            require(caseId.equals(a.get("case_id"))&&target.equals(a.get("target_user_id"))&&actor.equals(a.get("requested_by"))&&id(d,"orderId").equals(a.get("order_id"))&&id(e,"correlationId").equals(a.get("correlation_id"))&&id(e,"causationId").equals(a.get("command_event_id"))&&d.path("amount").asInt()==((Number)a.get("amount")).intValue());
+            require(caseId.equals(a.get("case_id"))&&target.equals(a.get("target_user_id"))&&actor.equals(a.get("requested_by"))&&id(d,"orderId").equals(a.get("order_id"))&&id(e,"correlationId").equals(a.get("correlation_id"))&&id(e,"causationId").equals(a.get("command_event_id"))&&(ban?"BAN":"CREDIT_ADJUSTMENT").equals(a.get("type"))&&(ban?a.get("amount")==null:d.path("amount").asInt()==((Number)a.get("amount")).intValue()));
             if(a.get("terminal_hash")!=null){require(terminal.equals(a.get("terminal_hash")));}
             else {
                 db.update("UPDATE admin_actions SET status=?,reason_code=?,completed_at=?,terminal_hash=?,owner_event_id=? WHERE operation_id=?",applied?"SUCCEEDED":"REJECTED",applied?null:d.path("reasonCode").asText(),at(completed),terminal,event,operation);
                 db.update("UPDATE admin_cases SET revision=revision+1,source_sequence=source_sequence+1 WHERE id=?",caseId);
                 long revision=db.queryForObject("SELECT revision FROM admin_cases WHERE id=?",Long.class,caseId),sequence=db.queryForObject("SELECT source_sequence FROM admin_cases WHERE id=?",Long.class,caseId);
-                Instant now=Instant.now();audit(caseId,revision,actor,"CREDIT_ACTION_COMPLETED",now);
+                Instant now=Instant.now();audit(caseId,revision,actor,ban?"BAN_COMPLETED":"CREDIT_ACTION_COMPLETED",now);
                 UUID factId=UUID.randomUUID();var factData=new LinkedHashMap<String,Object>();factData.put("caseId",caseId);factData.put("orderId",a.get("order_id"));factData.put("sourceSequence",sequence);factData.put("operationId",operation);factData.put("ownerEventId",event);factData.put("targetUserId",target);factData.put("result",d.path("result").asText());
                 db.update("INSERT INTO admin_case_outbox(event_id,case_id,source_sequence,event_type,topic,payload,created_at) VALUES (?,?,?,'CaseActionCompleted','admin.events',?,?)",factId,caseId,sequence,json.writeValueAsString(envelope(factId,"CaseActionCompleted","AdminCase",caseId,revision,now,"admin-service",(UUID)a.get("correlation_id"),event,actor,factData)),at(now));
             }

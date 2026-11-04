@@ -22,15 +22,19 @@ public class ActionKafkaTransport {
     @Scheduled(fixedDelayString="${app.kafka.outbox-delay:2000}")
     public void publish(){
         for(var d:outbox.claim()){
-            try{kafka.send("admin.credit.commands",d.target().toString(),d.payload()).get(10,TimeUnit.SECONDS);outbox.confirmed(d,reconcileSeconds);log.info("Admin credit command broker-confirmed operationId={} eventId={}",d.operationId(),d.eventId());}
+            try{kafka.send(d.topic(),d.target().toString(),d.payload()).get(10,TimeUnit.SECONDS);outbox.confirmed(d,reconcileSeconds);log.info("Admin case command broker-confirmed operationId={} eventId={}",d.operationId(),d.eventId());}
             catch(InterruptedException ex){Thread.currentThread().interrupt();outbox.failed(d);return;}
-            catch(Exception ex){outbox.failed(d);log.warn("Admin credit command unconfirmed operationId={} eventId={}",d.operationId(),d.eventId());}
+            catch(Exception ex){outbox.failed(d);log.warn("Admin case command unconfirmed operationId={} eventId={}",d.operationId(),d.eventId());}
         }
     }
     @KafkaListener(topics="credit.admin.events",groupId="admin-service-credit")
-    public void receive(ConsumerRecord<String,String> record,Acknowledgment acknowledgment){
-        if(!actions.outcome(record.key(),record.value())){
-            try {kafka.send("credit.admin.events.DLT",record.key(),"{\"failureCode\":\"INVALID_OR_CONFLICTING_OUTCOME\",\"sourceTopic\":\"credit.admin.events\",\"partition\":"+record.partition()+",\"offset\":"+record.offset()+",\"contentHash\":\""+CreditActionService.hash(String.valueOf(record.value()))+"\"}").get(10,TimeUnit.SECONDS);}
+    public void receive(ConsumerRecord<String,String> record,Acknowledgment acknowledgment){handle(record,acknowledgment,false);}
+    @KafkaListener(topics="user.admin.events",groupId="admin-service-user")
+    public void receiveUser(ConsumerRecord<String,String> record,Acknowledgment acknowledgment){handle(record,acknowledgment,true);}
+    private void handle(ConsumerRecord<String,String> record,Acknowledgment acknowledgment,boolean user){
+        boolean accepted=user?actions.outcome(record.key(),record.value(),"user-service"):actions.outcome(record.key(),record.value());
+        if(!accepted){
+            try {kafka.send(record.topic()+".DLT",record.key(),"{\"failureCode\":\"INVALID_OR_CONFLICTING_OUTCOME\",\"sourceTopic\":\""+record.topic()+"\",\"partition\":"+record.partition()+",\"offset\":"+record.offset()+",\"contentHash\":\""+CreditActionService.hash(String.valueOf(record.value()))+"\"}").get(10,TimeUnit.SECONDS);}
             catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException("DLT delivery unconfirmed");}
             catch(Exception e){throw new IllegalStateException("DLT delivery unconfirmed");}
         }

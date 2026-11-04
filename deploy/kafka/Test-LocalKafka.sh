@@ -28,6 +28,8 @@ export KAFKA_UI_BROKER_PASSWORD=${KAFKA_UI_BROKER_PASSWORD:-smoke-ui-broker-pass
 export KAFKA_UI_LOGIN_USERNAME=${KAFKA_UI_LOGIN_USERNAME:-kafka-smoke-viewer}
 export KAFKA_UI_LOGIN_PASSWORD=${KAFKA_UI_LOGIN_PASSWORD:-smoke-ui-login-password}
 
+export ADMIN_DB_NAME=${ADMIN_DB_NAME:-kafka_smoke_admin_db}
+export ADMIN_DB_USER=${ADMIN_DB_USER:-kafka_smoke_admin}
 export ADMIN_DB_PASSWORD=${ADMIN_DB_PASSWORD:-ci-admin-db-password}
 export ADMIN_SERVICE_PRIVATE_KEY=${ADMIN_SERVICE_PRIVATE_KEY:-not-used-by-this-job}
 export USER_SERVICE_TRUSTED_KEYS=${USER_SERVICE_TRUSTED_KEYS:-'{}'}

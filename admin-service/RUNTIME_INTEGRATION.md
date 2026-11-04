@@ -25,8 +25,11 @@ The separate `foc-admin-foundation` preview database/volume is not reused, reset
 If its data must be retained in the new runtime, arrange a stopped-writer backup/restore with
 Darryl before switching traffic. Never attach two running PostgreSQL servers to one volume.
 
-Provide the four new required values in `.env.example`: `ADMIN_DB_PASSWORD`,
+Provide the required values in `.env.example`: `ADMIN_DB_NAME`, `ADMIN_DB_USER`, `ADMIN_DB_PASSWORD`,
 `ADMIN_SERVICE_PRIVATE_KEY`, `USER_SERVICE_TRUSTED_KEYS`, `KAFKA_ADMIN_SERVICE_PASSWORD`.
+Use `admin_db` and `admin_user` for an existing default Admin volume; changing environment
+values does not rename an initialized PostgreSQL database or role. New installations may choose
+their own names. Compose passes the same values to Admin, PostgreSQL and its health check.
 Keep existing trusted-key entries when adding Admin. Generate a separate RSA signing key;
 do not reuse User's JWT signing private key. For example, using OpenSSL:
 
@@ -145,3 +148,11 @@ See `INTEGRATION_READINESS.md` for all other owner dependencies.
   UI. Treat a broker-confirmed command as delivery only. Financial acceptance awaits real Credit.
 - Record affected-owner review and the manual outcome before declaring shared activation and this
   iteration accepted. Real Chat evidence/reporting/conversations remain separate acceptance work.
+
+## Sanctions extension
+
+The subsequent [sanctions iteration](SANCTIONS_INTEGRATION.md) adds real User-owned ban handling,
+`admin.user.commands`/`user.admin.events` and their DLTs with scoped Admin/User groups. The runtime
+smoke now verifies real User outcomes in addition to the original explicitly simulated Credit
+outcomes. Shared activation/owner review remains pending. Standalone sanctions default off;
+shared Compose prepares `USER_ADMIN_COMMANDS_ENABLED=true` and User waits for broker initialization.

@@ -365,7 +365,7 @@ rejected even if its JWT still contains the `ADMIN` role claim.
 | --- | --- |
 | `GET /api/users/admin/accounts?query=&page=0&size=20` | Paged account summaries; `query` searches email or username. |
 | `PATCH /api/users/admin/accounts/{id}/role` | Body `{"administrator":true}` grants, or `{"administrator":false}` removes, the additional `ADMIN` assignment for an active account. |
-| `PATCH /api/users/admin/accounts/{id}/status` | Body `{"status":"BANNED"}` bans an active account, or `{"status":"ACTIVE"}` reactivates a banned account. |
+| `PATCH /api/users/admin/accounts/{id}/status` | Body `{"status":"BANNED"}` bans an active account, or `{"status":"ACTIVE","reason":"Reviewed appeal"}` reactivates a banned account with mandatory reason/audit. |
 
 There is deliberately no account-deletion API. Role changes and bans are allowed only for active
 accounts; unverified accounts cannot be banned. Administrators cannot demote, ban, or delete
@@ -505,3 +505,7 @@ the existing database volume. Role/lifecycle API checks require an already verif
 administrator and at least one additional active test account. In Admin mode, open **Manage users**,
 search for that account, promote it, then sign in as that account and confirm Admin mode is available.
 Do not delete production data for a manual test.
+
+## Case sanctions integration
+
+See [sanctions ownership, behavior, recovery and verification](../admin-service/SANCTIONS_INTEGRATION.md).

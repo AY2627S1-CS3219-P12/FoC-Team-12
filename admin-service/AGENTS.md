@@ -8,7 +8,8 @@ Chat reference confirmation, recovery exports and atomic audit/outbox. Chat owns
 messages, the historical timeline projection and coverage.
 Admin owns durable credit-action tracking, command outbox and outcome inbox. Credit exclusively
 applies ledger/balance effects; never implement financial effects or fabricate producer outcomes
-here. Do not fabricate Chat eligibility/evidence. Sanctions and resolution remain later work.
+here. Do not fabricate Chat eligibility/evidence. Admin tracks reversible ban requests; User
+alone applies sanctions, protects accounts and owns reactivation/audit. Resolution remains later work.
 Shared gateway, deployment and CI changes require a separately nominated editor.
 
 Before final integration or acceptance, read `INTEGRATION_READINESS.md` for unresolved owner

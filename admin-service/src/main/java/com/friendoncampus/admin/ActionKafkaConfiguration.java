@@ -13,7 +13,7 @@ import org.springframework.util.backoff.FixedBackOff;
 @ConditionalOnProperty(name="app.kafka.enabled",havingValue="true")
 public class ActionKafkaConfiguration {
     @Bean DefaultErrorHandler actionKafkaErrorHandler(KafkaTemplate<String,String> kafka){
-        var recoverer=new DeadLetterPublishingRecoverer(kafka,(record,failure)->new TopicPartition("credit.admin.events.DLT",0));
+        var recoverer=new DeadLetterPublishingRecoverer(kafka,(record,failure)->new TopicPartition(record.topic()+".DLT",0));
         recoverer.setFailIfSendResultIsError(true);
         var handler=new DefaultErrorHandler(recoverer,new FixedBackOff(1000L,2L));handler.setCommitRecovered(true);return handler;
     }

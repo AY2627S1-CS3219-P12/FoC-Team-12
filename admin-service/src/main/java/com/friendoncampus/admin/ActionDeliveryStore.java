@@ -13,7 +13,9 @@ public class ActionDeliveryStore {
     private final JdbcTemplate db;
     private final TransactionTemplate tx;
     public ActionDeliveryStore(JdbcTemplate db,PlatformTransactionManager manager){this.db=db;tx=new TransactionTemplate(manager);tx.setTimeout(10);}
-    public record Delivery(UUID eventId,UUID operationId,UUID target,UUID lease,String payload) { }
+    public record Delivery(UUID eventId,UUID operationId,UUID target,UUID lease,String payload,String topic) {
+        public Delivery(UUID eventId,UUID operationId,UUID target,UUID lease,String payload){this(eventId,operationId,target,lease,payload,"admin.credit.commands");}
+    }
     public List<Delivery> claim(){
         return tx.execute(s->{
             db.execute("SET LOCAL lock_timeout='5s'");
@@ -21,7 +23,7 @@ public class ActionDeliveryStore {
             var rows=db.queryForList("SELECT o.* FROM admin_action_outbox o JOIN admin_actions a ON a.operation_id=o.operation_id WHERE a.status IN ('PENDING','UNKNOWN') AND o.next_attempt_at<=CURRENT_TIMESTAMP AND (o.lease_until IS NULL OR o.lease_until<CURRENT_TIMESTAMP) ORDER BY o.next_attempt_at,o.event_id LIMIT 1 FOR UPDATE OF o SKIP LOCKED");
             List<Delivery> result=new ArrayList<>();
             for(var r:rows){UUID lease=UUID.randomUUID();db.update("UPDATE admin_action_outbox SET lease_id=?,lease_until=CURRENT_TIMESTAMP+INTERVAL '30 seconds',attempts=attempts+1 WHERE event_id=?",lease,r.get("event_id"));
-                result.add(new Delivery((UUID)r.get("event_id"),(UUID)r.get("operation_id"),(UUID)r.get("target_user_id"),lease,(String)r.get("payload")));}
+                result.add(new Delivery((UUID)r.get("event_id"),(UUID)r.get("operation_id"),(UUID)r.get("target_user_id"),lease,(String)r.get("payload"),(String)r.get("topic")));}
             return result;
         });
     }

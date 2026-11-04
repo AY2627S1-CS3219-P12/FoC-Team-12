@@ -4,7 +4,8 @@ Creates a unique disposable project, never uses .env or an existing database/bro
 Seeds TEST-ONLY case data and activates a disposable User account via fixture SQL
 inside this project's databases (not a reporting, email verification or bootstrap test).
 Credit outcomes are simulated by a test producer using Credit's broker principal;
-no Credit application or ledger runs. Never run this producer against a shared stack.
+no Credit application or ledger runs. User bans/outcomes are produced by real User.
+Never run the simulated Credit producer against a shared stack.
 """
 
 import base64
@@ -50,10 +51,11 @@ def main():
                       "ADMIN_SERVICE", "UI_BROKER", "UI_LOGIN"):
         env[f"KAFKA_{principal}_PASSWORD"] = secrets.token_hex(24)
     email, password = "runtime-test@u.nus.edu", "Test!" + secrets.token_hex(16)
-    env.update(ADMIN_DB_PASSWORD=secrets.token_hex(24), KAFKA_UI_LOGIN_USERNAME="test-viewer",
+    env.update(ADMIN_DB_NAME="admin_runtime_test", ADMIN_DB_USER="admin_runtime_user",
+               ADMIN_DB_PASSWORD=secrets.token_hex(24), KAFKA_UI_LOGIN_USERNAME="test-viewer",
                ADMIN_BOOTSTRAP_EMAIL="", ADMIN_BOOTSTRAP_USERNAME="",
                ADMIN_BOOTSTRAP_PASSWORD="", MAIL_PROVIDER="noop",
-               ADMIN_SERVICE_KEY_ID="admin-runtime-test", ADMIN_SERVICE_TRUSTED_KEYS="{}")
+               ADMIN_SERVICE_KEY_ID="admin-runtime-test", ADMIN_SERVICE_TRUSTED_KEYS="{}", USER_ADMIN_COMMANDS_ENABLED="true")
     with tempfile.TemporaryDirectory(prefix=project) as directory:
         directory = Path(directory)
         for name in ("user", "admin"):
@@ -76,6 +78,9 @@ def main():
     ports: !override []
   kafka:
     ports: !override []
+    healthcheck:
+      timeout: 30s
+      retries: 30
     volumes: !override
       - KAFKA_SCRIPTS:/opt/foc-kafka:ro
       - kafka-data:/var/lib/kafka
@@ -87,6 +92,9 @@ def main():
     environment:
       ADMIN_ACTION_OUTCOME_TIMEOUT_SECONDS: 3
       ADMIN_KAFKA_RECONCILE_SECONDS: 10
+    healthcheck:
+      timeout: 10s
+      retries: 20
   gateway:
     ports: !override ["127.0.0.1::8088"]
 """.replace("KAFKA_SCRIPTS", scripts.as_posix()), encoding="utf-8")
@@ -99,7 +107,7 @@ def main():
             return run(prefix + list(args), env=env, data=data, timeout=timeout)
 
         def sql(query):
-            return compose("exec", "-T", "admin-db", "psql", "-U", "admin_user", "-d", "admin_db",
+            return compose("exec", "-T", "admin-db", "psql", "-U", env["ADMIN_DB_USER"], "-d", env["ADMIN_DB_NAME"],
                            "-v", "ON_ERROR_STOP=1", "-At", data=query)
 
         def broker(script, data=None):
@@ -119,7 +127,7 @@ def main():
             print("Building isolated Admin, User and gateway images", flush=True)
             compose("build", "admin-service", "user-service", "gateway", timeout=1200)
             print("Starting private databases, User, authenticated broker and Admin", flush=True)
-            compose("up", "-d", "--wait", "admin-service", timeout=600)
+            compose("up", "-d", "--wait", "admin-service", timeout=1200)
             compose("up", "-d", "--no-deps", "gateway")
             address = compose("port", "gateway", "8088").splitlines()[0]
             base = "http://" + address
@@ -212,10 +220,92 @@ VALUES ('{case}','{target}','TEST ONLY runtime transport',CURRENT_TIMESTAMP,'TES
             assert sql("SELECT count(*) FROM admin_action_inbox") == "1", "Duplicate outcome applied twice"
             assert sql("SELECT count(*) FROM admin_case_outbox WHERE event_type='CaseActionCompleted'") == "1"
             print("PASS: TEST-ONLY rejected outcomes consumed once despite duplicate delivery", flush=True)
+            # Real User sanctions: its consumer is temporarily disabled while its auth API stays up.
+            def user_sql(query):
+                return compose("exec", "-T", "user-db", "psql", "-U", env["USER_DB_USER"], "-d", env["USER_DB_NAME"],
+                               "-v", "ON_ERROR_STOP=1", "-qAt", data=query)
+
+            target_email = "sanction-target@u.nus.edu"
+            assert http("/api/users/registrations", "POST", {"email":target_email,"username":"sanction-target","password":password})[0] in (201,503)
+            sanction_target = user_sql(f"UPDATE users SET status='ACTIVE' WHERE email='{target_email}'; SELECT id FROM users WHERE email='{target_email}';").splitlines()[-1]
+            for participant in (sanction_target, actor):
+                sql(f"INSERT INTO admin_case_participants(case_id,user_id) VALUES ('{case}','{participant}'); INSERT INTO admin_statements(case_id,reporter_id,description,submitted_at,eligibility_revision) VALUES ('{case}','{participant}','TEST ONLY sanctions',CURRENT_TIMESTAMP,'TEST-ONLY');")
+            exercise_outage=os.environ.get("ADMIN_RUNTIME_CONSUMER_OUTAGE","true")=="true"
+            if exercise_outage:
+                env["USER_ADMIN_COMMANDS_ENABLED"] = "false"
+                compose("up", "-d", "--no-deps", "--wait", "user-service", timeout=240)
+                poll(lambda:http("/api/users/me",token=token)[0]==200)
+            else:
+                print("Consumer-outage phase skipped for focused HTTP/replay rerun; not a new outage-test pass",flush=True)
+            ban_body={"type":"BAN","targetUserId":sanction_target,"reason":"TEST ONLY account safety review"}
+            ban_key=str(uuid.uuid4())
+            status,ban_receipt=http(path,"POST",ban_body,token,ban_key)
+            assert status==202, "Ban was not accepted while User auth was available"
+            ban_op=json.loads(ban_receipt)["operationId"]
+            if exercise_outage:
+                poll(lambda:json.loads(http(path+"/"+ban_op,token=token)[1])["status"]=="UNKNOWN")
+            assert http(path,"POST",ban_body,token,ban_key)==(202,ban_receipt)
+            original_ban=sql(f"SELECT payload FROM admin_action_outbox WHERE operation_id='{ban_op}'")
+            if exercise_outage:
+                env["USER_ADMIN_COMMANDS_ENABLED"] = "true"
+                compose("up", "-d", "--no-deps", "--wait", "user-service", timeout=240)
+                poll(lambda:http("/api/users/me",token=token)[0]==200)
+            poll(lambda:json.loads(http(path+"/"+ban_op,token=token)[1])["status"]=="SUCCEEDED")
+            assert original_ban==sql(f"SELECT payload FROM admin_action_outbox WHERE operation_id='{ban_op}'")
+            account=json.loads(http("/api/users/admin/accounts?query="+target_email,token=token)[1])["content"][0]
+            assert account["status"]=="BANNED"
+            owner_outcome=json.loads(user_sql(f"SELECT payload FROM user_sanction_operations WHERE operation_id='{ban_op}'"))
+            assert owner_outcome["producer"]=="user-service" and owner_outcome["data"]["result"]=="APPLIED"
+            samples=ROOT/"admin-service"/"target"/"ban-contract-samples"
+            samples.mkdir(parents=True,exist_ok=True)
+            (samples/"command.json").write_text(original_ban,encoding="utf-8")
+            (samples/"applied.json").write_text(json.dumps(owner_outcome),encoding="utf-8")
+            status,noop=http(path,"POST",ban_body,token,str(uuid.uuid4()))
+            assert status==202
+            noop_op=json.loads(noop)["operationId"]
+            poll(lambda:json.loads(http(path+"/"+noop_op,token=token)[1])["status"]=="SUCCEEDED")
+            noop_outcome=json.loads(user_sql(f"SELECT payload FROM user_sanction_operations WHERE operation_id='{noop_op}'"))
+            assert noop_outcome["data"]["result"]=="NO_CHANGE"
+            (samples/"no-change.json").write_text(json.dumps(noop_outcome),encoding="utf-8")
+            status,problem=http("/api/users/admin/accounts/"+sanction_target+"/status","PATCH",{"status":"ACTIVE"},token)
+            assert status==400, f"Missing reactivation reason returned {status}: {problem[:1000]}"
+            assert http("/api/users/admin/accounts/"+sanction_target+"/status","PATCH",{"status":"ACTIVE","reason":"TEST ONLY appeal reviewed"},token)[0]==200
+            generation=int(user_sql(f"SELECT dispatch_version FROM user_sanction_outbox WHERE operation_id='{ban_op}'"))
+            broker('source /opt/foc-kafka/lib.sh; write_client_properties /tmp/runtime-admin-service.properties admin_service "$KAFKA_ADMIN_SERVICE_PASSWORD"')
+            broker('/opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 '
+                   '--command-config /tmp/runtime-admin-service.properties --topic admin.user.commands --sync '
+                   '--reader-property parse.key=true --reader-property key.separator="|" '
+                   '--command-property enable.idempotence=true --command-property acks=all',data=sanction_target+"|"+original_ban+"\n")
+            poll(lambda:int(user_sql(f"SELECT dispatch_version FROM user_sanction_outbox WHERE operation_id='{ban_op}'"))>generation)
+            assert json.loads(http("/api/users/admin/accounts?query="+target_email,token=token)[1])["content"][0]["status"]=="ACTIVE", "Old operation rebanned reactivated account"
+            assert json.loads(user_sql(f"SELECT payload FROM user_sanction_operations WHERE operation_id='{ban_op}'"))==owner_outcome
+            status,self_receipt=http(path,"POST",{"type":"BAN","targetUserId":actor,"reason":"TEST ONLY self protection"},token,str(uuid.uuid4()))
+            assert status==202
+            self_op=json.loads(self_receipt)["operationId"]
+            poll(lambda:json.loads(http(path+"/"+self_op,token=token)[1])["status"]=="REJECTED")
+            assert json.loads(http(path+"/"+self_op,token=token)[1])["reasonCode"]=="SELF_SANCTION_FORBIDDEN"
+            (samples/"rejected.json").write_text(user_sql(f"SELECT payload FROM user_sanction_operations WHERE operation_id='{self_op}'"),encoding="utf-8")
+            assert user_sql(f"SELECT count(*) FROM user_account_audit WHERE operation_id='{ban_op}'")=="1"
+            print("PASS: REAL User Kafka ban/recovery, NO_CHANGE, protected self-ban, reason/audit reactivation and duplicate-after-reactivation",flush=True)
+            # Optional bounded visual review in this disposable environment, never a live fallback.
+            if os.environ.get("ADMIN_RUNTIME_UI_REVIEW")=="true":
+                review_file=ROOT/"output"/"sanctions-ui-review.json"
+                done_file=ROOT/"output"/"sanctions-ui-review.done"
+                done_file.unlink(missing_ok=True)
+                review_file.write_text(json.dumps({"testOnly":True,"base":base,"caseId":case,"email":email,"password":password}),encoding="utf-8")
+                print("Disposable GUI ready; waiting up to 5 minutes for visual review",flush=True)
+                until=time.monotonic()+300
+                while not done_file.exists() and time.monotonic()<until: time.sleep(1)
+                review_file.unlink(missing_ok=True);done_file.unlink(missing_ok=True)
             compose("restart", "admin-service")
             compose("up", "-d", "--no-deps", "--wait", "admin-service", timeout=180)
             assert json.loads(http(path + "/" + operation, token=token)[1])["status"] == "REJECTED"
             # Exercise failure without ever changing the normal User Service.
+            status, login_body=http("/api/users/login","POST",{"email":email,"password":password})
+            assert status==200
+            status, role_body=http("/api/users/me/session-role","PATCH",{"role":"ADMIN"},json.loads(login_body)["accessToken"])
+            assert status==200
+            token=json.loads(role_body)["accessToken"]
             compose("stop", "user-service")
             assert http("/api/admin/session", token=token)[0] == 503
             print("PASS: packaged UI/auth, real User eligibility, private callbacks, authenticated command delivery, "

@@ -43,7 +43,8 @@ record Chat/transport owner sign-off or deploy the shared drafts.
 Shared Compose/gateway/broker/CI runtime wiring is prepared in the
 [runtime integration guide](RUNTIME_INTEGRATION.md), pending affected-owner activation review.
 Chat/Order/Credit domain code and Kubernetes policies are unchanged.
-Conversation adapters and credit tracking are implemented; real owner integrations and resolution remain pending.
+Conversation adapters, credit tracking and reversible ban tracking are implemented. User owns the
+sanction consumer and reason/audit reactivation; real Chat/Credit integration and resolution remain pending.
 Account/supplier tools link to their existing owners.
 
 ## Cases behavior and APIs
@@ -521,3 +522,7 @@ and original Admin User JWTs are checked. The fixture is still test-only and exc
 the packaged application. Use `-Incomplete` to show projection lag and known gaps, and stop
 it to verify unavailable/retry behavior. This synthetic timeline is not derived from real
 Order/Credit history and must not be used to make real case decisions.
+
+## Case sanctions integration
+
+See [sanctions ownership, behavior, recovery and verification](SANCTIONS_INTEGRATION.md).

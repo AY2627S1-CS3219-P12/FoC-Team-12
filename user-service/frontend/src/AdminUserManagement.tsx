@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 
 import { ApiError, api, type AdminAccount, type AdminAccountPage } from './api/client'
 import { AccountIcon } from './AccountIcon'
@@ -21,6 +21,25 @@ export function AdminUserManagement({ currentUserId }: Props) {
   const [changingUserId, setChangingUserId] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [restore, setRestore] = useState<AdminAccount | null>(null)
+  const [restoreReason, setRestoreReason] = useState('')
+  const restoreField = useRef<HTMLTextAreaElement>(null)
+  const restoreButton = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    if (restore) restoreField.current?.focus()
+    else if (!changingUserId) restoreButton.current?.focus()
+  }, [restore, changingUserId])
+  const closeRestore = () => { setRestore(null); setRestoreReason('') }
+  const reactivate = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!restore || !restoreReason.trim() || changingUserId) return
+    setChangingUserId(restore.userId); setMessage(''); setError('')
+    try {
+      replaceAccount(await api.setAccountStatus(restore.userId, 'ACTIVE', restoreReason.trim()))
+      setMessage(`${restore.username} has been reactivated.`); closeRestore()
+    } catch (e) { setError(e instanceof ApiError ? e.message : 'Unable to reactivate the account.') }
+    finally { setChangingUserId(null) }
+  }
 
   useEffect(() => {
     if (!message) return
@@ -141,7 +160,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
                 </div>
                 <div className="admin-action-group">
                 <button type="button" className={`admin-account-action ${account.status === 'BANNED' ? 'account-restore' : 'account-ban'}`} disabled={changing || account.status === 'UNVERIFIED'}
-                  onClick={() => { void changeStatus(account, account.status === 'BANNED' ? 'ACTIVE' : 'BANNED') }}>
+                  onClick={(event) => { if (account.status === 'BANNED') { restoreButton.current = event.currentTarget; setRestoreReason(''); setRestore(account) } else void changeStatus(account, 'BANNED') }}>
                   <AccountIcon name={account.status === 'BANNED' ? 'restore' : 'ban'} />
                   {account.status === 'BANNED' ? 'Reactivate' : 'Ban account'}
                 </button>
@@ -152,6 +171,15 @@ export function AdminUserManagement({ currentUserId }: Props) {
       })}
     </div>}
 
+    {restore && <form className="admin-user-search account-reactivation" aria-label="Reactivate account" onSubmit={(event) => { void reactivate(event) }}>
+      <h2>Reactivate {restore.username}</h2>
+      <p>This restores sign-in access. Previous case actions remain in the account audit.</p>
+      <label htmlFor="reactivation-reason">Reason for reactivation</label>
+      <textarea id="reactivation-reason" ref={restoreField} required maxLength={2000} rows={3}
+        disabled={!!changingUserId} value={restoreReason} onChange={event => setRestoreReason(event.target.value)} />
+      <button disabled={!!changingUserId || !restoreReason.trim()}>Confirm reactivation</button>
+      <button type="button" className="secondary" disabled={!!changingUserId} onClick={closeRestore}>Cancel reactivation</button>
+    </form>}
     {accounts.totalPages > 1 && <nav className="admin-user-pagination" aria-label="User account pages">
       <button type="button" className="secondary" disabled={loading || accounts.page === 0}
         onClick={() => { setLoading(true); setError(''); setPageNumber(current => Math.max(0, current - 1)) }}>Previous</button>

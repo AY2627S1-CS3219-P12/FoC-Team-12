@@ -21,6 +21,9 @@ import com.friendoncampus.user.support.JwtTestProperties;
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
 })
 class UserServiceApplicationTests {
+    @MockitoBean private com.friendoncampus.user.service.UserAccountAudit accountAudit;
+    @MockitoBean private com.friendoncampus.user.messaging.UserSanctionService sanctions;
+    @MockitoBean private com.friendoncampus.user.messaging.UserSanctionOutbox sanctionOutbox;
     @MockitoBean
     private com.friendoncampus.user.messaging.UserOutboxRepository userOutboxRepository;
 
