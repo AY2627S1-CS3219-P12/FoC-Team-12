@@ -20,7 +20,7 @@ def is_image_input(path, service):
 
 def select_services(paths):
     # Changes to the publisher/checks themselves exercise every build on their first merge.
-    if any(path.startswith((".github/workflows/", ".github/scripts/")) for path in paths):
+    if any(path.startswith((".github/workflows/", ".github/scripts/", "deploy/aws/")) for path in paths):
         return list(SERVICES)
     return [service for service in SERVICES if any(is_image_input(path, service) for path in paths)]
 

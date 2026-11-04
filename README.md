@@ -23,6 +23,10 @@ Admin N2H additionally permits audited corrective issuance/removal by authorized
 Cloud infrastructure, integration, CI/CD, and demonstrations are shared responsibilities.
 The detailed task boundaries are in [`TASK_SPLIT.md`](TASK_SPLIT.md).
 
+The reproducible AWS Cloud Deployment N2H staging environment is documented in
+[`deploy/aws/README.md`](deploy/aws/README.md). It uses Terraform, EKS Auto Mode, ECR, private RDS,
+CloudFront, Secrets Manager and CloudWatch while preserving Compose and Minikube for local work.
+
 Admin N2H implementation starts with the [Admin specification](docs/integration/admin-service-spec.md),
 [Chat evidence/conversation contract](docs/integration/chat-admin-contract.md) and
 [Kafka administrative actions](docs/integration/admin-command-contract.md). These describe planned

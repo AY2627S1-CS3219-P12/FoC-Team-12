@@ -480,6 +480,31 @@ jobs:
       - name: Build and verify isolated Admin runtime (test-only outcomes)
         run: python3 admin-service/scripts/runtime_smoke.py
 
+  cloud-infrastructure-validation:
+    name: AWS infrastructure and Kubernetes manifests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.14.6"
+      - name: Check Terraform formatting and validate every stack
+        run: |
+          terraform fmt -check -recursive deploy/aws/terraform
+          for stack in bootstrap staging-core staging-edge; do
+            terraform -chdir="deploy/aws/terraform/$stack" init -backend=false -input=false
+            terraform -chdir="deploy/aws/terraform/$stack" validate
+          done
+      - name: Check cloud shell scripts
+        run: docker run --rm -v "$PWD:/repo:ro" -w /repo koalaman/shellcheck:v0.11.0 deploy/aws/scripts/*.sh
+      - name: Render and schema-check the AWS Kubernetes overlay
+        run: |
+          kubectl kustomize --load-restrictor=LoadRestrictionsNone deploy/aws/k8s/staging > /tmp/foc-aws.yaml
+          docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 \
+            -strict -ignore-missing-schemas -summary < /tmp/foc-aws.yaml
+
   publish-images:
     name: Publish ${{ matrix.service }}
     needs:
@@ -500,6 +525,7 @@ jobs:
       - admin-backend
       - admin-frontend
       - admin-container
+      - cloud-infrastructure-validation
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.image-plan.outputs.has-images == 'true'
     runs-on: ubuntu-24.04
     permissions:
