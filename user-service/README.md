@@ -431,6 +431,9 @@ The Vite development server runs at `http://localhost:5174` and proxies `/api` t
 on port `8088`. Production assets use `/user-assets/**` and are packaged inside the User Service.
 The frontend includes registration, email-verification and resend-code screens, login, and
 password-reset flows.
+When sign-in is requested from an Admin participant report, successful authentication returns
+to the same report or errand-scoped report form. This participant return path does not select
+Admin mode or grant administrator access; Admin enforces report privacy on its own API.
 
 Successful registration moves directly to six accessible OTP boxes with the registered email already set;
 entering the sixth digit automatically submits the verification. The resend button displays its 90-second

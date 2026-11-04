@@ -172,7 +172,17 @@ export function AdminShell({
                 </div>
               </details>
             ) : (
-              <a className="sign-in-link" href="/?returnTo=%2Fadmin">
+              <a
+                className="sign-in-link"
+                href={
+                  '/?returnTo=' +
+                  encodeURIComponent(
+                    window.location.pathname.startsWith('/admin/reports/')
+                      ? window.location.pathname + window.location.search
+                      : '/admin',
+                  )
+                }
+              >
                 Sign in
               </a>
             )}

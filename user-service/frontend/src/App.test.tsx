@@ -104,6 +104,23 @@ test('activates credits and returns to Credits after authentication was requeste
   expect(navigateTo).toHaveBeenCalledWith('/credits')
 })
 
+test.each([
+  ['USER', '/admin/reports/44923986-c91c-47ef-a6d5-b1717e47463c'],
+  ['COURIER', '/admin/reports/new?orderId=a8117ec5-2920-4aa6-91cf-4f722741dff3'],
+])('returns a signed-in %s participant to the requested report', async (role, destination) => {
+  window.history.replaceState(null, '', '/?returnTo=' + encodeURIComponent(destination))
+  vi.stubGlobal('fetch', vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => ({
+      accessToken: 'signed.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
+      userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Alice', role,
+    }) })
+    .mockResolvedValue({ ok: true, json: async () => ({ availableBalance: 10 }) }))
+  render(<App />)
+  const user = await fillLogin()
+  await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
+  expect(navigateTo).toHaveBeenCalledWith(destination)
+})
+
 test('uses the Requester and Courier selector to replace a session token', async () => {
   saveSession({
     accessToken: 'requester.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
@@ -211,6 +228,8 @@ test('accepts only approved relative service return destinations', () => {
   expect(safeReturnTo('?returnTo=https%3A%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2Fapi%2Fusers')).toBeNull()
+  expect(safeReturnTo('?returnTo=%2Fadmin%2Fcases%2Fprivate')).toBeNull()
+  expect(safeReturnTo('?returnTo=%2Fadmin%2Freports%2F..%2Fcases%2Fprivate')).toBeNull()
 })
 
 test('shows an accessible error when the live profile cannot be loaded', async () => {

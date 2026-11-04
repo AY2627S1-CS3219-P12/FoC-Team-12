@@ -317,7 +317,7 @@ export function App() {
       setLoginState('success')
       void api.activateCreditAccount().catch(() => undefined)
       const destination = safeReturnTo()
-      if (destination && (destination === '/credits' || destination.startsWith('/credits/'))) {
+      if (destination && (destination === '/credits' || destination.startsWith('/credits/') || destination.startsWith('/admin/reports/'))) {
         navigateTo(destination)
       }
     } catch (error) {
