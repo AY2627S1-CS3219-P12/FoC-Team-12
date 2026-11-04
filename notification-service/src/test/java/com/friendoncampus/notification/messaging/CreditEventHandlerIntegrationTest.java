@@ -10,6 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -147,6 +148,61 @@ class CreditEventHandlerIntegrationTest {
                 Integer.class, eventId)).isEqualTo(1);
     }
 
+    /** The same Credit outcome published again under a fresh eventId, as a reconciliation replay does. */
+    private static Map<String, Object> republished(Map<String, Object> event) {
+        Map<String, Object> copy = new LinkedHashMap<>(event);
+        copy.put("eventId", UUID.randomUUID().toString());
+        copy.put("data", new LinkedHashMap<>(data(event)));
+        return copy;
+    }
+
+    @Test
+    void theSameOperationUnderANewEventIdNotifiesOnce() {
+        Map<String, Object> first = settled(UUID.randomUUID(), REQUESTER, COURIER, 3);
+        Map<String, Object> again = republished(first);
+
+        assertThat(handler.handle(json(first))).isEqualTo(Outcome.NOTIFIED);
+        assertThat(handler.handle(json(again))).isEqualTo(Outcome.DUPLICATE_OPERATION);
+
+        assertThat(notificationsFrom(first.get("eventId"))).hasSize(1);
+        assertThat(notificationsFrom(again.get("eventId"))).isEmpty();
+        assertThat(inboxOutcome(again.get("eventId"))).isEqualTo("DUPLICATE_OPERATION");
+        assertThat(jdbc.queryForObject("select business_key from notifications where source_event_id = ?::uuid",
+                String.class, first.get("eventId"))).isEqualTo(data(first).get("operationId"));
+    }
+
+    @Test
+    void aRepeatedOperationWithDifferentValuesStillKeepsTheFirstNotification() {
+        Map<String, Object> first = settled(UUID.randomUUID(), REQUESTER, COURIER, 3);
+        Map<String, Object> again = republished(first);
+        data(again).put("transferredAmount", 30);
+
+        handler.handle(json(first));
+
+        assertThat(handler.handle(json(again))).isEqualTo(Outcome.DUPLICATE_OPERATION);
+        List<Map<String, Object>> rows = notificationsFrom(first.get("eventId"));
+        assertThat(rows).hasSize(1);
+        assertThat(amount(rows.get(0))).isEqualTo(3);
+    }
+
+    @Test
+    void anOperationIdIsOnlyADuplicateForTheSameRecipientAndType() {
+        UUID orderId = UUID.randomUUID();
+        Map<String, Object> settledEvent = settled(orderId, REQUESTER, COURIER, 3);
+        Map<String, Object> otherCourier = republished(settledEvent);
+        UUID secondCourier = UUID.randomUUID();
+        data(otherCourier).put("courierId", secondCourier.toString());
+        Map<String, Object> compensatedEvent = compensated(orderId, REQUESTER, COURIER, 1);
+        data(compensatedEvent).put("operationId", data(settledEvent).get("operationId"));
+
+        assertThat(handler.handle(json(settledEvent))).isEqualTo(Outcome.NOTIFIED);
+        assertThat(handler.handle(json(otherCourier))).isEqualTo(Outcome.NOTIFIED);
+        assertThat(handler.handle(json(compensatedEvent))).isEqualTo(Outcome.NOTIFIED);
+
+        assertThat(jdbc.queryForObject("select count(*) from notifications where order_id = ?", Integer.class,
+                orderId)).isEqualTo(3);
+    }
+
     @Test
     void anEventIdReusedWithDifferentContentIsRejected() {
         Map<String, Object> event = settled(UUID.randomUUID(), REQUESTER, COURIER, 3);
@@ -177,7 +233,9 @@ class CreditEventHandlerIntegrationTest {
                 event -> data(event).put("courierId", "not-a-uuid"),
                 event -> data(event).put("transferredAmount", 0),
                 event -> data(event).put("transferredAmount", 2.5),
-                event -> data(event).put("transferredAmount", "3"));
+                event -> data(event).put("transferredAmount", "3"),
+                event -> data(event).remove("operationId"),
+                event -> data(event).put("operationId", "not-a-uuid"));
 
         for (Consumer<Map<String, Object>> breakage : breakages) {
             Map<String, Object> event = settled(orderId, REQUESTER, COURIER, 3);

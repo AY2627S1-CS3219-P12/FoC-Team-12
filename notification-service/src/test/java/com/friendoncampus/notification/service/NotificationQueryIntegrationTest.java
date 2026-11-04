@@ -44,8 +44,10 @@ class NotificationQueryIntegrationTest {
     private UUID insert(UUID recipient, int occurredMinutes, int createdMinutes) {
         UUID id = UUID.randomUUID();
         jdbc.update("insert into notifications (id, recipient_id, type, order_id, params, source_event_id, "
-                + "occurred_at, created_at) values (?, ?, 'CREDITS_RECEIVED', ?, '{\"amount\":3}'::jsonb, ?, ?, ?)",
-                id, recipient, UUID.randomUUID(), UUID.randomUUID(), BASE.plusMinutes(occurredMinutes),
+                + "business_key, occurred_at, created_at) "
+                + "values (?, ?, 'CREDITS_RECEIVED', ?, '{\"amount\":3}'::jsonb, ?, ?, ?, ?)",
+                id, recipient, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID().toString(),
+                BASE.plusMinutes(occurredMinutes),
                 BASE.plusMinutes(createdMinutes));
         return id;
     }

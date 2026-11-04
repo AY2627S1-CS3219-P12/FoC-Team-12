@@ -19,7 +19,11 @@ CREATE TABLE notification_inbox (
     fingerprint VARCHAR(64) NOT NULL,
     outcome VARCHAR(32) NOT NULL,
     processed_at TIMESTAMPTZ NOT NULL,
-    CONSTRAINT chk_notification_inbox_outcome CHECK (outcome IN ('NOTIFIED', 'IGNORED'))
+    -- DUPLICATE_OPERATION: a new eventId for a business operation that
+    -- already notified its recipient, so no second notification.
+    CONSTRAINT chk_notification_inbox_outcome CHECK (
+        outcome IN ('NOTIFIED', 'IGNORED', 'DUPLICATE_OPERATION')
+    )
 );
 
 -- One row per recipient of a handled event. The message text is not
@@ -36,12 +40,18 @@ CREATE TABLE notifications (
     params JSONB NOT NULL DEFAULT '{}',
     -- No foreign key: inbox rows are pruned sooner than notifications.
     source_event_id UUID NOT NULL,
+    -- The source business operation, independent of the Kafka event:
+    -- Credit operationId; later orderId:sourceSequence for Order.
+    business_key VARCHAR(128) NOT NULL,
     -- When the fact happened (event occurredAt); lists sort by it.
     occurred_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
     -- NULL = unread.
     read_at TIMESTAMPTZ,
-    CONSTRAINT uq_notification_per_event_recipient UNIQUE (source_event_id, recipient_id)
+    CONSTRAINT uq_notification_per_event_recipient UNIQUE (source_event_id, recipient_id),
+    -- One notification per recipient and type for one business operation,
+    -- even if the producer republishes it under a new eventId.
+    CONSTRAINT uq_notification_business_key UNIQUE (recipient_id, type, business_key)
 );
 
 -- "My notifications, newest first".

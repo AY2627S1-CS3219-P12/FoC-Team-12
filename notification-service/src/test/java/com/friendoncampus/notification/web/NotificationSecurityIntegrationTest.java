@@ -96,7 +96,7 @@ class NotificationSecurityIntegrationTest {
 
     @Test
     void rejectsARequestWithoutAToken() throws Exception {
-        HttpResponse<String> response = get("/api/notifications", null);
+        HttpResponse<String> response = get("/api/notifications/me", null);
 
         assertThat(response.statusCode()).isEqualTo(401);
         assertThat(response.headers().firstValue("WWW-Authenticate")).hasValue("Bearer");
@@ -110,7 +110,7 @@ class NotificationSecurityIntegrationTest {
         when(queryService.listFor(any(), any())).thenReturn(Page.empty());
 
         for (String role : List.of("REQUESTER", "COURIER", "ADMIN")) {
-            HttpResponse<String> response = get("/api/notifications?userId=" + UUID.randomUUID(),
+            HttpResponse<String> response = get("/api/notifications/me?userId=" + UUID.randomUUID(),
                     token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role, Instant.now().plusSeconds(600)));
 
             assertThat(response.statusCode()).as(role).isEqualTo(200);
@@ -130,7 +130,7 @@ class NotificationSecurityIntegrationTest {
                 token(SIGNING_KEY, "not-a-uuid", ISSUER, AUDIENCE, "REQUESTER", valid));
 
         for (String token : invalidTokens) {
-            assertThat(get("/api/notifications", token).statusCode()).isEqualTo(401);
+            assertThat(get("/api/notifications/me", token).statusCode()).isEqualTo(401);
         }
         verify(queryService, never()).listFor(any(), any());
     }
@@ -139,11 +139,13 @@ class NotificationSecurityIntegrationTest {
     void writesAndUnknownPathsAreDenied() throws Exception {
         String token = token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, "REQUESTER", Instant.now().plusSeconds(600));
         HttpResponse<String> post = http.send(HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/api/notifications"))
+                .uri(URI.create("http://localhost:" + port + "/api/notifications/me"))
                 .header("Authorization", "Bearer " + token)
                 .POST(HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
         assertThat(post.statusCode()).isEqualTo(403);
         assertThat(get("/api/other", token).statusCode()).isEqualTo(403);
+        // The pre-contract path is gone; there is no list of everyone's notifications.
+        assertThat(get("/api/notifications", token).statusCode()).isEqualTo(403);
     }
 
     @Test

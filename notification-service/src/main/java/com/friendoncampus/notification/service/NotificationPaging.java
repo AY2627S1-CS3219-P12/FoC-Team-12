@@ -8,7 +8,7 @@ public record NotificationPaging(int page, int size) {
 
     public static final int DEFAULT_PAGE = 0;
     public static final int DEFAULT_SIZE = 20;
-    public static final int MAX_SIZE = 50;
+    public static final int MAX_SIZE = 100;
 
     public static NotificationPaging from(String page, String size) {
         int parsedPage = parseInteger("page", page, DEFAULT_PAGE);

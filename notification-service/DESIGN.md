@@ -18,7 +18,7 @@
 Order ──► order.lifecycle.events (proposed) ─┐
 Credit ─► credit.events ─────────────────────┼─► Notification Service ──► notification-db (private)
                                              │       ▲
-User Service ── JWKS ──► (token verification)│       │ GET /api/notifications (Bearer JWT)
+User Service ── JWKS ──► (token verification)│       │ GET /api/notifications/me (Bearer JWT)
                                                  UI ─► Gateway
 ```
 
@@ -26,8 +26,8 @@ User Service ── JWKS ──► (token verification)│       │ GET /api/no
   UUIDs, never foreign keys into other services.
 - **Consumer only.** Notification publishes nothing and calls no other service. The only
   synchronous outbound call is the JWKS fetch.
-- **Reliability:** at-least-once delivery from Kafka, inbox de-duplication by `eventId`, and
-  acknowledgement only after commit.
+- **Reliability:** at-least-once delivery from Kafka, inbox de-duplication by `eventId`, a
+  business key per source operation, and acknowledgement only after commit.
 
 ## What is stored, and what isn't
 
@@ -40,14 +40,20 @@ User Service ── JWKS ──► (token verification)│       │ GET /api/no
 
 ## Data model
 
-`V1__create_notifications.sql` (applied migrations are never edited). The columns and reasons are
-in the [README](README.md#data-model). Differences from the first draft:
+`V1__create_notifications.sql` (not yet applied in any shared environment; once it is, it is never
+edited). The columns and reasons are in the
+[README](README.md#data-model-and-delivery-guarantees). Differences from the first draft:
 
 - **No foreign key from `notifications.source_event_id` to the inbox.** Inbox rows are pruned sooner
   than notifications, and the foreign key would block that. `UNIQUE (source_event_id, recipient_id)`
   still blocks a duplicate row.
 - **No CHECK on `notifications.type`.** Java validates it, so a new type needs no migration.
-  `notification_inbox.outcome` is checked (`NOTIFIED`, `IGNORED`).
+  `notification_inbox.outcome` is checked (`NOTIFIED`, `IGNORED`, `DUPLICATE_OPERATION`).
+- **`business_key` with `UNIQUE (recipient_id, type, business_key)`** (blueprint rule). Credit
+  outcomes get a fresh `eventId` every time Credit processes an operation, including one it already
+  applied, so `eventId` alone cannot stop a reconciliation replay from notifying twice. The key is
+  Credit's `operationId`; for Order it will be `orderId:sourceSequence`. The handler looks the key up
+  before inserting, so a repeat is recorded as `DUPLICATE_OPERATION` and acknowledged.
 
 ## Event mapping
 
@@ -80,61 +86,99 @@ The actor (`actor.userId`) is never notified.
 | T12 `→ PICKED_UP` | requester | `ORDER_PICKED_UP` |
 | T13 `→ DELIVERED` | requester | `ORDER_DELIVERED` |
 | T14 `→ COMPLETED` | courier | `ORDER_COMPLETED` |
-| T1, T4, T5, T5a, T6 | nobody (the requester acted, or no one else is involved) | not published |
+| T1, T4, T5, T5a, T6 | nobody (the requester acted, or no one else is involved) | recorded `IGNORED` |
 
 The courier gets two notifications for T11 and T14: `ORDER_CANCELLED` + `CREDITS_COMPENSATED`, and
-`ORDER_COMPLETED` + `CREDITS_RECEIVED`. Proposal: keep both, so the lifecycle news is not delayed
-by Credit. **To confirm with the team.**
+`ORDER_COMPLETED` + `CREDITS_RECEIVED`. Both are kept, so the lifecycle news is not delayed by
+Credit (approved 2026-11-04).
 
 ## Proposed contract: `OrderTransitioned` on `order.lifecycle.events`
 
-**Status: proposed, not approved.** Copy into the shared blueprint only after approval. Until then
-nothing publishes or consumes it.
+**Status: proposed, not approved.** The shape is the shared one in
+[n2h-events.schema.json](../docs/contracts/n2h-events.schema.json) (example in
+[events.examples.json](../docs/contracts/events.examples.json)); Chat consumes the same event, so
+neither consumer renames fields. Until it is approved nothing publishes or consumes it.
 
 | Item | Proposal |
 | --- | --- |
 | Producer | Order Service (XueTing), through its existing transactional outbox |
-| Consumer | Notification Service only, group `notification-service` |
+| Consumers | Notification (group `notification-service`) and Chat (group `chat-service-timeline`) |
 | Topic | `order.lifecycle.events`, 3 partitions, 7-day retention; `order.lifecycle.events.DLT`, 1 partition, 30 days |
 | Key | Order UUID, so one errand's events stay in order |
 | Why a new topic | Credit rejects unknown event types on `order.events`, so adding them there would force a Credit change |
 | Envelope | The blueprint's required envelope: `eventType` = `OrderTransitioned`, `aggregateType` = `Order`, `aggregateVersion` = the order version after the change, `producer` = `order-service`, the order's `correlationId`, `causationId` = the Credit outcome's `eventId` for T2, T2b, T3 and T5b, otherwise null, and `actor` |
-| Operation identity | `eventId` only; there is no `operationId`, because no credit effect is requested |
-| Duplicates | The Notification inbox ignores a repeated `eventId`. Order writes exactly one outbox row per applied transition and none for a duplicate request |
+| Operation identity | `eventId` per message; `orderId` + `sourceSequence` per transition. There is no `operationId`, because no credit effect is requested |
+| Duplicates | The Notification inbox ignores a repeated `eventId`; the business key `orderId:sourceSequence` ignores the same transition under a new `eventId`. Order writes exactly one outbox row per applied transition and none for a duplicate or rejected request |
 | Failure and retry | Order's outbox relay retries until Kafka acknowledges. Notification retries transient failures three times and then dead-letters; rejected events go straight to the DLT |
-| Reconciliation | Notifications are informational, so a lost event means a missing notification, not a wrong balance. A DLT record can be replayed after it is fixed |
-| Observability | Both sides log `eventId`, `eventType`, `correlationId` and outcome; DLT counts are monitored with the others |
+| Reconciliation | Notifications are informational, so a lost event means a missing notification, not a wrong balance. A gap in `sourceSequence` is logged, never filled by guessing. A DLT record can be replayed after it is fixed |
+| Observability | Both sides log `eventId`, `eventType`, `correlationId`, `orderId`, `sourceSequence` and outcome; DLT counts are monitored with the others |
 
-`data`:
+`data` (an acceptance):
 
 ```json
 {
   "orderId": "513ea56a-41d5-49ad-b6c5-df81e2dd2b25",
-  "transition": "T8",
-  "action": "ACCEPT",
+  "requesterId": "1fd9b5c8-16cc-4460-a1cc-bc5ce0347a97",
+  "previousCourierId": null,
+  "courierId": "5b0f3c1e-8a52-4f8e-9d37-2c1b6e4a7f10",
   "fromState": "OPEN",
   "toState": "ACCEPTED",
-  "requesterId": "1fd9b5c8-16cc-4460-a1cc-bc5ce0347a97",
-  "courierId": "5b0f3c1e-8a52-4f8e-9d37-2c1b6e4a7f10",
-  "title": "Buy coffee",
-  "creditReward": 3,
-  "terminalReason": null,
-  "occurredAt": "2026-10-30T09:15:00Z"
+  "action": "ACCEPT",
+  "sourceSequence": 4,
+  "reasonCode": null,
+  "snapshot": {
+    "orderId": "513ea56a-41d5-49ad-b6c5-df81e2dd2b25",
+    "requesterId": "1fd9b5c8-16cc-4460-a1cc-bc5ce0347a97",
+    "courierId": "5b0f3c1e-8a52-4f8e-9d37-2c1b6e4a7f10",
+    "status": "ACCEPTED",
+    "title": "Buy coffee",
+    "description": "Flat white from the library cafe",
+    "creditReward": 3,
+    "pickupDeadline": "2026-10-30T10:00:00Z",
+    "pickupLocationId": "…",
+    "dropoffLocationId": "…",
+    "pickupLocationName": "Library cafe",
+    "dropoffLocationName": "Block E lobby"
+  }
 }
 ```
 
-- `action` uses Order's history actions (`OPEN`, `FAIL_RESERVATION`, `ACCEPT`, `WITHDRAW`,
-  `PICK_UP`, `DELIVER`, `COMPLETE`, `CANCEL`, `EXPIRE`, `REWARD_CHANGE_REJECTED`).
-- **`courierId` is the courier before the change.** Withdrawal (T9, T10) and cancellation after
-  acceptance (T11) clear the courier on the order, but the event must still name them so they can
-  be told.
-- `title` is a snapshot at the time of the change, so later edits don't rewrite past
-  notifications.
+- `action` is one of `SUBMIT`, `OPEN`, `FAIL_RESERVATION`, `CANCEL`, `EXPIRE`, `ACCEPT`,
+  `WITHDRAW`, `PICK_UP`, `DELIVER`, `COMPLETE`, `EDIT`, `REWARD_CHANGE_APPLIED`,
+  `REWARD_CHANGE_REJECTED`. Details-only edits are published too (`fromState` = `toState`), because
+  Chat's timeline needs them; Notification records them as `IGNORED`.
+- **`previousCourierId` keeps the courier a transition removed.** Withdrawal (T9, T10) and
+  cancellation after acceptance (T11) clear `courierId`, so the recipient for those rows is
+  `previousCourierId`. `snapshot.status` equals `toState`.
+- `reasonCode` is the safe, approved reason for `RESERVATION_FAILED` and rejected reward changes;
+  otherwise null. Notification shows only approved codes, never free text.
+- `snapshot` is the order as it was right after the change, so later edits do not rewrite past
+  notifications and Notification never calls Order.
 
-## Proposed shared changes (awaiting approval)
+### `sourceSequence`
 
-Each shared file has one nominated editor and needs review from the affected owners
-([root AGENTS.md](../AGENTS.md)). Nothing below is changed by iterations 0–2.
+A per-order counter for published transitions, from the shared rule "starts at 1 and is contiguous
+per source/stream/aggregate, not entity version" ([contract notes](../docs/contracts/README.md)).
+
+- **Only committed transitions take a number.** Order increments it in the same transaction that
+  writes the transition and its outbox row; a rejected or rolled-back request (a late accept, a
+  race loser, a repeated action) takes none. So consumers can treat a gap as a missing event.
+- **Not the JPA `version`.** That also changes for writes that publish nothing, such as Credit
+  status updates, so it would leave gaps.
+- **Lazy expiry** (an action on an overdue OPEN order) commits `OPEN → EXPIRED` with the next number
+  and a `SYSTEM` actor, then rejects the action. The caller only triggered it, so the expiry is
+  not attributed to them and the requester is still notified.
+- Order needs a new `source_sequence` column for this; it is part of iteration 4.
+
+Example: submit (1), opened (2), title edited (3), Alice accepts (4), Alice withdraws (5), Bob
+accepts (6). The requester gets `ORDER_ACCEPTED` twice, keys `513ea56a…:4` and `513ea56a…:6`;
+an accept after expiry adds nothing.
+
+## Planned shared changes
+
+The plan was approved on 2026-11-04 (iteration 0). Each shared file still has one nominated editor
+and needs review from the affected owners when it is changed ([root AGENTS.md](../AGENTS.md)).
+Nothing below is changed by iterations 0–2a.
 
 | Area | Change | Affected owners |
 | --- | --- | --- |
@@ -153,16 +197,27 @@ Each shared file has one nominated editor and needs review from the affected own
 Approved with the iteration 0–2 brief (2026-11-02):
 - Failed `credit.events` records go to the shared `credit.events.DLT`; no new DLT topic.
 - Any session role, including `ADMIN`, may read; each user reads only their own notifications.
-- `GET /api/notifications` returns stored rows from iteration 1 on.
+- `GET /api/notifications` returns stored rows from iteration 1 on (moved to `/me`, below).
 - The requester gets no notification for `CourierCompensated`.
 
+Approved with the `read-api` brief (2026-11-03):
+- The read API follows the shared contract: `GET /api/notifications/me`, `content`/`totalElements`,
+  size 1–100, server-rendered `message` and `readAt`.
+- Credit notifications are also de-duplicated by `operationId`; a repeat is `DUPLICATE_OPERATION`.
+- `OrderTransitioned` uses the shared schema (`previousCourierId`, `reasonCode`, `snapshot`,
+  `sourceSequence`) instead of this document's first draft.
+
+Approved with iteration 0 (2026-11-04):
+- The contract proposal and the [planned shared changes](#planned-shared-changes).
+- A separate `order.lifecycle.events` topic rather than more events on `order.events`.
+- The courier keeps both notifications for T11 and T14.
+- **Retention:** delete read notifications after 30 days and every notification after 90 days.
+  Keep inbox rows **at least 30 days**: DLT topics retain records for 30 days, so a replay after the
+  inbox row was pruned would notify twice. Enforced by the retention job (iteration 8); until then
+  nothing is deleted.
+
 To confirm with the team:
-1. A separate `order.lifecycle.events` topic (recommended) rather than more events on `order.events`.
-2. Whether the courier keeps both notifications for T11 and T14.
-3. **Retention.** Proposal: delete read notifications after 30 days and every notification after
-   90 days. Keep inbox rows **at least 30 days**: DLT topics retain records for 30 days, so a
-   replay after the inbox row was pruned would notify twice.
-4. Where the bell lives: in all four headers, or only a Notifications page linked from the main page.
+1. Where the bell lives: in all four headers, or only a Notifications page linked from the main page.
 
 Implementation details (no decision needed):
 - `auto-offset-reset=earliest`: on first start the service reads the 7 days still on `credit.events`,
@@ -177,21 +232,24 @@ Each one is a `/foc-iterate-feature notification-…` run.
 
 | # | Iteration | Status |
 |---|---|---|
-| 0 | Contract proposal and shared-change plan (this document) | Done (this change); approvals pending |
-| 1 | Service skeleton: Flyway V1, JWT validation, health, OpenAPI, `GET /api/notifications` | Done (this change) |
-| 2 | `credit.events` consumer: inbox, fingerprint, DLT; `CREDITS_*` notifications | Done (this change) |
-| 3 | Shared wiring: Kafka user and ACLs, Compose, gateway, CI, Kubernetes, network policies | Next; needs the approvals above |
+| 0 | Contract proposal and shared-change plan (this document) | Done; approved 2026-11-04 |
+| 1 | Service skeleton: Flyway V1, JWT validation, health, OpenAPI, notification list | Done |
+| 2 | `credit.events` consumer: inbox, fingerprint, DLT; `CREDITS_*` notifications | Done |
+| 2a | `read-api`: shared-contract list API with messages; `operationId` business key | Done (this change) |
+| 3 | Shared wiring: Kafka user and ACLs, Compose, gateway, CI, Kubernetes, network policies | Next; by the nominated editor |
 | 4 | `order-…`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | After 0 and the topic from 3 |
 | 5 | Order lifecycle consumer and recipient rules | After 4 |
-| 6 | Read API: message text, unread count, mark one or all read | After 1 |
+| 6 | Read state: `PATCH /api/notifications/me/{id}/read`, unread count | After 1 |
 | 7 | UI: Notifications page and polled bell badge; header links by each owner | After 3 and 6 |
 | 8 | Retention job and monitoring (consumer lag, DLT count); server-sent events if time allows | After 2 and 5 |
 
 ## Verification
 
 - **Every iteration:** `cd notification-service && ./mvnw -B verify` with JDK 17 and Docker running.
-- **Handler:** each mapping, the IGNORED case, duplicates, `EVENT_ID_CONFLICT`, and every envelope
-  or field violation rejected with nothing stored.
+- **Handler:** each mapping, the IGNORED case, duplicates, the same `operationId` under a new
+  `eventId` (`DUPLICATE_OPERATION`), `EVENT_ID_CONFLICT`, and every envelope or field violation
+  rejected with nothing stored.
+- **Read API:** the contract shape, each type's message, paging limits 1–100.
 - **Kafka:** a published event becomes a notification, a redelivery stays at one row, and a
   rejected event reaches the DLT with its key and the `notification-service` group header.
 - **Security:** `401` without a valid token, every role reads only its own `sub`, and other

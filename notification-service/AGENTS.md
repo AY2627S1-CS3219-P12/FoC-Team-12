@@ -28,6 +28,6 @@ changes, Credit arithmetic, Chat storage, email verification or Admin case polic
 Use Java 17, Spring Boot, Maven Wrapper, PostgreSQL, JPA transactions, Flyway, Actuator, OpenAPI and
 User-contract RS256/JWKS validation, as Order Service does. Never edit applied migrations. Read
 [README](README.md) for behaviour and verification and [DESIGN.md](DESIGN.md) for the iteration plan
-and the shared changes still awaiting approval. Keep tests/README/CI current with the code; shared
+and the planned shared changes. Keep tests/README/CI current with the code; shared
 gateway/Compose/broker/env/CI changes use the nominated editor/affected-review rule. Use the root
 `$foc-iterate-feature` workflow, one bounded outcome with live UI where applicable.

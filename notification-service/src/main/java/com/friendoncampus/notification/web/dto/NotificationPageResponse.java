@@ -8,22 +8,22 @@ import com.friendoncampus.notification.domain.Notification;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-/** A page of notifications. Field names match the Order and Supplier list responses. */
+/** A page of notifications; the shared contract's {@code NotificationPage} schema. */
 @Schema(description = "Page of notifications and pagination metadata")
 public record NotificationPageResponse(
         @Schema(description = "Notifications in the requested page, newest first")
-        List<NotificationResponse> items,
+        List<NotificationResponse> content,
         @Schema(description = "Zero-based page number", example = "0", minimum = "0")
         int page,
-        @Schema(description = "Requested page size", example = "20", minimum = "1", maximum = "50")
+        @Schema(description = "Requested page size", example = "20", minimum = "1", maximum = "100")
         int size,
         @Schema(description = "Number of the caller's notifications", example = "21", minimum = "0")
-        long totalItems,
+        long totalElements,
         @Schema(description = "Number of available pages", example = "2", minimum = "0")
         int totalPages) {
 
     public NotificationPageResponse {
-        items = List.copyOf(items);
+        content = List.copyOf(content);
     }
 
     public static NotificationPageResponse from(Page<Notification> notifications) {

@@ -43,6 +43,10 @@ public class Notification {
     @Column(name = "source_event_id", nullable = false)
     private UUID sourceEventId;
 
+    /** The source business operation, so a republished event cannot notify twice. */
+    @Column(name = "business_key", nullable = false, length = 128)
+    private String businessKey;
+
     @Column(name = "occurred_at", nullable = false)
     private OffsetDateTime occurredAt;
 
@@ -56,13 +60,14 @@ public class Notification {
     }
 
     public Notification(UUID id, UUID recipientId, NotificationType type, UUID orderId, String params,
-            UUID sourceEventId, OffsetDateTime occurredAt, OffsetDateTime createdAt) {
+            UUID sourceEventId, String businessKey, OffsetDateTime occurredAt, OffsetDateTime createdAt) {
         this.id = id;
         this.recipientId = recipientId;
         this.type = type;
         this.orderId = orderId;
         this.params = params;
         this.sourceEventId = sourceEventId;
+        this.businessKey = businessKey;
         this.occurredAt = occurredAt;
         this.createdAt = createdAt;
     }
@@ -89,6 +94,10 @@ public class Notification {
 
     public UUID getSourceEventId() {
         return sourceEventId;
+    }
+
+    public String getBusinessKey() {
+        return businessKey;
     }
 
     public OffsetDateTime getOccurredAt() {

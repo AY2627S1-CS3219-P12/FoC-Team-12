@@ -28,7 +28,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * {@code userId} parameter, so nobody can ask for another user's notifications.
  */
 @RestController
-@RequestMapping("/api/notifications")
+@RequestMapping("/api/notifications/me")
 @Tag(name = "Notifications", description = "What happened on the signed-in user's errands and credits")
 @SecurityRequirement(name = "bearer-jwt")
 public class NotificationController {
@@ -40,7 +40,7 @@ public class NotificationController {
     }
 
     @Operation(
-            operationId = "listMyNotifications",
+            operationId = "notification_get__api_notifications_me",
             summary = "List my notifications",
             description = "The caller's notifications, newest first by when the fact happened. Any "
                     + "signed-in session role may call it; notifications belong to the account, not the role.")
@@ -65,7 +65,7 @@ public class NotificationController {
                     defaultValue = "0"))
             @RequestParam(required = false) String page,
             @Parameter(description = "Page size", schema = @Schema(type = "integer", minimum = "1",
-                    maximum = "50", defaultValue = "20"))
+                    maximum = "100", defaultValue = "20"))
             @RequestParam(required = false) String size) {
         NotificationPaging paging = NotificationPaging.from(page, size);
         return NotificationPageResponse.from(queryService.listFor(UUID.fromString(jwt.getSubject()), paging));

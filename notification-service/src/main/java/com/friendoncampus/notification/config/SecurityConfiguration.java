@@ -46,7 +46,7 @@ public class SecurityConfiguration {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Error dispatches must reach the error page, or a 500 would surface as 403.
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/notifications", "/api/notifications/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/notifications/me").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationEntryPoint(problemSecurityHandler)

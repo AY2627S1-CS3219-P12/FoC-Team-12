@@ -1,6 +1,7 @@
 package com.friendoncampus.notification.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -40,7 +41,7 @@ import com.friendoncampus.notification.service.NotificationPaging;
 import com.friendoncampus.notification.service.NotificationQueryService;
 import com.friendoncampus.notification.web.error.ApiExceptionHandler;
 
-/** {@code GET /api/notifications}: paging defaults and limits, response shape and the recipient. */
+/** {@code GET /api/notifications/me}: paging defaults and limits, response shape, messages and the recipient. */
 class NotificationControllerTest {
 
     private static final UUID CALLER = UUID.fromString("97947588-bb2e-42f2-91ba-9abf8e15a8e7");
@@ -70,25 +71,35 @@ class NotificationControllerTest {
         SecurityContextHolder.clearContext();
     }
 
-    @Test
-    void listsTheCallersNotificationsWithDefaultPaging() throws Exception {
-        OffsetDateTime occurredAt = OffsetDateTime.of(2026, 10, 30, 9, 15, 0, 0, ZoneOffset.UTC);
-        Notification notification = new Notification(UUID.randomUUID(), CALLER, NotificationType.CREDITS_RECEIVED,
-                ORDER_ID, "{\"amount\":3}", UUID.randomUUID(), occurredAt, occurredAt.plusSeconds(1));
+    private static final OffsetDateTime OCCURRED_AT = OffsetDateTime.of(2026, 10, 30, 9, 15, 0, 0, ZoneOffset.UTC);
+
+    private static Notification notification(NotificationType type, UUID orderId, String params) {
+        return new Notification(UUID.randomUUID(), CALLER, type, orderId, params, UUID.randomUUID(),
+                UUID.randomUUID().toString(), OCCURRED_AT, OCCURRED_AT.plusSeconds(1));
+    }
+
+    private void returns(Notification notification) {
         when(queryService.listFor(eq(CALLER), any()))
                 .thenReturn(new PageImpl<>(List.of(notification), PageRequest.of(0, 20), 1));
+    }
 
-        mockMvc.perform(get("/api/notifications"))
+    @Test
+    void listsTheCallersNotificationsWithDefaultPaging() throws Exception {
+        Notification notification = notification(NotificationType.CREDITS_RECEIVED, ORDER_ID, "{\"amount\":3}");
+        returns(notification);
+
+        mockMvc.perform(get("/api/notifications/me"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].id").value(notification.getId().toString()))
-                .andExpect(jsonPath("$.items[0].type").value("CREDITS_RECEIVED"))
-                .andExpect(jsonPath("$.items[0].orderId").value(ORDER_ID.toString()))
-                .andExpect(jsonPath("$.items[0].params.amount").value(3))
-                .andExpect(jsonPath("$.items[0].read").value(false))
-                .andExpect(jsonPath("$.items[0].occurredAt").exists())
+                .andExpect(jsonPath("$.content[0].id").value(notification.getId().toString()))
+                .andExpect(jsonPath("$.content[0].type").value("CREDITS_RECEIVED"))
+                .andExpect(jsonPath("$.content[0].orderId").value(ORDER_ID.toString()))
+                .andExpect(jsonPath("$.content[0].message").value("You received 3 credits for completing an errand."))
+                .andExpect(jsonPath("$.content[0].occurredAt").exists())
+                .andExpect(jsonPath("$.content[0].readAt").value(nullValue()))
+                .andExpect(jsonPath("$.content[0].params").doesNotExist())
                 .andExpect(jsonPath("$.page").value(0))
                 .andExpect(jsonPath("$.size").value(20))
-                .andExpect(jsonPath("$.totalItems").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.totalPages").value(1));
 
         ArgumentCaptor<NotificationPaging> paging = ArgumentCaptor.forClass(NotificationPaging.class);
@@ -98,47 +109,43 @@ class NotificationControllerTest {
 
     @Test
     void anAccountLevelNotificationHasANullOrderId() throws Exception {
-        OffsetDateTime occurredAt = OffsetDateTime.of(2026, 10, 30, 9, 15, 0, 0, ZoneOffset.UTC);
-        Notification welcome = new Notification(UUID.randomUUID(), CALLER, NotificationType.CREDITS_WELCOME,
-                null, "{\"amount\":10}", UUID.randomUUID(), occurredAt, occurredAt);
-        when(queryService.listFor(eq(CALLER), any()))
-                .thenReturn(new PageImpl<>(List.of(welcome), PageRequest.of(0, 20), 1));
+        returns(notification(NotificationType.CREDITS_WELCOME, null, "{\"amount\":10}"));
 
-        mockMvc.perform(get("/api/notifications"))
+        mockMvc.perform(get("/api/notifications/me"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].type").value("CREDITS_WELCOME"))
-                .andExpect(jsonPath("$.items[0].orderId").doesNotExist());
+                .andExpect(jsonPath("$.content[0].type").value("CREDITS_WELCOME"))
+                .andExpect(jsonPath("$.content[0].orderId").value(nullValue()));
     }
 
-    @Test
-    void aNullTemplateValueIsReturnedAsNull() throws Exception {
-        OffsetDateTime occurredAt = OffsetDateTime.of(2026, 10, 30, 9, 15, 0, 0, ZoneOffset.UTC);
-        Notification notification = new Notification(UUID.randomUUID(), CALLER, NotificationType.CREDITS_RECEIVED,
-                ORDER_ID, "{\"amount\":3,\"reason\":null}", UUID.randomUUID(), occurredAt, occurredAt);
-        when(queryService.listFor(eq(CALLER), any()))
-                .thenReturn(new PageImpl<>(List.of(notification), PageRequest.of(0, 20), 1));
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "CREDITS_WELCOME     | 10 | Welcome! You received 10 credits to get started.",
+            "CREDITS_RECEIVED    | 1  | You received 1 credit for completing an errand.",
+            "CREDITS_COMPENSATED | 2  | You received 2 credits as compensation for a cancelled errand."
+    })
+    void eachTypeHasItsMessage(NotificationType type, int amount, String message) throws Exception {
+        returns(notification(type, ORDER_ID, "{\"amount\":" + amount + "}"));
 
-        mockMvc.perform(get("/api/notifications"))
+        mockMvc.perform(get("/api/notifications/me"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].params.amount").value(3))
-                .andExpect(jsonPath("$.items[0].params.reason").isEmpty());
+                .andExpect(jsonPath("$.content[0].message").value(message));
     }
 
     @Test
     void passesAValidPageAndSize() throws Exception {
-        when(queryService.listFor(eq(CALLER), any())).thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 50), 0));
+        when(queryService.listFor(eq(CALLER), any())).thenReturn(new PageImpl<>(List.of(), PageRequest.of(2, 100), 0));
 
-        mockMvc.perform(get("/api/notifications").param("page", "2").param("size", "50"))
+        mockMvc.perform(get("/api/notifications/me").param("page", "2").param("size", "100"))
                 .andExpect(status().isOk());
 
-        verify(queryService).listFor(CALLER, new NotificationPaging(2, 50));
+        verify(queryService).listFor(CALLER, new NotificationPaging(2, 100));
     }
 
     @Test
     void aUserIdParameterIsIgnoredAndTheTokenSubjectIsUsed() throws Exception {
         when(queryService.listFor(eq(CALLER), any())).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        mockMvc.perform(get("/api/notifications").param("userId", UUID.randomUUID().toString()))
+        mockMvc.perform(get("/api/notifications/me").param("userId", UUID.randomUUID().toString()))
                 .andExpect(status().isOk());
 
         verify(queryService).listFor(eq(CALLER), any());
@@ -150,11 +157,11 @@ class NotificationControllerTest {
             "page, abc",
             "page, ''",
             "size, 0",
-            "size, 51",
+            "size, 101",
             "size, 1.5"
     })
     void rejectsAnInvalidPagingValue(String parameter, String value) throws Exception {
-        mockMvc.perform(get("/api/notifications").param(parameter, value))
+        mockMvc.perform(get("/api/notifications/me").param(parameter, value))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.code").value("INVALID_QUERY"));

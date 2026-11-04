@@ -26,8 +26,9 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Turns {@code credit.events} into notifications, following the event communication blueprint's
- * consumer rules: validate the envelope, deduplicate by {@code eventId} (inbox), then store the
- * inbox receipt and any notification in one transaction. The Kafka listener acknowledges the record
+ * consumer rules: validate the envelope, deduplicate by {@code eventId} (inbox) and by
+ * {@code operationId} (business key), then store the inbox receipt and any notification in one
+ * transaction. The Kafka listener acknowledges the record
  * only after this commits. Recipients come from the event itself; nothing is looked up elsewhere.
  *
  * <p>Only three Credit events notify anyone (see DESIGN.md "Event mapping"). Every other type,
@@ -42,11 +43,16 @@ public class CreditEventHandler {
     private static final String CREDIT_PRODUCER = "credit-service";
     private static final int EVENT_VERSION = 1;
 
-    /** What happened to one received event. DUPLICATE is not stored; the first receipt already is. */
+    /**
+     * What happened to one received event. DUPLICATE (same eventId) is not stored; the first receipt
+     * already is. DUPLICATE_OPERATION is a new eventId for an operation that already notified its
+     * recipient, for example Credit republishing an outcome during reconciliation.
+     */
     public enum Outcome {
         NOTIFIED,
         IGNORED,
-        DUPLICATE
+        DUPLICATE,
+        DUPLICATE_OPERATION
     }
 
     /** One Credit event that notifies someone: who, what, and where the values come from. */
@@ -107,15 +113,37 @@ public class CreditEventHandler {
         UUID correlationId = requiredUuid(envelope, "correlationId");
 
         Mapping mapping = MAPPINGS.get(eventType);
-        Outcome outcome = mapping == null ? Outcome.IGNORED : Outcome.NOTIFIED;
-        if (mapping != null) {
-            notificationRepository.save(notificationFor(envelope, eventId, aggregateId, mapping));
-        }
+        Outcome outcome = mapping == null ? Outcome.IGNORED : notify(envelope, eventId, aggregateId, mapping);
         processedEventRepository.save(new ProcessedEvent(eventId, TOPIC, eventType, aggregateId, correlationId,
                 fingerprint, outcome.name(), OffsetDateTime.now(clock)));
-        log.info("{} credit event eventId={} eventType={} correlationId={}",
-                outcome == Outcome.NOTIFIED ? "Notified for" : "Ignored", eventId, eventType, correlationId);
+        log.info("{} credit event eventId={} eventType={} correlationId={}", switch (outcome) {
+            case NOTIFIED -> "Notified for";
+            case DUPLICATE_OPERATION -> "Ignored repeated operation in";
+            default -> "Ignored";
+        }, eventId, eventType, correlationId);
         return outcome;
+    }
+
+    /**
+     * Stores the notification unless this recipient was already told about the same operation. The
+     * lookup runs before the insert so the inbox row still commits. The unique business key is only a
+     * backstop: a concurrent duplicate fails, rolls back, and on retry is found here.
+     */
+    private Outcome notify(JsonNode envelope, UUID eventId, UUID aggregateId, Mapping mapping) {
+        Notification notification = notificationFor(envelope, eventId, aggregateId, mapping);
+        Optional<Notification> existing = notificationRepository.findByRecipientIdAndTypeAndBusinessKey(
+                notification.getRecipientId(), notification.getType(), notification.getBusinessKey());
+        if (existing.isPresent()) {
+            // Compared as JSON: PostgreSQL jsonb does not keep the original text.
+            JsonNode firstParams = jsonMapper.readTree(existing.get().getParams());
+            if (!firstParams.equals(jsonMapper.readTree(notification.getParams()))) {
+                log.warn("Repeated credit operationId={} has different values: first eventId={}, now eventId={}",
+                        notification.getBusinessKey(), existing.get().getSourceEventId(), eventId);
+            }
+            return Outcome.DUPLICATE_OPERATION;
+        }
+        notificationRepository.save(notification);
+        return Outcome.NOTIFIED;
     }
 
     private Notification notificationFor(JsonNode envelope, UUID eventId, UUID aggregateId, Mapping mapping) {
@@ -135,9 +163,11 @@ public class CreditEventHandler {
             throw reject("INVALID_EVENT", "aggregateId does not match data." + aggregateField);
         }
         UUID recipientId = requiredUuid(data, mapping.recipientField());
+        UUID operationId = requiredUuid(data, "operationId");
         String params = jsonMapper.writeValueAsString(Map.of("amount", positiveInteger(data, mapping.amountField())));
         return new Notification(UUID.randomUUID(), recipientId, mapping.type(),
-                mapping.linksToOrder() ? aggregateId : null, params, eventId, occurredAt, OffsetDateTime.now(clock));
+                mapping.linksToOrder() ? aggregateId : null, params, eventId, operationId.toString(), occurredAt,
+                OffsetDateTime.now(clock));
     }
 
     private JsonNode parse(String json) {
