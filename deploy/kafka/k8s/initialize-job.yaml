@@ -24,8 +24,15 @@ spec:
           imagePullPolicy: IfNotPresent
           command: [/bin/bash, /opt/foc-kafka/initialize.sh]
           env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: KAFKA_BOOTSTRAP_SERVERS
-              value: kafka:9092
+              value: kafka.$(POD_NAMESPACE).svc.cluster.local.:9092
+            # Seven CLI JVMs exceed this local Job's 512Mi budget. Keep effects identical.
+            - name: KAFKA_INIT_PARALLELISM
+              value: "1"
             - name: KAFKA_BIN_DIR
               value: /opt/foc-kafka-cli
             - name: KAFKA_HEAP_OPTS

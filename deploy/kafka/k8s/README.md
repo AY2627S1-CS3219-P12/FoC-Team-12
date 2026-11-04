@@ -3,6 +3,19 @@
 Shared editor: Darryl's infrastructure task. Jun Hui reviews the broker/UI setup; User, Order
 and Credit owners review their connection configuration. No business event contracts change.
 
+Admin's Kubernetes increment adds the existing `admin_service` broker identity and its own
+`admin-kafka-client` Secret while preserving all older credentials. The initializer Job sets
+`KAFKA_INIT_PARALLELISM=1` within its 512Mi budget; the shared script defaults to seven elsewhere.
+No ACL/topic behavior changes. Review [Admin deployment](../../../admin-service/k8s/README.md).
+
+The shared initializer retries idempotent create/config/ACL commands up to three times before
+failing. Its regression test uses fake CLI executables, not a broker. From the repository root,
+run only in a disposable container (PowerShell):
+
+```powershell
+docker run --rm --entrypoint bash -e KAFKA_INITIALIZER_TEST_ONLY=true --mount "type=bind,source=$((Get-Location).Path)/deploy/kafka,target=/opt/foc-kafka,readonly" apache/kafka:4.3.1 /opt/foc-kafka/k8s/test-initialize.sh
+```
+
 This extends the [course's Minikube/Docker/YAML workflow](https://sds-edu.github.io/SDS-Kubernetes-Guide/)
 using a StatefulSet for Kafka's stable identity and persistent storage, a Deployment for the
 stateless UI, ClusterIP Services, ConfigMaps, Secrets and an initialization Job. No Helm/operator,

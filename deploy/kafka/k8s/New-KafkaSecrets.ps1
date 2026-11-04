@@ -14,15 +14,26 @@ if (-not $broker) {
     if ($claim) { throw 'Kafka storage exists without its broker Secret. Recover the original Secret; do not replace credentials.' }
     $passwords = @{}
     foreach ($key in @('KAFKA_ADMIN_PASSWORD', 'KAFKA_BROKER_PASSWORD', 'KAFKA_USER_SERVICE_PASSWORD',
-            'KAFKA_ORDER_SERVICE_PASSWORD', 'KAFKA_CREDIT_SERVICE_PASSWORD', 'KAFKA_UI_BROKER_PASSWORD')) {
+            'KAFKA_ORDER_SERVICE_PASSWORD', 'KAFKA_CREDIT_SERVICE_PASSWORD', 'KAFKA_ADMIN_SERVICE_PASSWORD', 'KAFKA_UI_BROKER_PASSWORD')) {
         $passwords[$key] = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
     }
     Ensure-KafkaSecret 'kafka-broker-secrets' $passwords
     $broker = Read-KafkaSecret 'kafka-broker-secrets'
 }
+# Upgrade only the previously absent Admin identity. Preserve every existing credential.
+if (-not $broker.data.ContainsKey('KAFKA_ADMIN_SERVICE_PASSWORD')) {
+    $client = Read-KafkaSecret 'admin-kafka-client'
+    if ($client) { throw 'Admin client exists without its broker credential; recover matching credentials.' }
+    $value = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+    $broker.data['KAFKA_ADMIN_SERVICE_PASSWORD']=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($value))
+    # Replace carries the observed resourceVersion: concurrent changes conflict, never overwrite.
+    Send-KafkaDocument $broker -Arguments @('replace','-f','-')
+    $value = $null
+    $broker = Read-KafkaSecret 'kafka-broker-secrets'
+}
 $passwords = @{}
 foreach ($key in @('KAFKA_ADMIN_PASSWORD', 'KAFKA_BROKER_PASSWORD', 'KAFKA_USER_SERVICE_PASSWORD',
-        'KAFKA_ORDER_SERVICE_PASSWORD', 'KAFKA_CREDIT_SERVICE_PASSWORD', 'KAFKA_UI_BROKER_PASSWORD')) {
+        'KAFKA_ORDER_SERVICE_PASSWORD', 'KAFKA_CREDIT_SERVICE_PASSWORD', 'KAFKA_ADMIN_SERVICE_PASSWORD', 'KAFKA_UI_BROKER_PASSWORD')) {
     if (-not $broker.data.ContainsKey($key)) { throw "Broker Secret is missing $key; recover it before proceeding." }
     $passwords[$key] = ConvertFrom-KafkaSecretValue $broker.data[$key]
     if ([string]::IsNullOrWhiteSpace($passwords[$key]) -or $passwords[$key] -match '[\r\n]') {
@@ -36,6 +47,11 @@ try {
             KAFKA_PASSWORD = $passwords["KAFKA_$($service.ToUpperInvariant())_SERVICE_PASSWORD"]
         }
     }
+    $adminPassword = $passwords.KAFKA_ADMIN_SERVICE_PASSWORD.Replace('\', '\\').Replace('"', '\"')
+    Ensure-KafkaSecret 'admin-kafka-client' @{
+        SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG = 'org.apache.kafka.common.security.plain.PlainLoginModule required username="admin_service" password="' + $adminPassword + '";'
+    }
+    $adminPassword = $null
     $ui = Read-KafkaSecret 'kafka-ui-secrets'
     $loginName = if ($ui) { ConvertFrom-KafkaSecretValue $ui.data.SPRING_SECURITY_USER_NAME } else { 'kafka-viewer' }
     $loginPassword = if ($ui) { ConvertFrom-KafkaSecretValue $ui.data.SPRING_SECURITY_USER_PASSWORD } else {
