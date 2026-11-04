@@ -5,6 +5,11 @@ metadata:
   namespace: foc-local
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
   selector:
     matchLabels:
       app: user-service
@@ -15,7 +20,7 @@ spec:
     spec:
       containers:
         - name: user-service
-          image: arkanian4/foc-user-service:sha-45c857fbb7f4eb5eac2014f916540346e8e171c0-r39280499271-1
+          image: foc-user-service:local-22bc8cc
           ports:
             - containerPort: 8081
           env:
@@ -37,6 +42,11 @@ spec:
                 secretKeyRef:
                   name: user-service-secrets
                   key: JWT_PRIVATE_KEY
+            - name: USER_SERVICE_TRUSTED_KEYS
+              valueFrom:
+                configMapKeyRef:
+                  name: admin-user-trust
+                  key: USER_SERVICE_TRUSTED_KEYS
             - name: USER_EVENTS_PUBLISHER_ENABLED
               value: "true"
             - name: KAFKA_BOOTSTRAP_SERVERS
@@ -84,14 +94,14 @@ spec:
                   key: ADMIN_BOOTSTRAP_PASSWORD
                   optional: true
             - name: JAVA_TOOL_OPTIONS
-              value: "-XX:MaxRAMPercentage=70.0"
+              value: "-XX:MaxRAMPercentage=70.0 -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1"
           startupProbe:
             httpGet:
               path: /actuator/health
               port: 8081
             periodSeconds: 5
             timeoutSeconds: 3
-            failureThreshold: 60
+            failureThreshold: 120
           readinessProbe:
             httpGet:
               path: /actuator/health

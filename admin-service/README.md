@@ -1,5 +1,8 @@
 # Admin Service
 
+Local Kubernetes deployment: [Admin Minikube guide](k8s/README.md). Its database/PVC and
+credentials are independent of Docker Compose and disposable test stacks.
+
 Owner: Darryl. Java 17 / Spring Boot 4.1.1, PostgreSQL/Flyway, React/TypeScript/Vite.
 Scope: Admin backend/database/dashboard, current User eligibility, case-access callback,
 participant reporting/status, administrator queue/detail/claim, evidence/conversation consumers

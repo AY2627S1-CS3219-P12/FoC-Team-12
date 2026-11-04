@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('gateway', 'supplier', 'credit', 'order')]
+    [ValidateSet('gateway', 'supplier', 'credit', 'order', 'admin')]
     [string] $Service,
     [string] $Profile = 'foc-local',
     [switch] $CheckDatabaseRestart
@@ -47,7 +47,7 @@ function Assert-Http {
 
 $deployment = if ($Service -eq 'gateway') { 'gateway' } else { "$Service-service" }
 Invoke-Kubectl @('rollout', 'status', "deployment/$deployment", '--timeout=300s')
-$port = @{ gateway = 8088; supplier = 8080; credit = 8083; order = 8082 }[$Service]
+$port = @{ gateway = 8088; supplier = 8080; credit = 8083; order = 8082; admin = 8084 }[$Service]
 $base = "http://${deployment}:$port"
 Assert-Http "$base/actuator/health" 200
 if ($Service -eq 'gateway') {
@@ -59,6 +59,14 @@ if ($Service -eq 'gateway') {
 }
 Assert-Http "$base/v3/api-docs" 200
 switch ($Service) {
+    admin {
+        Assert-Http "$base/admin" 200
+        Assert-Http "$base/api/admin/cases" 401
+        Assert-Http "$base/api/admin/cases" 401 -InvalidToken
+        Assert-Http 'http://gateway:8088/admin' 200
+        Assert-Http 'http://gateway:8088/api/admin/cases' 401
+        Assert-Http 'http://gateway:8088/internal/admin/cases/00000000-0000-0000-0000-000000000001/access' 404
+    }
     supplier {
         Assert-Http "$base/suppliers" 200
         Assert-Http "$base/api/suppliers" 200

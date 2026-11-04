@@ -100,7 +100,7 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [gateway, supplier-service, order-service, credit-service]
+                values: [gateway, supplier-service, order-service, credit-service, admin-service]
       ports:
         # L4 policy cannot restrict the other services to just the JWKS HTTP path.
         - protocol: TCP
@@ -354,7 +354,7 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [user-service, order-service, credit-service, kafka, kafka-ui, kafka-init]
+                values: [user-service, order-service, credit-service, admin-service, kafka, kafka-ui, kafka-init]
       ports:
         - protocol: TCP
           port: 9092

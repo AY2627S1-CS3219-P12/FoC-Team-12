@@ -202,3 +202,54 @@ real participant errands. Historical withdrawn-errand discovery also remains Ord
 Manual steps and role requirements are in the Admin README. User GUI acceptance and real Chat
 success paths remain pending. Darryl subsequently requested commit, push and PR creation;
 merge remains outside this task's authorization.
+
+### Admin Kubernetes handoff — 4 November 2026
+
+Darryl approved the bounded Kubernetes brief and this task as nominated shared editor. Admin
+manifests now deploy the existing image plus private PostgreSQL 16 with a retained 5Gi claim,
+cluster-only Services, private Secrets, health probes and explicit default-deny exceptions.
+Gateway/User manifests load existing Admin-support images; no application domain code or wire
+contracts changed. User's existing signing/database/mail Secrets and other pinned callers are
+preserved. New cluster credentials are independent of `.env`, Compose and disposable fixtures.
+Jun Hui and affected owners still review the resulting shared diff before merge; deployment
+authorization is not a recorded independent owner review or production/TLS approval.
+
+Live checks passed in `foc-local`: Admin/User/gateway rollout; seven Admin migrations; replacement
+of only `admin-db-0` retained its PVC UID and all migration records; gateway `/admin` and real
+administrator eligibility; unauthenticated/invalid Admin requests rejected; internal callback
+not publicly routed. Admin's authenticated Kafka consumers are assigned all three partitions of
+both `credit.admin.events` and `user.admin.events`. Existing Admin ACLs were applied idempotently;
+no business commands, synthetic outcomes or financial/account mutations were used for transport
+verification. These results do not establish real Credit processing or User sanction acceptance.
+
+The isolated policy suite passed its full allow/deny matrix and DNS after cold-start repairs;
+live pod-IP probes separately proved Admin -> own DB/User/Kafka and gateway -> Admin, and denied
+Admin -> User DB plus User/gateway -> Admin DB. Actual gateway HTTP checks exercise normal
+Service routing. Secret helpers rerun without rotating credentials. Shell/PowerShell syntax
+checks passed; explicitly test-only CLI mocks verified bounded initialization, retry recovery,
+exhausted failure and invalid configuration. No normal database was seeded/reset.
+
+Cluster GUI verification with Darryl's real account showed Access verified and an empty queue,
+participant mode denying administrator access, and unavailable/retry with no report form when
+Chat was offline. The latter used a read-only nonexistent errand URL to test failure handling,
+not a real eligible-errand success. Queue keyboard filtering also works. Protected GUI results
+do not establish Chat eligibility, complete evidence, conversations or resolution acceptance.
+
+Regular Compose remains running on 8088. Kubernetes is exposed only through the loopback gateway
+tunnel at `http://localhost:8089`; this cluster's data is separate. The user authorized stopping
+only the old disposable Compose test project, whose volumes remain, and raising the existing
+node's Docker CPU limit from two to four. No cluster/profile recreation or storage deletion.
+
+Cold-start attempts exposed CPU/startup pressure, intermittent DNS and existing Order/Credit/
+Supplier startup failures; those services' code/manifests were not changed to hide failures.
+The initializer's seven CLI JVMs exceeded its local budget: Kubernetes now limits concurrency
+to one, uses absolute namespace DNS and bounded idempotent retries. Earlier attempts failed;
+the final `kafka-init-admin-retry` Job completed successfully (1/1), including all topic/config
+and ACL operations. Admin's own cases/actions/decisions remained zero. Final live Admin smoke
+checks also passed after absolute namespace DNS replaced Admin's short dependency names and
+the gateway's Admin destination; an earlier repeat GUI account check had reproduced the DNS
+failure. Existing cluster-wide DNS/startup behavior outside that scope is not declared repaired.
+Admin started before ACL setup once; its listeners were restarted and actual assignment then
+verified. HTTP health alone is not Kafka readiness. Remaining Chat trust/reverse policies, TLS,
+owner review and user manual acceptance stay open. Darryl subsequently requested grouped commits,
+push and PR creation. Merge remains outside this task's authorization.
