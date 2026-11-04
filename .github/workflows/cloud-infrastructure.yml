@@ -1,0 +1,149 @@
+name: AWS staging infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Infrastructure operation
+        required: true
+        type: choice
+        options: [plan-core, apply-core, provision-runtime, destroy-staging]
+      confirmation:
+        description: Type DESTROY foc-staging only for destroy-staging
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-staging-infrastructure
+  cancel-in-progress: false
+
+jobs:
+  infrastructure:
+    runs-on: ubuntu-24.04
+    environment: aws-staging-infra
+    env:
+      AWS_REGION: ap-southeast-1
+      EKS_CLUSTER_NAME: foc-staging
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_github_infra_role_arn: ${{ vars.AWS_INFRA_ROLE_ARN }}
+      TF_VAR_github_deploy_role_arn: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      TF_VAR_budget_email: ${{ vars.AWS_BUDGET_EMAIL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.14.6"
+      - uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_INFRA_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Prepare remote backend
+        id: backend
+        run: |
+          account_id=$(aws sts get-caller-identity --query Account --output text)
+          bucket="foc-team-12-terraform-state-${account_id}-${AWS_REGION}"
+          printf 'bucket = "%s"\nkey = "staging-core/terraform.tfstate"\nregion = "%s"\n' \
+            "$bucket" "$AWS_REGION" > "$RUNNER_TEMP/core.hcl"
+          printf 'bucket = "%s"\nkey = "staging-edge/terraform.tfstate"\nregion = "%s"\n' \
+            "$bucket" "$AWS_REGION" > "$RUNNER_TEMP/edge.hcl"
+          echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
+      - name: Initialize core stack
+        run: terraform -chdir=deploy/aws/terraform/staging-core init -backend-config="$RUNNER_TEMP/core.hcl"
+      - name: Plan core infrastructure
+        if: inputs.operation == 'plan-core'
+        run: terraform -chdir=deploy/aws/terraform/staging-core plan -out="$RUNNER_TEMP/core.tfplan"
+      - name: Apply core infrastructure
+        if: inputs.operation == 'apply-core'
+        run: terraform -chdir=deploy/aws/terraform/staging-core apply -auto-approve
+      - name: Verify runtime provisioning preconditions
+        if: inputs.operation == 'provision-runtime'
+        run: |
+          test -n "$TF_VAR_budget_email"
+          for name in user-service-secrets user-mail-secrets supplier-service-secrets order-service-secrets \
+            credit-service-secrets admin-service-secrets kafka-broker-secrets kafka-ui-secrets; do
+            aws secretsmanager get-secret-value --secret-id "foc/staging/$name" --query VersionId --output text >/dev/null
+          done
+      - uses: docker/setup-buildx-action@v4
+        if: inputs.operation == 'provision-runtime'
+      - uses: aws-actions/amazon-ecr-login@v2
+        if: inputs.operation == 'provision-runtime'
+      - name: Build initial immutable images
+        if: inputs.operation == 'provision-runtime'
+        id: images
+        run: |
+          registry="${{ steps.backend.outputs.account_id }}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          tag="bootstrap-${GITHUB_SHA}-r${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          for service in gateway-service user-service supplier-service order-service credit-service admin-service; do
+            docker buildx build --platform linux/amd64 --push \
+              -t "$registry/foc-$service:$tag" "$service"
+          done
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - uses: azure/setup-helm@v4
+        if: inputs.operation == 'provision-runtime' || inputs.operation == 'destroy-staging'
+        with:
+          version: v3.19.0
+      - name: Deploy initial Kubernetes runtime
+        if: inputs.operation == 'provision-runtime'
+        env:
+          GATEWAY_IMAGE: ${{ steps.images.outputs.registry }}/foc-gateway-service:${{ steps.images.outputs.tag }}
+          USER_IMAGE: ${{ steps.images.outputs.registry }}/foc-user-service:${{ steps.images.outputs.tag }}
+          SUPPLIER_IMAGE: ${{ steps.images.outputs.registry }}/foc-supplier-service:${{ steps.images.outputs.tag }}
+          ORDER_IMAGE: ${{ steps.images.outputs.registry }}/foc-order-service:${{ steps.images.outputs.tag }}
+          CREDIT_IMAGE: ${{ steps.images.outputs.registry }}/foc-credit-service:${{ steps.images.outputs.tag }}
+          ADMIN_IMAGE: ${{ steps.images.outputs.registry }}/foc-admin-service:${{ steps.images.outputs.tag }}
+        run: |
+          RDS_HOST=$(aws ssm get-parameter --name /foc/staging/rds-host --query Parameter.Value --output text)
+          RDS_MASTER_SECRET_ARN=$(aws ssm get-parameter --name /foc/staging/rds-master-secret-arn --query Parameter.Value --output text)
+          ALB_SECURITY_GROUP_ID=$(aws ssm get-parameter --name /foc/staging/alb-security-group-id --query Parameter.Value --output text)
+          export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID
+          deploy/aws/scripts/deploy-platform.sh
+      - name: Resolve private ALB
+        if: inputs.operation == 'provision-runtime'
+        id: alb
+        run: deploy/aws/scripts/resolve-alb.sh
+      - name: Create CloudFront edge
+        if: inputs.operation == 'provision-runtime'
+        env:
+          TF_VAR_alb_arn: ${{ steps.alb.outputs.alb_arn }}
+          TF_VAR_alb_dns_name: ${{ steps.alb.outputs.alb_dns_name }}
+        run: |
+          terraform -chdir=deploy/aws/terraform/staging-edge init -backend-config="$RUNNER_TEMP/edge.hcl"
+          terraform -chdir=deploy/aws/terraform/staging-edge apply -auto-approve
+      - name: Smoke-test initial deployment
+        if: inputs.operation == 'provision-runtime'
+        run: |
+          PUBLIC_URL=$(aws ssm get-parameter --name /foc/staging/public-url --query Parameter.Value --output text)
+          export PUBLIC_URL
+          deploy/aws/scripts/smoke-test.sh
+      - name: Validate destructive confirmation
+        if: inputs.operation == 'destroy-staging'
+        run: test "${{ inputs.confirmation }}" = 'DESTROY foc-staging'
+      - name: Destroy CloudFront edge before its private origin
+        if: inputs.operation == 'destroy-staging'
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          terraform -chdir=deploy/aws/terraform/staging-edge init -backend-config="$RUNNER_TEMP/edge.hcl"
+          if terraform -chdir=deploy/aws/terraform/staging-edge state list | grep -q '^aws_cloudfront_distribution.gateway$'; then
+            TF_VAR_alb_arn=$(terraform -chdir=deploy/aws/terraform/staging-edge output -raw origin_alb_arn)
+            TF_VAR_alb_dns_name=$(terraform -chdir=deploy/aws/terraform/staging-edge output -raw origin_alb_dns_name)
+            export TF_VAR_alb_arn TF_VAR_alb_dns_name
+            terraform -chdir=deploy/aws/terraform/staging-edge destroy -auto-approve
+          else
+            echo 'Edge stack is already empty.'
+          fi
+      - name: Remove Kubernetes-owned load balancers and volumes
+        if: inputs.operation == 'destroy-staging'
+        run: |
+          kubectl -n foc-staging delete ingress gateway --ignore-not-found
+          kubectl delete namespace foc-staging --ignore-not-found --wait=true --timeout=20m
+      - name: Destroy core staging infrastructure
+        if: inputs.operation == 'destroy-staging'
+        run: terraform -chdir=deploy/aws/terraform/staging-core destroy -auto-approve

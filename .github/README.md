@@ -19,15 +19,30 @@ repositories public so teammates' local clusters can pull without registry crede
 or mismatched credentials fail the publishing job with a setup message; existing CI checks
 still run. All affected service owners must review shared CI changes before merge.
 
+## AWS staging automation
+
+The existing Docker Hub release remains the portable image-publishing path. AWS staging adds two
+separate OIDC workflows:
+
+- `cloud-infrastructure.yml` is manually approved and performs core plan/apply, initial runtime
+  provisioning or guarded teardown.
+- `cloud-deploy.yml` runs only when `AWS_STAGING_ENABLED=true`, publishes immutable ECR images after
+  successful main CI and rolls out through EKS with smoke-test rollback.
+
+No AWS access key is stored in GitHub. The protected `aws-staging-infra` and
+`aws-staging-deploy` environments provide short-lived role sessions. Setup, variables, costs,
+secret initialization and teardown are documented in [the AWS staging guide](../deploy/aws/README.md).
+
 ## What is published
 
 On each push to `main`, CI compares the pushed commit to the previous `main` commit. Changes
 under a service directory select that image, including frontend, tests and Dockerfiles. The
 service's `k8s/` files and root-level Markdown documentation are excluded: committing a deployment
-image-tag update must not publish another image. Changes under `.github/workflows/` or
-`.github/scripts/` select all five images. Unrelated root documentation changes publish nothing.
+image-tag update must not publish another image. Changes under `.github/workflows/`,
+`.github/scripts/` or `deploy/aws/` select all six images. Unrelated root documentation changes
+publish nothing.
 If the previous commit is unavailable, CI
-conservatively selects all five. A rename between services selects both affected images.
+conservatively selects all six. A rename between services selects both affected images.
 
 Images retain the existing repository names, for example `arkanian4/foc-order-service`.
 The tag is `sha-<full-commit-SHA>-r<workflow-run-ID>-<attempt>`. The suffix prevents reruns from

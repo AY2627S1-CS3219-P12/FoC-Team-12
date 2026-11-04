@@ -1,0 +1,38 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace-storage.yaml
+  - external-secrets.yaml
+  - applications.yaml
+  - autoscaling.yaml
+  - ingress.yaml
+  - ../../../kafka/k8s/broker.yaml
+  - ../../../kafka/k8s/ui.yaml
+images:
+  - { name: foc-gateway-service, newName: foc-gateway-service, newTag: bootstrap }
+  - { name: foc-user-service, newName: foc-user-service, newTag: bootstrap }
+  - { name: foc-supplier-service, newName: foc-supplier-service, newTag: bootstrap }
+  - { name: foc-order-service, newName: foc-order-service, newTag: bootstrap }
+  - { name: foc-credit-service, newName: foc-credit-service, newTag: bootstrap }
+  - { name: foc-admin-service, newName: foc-admin-service, newTag: bootstrap }
+patches:
+  # The reusable Kafka base is namespace-neutral; application manifests name foc-staging directly.
+  # Avoid a global namespace transformer because Kustomize cannot infer that the two CRDs below
+  # (ClusterSecretStore and IngressClassParams) are cluster-scoped without their OpenAPI schemas.
+  - target:
+      kind: ^(Service|ConfigMap|StatefulSet|Deployment)$
+      name: ^kafka(-headless|-config|-ui)?$
+    patch: |-
+      - op: add
+        path: /metadata/namespace
+        value: foc-staging
+  - target: { kind: StatefulSet, name: kafka }
+    patch: |-
+      - op: add
+        path: /spec/volumeClaimTemplates/0/spec/storageClassName
+        value: foc-encrypted-gp3
+  - target: { kind: Deployment, name: kafka-ui }
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: foc-staging

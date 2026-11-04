@@ -24,7 +24,8 @@ class ImagePlanTests(unittest.TestCase):
             "order-service/pom.xml", "supplier-service/Dockerfile", "order-service/src/A.java"]))
 
     def test_workflow_and_publisher_changes_select_all_services(self):
-        for path in (".github/workflows/ci.yml", ".github/scripts/image_plan.py"):
+        for path in (".github/workflows/ci.yml", ".github/scripts/image_plan.py",
+                     "deploy/aws/terraform/staging-core/main.tf"):
             self.assertEqual(list(image_plan.SERVICES), image_plan.select_services([path]))
 
     def test_unrelated_docs_do_not_publish(self):
