@@ -34,6 +34,17 @@ is trimmed 1-2000 characters (proposed bound). Action retry must never allocate 
 
 ## Validation and authoritative effects
 
+### Admin lifecycle delivery refinement
+
+The approved Admin producer implementation delivers original stored envelopes to `admin.events`
+with case ID keys and contiguous `data.sourceSequence` order per case. It uses a fenced Kafka
+transactional producer; consumers must read committed records and deduplicate original event IDs.
+Database progress is recorded after Kafka commit, so a crash can repeat an identical envelope.
+Admin owns durable retry/backlog recovery and blocks missing/invalid sequences rather than
+inventing facts. This transport refinement does not change the draft wire fields or constitute
+Chat/Credit owner approval. Chat's projection/consumer remains an external dependency.
+
+
 Admin checks current active admin, reviewer, UNDER_REVIEW, historical target and reason before
 publishing. Owner validates service principal/topic ACL, envelope/producer/actor and current
 admin eligibility per Chat security profile. No bearer credentials in Kafka. User outage retries
