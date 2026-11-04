@@ -9,7 +9,9 @@ messages, the historical timeline projection and coverage.
 Admin owns durable credit-action tracking, command outbox and outcome inbox. Credit exclusively
 applies ledger/balance effects; never implement financial effects or fabricate producer outcomes
 here. Do not fabricate Chat eligibility/evidence. Admin tracks reversible ban requests; User
-alone applies sanctions, protects accounts and owns reactivation/audit. Resolution remains later work.
+alone applies sanctions, protects accounts and owns reactivation/audit. Resolution owns the immutable
+decision and atomic CaseResolved outbox entry; it must fail closed on stale/incomplete evidence
+or uncertain actions, and never call Chat while holding the case lock.
 Shared gateway, deployment and CI changes require a separately nominated editor.
 
 Before final integration or acceptance, read `INTEGRATION_READINESS.md` for unresolved owner

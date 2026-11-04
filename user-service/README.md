@@ -434,6 +434,10 @@ password-reset flows.
 When sign-in is requested from an Admin participant report, successful authentication returns
 to the same report or errand-scoped report form. This participant return path does not select
 Admin mode or grant administrator access; Admin enforces report privacy on its own API.
+Sign-in also preserves approved errand and administrator case/queue destinations. For an Admin
+destination, a backend-advertised ADMIN assignment permits a real session-role request before
+navigation; no browser-only flag grants access. Selecting Switch to Admin from Profile now opens
+the Admin queue. Accounts without the assignment never receive an ADMIN token through this flow.
 
 Successful registration moves directly to six accessible OTP boxes with the registered email already set;
 entering the sixth digit automatically submits the verification. The resend button displays its 90-second

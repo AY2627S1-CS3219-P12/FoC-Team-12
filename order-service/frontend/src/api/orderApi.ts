@@ -63,7 +63,8 @@ export type PoolQuery = {
   page: number
 }
 
-export type OrderAction = 'accept' | 'withdraw' | 'pickup' | 'deliver' | 'complete' | 'cancel'
+export type OrderAction =
+  'accept' | 'withdraw' | 'pickup' | 'deliver' | 'complete' | 'cancel'
 
 /** A problem+json rejection; `code` is the Order error code (e.g. ORDER_ALREADY_ACCEPTED). */
 export class OrderApiError extends Error {
@@ -106,13 +107,52 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       // Keep the generic message when the body is not problem+json.
     }
-    throw new OrderApiError(response.status, detail, code, currentState, fieldErrors)
+    throw new OrderApiError(
+      response.status,
+      detail,
+      code,
+      currentState,
+      fieldErrors,
+    )
   }
   return (await response.json()) as T
 }
 
+export type ReportContext = {
+  orderId: string
+  status: 'OWN_REPORT' | 'ELIGIBLE' | 'INELIGIBLE'
+  caseId: string | null
+  state: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | null
+}
+export async function fetchReportContext(
+  orderId: string,
+): Promise<ReportContext> {
+  const value = await request<ReportContext>(
+    `/api/admin/orders/${encodeURIComponent(orderId)}/report-context`,
+    { cache: 'no-store' },
+  )
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (
+    !value ||
+    value.orderId !== orderId ||
+    !['OWN_REPORT', 'ELIGIBLE', 'INELIGIBLE'].includes(value.status) ||
+    (value.status === 'OWN_REPORT'
+      ? typeof value.caseId !== 'string' ||
+        !uuid.test(value.caseId) ||
+        !['OPEN', 'UNDER_REVIEW', 'RESOLVED'].includes(value.state || '')
+      : value.caseId !== null || value.state !== null)
+  ) {
+    throw new OrderApiError(503, 'Reporting access could not be verified.')
+  }
+  return value
+}
+
 export function fetchOpenPool(query: PoolQuery): Promise<OrderPage> {
-  const params = new URLSearchParams({ sort: query.sort, page: String(query.page), size: '20' })
+  const params = new URLSearchParams({
+    sort: query.sort,
+    page: String(query.page),
+    size: '20',
+  })
   if (query.minReward) params.set('minReward', String(query.minReward))
   if (query.maxReward) params.set('maxReward', String(query.maxReward))
   return request<OrderPage>(`/api/orders?${params}`)
@@ -123,7 +163,9 @@ export function fetchOrder(id: string): Promise<Order> {
 }
 
 export function fetchHistory(id: string): Promise<OrderTransition[]> {
-  return request<OrderTransition[]>(`/api/orders/${encodeURIComponent(id)}/history`)
+  return request<OrderTransition[]>(
+    `/api/orders/${encodeURIComponent(id)}/history`,
+  )
 }
 
 /** The caller's own errands: `active` (in progress) or `past` (finished), optionally one state. */
@@ -139,9 +181,10 @@ export function fetchMyOrders(
 }
 
 export function performAction(id: string, action: OrderAction): Promise<Order> {
-  return request<Order>(`/api/orders/${encodeURIComponent(id)}/${action}`, { method: 'POST' })
+  return request<Order>(`/api/orders/${encodeURIComponent(id)}/${action}`, {
+    method: 'POST',
+  })
 }
-
 
 /** Body of POST /api/orders (CreateOrderRequest). Locations come from Supplier Service. */
 export type CreateOrderInput = {
@@ -158,7 +201,10 @@ export type CreateOrderInput = {
 /** Body of PATCH /api/orders/{id} (UpdateOrderRequest): every editable field plus the version read. */
 export type UpdateOrderInput = CreateOrderInput & { version: number }
 
-export function updateOrder(id: string, input: UpdateOrderInput): Promise<Order> {
+export function updateOrder(
+  id: string,
+  input: UpdateOrderInput,
+): Promise<Order> {
   return request<Order>(`/api/orders/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

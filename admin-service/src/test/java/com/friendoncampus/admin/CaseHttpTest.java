@@ -22,6 +22,12 @@ class CaseHttpTest {
     @MockitoBean CaseService cases;
     UUID actor=UUID.randomUUID(), id=UUID.randomUUID(), order=UUID.randomUUID(), key=UUID.randomUUID();
     void role(String role){when(userJwtDecoder.decode("user")).thenReturn(Jwt.withTokenValue("user").header("alg","RS256").subject(actor.toString()).claim("role",role).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build());}
+    @Test void reportContextRequiresParticipantModeAndIsNotCacheable() throws Exception {
+        mvc.perform(get("/api/admin/orders/{id}/report-context",order)).andExpect(status().isUnauthorized());
+        role("ADMIN");mvc.perform(get("/api/admin/orders/{id}/report-context",order).header("Authorization","Bearer user")).andExpect(status().isForbidden());
+        role("COURIER");when(cases.reportContext(any(),eq(order))).thenReturn(new CaseService.ReportContext(order,"INELIGIBLE",null,null));
+        mvc.perform(get("/api/admin/orders/{id}/report-context",order).header("Authorization","Bearer user")).andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store")).andExpect(jsonPath("$.status").value("INELIGIBLE")).andExpect(jsonPath("$.caseId").isEmpty());
+    }
     @Test void conversationInitiationRequiresAdminValidTargetAndRequestKey() throws Exception {
         role("REQUESTER");
         mvc.perform(post("/api/admin/cases/{id}/conversations",id).header("Authorization","Bearer user").header("Idempotency-Key",key).contentType("application/json").content("{\"participantUserId\":\""+actor+"\"}")).andExpect(status().isForbidden());

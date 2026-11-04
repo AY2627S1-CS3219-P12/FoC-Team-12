@@ -44,7 +44,8 @@ Shared Compose/gateway/broker/CI runtime wiring is prepared in the
 [runtime integration guide](RUNTIME_INTEGRATION.md), pending affected-owner activation review.
 Chat/Order/Credit domain code and Kubernetes policies are unchanged.
 Conversation adapters, credit tracking and reversible ban tracking are implemented. User owns the
-sanction consumer and reason/audit reactivation; real Chat/Credit integration and resolution remain pending.
+sanction consumer and reason/audit reactivation. Admin resolution is implemented with fail-closed
+evidence guards; real Chat/Credit integration remains pending.
 Account/supplier tools link to their existing owners.
 
 ## Cases behavior and APIs
@@ -72,7 +73,7 @@ another statement from the same participant conflicts. Resolved cases reject new
 Each accepted statement increments revision. Claims lock the case and check revision/state:
 one competing claimant wins; stale/already claimed cases return 409. Other active admins
 may read; the case-access callback grants administrator writes only to the assigned reviewer
-while UNDER_REVIEW. Credit correction tracking is described below; bans and resolution remain deferred.
+while UNDER_REVIEW. Credit correction/ban tracking and guarded resolution are described below.
 
 Every mutation requires a UUID `Idempotency-Key`. Receipts retain actor, route, canonical
 body hash and original response in the same transaction. Same request replays that response
@@ -526,3 +527,91 @@ Order/Credit history and must not be used to make real case decisions.
 ## Case sanctions integration
 
 See [sanctions ownership, behavior, recovery and verification](SANCTIONS_INTEGRATION.md).
+
+## Participant entry from errands
+
+Order's errand detail links to Admin reporting through the regular gateway. The read-only
+`GET /api/admin/orders/{orderId}/report-context` requires a current active Requester/Courier JWT.
+`OWN_REPORT` returns only that actor's existing case ID and safe state, even during a Chat outage.
+Otherwise Admin asks Chat for verified reporting eligibility: `ELIGIBLE` offers the errand-scoped
+form; `INELIGIBLE` returns null case/state and exposes no other participant's case. Incomplete or
+unavailable eligibility returns 503, never an empty/no-report success. Responses are no-store.
+The GET creates no rows/events, needs no mutation identity and may be retried safely. Admin's
+existing POST still rechecks Chat eligibility and locks case state before accepting a statement.
+
+The new-report page checks the same context so repeat visits lead to View your report rather than
+a duplicate statement form. Current account/role and per-report access stay backend-enforced.
+Existing gateway /api/admin and /admin routes cover this API/UI; no internal API is exposed.
+Order remains navigation only and never reads Admin's database. User sign-in preserves approved
+errand/report/Admin destinations and requests a real User-issued ADMIN token when appropriate.
+
+Real reporting needs Eldridge's Chat eligibility implementation and trusted historical Order
+evidence. A previous courier with a saved errand URL may check report access even when Order's
+normal detail is hidden, but discovery of withdrawn errands in My errands remains an Order-owned
+history dependency; this change does not expand Order data visibility or invent a history API.
+
+### Regular-stack GUI acceptance
+
+Use `http://localhost:8088/` (account), `/errands/mine` (your errands),
+`/errands/browse` (Courier discovery), and `/admin` (administrator queue). These use regular
+persistent databases, including Admin's named Compose volume, not the disposable smoke fixtures.
+This checkout publishes Admin PostgreSQL on `127.0.0.1:5545`; use the regular `.env` database/user/
+password. Do not use disposable preview credentials or seed normal databases for this checklist.
+
+Roles needed: a regular requester, an assigned courier on the same real errand, an unrelated
+participant, and an active administrator who claims the case. An administrator testing their own
+report must switch to Requester/Courier; Admin mode is reserved for review. No accounts are
+automatically created by this frontend integration.
+
+1. As the requester, open Errands → My errands → a real errand. Below its details, check the
+   reporting panel. With Chat unavailable it must show unavailable/retry and offer no submission.
+   With complete eligible Chat context, select **Report an issue**, submit a statement, then use
+   **Back to errand**. **View your report** must return to only your statement and safe status.
+2. Repeat as the assigned courier using their My errands detail. A historical courier with a
+   saved URL can check report access even if Order hides its details; discovering withdrawn
+   assignments without a saved URL remains an Order history dependency.
+3. Copy the actual report/new-report URL. Open it signed out, choose **Sign in to FoC**, and sign
+   in as the same participant. It must return to that report, preserving the errand query.
+   An unrelated account opening the report URL must receive denial without a statement/case leak.
+4. Use an administrator's account menu → **Switch to Admin**. The dashboard should open directly.
+   Navigate Profile → Admin and Errands → Admin. Filter the queue, open the new case, claim it,
+   and check that only its assigned reviewer receives enabled resolution controls. Try resolution
+   with unavailable Chat: explain the dependency and keep the case UNDER_REVIEW. Successful
+   closure requires real fresh complete Chat coverage and no PENDING/UNKNOWN actions.
+5. Repeat at desktop and 375px width. Use Tab/Shift+Tab and Enter/Space for report links, retry,
+   filters, claiming and resolution confirmation/cancel; check visible focus and no clipped forms.
+   After genuine closure, the participant sees the safe resolved/read-only status only.
+
+Until real Chat and a real participant errand are available, steps requiring eligibility,
+submission, evidence or successful closure remain unverified through live services. Automated
+fixtures are test-only and never replace these dependencies. Record GUI results before acceptance.
+
+## Resolution behavior
+
+Assigned reviewers can resolve UNDER_REVIEW cases with a reason, expected revision and an
+explanation for each rejected action. No-action resolution is allowed; PENDING/UNKNOWN actions
+block closure. The GUI requires confirmation and preserves request identity across uncertain
+responses. It fetches no synthetic evidence as a live fallback.
+
+`POST /api/admin/cases/{caseId}/resolve` requires Idempotency-Key and body
+`{"resolution":"Review completed","expectedRevision":2,"rejectedActionExplanations":[]}`.
+Success returns the existing CaseDetail shape. Same actor/key/body recovers the original response
+without requiring Chat again, including after closure. Changed input with the same key is 409.
+400 means invalid reason/explanations; 403 means reviewer/current account denial; 409 means stale
+revision/state or unsettled actions; 503 means evidence/dependency unavailable. Refresh stale cases.
+
+Admin reads Chat before locking. `app.resolution.evidence-max-age-seconds` defaults 60 and must be
+positive; coverage/checkpoints older than that or more than five seconds in the future fail closed.
+Admin's checkpoint must cover its current source sequence. The final locked transaction records
+the immutable decision (including evidence coverage/revision and rejection explanations), updated
+case/revision, audit, original receipt and CaseResolved outbox fact. Further reports/actions and
+conversation initiation are rejected. The internal callback returns read-only conversation access.
+The participant sees RESOLVED and their own statement, never the private decision reason.
+
+Chat is still an external dependency; successful resolution tests use explicit test-only evidence.
+Real Chat read-only send enforcement, producer checkpoint integration and Admin lifecycle Kafka
+relay remain owner dependencies. An unavailable Chat leaves the live case open with retry feedback.
+
+Manual acceptance: assigned/other reviewer permissions, reason and rejected-action explanations,
+confirmation/cancel, pending/unknown blockers, stale refresh, Chat-unavailable feedback, immutable
+resolved view and participant privacy. Check desktop/mobile layout, keyboard focus and SGT times.

@@ -5,6 +5,7 @@ import {
   clearSession,
   readSession,
   safeReturnTo,
+  isAdminDestination,
   saveSession,
   type AuthSession,
   type WorkspaceRole,
@@ -317,7 +318,10 @@ export function App() {
       setLoginState('success')
       void api.activateCreditAccount().catch(() => undefined)
       const destination = safeReturnTo()
-      if (destination && (destination === '/credits' || destination.startsWith('/credits/') || destination.startsWith('/admin/reports/'))) {
+      if (destination && (destination === '/credits' || destination.startsWith('/credits/') || destination.startsWith('/admin/reports/') || destination === '/errands' || destination.startsWith('/errands/') || isAdminDestination(destination))) {
+        if (isAdminDestination(destination) && nextSession.role !== 'ADMIN' && nextSession.availableRoles?.includes('ADMIN')) {
+          setSession(saveSession(await api.changeSessionRole({ role: 'ADMIN' })))
+        }
         navigateTo(destination)
       }
     } catch (error) {
@@ -712,7 +716,10 @@ export function App() {
                 {adminMode && <a aria-current={adminUsersPage ? 'page' : undefined} href="/?view=users">Manage users</a>}
                 {canUseAdmin && !adminMode && <button type="button" disabled={workspaceState === 'loading'}
                   onClick={() => { void selectWorkspaceRole('ADMIN').then(changed => {
-                    if (changed && accountMenuRef.current) accountMenuRef.current.open = false
+                    if (changed) {
+                      if (accountMenuRef.current) accountMenuRef.current.open = false
+                      navigateTo('/admin')
+                    }
                   }) }}>Switch to Admin</button>}
                 {adminMode && <button type="button" disabled={workspaceState === 'loading'}
                   onClick={() => { void selectWorkspaceRole('REQUESTER').then(changed => {

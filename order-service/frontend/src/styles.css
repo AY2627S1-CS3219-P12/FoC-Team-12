@@ -92,6 +92,7 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .subtle { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
 .two-column { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem); gap: 1.5rem; align-items: start; }
 .card { padding: 1.25rem 1.5rem; border: 1px solid var(--line); border-radius: 0.75rem; background: var(--surface); }
+.errand-report { margin-top: 1.25rem; }
 .card h2 { margin: 0 0 0.75rem; color: var(--ink); font-size: 1.05rem; }
 .card p { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.6rem 2rem; margin: 0; font-size: 0.875rem; }

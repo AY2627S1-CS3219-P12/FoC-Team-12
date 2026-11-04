@@ -1,5 +1,22 @@
 # Order Service
 
+## Admin reporting entry
+
+The errand detail screen includes a participant reporting panel using Admin-owned
+`GET /api/admin/orders/{orderId}/report-context` through the gateway. The panel offers Report an
+issue only after authoritative ELIGIBLE, or View your report for OWN_REPORT (including resolved
+cases). INELIGIBLE has no link or case metadata; failures show unavailable/retry instead of
+pretending no report exists. Query keys include actor, mode and order; auth/eligibility remain
+Admin/Chat responsibilities. Order lifecycle endpoints and database are unchanged.
+
+An unavailable Order detail may still show the separate reporting-access panel, allowing a
+historical participant with a known errand URL to ask Admin/Chat without exposing the hidden Order
+details. My errands does not yet discover every withdrawn historical assignment; that is a separate
+Order-owned history/API task. Without real Chat eligibility, new reporting correctly stays blocked.
+
+Use the regular gateway at http://localhost:8088 for cross-service GUI checks. The Vite preview
+also proxies Admin paths through that gateway; isolated frontend unit fixtures are test-only.
+
 Owned by XueTing. See [`AGENTS.md`](AGENTS.md) for the coding boundary and
 [`../TASK_SPLIT.md`](../TASK_SPLIT.md) for team responsibilities. The D3 roadmap is
 [`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md).

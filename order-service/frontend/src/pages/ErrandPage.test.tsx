@@ -12,6 +12,7 @@ const ORDER_URL = '/api/orders/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64'
 /** Serves `current` for GET and applies `next` for a POST action (or a problem). */
 function serve(current: Order, onAction?: (action: string) => { status?: number; body: unknown }) {
   return stubFetch((url, init) => {
+    if (url.startsWith('/api/admin/orders/')) return { body: { orderId: current.id, status: 'INELIGIBLE', caseId: null, state: null } }
     if (init?.method === 'POST' && onAction) return onAction(url.split('/').at(-1) ?? '')
     return { body: current }
   })
@@ -73,6 +74,7 @@ describe('ErrandPage', () => {
       const taken = order({ state: 'ACCEPTED', courierId: COURIER_ID })
       let accepted = false
       const fetchMock = stubFetch((_url, init) => {
+        if (_url.startsWith('/api/admin/orders/')) return { body: { orderId: order().id, status: 'INELIGIBLE', caseId: null, state: null } }
         if (init?.method === 'POST') {
           accepted = true
           return { status: 409, body: { detail: 'taken', code: 'ORDER_ALREADY_ACCEPTED', currentState: 'ACCEPTED' } }

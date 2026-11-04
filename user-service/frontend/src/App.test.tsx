@@ -161,7 +161,17 @@ test('uses the Requester and Courier selector to replace a session token', async
   expect(fetch).toHaveBeenCalledWith('/api/users/me/session-role', expect.objectContaining({ method: 'PATCH' }))
 })
 
-test('lets an administrator select Admin mode without leaving Profile', async () => {
+test.each(['/errands/mine','/errands/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64','/admin','/admin/cases/10000000-0000-4000-8000-000000000001'])('returns to %s after real role selection when needed',async destination=>{
+  window.history.replaceState(null,'','/?returnTo='+encodeURIComponent(destination))
+  const fetcher=vi.fn((url:string)=>Promise.resolve({ok:true,json:async()=>url==='/api/users/login'?{accessToken:'participant.jwt',tokenType:'Bearer',expiresAt:'2030-01-01T00:15:00Z',userId:'c3e8d15c-0bb4-443f-989e-b6fda9f38993',username:'Alice',role:'REQUESTER',availableRoles:['REQUESTER','ADMIN']}:url==='/api/users/me/session-role'?{accessToken:'admin.jwt',tokenType:'Bearer',expiresAt:'2030-01-01T00:15:00Z',userId:'c3e8d15c-0bb4-443f-989e-b6fda9f38993',username:'Alice',role:'ADMIN',availableRoles:['REQUESTER','ADMIN']}:{availableBalance:10}}))
+  vi.stubGlobal('fetch',fetcher);render(<App/>);const user=await fillLogin()
+  await user.click(within(screen.getByRole('form',{name:'Sign in form'})).getByRole('button',{name:'Sign in'}))
+  await waitFor(()=>expect(navigateTo).toHaveBeenCalledWith(destination))
+  if(destination.startsWith('/admin'))expect(fetcher).toHaveBeenCalledWith('/api/users/me/session-role',expect.objectContaining({method:'PATCH',body:JSON.stringify({role:'ADMIN'})}))
+  else expect(fetcher.mock.calls.some(call=>call[0]==='/api/users/me/session-role')).toBe(false)
+})
+
+test('opens the dashboard after the administrator selects Admin mode', async () => {
   saveSession({
     accessToken: 'requester.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'REQUESTER',
@@ -205,7 +215,7 @@ test('lets an administrator select Admin mode without leaving Profile', async ()
   const accountAccess = screen.getByText('Account access').parentElement
   expect(accountAccess).not.toBeNull()
   expect(within(accountAccess!).getByText('Admin')).toBeInTheDocument()
-  expect(navigateTo).not.toHaveBeenCalled()
+  expect(navigateTo).toHaveBeenCalledWith('/admin')
 })
 
 test('clears malformed and expired sessions instead of restoring Profile', () => {
@@ -228,8 +238,9 @@ test('accepts only approved relative service return destinations', () => {
   expect(safeReturnTo('?returnTo=https%3A%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2Fapi%2Fusers')).toBeNull()
-  expect(safeReturnTo('?returnTo=%2Fadmin%2Fcases%2Fprivate')).toBeNull()
-  expect(safeReturnTo('?returnTo=%2Fadmin%2Freports%2F..%2Fcases%2Fprivate')).toBeNull()
+  expect(safeReturnTo('?returnTo=%2Fadmin%2Fcases%2Fprivate')).toBe('/admin/cases/private')
+  expect(safeReturnTo('?returnTo=%2Fadmin%2Freports%2F..%2F..%2Finternal%2Fprivate')).toBeNull()
+  expect(safeReturnTo('?returnTo=%2Ferrands%2Fmine')).toBe('/errands/mine')
 })
 
 test('shows an accessible error when the live profile cannot be loaded', async () => {

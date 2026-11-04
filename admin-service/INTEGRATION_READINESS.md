@@ -46,7 +46,7 @@ thread in session storage. No message content is stored in Admin's database.
 | I1: Current User eligibility and role delegation — Darryl (User owner), Eldridge (Chat consumer) | Admin's User checks exist; verify actual Chat JWT/service trust and current active/admin checks. Keep effective participant mode separate from Admin access; propagate revoked/unavailable identity safely. | All privileged integration and conversation authorization | Revocation during requests, inactive participant, mode changes, wrong key/audience/subject and User outage tests across real services. |
 | I2: Shared deployment — nominated editor, Jun Hui coordinates; all affected owners review | Gateway/Compose/env/CI, service DNS/TLS, signing-key distribution/rotation, broker access and both ingress/egress default-deny policies need coordinated implementation. Required Compose variables must also reach env examples, Compose CI jobs and Kafka smoke checks. | Deployed N2H, live Chat and final acceptance | Actual gateway/TLS/network/broker smoke checks and compose_env_check pass; no public exposure of internal APIs. |
 | A1: Commands/outcomes — Darryl (Admin/User), Eldridge (Credit), Jun Hui (transport) | Confirm approved action envelopes, command deduplication, persisted outcomes, failure/retry/reconciliation and observability before actions iteration. | Admin actions and resolution | Pending/unknown/rejected/applied outcomes tested with real producers, insufficient-credit and self/final-admin protections preserved. |
-| A2: Resolution/read-only — Darryl + Eldridge | Resolution is a later iteration. Implement closure only with fresh acceptable evidence and no pending/unknown actions; Chat must recheck closure on writes, not trust an old UI flag. | Resolution and full workflow acceptance | Concurrent closure/send, immutable decision, no post-close actions and readable private history verified. |
+| A2: Resolution/read-only — Darryl + Eldridge | Admin implements atomic closure with fresh complete evidence, current case checkpoints, no pending/unknown actions and per-rejection explanations. Chat must still implement/recheck closure on writes, not trust an old UI flag. | Real Chat resolution and full workflow acceptance | Admin decision/retry/race/privacy checks use test-only Chat evidence; actual concurrent Chat closure/send and readable private history remain pending. |
 
 ## Final integration exit checks
 
@@ -121,6 +121,35 @@ review. See [sanctions integration](SANCTIONS_INTEGRATION.md). Historical non-re
 Chat projection, Admin lifecycle relay, immediate cross-service revocation and resolution remain
 separate dependencies. Wire schemas are unchanged; this is not approval on behalf of other owners.
 
+### Resolution iteration handoff
+
+Admin resolution now performs a new authenticated Chat timeline read before locking, validates
+COMPLETE coverage/no blocking gaps and 60-second coverage/checkpoint freshness, and checks that
+Chat covers the currently committed Admin source sequence. Under the shared case lock it
+rechecks reviewer, revision/state and confirmed actions. No-action closure is allowed; each
+rejected action requires its own explanation through the Admin-owned request extension approved
+by Darryl. Chat wire shapes and other services are unchanged.
+
+One transaction commits an immutable decision, case/revision, audit, original idempotency receipt
+and CaseResolved outbox record. Admin's callback becomes read-only and participant status exposes
+no private decision text. Admin backend/HTTP/PostgreSQL tests cover success/retry, rollback,
+stale/concurrent changes, blocked evidence/actions, post-close reports/actions and callback privacy.
+Successful closure tests use explicitly test-only Chat evidence. Packaged GUI verification checks
+the actual unavailable-Chat path; real Chat send-vs-resolution enforcement, producer checkpoint
+integration and lifecycle relay remain owner dependencies. Do not declare those integrated.
+
+Verification: full Admin backend run passed 76 tests; the final resolution HTTP/workflow run
+passed 38 tests (including the newly added HTTP tests). Admin frontend passed 61 tests, followed
+by six focused passes after repairing mobile form sizing; build/lint and contract validation
+passed. The packaged disposable GUI was checked at desktop and 390px mobile width, including
+confirmation/cancel, visible keyboard focus, unavailable Chat and same-request recovery after
+reload. SQL confirmed UNDER_REVIEW with zero decisions after the live unavailable-evidence
+attempt. Successful closure remains automated with test-only evidence, not real Chat acceptance.
+At that disposable-stack check, user desktop/mobile/keyboard acceptance remained pending and no
+commits or shared rollout had been made. See the regular-stack integration handoff below.
+
+### Recorded sanctions verification
+
 Sanctions verification now covers real packaged Admin/User, private PostgreSQL and authenticated
 Kafka: applied/NO_CHANGE/rejected outcomes, stable retries, self-ban rejection, reason/audit
 reactivation and original-result replay without re-banning, plus restart persistence and User
@@ -132,3 +161,44 @@ save race is fixed inside User with changed-field updates. Credit outcomes remai
 no real Credit financial acceptance is claimed. GUI behavior tests/build/lint pass, but visual
 desktop/mobile/keyboard acceptance remains pending because browser control is disabled. Existing
 shared services were not activated; affected-owner review still gates shared rollout.
+
+### Cross-service reporting navigation handoff — 4 November 2026
+
+Darryl approved the bounded Order frontend/User return-path work and Admin-owned
+`GET /api/admin/orders/{orderId}/report-context`. Order supplies navigation/context only; Admin
+checks current User eligibility and either returns the actor's own statement grant/safe status or
+asks Chat for reporting eligibility. Unrelated actors receive no case pointer. An unavailable or
+incomplete dependency is 503, never an empty/no-report result. POST still verifies eligibility
+and closed-case rules independently. Chat contracts, Order backend and other databases are unchanged.
+
+The regular `foc-team-12` stack is active at `http://localhost:8088` after Darryl confirmed the
+shared runtime review was complete. Admin uses persistent `foc-team-12_admin-db-data`, accessible
+locally at `127.0.0.1:5545` with the ignored `.env` credentials. The disposable project's database
+on 5544 is separate. No normal database was seeded/reset and no synthetic evidence is used live.
+Existing User signing keys/passwords and other service database credentials were preserved.
+Admin has its own signing key and User public-key trust; broker initialization was rerun without
+resetting/restarting the broker or its data. New Order UI/API affected-owner review is still
+required before merge; the earlier runtime confirmation does not imply that review.
+
+Verification: Admin HTTP/workflow/resolution tests passed 45 cases; Admin GUI 63, User GUI 56,
+and the Order full GUI suite 84 passed. The subsequent Order identity/expiry repair passed all
+24 focused report-panel/errand tests. Frontend builds/lints and Order typecheck passed; generated
+contracts validated 31 HTTP operations. Regular packaged services start; unauthenticated queue
+and report-context return 401 and internal callback routes are not exposed by the gateway (404).
+The regular administrator's Switch to Admin opens the live empty queue, and Admin remains
+reachable from Profile and Errands. Dashboard checked at desktop/390px; report-unavailable at
+375px has no horizontal overflow. Keyboard Tab/Enter operates queue filters and reaches retry.
+Signed-out report links preserve the order query through the sign-in page; successful post-login
+return and eligible/existing/private report outcomes are covered by frontend/backend tests.
+
+The signed-in account has no errands and the regular courier browse list is empty. A read-only
+nonexistent-order probe showed Order's not-found state and the independent Admin unavailable/retry
+state, with no reporting form or other participant data. This is a failure-path check, not a real
+eligible-errand success. Real Chat eligibility, evidence coverage and resolution remain pending
+Eldridge's running producer implementation. Successful report submission, existing-report return,
+unrelated-user denial and case resolution through real services still need manual acceptance with
+real participant errands. Historical withdrawn-errand discovery also remains Order-owned.
+
+Manual steps and role requirements are in the Admin README. User GUI acceptance and real Chat
+success paths remain pending. Darryl subsequently requested commit, push and PR creation;
+merge remains outside this task's authorization.

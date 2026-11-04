@@ -14,6 +14,12 @@ export type Statement = {
   submittedAt: string
 }
 export type Report = { case: Summary; ownStatement: Statement }
+export type ReportContext = {
+  orderId: string
+  status: 'OWN_REPORT' | 'ELIGIBLE' | 'INELIGIBLE'
+  caseId: string | null
+  state: Summary['state'] | null
+}
 export type CreditAction = {
   operationId: string
   caseId: string
@@ -32,6 +38,7 @@ export type BanAction = Omit<CreditAction, 'type' | 'amount'> & {
 }
 export type AdminAction = CreditAction | BanAction
 export type Detail = {
+  resolution?: string | null
   case: Summary
   statements: Statement[]
   actions?: AdminAction[]

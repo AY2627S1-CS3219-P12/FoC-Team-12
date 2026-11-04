@@ -31,8 +31,23 @@ function session(
 function response(data: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => data }
 }
+function mockServiceFetch(fetcher = vi.fn()) {
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+    url.endsWith('/report-context')
+      ? Promise.resolve(
+          response({
+            orderId: url.split('/')[4],
+            status: 'ELIGIBLE',
+            caseId: null,
+            state: null,
+          }),
+        )
+      : fetcher(url, init),
+  )
+}
 beforeEach(() => {
   sessionStorage.clear()
+  mockServiceFetch()
 })
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -58,9 +73,9 @@ it('submits in participant mode and retries the same key and body after an uncer
         201,
       ),
     )
-  vi.stubGlobal('fetch', fetcher)
+  mockServiceFetch(fetcher)
   render(<App />)
-  expect(screen.getByText(order)).toBeVisible()
+  expect(await screen.findByText(order)).toBeVisible()
   expect(
     screen.queryByRole('textbox', { name: 'Errand ID' }),
   ).not.toBeInTheDocument()
@@ -91,7 +106,7 @@ it('requires errand context and does not advertise reporting in administrator na
   window.history.replaceState({}, '', '/admin/reports/new')
   session()
   const fetcher = vi.fn()
-  vi.stubGlobal('fetch', fetcher)
+  mockServiceFetch(fetcher)
   render(<App />)
   expect(screen.getByText('Choose an errand to report')).toBeVisible()
   expect(
@@ -108,7 +123,7 @@ it('requires errand context and does not advertise reporting in administrator na
   ).not.toBeInTheDocument()
   expect(fetcher).not.toHaveBeenCalled()
 })
-it('does not move an uncertain statement to another errand', () => {
+it('does not move an uncertain statement to another errand', async () => {
   window.history.replaceState({}, '', '/admin/reports/new?orderId=' + id)
   session()
   sessionStorage.setItem(
@@ -119,7 +134,7 @@ it('does not move an uncertain statement to another errand', () => {
     }),
   )
   render(<App />)
-  expect(screen.getByText('Finish your pending report')).toBeVisible()
+  expect(await screen.findByText('Finish your pending report')).toBeVisible()
   expect(
     screen.getByRole('link', { name: 'Resume pending report' }),
   ).toHaveAttribute('href', '/admin/reports/new?orderId=' + order)
@@ -169,7 +184,7 @@ it('opens the queue directly on the dashboard and restores filters and page from
         totalPages: 3,
       }),
     )
-  vi.stubGlobal('fetch', fetcher)
+  mockServiceFetch(fetcher)
   render(<App />)
   const review = await screen.findByRole('link', { name: 'Review case ' + id })
   expect(fetcher.mock.calls[1]![0]).toBe(
@@ -200,7 +215,7 @@ it('keeps all-reports selection on a reload without sending the UI marker to the
         totalPages: 0,
       }),
     )
-  vi.stubGlobal('fetch', fetcher)
+  mockServiceFetch(fetcher)
   render(<App />)
   expect(
     await screen.findByText('No reports match these filters'),
@@ -224,9 +239,9 @@ it('resumes a pending report after reload instead of generating another request'
   const fetcher = vi
     .fn()
     .mockResolvedValue(response({ detail: 'Already submitted.' }, 409))
-  vi.stubGlobal('fetch', fetcher)
+  mockServiceFetch(fetcher)
   render(<App />)
-  expect(screen.getByLabelText('What happened?')).toHaveValue(
+  expect(await screen.findByLabelText('What happened?')).toHaveValue(
     'Pending statement',
   )
   fireEvent.click(screen.getByRole('button', { name: 'Retry submission' }))
@@ -260,11 +275,49 @@ it('shows only the reporters own statement and hides it on identity replacement'
     expect(screen.queryByText('My private statement')).not.toBeInTheDocument(),
   )
 })
+
+it('routes an already-submitted errand to the private report instead of offering a second statement', async () => {
+  window.history.replaceState({}, '', '/admin/reports/new?orderId=' + order)
+  session()
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        response({
+          orderId: order,
+          status: 'OWN_REPORT',
+          caseId: id,
+          state: 'RESOLVED',
+        }),
+      ),
+  )
+  render(<App />)
+  expect(
+    await screen.findByRole('link', { name: 'View your report' }),
+  ).toHaveAttribute('href', '/admin/reports/' + id)
+  expect(
+    screen.queryByRole('button', { name: 'Submit report' }),
+  ).not.toBeInTheDocument()
+})
+it('does not offer reporting when context is unavailable', async () => {
+  window.history.replaceState({}, '', '/admin/reports/new?orderId=' + order)
+  session()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(response({ detail: 'Chat unavailable' }, 503)),
+  )
+  render(<App />)
+  expect(await screen.findByRole('alert')).toHaveTextContent('unavailable')
+  expect(
+    screen.queryByRole('button', { name: 'Submit report' }),
+  ).not.toBeInTheDocument()
+})
 it('does not query the queue until live administrator eligibility is confirmed', async () => {
   window.history.replaceState({}, '', '/admin/cases')
   session('ADMIN')
   const fetcher = vi.fn().mockResolvedValue(response({}, 403))
-  vi.stubGlobal('fetch', fetcher)
+  mockServiceFetch(fetcher)
   render(<App />)
   expect(
     await screen.findByText('This workspace is for administrators'),
@@ -287,7 +340,7 @@ it('loads queue filters and empty results from the live API', async () => {
         totalPages: 0,
       }),
     )
-  vi.stubGlobal('fetch', fetcher)
+  mockServiceFetch(fetcher)
   render(<App />)
   expect(await screen.findByText('No open reports')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Open' }))
@@ -314,7 +367,7 @@ it('claims using the displayed revision and explains conflicts without claiming 
         409,
       ),
     )
-  vi.stubGlobal('fetch', fetcher)
+  mockServiceFetch(fetcher)
   render(<App />)
   fireEvent.click(await screen.findByRole('button', { name: 'Claim case' }))
   expect(
@@ -343,7 +396,7 @@ it('removes protected queue data when a later live administrator check denies ac
       }),
     )
     .mockResolvedValue(response({}, 403))
-  vi.stubGlobal('fetch', fetcher)
+  mockServiceFetch(fetcher)
   render(<App />)
   expect(await screen.findByText('Case ' + id)).toBeVisible()
   fireEvent.focus(window)
