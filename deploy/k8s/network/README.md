@@ -28,6 +28,10 @@ All `foc-local` pods are default-denied for ingress/egress. These explicit rules
 | External browser | Gateway | 8088 |
 | Gateway | User / Supplier / Order / Credit | 8081 / 8080 / 8082 / 8083 |
 | Each backend | Its own PostgreSQL pod | 5432 |
+| Gateway | Admin | 8084 |
+| Admin | User / Kafka | 8081 current eligibility and JWKS / 9092 authenticated actions |
+| Admin | Chat (when deployed) | 8085, agreed private APIs |
+| Chat (when deployed) | Admin | 8084, service-authenticated case callback/export |
 | Supplier / Order / Credit | User | 8081, JWT public-key discovery |
 | User / Order / Credit / Kafka UI / Kafka initializer | Kafka | 9092 |
 | Kafka | Kafka | 9092 / 9093, broker/controller |
@@ -39,6 +43,11 @@ The broker still requires its per-service SASL credentials and ACLs. Network rea
 not grant permission to produce/consume. Frontend calls go through the gateway; no current
 backend-to-backend business API calls beyond the published JWKS connection are assumed.
 Future services, monitoring, Jobs and new integrations need a reviewed rule before rollout.
+
+Admin's additional policies live in `admin-service/k8s/network.yaml`; `Common.ps1` combines
+them with this directory's policies for isolated checks and shared application. Chat reverse
+policies and pinned signing trust remain integration dependencies. These exceptions do not
+deploy Chat or grant HTTP authorization. Admin cannot reach other service databases.
 
 ### Important boundaries
 

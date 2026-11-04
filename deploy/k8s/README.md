@@ -8,6 +8,11 @@ optional in-cluster broker and dashboard, see [Kafka on Kubernetes](../kafka/k8s
 Shared editor: Darryl's Kubernetes task. Each service owner reviews their deployment; Jun Hui
 reviews gateway/shared networking. Databases and credentials remain service-private.
 
+Admin's incremental deployment, local images, private credentials/storage and verification are
+documented in [Admin Minikube](../../admin-service/k8s/README.md). The shared scope includes User's
+existing service-auth support, gateway routing and Admin Kafka/network permissions. Earlier
+Compose runtime review does not constitute Kubernetes owner signoff.
+
 ## Cluster and images
 
 Start Docker Desktop with Linux containers, then use Git Bash from the repository root:

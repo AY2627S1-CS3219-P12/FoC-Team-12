@@ -75,7 +75,7 @@ try {
     # Small listeners model the real pod labels and ports, not the business applications/data.
     $roles = [ordered]@{
         gateway=@(8088); 'user-service'=@(8081); 'supplier-service'=@(8080)
-        'order-service'=@(8082); 'credit-service'=@(8083)
+        'order-service'=@(8082); 'credit-service'=@(8083); 'admin-service'=@(8084); 'chat-service'=@(8085); 'admin-db'=@(5432)
         'user-db'=@(5432); 'supplier-db'=@(5432); 'order-db'=@(5432); 'credit-db'=@(5432)
         kafka=@(9092,9093); 'kafka-ui'=@(8080); 'kafka-init'=@(9999)
     }
@@ -98,8 +98,14 @@ try {
     Send-NetDocument @{apiVersion='v1';kind='List';items=$resources}
     Invoke-NetKubectl @('-n',$namespace,'wait','--for=condition=Ready','pod','--all','--timeout=180s')
     function Assert-TestTcp([string] $Source, [string] $Target, [int] $Port, [bool] $Allowed) {
-        $null = & $script:NetMinikube -p $Profile kubectl -- "--context=$Profile" -n $namespace exec $Source -- nc -z -w 3 $Target "$Port" 2>&1
-        $open = $LASTEXITCODE -eq 0
+        $attempts=if($Allowed){3}else{1}
+        for($attempt=0;$attempt -lt $attempts;$attempt++) {
+            $null = & $script:NetMinikube -p $Profile kubectl -- "--context=$Profile" -n $namespace exec $Source -- nc -z -w 5 $Target "$Port" 2>&1
+            $open = $LASTEXITCODE -eq 0
+            if($open -or $attempt+1 -eq $attempts){break}
+            # Allow a loaded local policy/DNS controller to converge; never retry away a denial failure.
+            Start-Sleep -Seconds 2
+        }
         if ($open -ne $Allowed) { throw "Unexpected isolated result: $Source -> ${Target}:$Port (allowed=$Allowed)." }
         Write-Host "PASS allowed=$Allowed $Source -> ${Target}:$Port"
     }
@@ -108,6 +114,8 @@ try {
     Assert-TestTcp gateway user-db 5432 $true
     Assert-TestTcp supplier-service kafka 9092 $true
     Assert-TestTcp user-service kafka-ui 8080 $true
+    Assert-TestTcp gateway admin-db 5432 $true
+    Assert-TestTcp admin-service user-db 5432 $true
     Send-NetDocument (Get-NetPolicies $namespace) -Arguments @('apply','--dry-run=server','-f','-')
     Send-NetDocument (Get-NetPolicies $namespace)
     Start-Sleep -Seconds 3
@@ -122,6 +130,15 @@ try {
         Assert-TestTcp $service kafka 9092 $true
     }
     Assert-TestTcp kafka kafka 9093 $true
+    Assert-TestTcp gateway admin-service 8084 $true
+    Assert-TestTcp admin-service admin-db 5432 $true
+    Assert-TestTcp admin-service user-service 8081 $true
+    Assert-TestTcp admin-service kafka 9092 $true
+    # Chat's own ingress/egress policy is not supplied by Admin. No fake Chat integration.
+    Assert-TestTcp admin-service user-db 5432 $false
+    Assert-TestTcp gateway admin-db 5432 $false
+    Assert-TestTcp user-service admin-db 5432 $false
+    Assert-TestTcp supplier-service admin-service 8084 $false
     foreach ($pair in @(@('supplier-service','user-db',5432),@('gateway','user-db',5432),
             @('user-service','supplier-db',5432),@('supplier-service','kafka',9092),
             @('user-service','credit-service',8083),@('user-service','kafka-ui',8080),
@@ -131,7 +148,7 @@ try {
     # Query an explicit A record: BusyBox short-name/AAAA search behaviour can report
     # failure after a successful A answer. Validate the requested Service IP too.
     $expectedIp = (Invoke-NetKubectl @('-n',$namespace,'get','service','user-db','-o','jsonpath={.spec.clusterIP}')) -join ''
-    $answer = Invoke-NetKubectl @('-n',$namespace,'exec','user-service','--','nslookup','-type=A',"user-db.$namespace.svc.cluster.local")
+    $answer = Invoke-NetKubectl @('-n',$namespace,'exec','user-service','--','nslookup','-type=A',"user-db.$namespace.svc.cluster.local.")
     if(($answer -join "`n") -notmatch [regex]::Escape($expectedIp)){throw 'DNS did not return the expected test Service IP.'}
     $dns = (Invoke-NetKubectl @('-n','kube-system','get','service','kube-dns','-o','jsonpath={.spec.clusterIP}')) -join ''
     Assert-TestTcp user-service $dns 53 $true
