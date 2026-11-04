@@ -92,6 +92,15 @@ and template values, so wording can change without rewriting past notifications:
 `PATCH /api/notifications/me/{id}/read` to set the caller's own `readAt` idempotently (`404` for a
 missing or another user's notification), an unread count, and the UI.
 
+## Proposed UI
+
+Not built (iteration 7). Notification UI lives in the Notification-owned area and uses same-origin
+gateway APIs. List loading/empty/error/expired-session states and links to authorized errand pages.
+Proposed UI path `/notifications`; optional badge/read controls require explicit scope approval in
+feature analysis. Polling is sufficient initially; WebSocket delivery is not required by the D3
+notification plan (see [DESIGN.md](DESIGN.md#decisions) for why push is deferred). No browser code
+or untrusted notification link grants access to an order.
+
 ## Notifications from Credit events
 
 The service consumes `credit.events` as group `notification-service`, using the shared
