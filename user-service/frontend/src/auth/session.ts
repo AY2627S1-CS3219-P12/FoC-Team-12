@@ -76,7 +76,9 @@ export function safeReturnTo(search = window.location.search): string | null {
       destination.pathname.startsWith("/admin/suppliers/") ||
       destination.pathname === "/credits" ||
       destination.pathname.startsWith("/credits/") ||
-      destination.pathname.startsWith("/admin/reports/")
+      destination.pathname.startsWith("/admin/reports/") ||
+      destination.pathname === "/errands" || destination.pathname.startsWith("/errands/") ||
+      destination.pathname === "/admin" || destination.pathname.startsWith("/admin/cases/")
     ) {
       return `${destination.pathname}${destination.search}${destination.hash}`;
     }
@@ -87,5 +89,6 @@ export function safeReturnTo(search = window.location.search): string | null {
 }
 
 export function isAdminDestination(path: string) {
-  return path === "/admin/suppliers" || path.startsWith("/admin/suppliers/");
+  const pathname = path.split(/[?#]/)[0];
+  return pathname === "/admin" || pathname.startsWith("/admin/cases/") || pathname === "/admin/suppliers" || pathname.startsWith("/admin/suppliers/");
 }

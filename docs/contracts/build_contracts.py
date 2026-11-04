@@ -148,6 +148,10 @@ S['ParticipantReport'] = obj({'case':ref('CaseSummary'),'ownStatement':ref('Stat
 S['CasePage'] = obj({'content':array(ref('CaseSummary')),'page':INT,'size':INT,'totalElements':INT,'totalPages':INT})
 endpoint('/api/admin/reports','post','admin','ParticipantReport',obj({'orderId':UUID,'description':TEXT}),code=201,idem=True)
 endpoint('/api/admin/reports/{caseId}','get','admin','ParticipantReport')
+S['ReportContext'] = {'oneOf':[
+    obj({'orderId':UUID,'status':{'const':'OWN_REPORT'},'caseId':UUID,'state':enum('OPEN','UNDER_REVIEW','RESOLVED')}),
+    obj({'orderId':UUID,'status':enum('ELIGIBLE','INELIGIBLE'),'caseId':{'type':'null'},'state':{'type':'null'}})]}
+endpoint('/api/admin/orders/{orderId}/report-context','get','admin','ReportContext')
 endpoint('/api/admin/cases','get','admin','CasePage',params=[param('status',schema=enum('OPEN','UNDER_REVIEW','RESOLVED')),
     param('query',schema=UUID),param('page',schema={**INT,'default':0}),param('size',schema={'type':'integer','minimum':1,'maximum':100,'default':20})])
 endpoint('/api/admin/cases/{caseId}','get','admin','CaseDetail')
@@ -158,7 +162,8 @@ endpoint('/api/admin/cases/{caseId}/actions','post','admin','Action',{'oneOf':[
     obj({'type':{'const':'CREDIT_ADJUSTMENT'},'targetUserId':UUID,'reason':TEXT,'amount':{'type':'integer','not':{'const':0}}}),
     obj({'type':{'const':'BAN'},'targetUserId':UUID,'reason':TEXT})]},code=202,idem=True)
 endpoint('/api/admin/cases/{caseId}/actions/{operationId}','get','admin','Action')
-endpoint('/api/admin/cases/{caseId}/resolve','post','admin','CaseDetail',obj({'resolution':TEXT,'expectedRevision':INT}),idem=True)
+endpoint('/api/admin/cases/{caseId}/resolve','post','admin','CaseDetail',obj({'resolution':TEXT,'expectedRevision':INT,
+    'rejectedActionExplanations':{'type':'array','maxItems':1000,'items':obj({'operationId':UUID,'explanation':TEXT})}}, ['resolution','expectedRevision']),idem=True)
 write('n2h.openapi.json',api)
 
 # Standalone JSON Schema 2020-12 for NEW Kafka messages only.
@@ -240,6 +245,10 @@ for path, methods in api['paths'].items():
         example=sample(op['responses'][success]['content']['application/json']['schema'])
         item={'operationId':op['operationId'],'status':int(success),'body':example}
         if 'requestBody' in op: item['requestBody']=sample(op['requestBody']['content']['application/json']['schema'])
+        if path == '/api/admin/cases/{caseId}/resolve':
+            item['requestBody']['rejectedActionExplanations'] = []
+            item['body']['case']['state'] = 'RESOLVED'
+            item['body']['actions'] = []
         http.append(item)
 write('http.examples.json',http)
 websocket={'$schema':'https://json-schema.org/draft/2020-12/schema', 'title':'Chat WebSocket frames - review draft',
@@ -251,6 +260,7 @@ websocket={'$schema':'https://json-schema.org/draft/2020-12/schema', 'title':'Ch
         obj({'type':{'const':'TRANSLATION_UPDATED'},'conversationId':UUID,'translation':ref('Translation')}),
         obj({'type':{'const':'ERROR'},'code':enum('INVALID_TICKET','FORBIDDEN','SESSION_EXPIRED','UNAVAILABLE')})]}
 # Standalone schema local references use $defs rather than OpenAPI components.
+websocket['$defs'].pop('ReportContext', None)  # Admin HTTP lookup is not a Chat wire change.
 write('chat-websocket.schema.json',json.loads(json.dumps(websocket).replace('#/components/schemas/','#/$defs/')))
 write('websocket.examples.json',[sample(branch) for branch in websocket['oneOf']])
 print(f'Generated {len(api["paths"])} HTTP paths, {len(variants)} new event variants and examples.')

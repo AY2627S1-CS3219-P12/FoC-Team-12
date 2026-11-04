@@ -66,7 +66,7 @@ public class EvidenceExportService {
                 EvidenceValidation.equalUuid(event,"aggregateId",caseId); EvidenceValidation.equalUuid(event.path("data"),"caseId",caseId); EvidenceValidation.equalUuid(event.path("data"),"orderId",orderId);
                 EvidenceValidation.require(event.path("eventVersion").asInt()==1 && event.path("eventVersion").isIntegralNumber());
                 EvidenceValidation.require(type.equals(event.path("eventType").asText())&&"admin-service".equals(event.path("producer").asText())&&"AdminCase".equals(event.path("aggregateType").asText()));
-                EvidenceValidation.require(Set.of("CaseOpened","CaseClaimed","CaseActionCompleted").contains(type));
+                EvidenceValidation.require(Set.of("CaseOpened","CaseClaimed","CaseActionCompleted","CaseResolved").contains(type));
                 EvidenceValidation.number(event.path("data"),"sourceSequence"); EvidenceValidation.require(event.path("data").path("sourceSequence").asLong()==sequence);
                 EvidenceValidation.time(event,"occurredAt"); EvidenceValidation.uuid(event.path("actor"),"userId");
                 EvidenceValidation.require("USER".equals(event.path("actor").path("type").asText()));
@@ -74,6 +74,7 @@ public class EvidenceExportService {
                 if(!"CaseActionCompleted".equals(type))EvidenceValidation.equalUuid(event.path("data"),"CaseOpened".equals(type)?"reporterId":"reviewerId",actor);
                 else {EvidenceValidation.uuid(event.path("data"),"operationId");EvidenceValidation.uuid(event.path("data"),"ownerEventId");EvidenceValidation.uuid(event.path("data"),"targetUserId");EvidenceValidation.choice(event.path("data"),"result",Set.of("APPLIED","REJECTED","NO_CHANGE"));}
                 EvidenceValidation.choice(event.path("actor"),"role","CaseOpened".equals(type)?Set.of("REQUESTER","COURIER"):Set.of("ADMIN"));
+                if("CaseResolved".equals(type))EvidenceValidation.time(event.path("data"),"resolvedAt");
             }catch(Exception ex){throw missingBaseline();}
             Map<String,Object> data=new LinkedHashMap<>();data.put("kind","ADMIN");data.put("caseId",caseId);data.put("operationId",null);data.put("targetUserId",null);data.put("result",null);
             if("CaseActionCompleted".equals(type))for(String field:List.of("operationId","targetUserId","result"))data.put(field,event.path("data").path(field).asText());

@@ -1,0 +1,126 @@
+import { useQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
+import {
+  readSession,
+  sessionChangedEvent,
+  sessionExpiredEvent,
+} from '../auth/session'
+import { fetchReportContext, OrderApiError } from '../api/orderApi'
+import { signInPath } from '../navigation'
+
+/** Navigation only. Admin and Chat remain authoritative for reporting/privacy. */
+export function ErrandReportPanel({ orderId }: { orderId: string }) {
+  const [session, setSession] = useState(readSession)
+  useEffect(() => {
+    const refresh = () => setSession(readSession())
+    window.addEventListener(sessionChangedEvent, refresh)
+    window.addEventListener(sessionExpiredEvent, refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.removeEventListener(sessionChangedEvent, refresh)
+      window.removeEventListener(sessionExpiredEvent, refresh)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [])
+  const participantMode =
+    session?.role === 'REQUESTER' ||
+    session?.role === 'COURIER' ||
+    session?.role === 'USER'
+  const context = useQuery({
+    queryKey: ['admin-report-context', session?.userId, session?.role, orderId],
+    queryFn: () => fetchReportContext(orderId),
+    enabled: !!participantMode,
+    retry: false,
+    staleTime: 0,
+  })
+  if (!session)
+    return (
+      <section className="card errand-report">
+        <h2 className="section-title">Your errand report</h2>
+        <a
+          className="button-secondary"
+          href={signInPath('/errands/' + orderId)}
+        >
+          Sign in to view your report
+        </a>
+      </section>
+    )
+  if (!participantMode)
+    return (
+      <section className="card">
+        <h2 className="section-title">Report an issue</h2>
+        <p className="subtle">
+          Switch to Requester or Courier mode to check your own report.
+          Administrators review cases in the Admin tab.
+        </p>
+      </section>
+    )
+  return (
+    <section
+      className="card errand-report"
+      aria-labelledby="errand-report-title"
+    >
+      <h2 className="section-title" id="errand-report-title">
+        Need help with this errand?
+      </h2>
+      {context.isPending ? (
+        <p role="status">Checking your report access…</p>
+      ) : context.isError ? (
+        <>
+          <p role="alert" className="notice notice-error">
+            {context.error instanceof OrderApiError &&
+            context.error.status === 401
+              ? 'Your session expired. Sign in again to check your report.'
+              : context.error instanceof OrderApiError &&
+                  context.error.status === 403
+                ? 'Your current account or workspace cannot access participant reports.'
+                : 'Reporting is temporarily unavailable. We could not check your existing report or eligibility.'}
+          </p>
+          <button
+            type="button"
+            className="button-secondary"
+            onClick={() => void context.refetch()}
+          >
+            Retry report access
+          </button>
+        </>
+      ) : context.data.status === 'OWN_REPORT' ? (
+        <>
+          <p>
+            Your report is{' '}
+            {context.data.state === 'RESOLVED'
+              ? 'resolved'
+              : context.data.state === 'UNDER_REVIEW'
+                ? 'under review'
+                : 'awaiting review'}
+            . Only your own statement and private status are shown.
+          </p>
+          <a
+            className="button-secondary"
+            href={`/admin/reports/${context.data.caseId}`}
+          >
+            View your report
+          </a>
+        </>
+      ) : context.data.status === 'ELIGIBLE' ? (
+        <>
+          <p>
+            Tell the review team about an issue with this errand. Your report
+            and status are private.
+          </p>
+          <a
+            className="button-secondary"
+            href={`/admin/reports/new?orderId=${encodeURIComponent(orderId)}`}
+          >
+            Report an issue
+          </a>
+        </>
+      ) : (
+        <p className="subtle">
+          Reporting is not available for your account on this errand. Only
+          verified participants can report while reporting remains open.
+        </p>
+      )}
+    </section>
+  )
+}

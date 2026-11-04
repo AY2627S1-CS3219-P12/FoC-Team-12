@@ -28,6 +28,28 @@ fixtures; a new required field is not a backward-compatible change.
 
 ## Semantics schema validation cannot prove
 
+Admin report-context extension approved by Darryl for Order frontend integration:
+`GET /api/admin/orders/{orderId}/report-context` is a no-store, read-only participant endpoint.
+Caller: browser on the Order screen via gateway; producer: Admin; eligibility dependency: Chat's
+unchanged report-eligibility API. OWN_REPORT exposes only the active JWT actor's own case ID/state
+using an existing statement grant and does not require Chat. Otherwise ELIGIBLE/INELIGIBLE expose
+null case/state; 503 means eligibility/context unavailable and must not be treated as no report.
+401/403 reject identity/account/mode; malformed UUID is 400. Retries have no effect or operation
+identity; POST reporting separately rechecks authorization/eligibility/state and retains its existing
+idempotency contract. Existing HTTP metrics observe status/failure without private log payloads.
+The UI must clear/isolate lookup data across identities and must never cache another actor's report.
+
+Admin resolution extension approved by Darryl: the resolve request optionally includes
+`rejectedActionExplanations` (`operationId`, `explanation`). Admin requires exactly one nonblank
+explanation for each persisted REJECTED action and rejects entries for other operations. Omission
+is valid only when there are no rejected actions. Existing Chat/event shapes are unchanged.
+Admin performs a new Chat read for resolution, requires COMPLETE coverage without blocking gaps,
+and uses a configurable 60-second maximum age for coverage/checkpoint timestamps (five seconds
+future clock tolerance). Under the case lock it rechecks revision, assignment, action states and
+that the Admin checkpoint covers the locally committed source sequence. No claim of globally
+instantaneous cross-service evidence is made. Chat owner integration and checkpoint semantics
+remain pending; this is approval of Admin behavior, not approval on behalf of producer owners.
+
 - UUID relationships: actor.userId=requestedBy, command/outcome aggregateId=targetUserId=Kafka key;
   Order aggregateId=data.orderId; AdminCase aggregateId=data.caseId. Source/producer/type/topic
   must match. Owner outcomes retain operation/case/order/target/actor, not a new request identity.

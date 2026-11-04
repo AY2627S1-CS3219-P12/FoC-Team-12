@@ -1,20 +1,28 @@
 # Admin shared runtime integration
 
-Nominated editor: Darryl's Admin task. This change prepares Compose, gateway, broker and CI;
-it does not record affected-owner approval or activate the existing shared stack.
+Nominated editor: Darryl's Admin task. This change prepares Compose, gateway, broker and CI.
+The regular local activation and owner-review confirmation are recorded below.
 
 ## Owner review before activation
+
+On 4 November 2026 Darryl confirmed that Jun Hui and the affected owners completed the shared
+Admin runtime review, authorizing regular local activation. The table below records the earlier
+runtime handoff; the new Order reporting UI and Admin lookup API still require their own affected
+owner review before merge. Local activation preserves existing volumes and credentials and uses
+the regular gateway; no test accounts/cases or synthetic evidence are seeded into this stack.
 
 | Reviewer | Concrete scope to review | Status / remaining dependency |
 | --- | --- | --- |
 | Darryl — Admin/User | Private DB, signing-key pair and User trust, current eligibility, dashboard routes, test-only account fixtures | Task scope approved; operational key/data handoff and manual acceptance pending |
-| Jun Hui — broker/gateway | Literal topics/groups, least-privilege ACLs, retention, rerunnable initialization, supplier route precedence, shared CI/image publishing | Owner review pending |
-| Eldridge — Credit/Chat | Credit principal's new topics/group, correction outcome ownership, missing real consumer/outcome outbox, Chat DNS and callback trust | Owner review pending; Credit correction implementation and Chat runtime remain absent |
-| XueTing — Order | Broker restart coordination, shared Compose/CI regression impact; existing Order permissions/routes unchanged | Owner review pending |
+| Jun Hui — broker/gateway | Literal topics/groups, least-privilege ACLs, retention, rerunnable initialization, supplier route precedence, shared CI/image publishing | Runtime review complete, confirmed by Darryl on 4 November 2026 |
+| Eldridge — Credit/Chat | Credit principal's new topics/group, correction outcome ownership, missing real consumer/outcome outbox, Chat DNS and callback trust | Runtime review complete per Darryl; Credit correction implementation and Chat runtime remain absent |
+| XueTing — Order | Broker restart coordination, shared Compose/CI regression impact | Runtime review complete per Darryl; new reporting UI/API follow-up review remains pending |
 
-No owner approval is inferred from an automated test. Existing shared containers and volumes
-must remain untouched until these reviews are recorded. Kubernetes/TLS/network-policy deployment
-is outside this local Compose iteration.
+No owner approval is inferred from an automated test. The regular stack was activated after the
+explicit review confirmation, preserving existing databases and broker data. Its gateway is
+`http://localhost:8088`; this checkout uses `ADMIN_DB_HOST_PORT=5545` in ignored `.env`, keeping
+the disposable database on 5544 separate. No fixture accounts, reports or evidence were inserted.
+Kubernetes/TLS/network-policy deployment is outside this local Compose iteration.
 
 ## Runtime and keys
 

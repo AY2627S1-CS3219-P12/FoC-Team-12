@@ -105,6 +105,20 @@ public class CaseService {
         return new ParticipantReport(row(caseId).summary, statement(caseId, actor));
     }
 
+    public record ReportContext(UUID orderId,String status,UUID caseId,AdminCase.State state) { }
+    public ReportContext reportContext(Jwt jwt,UUID orderId) {
+        UUID actor=requireParticipant(jwt);
+        // A statement is the local grant. Never reveal another participant's case through lookup.
+        var own=db.query("SELECT c.id,c.state FROM admin_cases c JOIN admin_statements s ON s.case_id=c.id WHERE c.order_id=? AND s.reporter_id=?",
+            (r,n)->new ReportContext(orderId,"OWN_REPORT",r.getObject("id",UUID.class),AdminCase.State.valueOf(r.getString("state"))),orderId,actor);
+        if(!own.isEmpty())return own.get(0); // Existing private status does not depend on Chat.
+        var eligibility=chat.check(orderId,actor,jwt.getTokenValue());
+        requireParticipant(jwt); // Do not disclose a remote decision after account revocation.
+        if(!eligibility.complete())throw unavailable("Reporting eligibility could not be verified. This is not confirmation that no report exists. Please retry.");
+        boolean closed=Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_cases WHERE order_id=? AND state='RESOLVED')",Boolean.class,orderId));
+        return new ReportContext(orderId,eligibility.eligible()&&!closed?"ELIGIBLE":"INELIGIBLE",null,null);
+    }
+
     public Page queue(Jwt jwt, AdminCase.State state, UUID query, int page, int size) {
         requireAdmin(jwt);
         if (page < 0 || size < 1 || size > 100) throw invalid("Page must be non-negative and size must be between 1 and 100.");
@@ -126,8 +140,12 @@ public class CaseService {
         TransactionTemplate read = new TransactionTemplate(transaction.getTransactionManager());
         read.setReadOnly(true);
         read.setIsolationLevel(org.springframework.transaction.TransactionDefinition.ISOLATION_REPEATABLE_READ);
-        return read.execute(s -> new Detail(row(caseId).summary,
-                db.query("SELECT reporter_id,description,submitted_at FROM admin_statements WHERE case_id=? ORDER BY submitted_at,reporter_id", this::statementRow, caseId), creditActions.list(caseId), null));
+        return read.execute(s -> localDetail(caseId));
+    }
+    Detail localDetail(UUID caseId) {
+        return new Detail(row(caseId).summary,
+                db.query("SELECT reporter_id,description,submitted_at FROM admin_statements WHERE case_id=? ORDER BY submitted_at,reporter_id", this::statementRow, caseId), creditActions.list(caseId),
+                db.query("SELECT resolution FROM admin_case_decisions WHERE case_id=?",r->r.next()?r.getString(1):null,caseId));
     }
     public Summary evidenceCase(Jwt jwt,UUID caseId) {
         requireAdmin(jwt);

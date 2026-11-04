@@ -5,6 +5,7 @@ import { AccessError, checkAccess } from './access'
 import { EvidencePanel } from './EvidencePanel'
 import { formatSingaporeTime } from './time'
 import { CreditActions } from './CreditActions'
+import { ResolutionPanel } from './ResolutionPanel'
 import {
   CaseConversations,
   ParticipantConversationStatus,
@@ -17,6 +18,7 @@ import {
   type Detail,
   type Page,
   type Report,
+  type ReportContext,
   type Summary,
 } from './cases'
 
@@ -332,7 +334,49 @@ function ReportEntry({ actor, orderId }: { actor: string; orderId: string }) {
         </a>
       </section>
     )
-  return <ReportForm key={orderId} actor={actor} orderId={orderId} />
+  return <ReportEntryContext key={orderId} actor={actor} orderId={orderId} />
+}
+function ReportEntryContext({
+  actor,
+  orderId,
+}: {
+  actor: string
+  orderId: string
+}) {
+  const context = useRemote<ReportContext>(`orders/${orderId}/report-context`)
+  if (!context.data) return <Feedback {...context} />
+  if (context.data.orderId !== orderId)
+    return (
+      <p role="alert">Report access could not be verified. Please refresh.</p>
+    )
+  if (
+    context.data.status === 'OWN_REPORT' &&
+    context.data.caseId &&
+    isUuid(context.data.caseId)
+  )
+    return (
+      <section className="case-panel">
+        <h2>You already reported this errand</h2>
+        <p>Continue to your private statement and status.</p>
+        <a className="button" href={'/admin/reports/' + context.data.caseId}>
+          View your report
+        </a>
+      </section>
+    )
+  if (context.data.status !== 'ELIGIBLE')
+    return (
+      <section className="case-panel">
+        <h2>Reporting is not available</h2>
+        <p>
+          Your account cannot submit a report for this errand, or reporting has
+          closed.
+        </p>
+        <a className="button-secondary" href={'/errands/' + orderId}>
+          Back to errand
+        </a>
+      </section>
+    )
+  return <ReportForm actor={actor} orderId={orderId} />
 }
 function ReportForm({ actor, orderId }: { actor: string; orderId: string }) {
   const mutation = useMutation<Report>('foc.report-pending.' + actor)
@@ -444,6 +488,12 @@ function ReportStatusData({ id }: { id: string }) {
         Back to errand
       </a>
       <h2>Report status</h2>
+      {state.data.case.state === 'RESOLVED' && (
+        <p role="status">
+          Review is complete. This case is closed and your case conversation is
+          read only.
+        </p>
+      )}
       <SummaryCard value={state.data.case} />
       <h3>Your statement</h3>
       <p className="statement-text">{state.data.ownStatement.description}</p>
@@ -828,6 +878,14 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         initialActions={state.data.actions}
       />
       <EvidencePanel key={id} caseId={id} orderId={value.orderId} />
+      <ResolutionPanel
+        key={`resolve.${actor}.${id}`}
+        summary={value}
+        actor={actor}
+        actions={state.data.actions}
+        resolution={state.data.resolution}
+        refresh={state.retry}
+      />
       <CaseConversations
         key={`${actor}.${id}`}
         summary={value}

@@ -64,6 +64,7 @@ route, canonical body hash and original outcome. Same key/different request is 4
 | Method/path | Behaviour | Caller |
 | --- | --- | --- |
 | POST /api/admin/reports | Body orderId, description; create statement/case, 201 | Eligible participant |
+| GET /api/admin/orders/{orderId}/report-context | Own report pointer/safe status, or Chat-verified eligibility; unavailable is 503, never absence | Active participant mode |
 | GET /api/admin/reports/{caseId} | Own statement and safe status | Reporting participant |
 | GET /api/admin/cases?status=&query=&page=&size= | Queue/filter; query case/order UUID | Active ADMIN |
 | GET /api/admin/cases/{caseId} | Case detail and evidence availability | Active ADMIN |
@@ -73,6 +74,14 @@ route, canonical body hash and original outcome. Same key/different request is 4
 | POST /api/admin/cases/{caseId}/actions | type CREDIT_ADJUSTMENT/BAN, targetUserId, reason, amount for credit; 202 with operationId | Reviewer |
 | GET /api/admin/cases/{caseId}/actions/{operationId} | Persisted action outcome | Active ADMIN |
 | POST /api/admin/cases/{caseId}/resolve | resolution, expectedRevision | Reviewer |
+
+Resolution implementation refinement approved by Darryl: resolve additionally accepts optional
+`rejectedActionExplanations`, an array of `{operationId, explanation}`. Admin requires an exact
+match to the case's rejected actions; explanations are trimmed 1–2000 characters. A fresh
+server-side Chat timeline read must have COMPLETE coverage, no blocking gaps, coverage/checkpoints
+within the configurable 60-second maximum age, and cover Admin's current committed case sequence.
+The immutable private decision retains the evidence revision/coverage and rejected-action
+explanations; the existing CaseResolved event carries no private reason or explanation.
 
 Unique constraints: orderId and (caseId, reporterId). Lock case for claim/action/resolve; reject
 stale revision and closure races. 401 invalid identity; 403 disallowed action; 404 hidden/missing

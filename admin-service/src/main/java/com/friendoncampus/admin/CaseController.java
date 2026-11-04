@@ -20,6 +20,10 @@ public class CaseController {
     }
     @GetMapping("/api/admin/reports/{caseId}")
     public CaseViews.ParticipantReport status(@AuthenticationPrincipal Jwt actor, @PathVariable UUID caseId) { return cases.reportStatus(actor, caseId); }
+    @GetMapping("/api/admin/orders/{orderId}/report-context")
+    public ResponseEntity<CaseService.ReportContext> context(@AuthenticationPrincipal Jwt actor,@PathVariable UUID orderId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(cases.reportContext(actor,orderId));
+    }
     @GetMapping("/api/admin/cases")
     public CaseViews.Page queue(@AuthenticationPrincipal Jwt actor, @RequestParam(required=false) AdminCase.State status,
             @RequestParam(required=false) UUID query, @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size) {
