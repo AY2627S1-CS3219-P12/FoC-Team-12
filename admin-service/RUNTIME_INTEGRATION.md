@@ -105,8 +105,9 @@ Admin continues to authorize requests locally.
 Admin receives cluster IdempotentWrite only; no Create/Alter or outcome-topic Write.
 Kafka UI receives read/describe access to the four topics and describe access to the groups,
 without business-group Read. Existing core permissions are preserved. Retention is a local
-default, not a production retention agreement. No `admin.events` lifecycle relay, Chat consumer,
-sanctions topic or producer recovery API is introduced in this iteration.
+default, not a production retention agreement. The later case-event delivery iteration adds
+`admin.events` and a separately fenced transactional relay; see the Admin README. Chat consumption
+remains pending. Sanctions and recovery were added in their subsequent iterations.
 Independent topic and principal setup runs in bounded parallel groups; the initializer waits
 for every child and fails if any child fails. Admin starts only after successful initialization.
 

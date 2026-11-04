@@ -90,10 +90,64 @@ Receipts have no automatic expiry in this iteration.
 Each mutation persists a revisioned local audit record atomically. CaseOpened and CaseClaimed
 also persist stable-ID `admin.events` envelope drafts in the outbox, keyed by case ID.
 sourceSequence counts events separately from case revision. Adding a statement has an audit
-record but no invented lifecycle event. No lifecycle Kafka relay is implemented: those outbox rows remain
-pending until a later approved transport/relay iteration. Topic/ACL integration,
-broker delivery and Chat consumption are not verified here. Draft schemas remain
+record but no invented lifecycle event. The lifecycle relay below delivers existing pending rows.
+Chat consumption is not verified here. Draft schemas remain
 subject to affected-owner review; local implementation is not Chat/transport sign-off.
+
+### Case lifecycle delivery
+
+With `ADMIN_KAFKA_ENABLED=true` and `ADMIN_CASE_EVENTS_ENABLED=true` (the latter defaults true),
+the relay drains **all** pending `admin_case_outbox` rows, including pre-migration backlog, to
+`admin.events`, keyed by case ID. It sends the stored envelope unchanged: event ID, UTC time,
+actor, correlation and source sequence are never regenerated. V8 adds durable attempts,
+next-attempt time and sanitized error codes; it preserves existing `published_at` values and
+prevents edits to stored event identity/content.
+
+A delivery-only PostgreSQL coordinator serializes publishers without locking business cases.
+Within a case, an earlier pending row always blocks later rows. A missing sequence or invalid
+envelope remains pending with `SOURCE_SEQUENCE_GAP` or `INVALID_STORED_EVENT`; investigate the
+producer history rather than fabricate or skip evidence. Other cases can continue after the
+blocked row's retry delay. `BROKER_UNCONFIRMED` retains the original row for retry.
+
+Each attempt uses a fresh Kafka producer epoch with a stable transactional ID to fence an old
+publisher after connection loss, then verifies its original database transaction still holds the
+coordinator before sending. A worker resuming after losing that lock cannot publish late even if
+it initializes a newer producer epoch. All replicas sharing one Admin database must use the same
+`ADMIN_CASE_EVENTS_TRANSACTION_ID` (default `admin-case-events-v1`); separate databases sharing
+a broker require different stable IDs under `admin-case-events-`. Consumers must use
+`isolation.level=read_committed`. PostgreSQL and Kafka have no common transaction: Kafka commit
+followed by a database failure can deliver the same event again. Consumers must deduplicate
+by original event ID, verify matching content and reconcile conflicting IDs/sequences.
+
+Defaults: delay/initial delay 2000 ms (`ADMIN_CASE_EVENTS_DELAY`,
+`ADMIN_CASE_EVENTS_INITIAL_DELAY`), retry 10 seconds (`ADMIN_CASE_EVENTS_RETRY_SECONDS`, range
+1–3600). A separate scheduler keeps lifecycle broker delays off command delivery's scheduler.
+Only a confirmed Kafka transaction advances `published_at`; it does not prove Chat ingestion.
+Inspect `event_id, case_id, source_sequence, published_at, attempts, next_attempt_at, last_error`
+in Admin's own outbox for backlog/progress. Logs include IDs and sanitized codes, not payloads.
+
+Broker initialization must precede activation: three-partition `admin.events`, Admin topic
+Write/Describe and transactional-prefix Write/Describe. No Chat principal, consumer or lifecycle
+DLT contract is invented. Shared configuration requires affected-owner review before rollout.
+
+Verification: `./mvnw verify` includes real disposable PostgreSQL/Kafka tests for all four event
+types, existing backlog migration, original bytes/IDs, per-case ordering, competing publishers,
+stale-epoch fencing, broker pause/recovery, invalid/gapped histories and duplicate replay after
+Kafka commit/database rollback. `python admin-service/scripts/runtime_smoke.py` from repository
+root builds the packaged application with a separate authenticated broker and private databases;
+its history fixture and Credit outcome are explicitly test-only, while delivery uses real Kafka.
+It never reads the normal `.env` or seeds normal databases. Its disposable volumes are removed
+on completion. No Chat projection or financial effect is established by these checks.
+Set `ADMIN_RUNTIME_CASE_EVENTS_ONLY=true` for the narrower packaged four-event transport/restart
+check. It omits User/Gateway and uses explicit stored-history fixtures, never simulated owner
+outcomes or live reporting. The default mode still checks the broader User/Gateway journey.
+
+Manual operational acceptance after owner-reviewed activation: inspect the original pending
+outbox IDs/sequences; verify committed Kafka records with matching case keys/content and advancing
+`published_at`; restart only Admin and confirm progress persists. Exercise broker interruption
+only in a disposable stack, confirm rows stay pending, restore the broker and confirm original-ID
+delivery before later case sequences. A repeated original record after uncertain database commit
+is valid at-least-once recovery. Do not stop the regular broker to perform this check.
 
 `/admin` opens the live report queue first; account/supplier tools follow below it.
 Open reports are selected by default. Status filters, exact case/errand ID search and page
@@ -612,8 +666,8 @@ conversation initiation are rejected. The internal callback returns read-only co
 The participant sees RESOLVED and their own statement, never the private decision reason.
 
 Chat is still an external dependency; successful resolution tests use explicit test-only evidence.
-Real Chat read-only send enforcement, producer checkpoint integration and Admin lifecycle Kafka
-relay remain owner dependencies. An unavailable Chat leaves the live case open with retry feedback.
+Real Chat read-only send enforcement and producer checkpoint integration remain owner dependencies.
+An unavailable Chat leaves the live case open with retry feedback.
 
 Manual acceptance: assigned/other reviewer permissions, reason and rejected-action explanations,
 confirmation/cancel, pending/unknown blockers, stale refresh, Chat-unavailable feedback, immutable

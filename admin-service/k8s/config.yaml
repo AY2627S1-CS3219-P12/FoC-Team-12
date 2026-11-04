@@ -12,6 +12,8 @@ data:
   ADMIN_USER_JWKS: http://user-service.foc-local.svc.cluster.local.:8081/.well-known/jwks.json
   ADMIN_CHAT_URL: http://chat-service.foc-local.svc.cluster.local.:8085
   ADMIN_KAFKA_ENABLED: "true"
+  ADMIN_CASE_EVENTS_ENABLED: "true"
+  ADMIN_CASE_EVENTS_TRANSACTION_ID: admin-case-events-v1
   KAFKA_BOOTSTRAP_SERVERS: kafka.foc-local.svc.cluster.local.:9092
   SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAINTEXT
   SPRING_KAFKA_PROPERTIES_SASL_MECHANISM: PLAIN

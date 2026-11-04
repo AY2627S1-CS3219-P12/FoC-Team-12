@@ -6,6 +6,43 @@ requirements or approval of draft interfaces. Product scope remains in the Admin
 wire shapes in `docs/contracts/` remain review drafts until the affected owners agree them.
 Never replace an unavailable dependency with synthetic data in application code.
 
+## Case-event delivery handoff
+
+Admin owns the new V8 outbox progress migration and lifecycle relay. It includes existing pending
+events, preserves original envelopes/IDs and serializes delivery with a dedicated database
+coordinator. Stable Kafka transaction epochs plus a post-initialization check of the original
+database lease prevent obsolete workers from publishing late. Kafka commit followed by failed
+database progress can repeat the original event: Chat must use `read_committed`, deduplicate
+matching event IDs and investigate conflicting content/sequences. Missing history remains blocked.
+
+Verification: the full Admin build passed 89 tests; after the concurrency repair, the affected
+eight lifecycle and two command transport tests passed. These use disposable real PostgreSQL and
+Kafka. They cover migration/backlog, ordering, immutable content, competing publishers, lost-lock
+resumption, fencing, broker outage/recovery and original-ID duplicate replay. Command outcomes in
+the transport regressions are explicitly test-produced, not User/Credit domain acceptance.
+Contract examples/semantics, CI syntax, environment consistency and initializer CLI-mock tests pass.
+The final transport-only packaged check also passed: real private PostgreSQL, authenticated Kafka
+with scoped Admin credentials, all four lifecycle types with exact original content/IDs/order,
+and unchanged confirmed delivery progress after restarting Admin. Its stored history is explicitly
+test-only; no User/Credit outcome or Chat projection is simulated as live acceptance. The owned
+disposable project and volumes were removed afterward.
+
+The read-only `foc-local` check found the previous image `foc-admin-service:local-22bc8cc` and
+missing lifecycle enablement/transaction-ID settings, `admin.events`, Admin topic Write/Describe
+and transactional-prefix Write/Describe. The existing single-node transaction-state replication/
+min-ISR settings and Admin cluster idempotent-write permission were present on the repeated live
+check. No new configuration was applied there. Jun Hui and affected owners (including Eldridge
+for Chat/Credit and XueTing for shared broker review) must
+review the prepared initializer, Compose, cluster configuration and CI changes before activation.
+Existing network policies already permit Admin-to-Kafka. No other service backend was changed.
+
+The broad packaged User/Gateway check failed because its disposable User container was unhealthy
+before Admin started; it is not a pass. The standalone Kafka smoke also did not pass locally
+(Windows path conversion, followed by repeated disposable health-check timeouts; the latter
+attempt was stopped to reduce contention). Neither failure authorizes changes to User or the
+regular stacks. Normal databases/volumes were neither seeded nor reset. The transport-only smoke
+is separate from those broader checks, and does not establish Chat ingestion or financial effects.
+
 ## Current boundary
 
 Admin owns cases, statements, reviewer/state, audit, request receipts and its private database.
@@ -41,7 +78,7 @@ thread in session storage. No message content is stored in Admin's database.
 | --- | --- | --- | --- |
 | E1: Complete Order history — XueTing | Publish full lifecycle/assignment facts and producer-owned stable recovery snapshots/checkpoints, including withdrawn couriers and historical locations. Agree pre-stream baseline policy. | Historical reporting/conversations, complete timeline, resolution | Initial/edit/accept/withdraw/pickup/delivery/terminal scenarios recover with original identities and contiguous evidence sequences; missing legacy facts remain explicit gaps. |
 | E2: Credit evidence — Eldridge | Confirm order-linked ledger outcome/export shapes, stable evidence sequence for existing core events and case-scoped correction history. Do not silently add fields to deployed core messages. | Complete timeline, financial review/actions and resolution | Reconciled producer checkpoints and ledger effects; duplicate replay does not repeat a financial effect; unavailable history is UNKNOWN/INCOMPLETE. |
-| E3: Admin event delivery/recovery — Darryl + Jun Hui for transport | Admin outbox has CaseOpened/CaseClaimed; broker relay/ACL/topics/replay remain deferred. Conversation reference audit does not invent a new lifecycle event. Agree durable relay/reconciliation and private export retention/expiry. Exports preserve original IDs/checkpoints; Admin export ingestion time is local persistence time. | Chat projection of Admin activity, complete timeline, final acceptance | Real-broker publish/retry/restart/recovery tests, original IDs retained, no gaps/duplicates; agreed snapshot retention and expired-cursor outcomes. |
+| E3: Admin event delivery/recovery — Darryl + Jun Hui for transport | Admin now implements a fenced transactional relay for all four existing lifecycle types and pre-existing pending rows; shared topic/ACL/configuration changes await affected-owner review and activation. Chat must use read_committed and event-ID deduplication. Conversation reference audit invents no lifecycle event. Private export retention/expiry agreement remains open. | Live Chat projection of Admin activity, complete timeline, final acceptance | Real PostgreSQL/Kafka tests cover original IDs/content, ordering, concurrent publishers, fencing, outage recovery and duplicate replay after database failure. Live cluster still lacks topic/ACL/config/image activation; Chat projection and snapshot retention/expired-cursor acceptance remain pending. |
 | E4: Coverage semantics — Eldridge + Darryl + affected producers | Confirm per-source committed/projected checkpoints, gap classifications, pinned timeline revision and pagination. A running Chat or empty page never establishes complete history. | Evidence verification and resolution guards | Late/out-of-order/conflicting events, backfill overlap, checkpoint outage and producer lag tested; COMPLETE only through explicit verified limits. |
 | I1: Current User eligibility and role delegation — Darryl (User owner), Eldridge (Chat consumer) | Admin's User checks exist; verify actual Chat JWT/service trust and current active/admin checks. Keep effective participant mode separate from Admin access; propagate revoked/unavailable identity safely. | All privileged integration and conversation authorization | Revocation during requests, inactive participant, mode changes, wrong key/audience/subject and User outage tests across real services. |
 | I2: Shared deployment — nominated editor, Jun Hui coordinates; all affected owners review | Gateway/Compose/env/CI, service DNS/TLS, signing-key distribution/rotation, broker access and both ingress/egress default-deny policies need coordinated implementation. Required Compose variables must also reach env examples, Compose CI jobs and Kafka smoke checks. | Deployed N2H, live Chat and final acceptance | Actual gateway/TLS/network/broker smoke checks and compose_env_check pass; no public exposure of internal APIs. |

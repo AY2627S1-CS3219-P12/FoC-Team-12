@@ -103,3 +103,22 @@ Admin's backend error/retry logic.
 Admin's DB/User/Chat/Kafka addresses and the gateway's Admin destination use absolute namespace
 DNS names to avoid reproducing the cold-start short-name lookup failures. This is runtime
 configuration only; it does not bypass service authentication or broaden network permissions.
+
+## Case-event relay rollout prerequisites
+
+The case-event delivery change prepares `ADMIN_CASE_EVENTS_ENABLED=true` and the stable
+`ADMIN_CASE_EVENTS_TRANSACTION_ID=admin-case-events-v1`. Before activating a new Admin image,
+obtain affected-owner review and run the reviewed broker initializer to create `admin.events`
+and grant Admin topic Write/Describe plus Write/Describe on the `admin-case-events-` transaction
+prefix. The existing Admin-to-Kafka network policy already permits this broker connection.
+Do not apply only the enabled flag to an old image or infer delivery from HTTP readiness.
+
+`./admin-service/k8s/Check-CaseEventConfiguration.ps1 -Profile foc-local`
+reads deployed image/config and broker topic/ACL metadata without modifying the cluster.
+It fails with a list of missing prerequisites. Passing metadata checks alone does not prove the
+image implements delivery or that Chat consumes it. The checked cluster still has the previous
+image and lacks these new settings/topic/ACLs; no case-event rollout was performed in this task.
+
+All replicas using one database share a stable transaction ID; a separate database using the
+same broker needs its own ID under the allowed prefix. Chat must consume with `read_committed`
+and deduplicate event IDs. PostgreSQL/Kafka crash recovery can repeat original events.

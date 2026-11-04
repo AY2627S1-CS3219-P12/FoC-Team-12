@@ -6,6 +6,8 @@ inside this project's databases (not a reporting, email verification or bootstra
 Credit outcomes are simulated by a test producer using Credit's broker principal;
 no Credit application or ledger runs. User bans/outcomes are produced by real User.
 Never run the simulated Credit producer against a shared stack.
+ADMIN_RUNTIME_CASE_EVENTS_ONLY=true omits User/Gateway and verifies four TEST-ONLY stored
+history envelopes through packaged Admin, real PostgreSQL and authenticated Kafka, then restart.
 """
 
 import base64
@@ -34,7 +36,49 @@ def run(args, *, env=None, data=None, timeout=600):
     return result.stdout.strip()
 
 
+def check_case_events(compose, sql, broker, poll):
+    """TEST ONLY stored history; real packaged producer, database and SASL broker."""
+    case, actor, participant, order = (str(uuid.uuid4()) for _ in range(4))
+    sql(f"INSERT INTO admin_cases(id,order_id,state,reviewer_id,revision,source_sequence,correlation_id) VALUES ('{case}','{order}','UNDER_REVIEW','{actor}',4,4,'{case}')")
+    originals = []
+    for sequence, event_type in enumerate(("CaseOpened", "CaseClaimed", "CaseActionCompleted", "CaseResolved"), 1):
+        event_id, owner_id = str(uuid.uuid4()), str(uuid.uuid4())
+        occurred = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        data = dict(caseId=case, orderId=order, sourceSequence=sequence)
+        if event_type == "CaseOpened":
+            data["reporterId"] = participant
+        elif event_type == "CaseActionCompleted":
+            data.update(operationId=str(uuid.uuid4()), ownerEventId=owner_id, targetUserId=participant, result="REJECTED")
+        else:
+            data["reviewerId"] = actor
+        if event_type == "CaseResolved":
+            data["resolvedAt"] = occurred
+        fact = dict(eventId=event_id, eventType=event_type, eventVersion=1, aggregateType="AdminCase",
+                    aggregateId=case, aggregateVersion=sequence, occurredAt=occurred, producer="admin-service",
+                    correlationId=case, causationId=owner_id if event_type == "CaseActionCompleted" else None,
+                    actor=dict(type="USER", userId=participant if sequence == 1 else actor,
+                               role="REQUESTER" if sequence == 1 else "ADMIN"), data=data)
+        original = json.dumps(fact, separators=(",", ":")); originals.append(original)
+        sql(f"INSERT INTO admin_case_outbox(event_id,case_id,source_sequence,event_type,topic,payload,created_at) VALUES ('{event_id}','{case}',{sequence},'{event_type}','admin.events','{original}',CURRENT_TIMESTAMP)")
+    poll(lambda: sql(f"SELECT count(*) FROM admin_case_outbox WHERE case_id='{case}' AND published_at IS NOT NULL") == "4", seconds=120)
+    committed = broker('source /opt/foc-kafka/lib.sh; f=$(mktemp); trap \'rm -f "$f"\' EXIT; '
+        'write_client_properties "$f" kafka_ui "$KAFKA_UI_BROKER_PASSWORD"; '
+        'kafka_command kafka-console-consumer.sh --bootstrap-server localhost:9092 --command-config "$f" '
+        '--topic admin.events --group kafka-ui-browser-lifecycle-test --from-beginning '
+        '--isolation-level read_committed --timeout-ms 30000 --max-messages 4 '
+        '--property print.key=true --property key.separator="|"')
+    records = [line.split("|", 1) for line in committed.splitlines() if line.startswith(case + "|")]
+    assert records == [[case, original] for original in originals], "Committed lifecycle identity/content/order mismatch"
+    marks = sql(f"SELECT event_id,published_at,attempts FROM admin_case_outbox WHERE case_id='{case}' ORDER BY source_sequence")
+    compose("restart", "admin-service")
+    compose("up", "-d", "--no-deps", "--wait", "admin-service", timeout=180)
+    assert marks == sql(f"SELECT event_id,published_at,attempts FROM admin_case_outbox WHERE case_id='{case}' ORDER BY source_sequence")
+    print("PASS: packaged Admin, real PostgreSQL, REAL SASL transactional delivery of all four types, original IDs/content/order and durable progress after Admin restart", flush=True)
+    print("TEST ONLY: stored history fixture. NOT VERIFIED: User/Gateway journey, Chat ingestion or owner-service effects", flush=True)
+
+
 def main():
+    case_events_only = os.environ.get("ADMIN_RUNTIME_CASE_EVENTS_ONLY") == "true"
     openssl = shutil.which("openssl")
     if not openssl and os.name == "nt":
         candidate = Path("C:/Program Files/Git/usr/bin/openssl.exe")
@@ -87,6 +131,8 @@ def main():
       - KAFKA_SCRIPTS:/opt/foc-kafka:ro
       - kafka-data:/var/lib/kafka
   kafka-init:
+    environment:
+      JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1
     volumes: !override
       - KAFKA_SCRIPTS:/opt/foc-kafka:ro
   admin-service:
@@ -100,6 +146,15 @@ def main():
   gateway:
     ports: !override ["127.0.0.1::8088"]
 """.replace("KAFKA_SCRIPTS", scripts.as_posix()), encoding="utf-8")
+        if case_events_only:
+            # This transport-only mode needs no User application, account or gateway.
+            override.write_text(override.read_text(encoding="utf-8").replace("  admin-service:\n", """  admin-service:
+    depends_on: !override
+      admin-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+"""), encoding="utf-8")
         empty = directory / "empty.env"
         empty.touch()
         prefix = ["docker", "compose", "--project-directory", str(ROOT), "--env-file", str(empty),
@@ -126,10 +181,13 @@ def main():
 
         try:
             compose("config", "--quiet")
-            print("Building isolated Admin, User and gateway images", flush=True)
-            compose("build", "admin-service", "user-service", "gateway", timeout=1200)
-            print("Starting private databases, User, authenticated broker and Admin", flush=True)
+            print("Building isolated Admin image" if case_events_only else "Building isolated Admin, User and gateway images", flush=True)
+            compose("build", *( ["admin-service"] if case_events_only else ["admin-service", "user-service", "gateway"] ), timeout=1200)
+            print("Starting private Admin database, authenticated broker and Admin" if case_events_only else "Starting private databases, User, authenticated broker and Admin", flush=True)
             compose("up", "-d", "--wait", "admin-service", timeout=1200)
+            if case_events_only:
+                check_case_events(compose, sql, broker, poll)
+                return
             compose("up", "-d", "--no-deps", "gateway")
             address = compose("port", "gateway", "8088").splitlines()[0]
             base = "http://" + address
@@ -176,10 +234,24 @@ INSERT INTO user_roles(user_id,role) SELECT id,'ADMIN' FROM users WHERE email='{
             assert http("/api/admin/session", token=token)[0] == 200, "User JWKS/current eligibility trust failed"
             print("PASS: gateway UI, private routes, real User JWT and current Admin eligibility", flush=True)
             actor, case, order, target = login["userId"], str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
-            sql(f"""INSERT INTO admin_cases(id,order_id,state,reviewer_id,revision) VALUES ('{case}','{order}','UNDER_REVIEW','{actor}',1);
+            sql(f"""INSERT INTO admin_cases(id,order_id,state,reviewer_id,revision,source_sequence,correlation_id) VALUES ('{case}','{order}','UNDER_REVIEW','{actor}',2,2,'{case}');
 INSERT INTO admin_case_participants(case_id,user_id) VALUES ('{case}','{target}');
 INSERT INTO admin_statements(case_id,reporter_id,description,submitted_at,eligibility_revision)
 VALUES ('{case}','{target}','TEST ONLY runtime transport',CURRENT_TIMESTAMP,'TEST-ONLY');""")
+            # Explicit TEST-ONLY stored history, never a Chat/live reporting fallback.
+            for sequence, event_type, event_actor, role, field in (
+                (1, "CaseOpened", target, "REQUESTER", "reporterId"),
+                (2, "CaseClaimed", actor, "ADMIN", "reviewerId"),
+            ):
+                event_id = str(uuid.uuid4())
+                occurred = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+                fact = dict(eventId=event_id, eventType=event_type, eventVersion=1,
+                            aggregateType="AdminCase", aggregateId=case, aggregateVersion=sequence,
+                            occurredAt=occurred, producer="admin-service", correlationId=case,
+                            causationId=None, actor=dict(type="USER", userId=event_actor, role=role),
+                            data=dict(caseId=case, orderId=order, sourceSequence=sequence, **{field: event_actor}))
+                original = json.dumps(fact, separators=(",", ":")).replace("'", "''")
+                sql(f"INSERT INTO admin_case_outbox(event_id,case_id,source_sequence,event_type,topic,payload,created_at) VALUES ('{event_id}','{case}',{sequence},'{event_type}','admin.events','{original}',CURRENT_TIMESTAMP)")
             key = str(uuid.uuid4())
             path = f"/api/admin/cases/{case}/actions"
             body = {"type": "CREDIT_ADJUSTMENT", "targetUserId": target, "amount": -5,
@@ -222,6 +294,21 @@ VALUES ('{case}','{target}','TEST ONLY runtime transport',CURRENT_TIMESTAMP,'TES
             assert sql("SELECT count(*) FROM admin_action_inbox") == "1", "Duplicate outcome applied twice"
             assert sql("SELECT count(*) FROM admin_case_outbox WHERE event_type='CaseActionCompleted'") == "1"
             print("PASS: TEST-ONLY rejected outcomes consumed once despite duplicate delivery", flush=True)
+            poll(lambda: sql(f"SELECT count(*) FROM admin_case_outbox WHERE case_id='{case}' AND published_at IS NOT NULL") == "3")
+            broker('source /opt/foc-kafka/lib.sh; write_client_properties /tmp/runtime-viewer.properties kafka_ui "$KAFKA_UI_BROKER_PASSWORD"')
+            committed = broker('timeout 40 /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 '
+                '--command-config /tmp/runtime-viewer.properties --topic admin.events '
+                '--group kafka-ui-browser-lifecycle-test --from-beginning --isolation-level read_committed '
+                '--max-messages 3 --property print.key=true --property key.separator="|"')
+            records = [line.split("|", 1) for line in committed.splitlines() if line.startswith(case + "|")]
+            assert len(records) == 3, "Missing committed lifecycle history"
+            for sequence, (record_key, original) in enumerate(records, 1):
+                assert record_key == case
+                assert json.loads(original)["data"]["sourceSequence"] == sequence
+                assert original == sql(f"SELECT payload FROM admin_case_outbox WHERE case_id='{case}' AND source_sequence={sequence}"), "Lifecycle identity/payload changed"
+            print("PASS: REAL SASL lifecycle transactions and original stored history in case order; history fixture and Credit result are TEST ONLY", flush=True)
+            delivery_marks = sql(f"SELECT event_id,published_at,attempts FROM admin_case_outbox WHERE case_id='{case}' AND source_sequence<=3 ORDER BY source_sequence")
+
             # Real User sanctions: its consumer is temporarily disabled while its auth API stays up.
             def user_sql(query):
                 return compose("exec", "-T", "user-db", "psql", "-U", env["USER_DB_USER"], "-d", env["USER_DB_NAME"],
@@ -301,6 +388,7 @@ VALUES ('{case}','{target}','TEST ONLY runtime transport',CURRENT_TIMESTAMP,'TES
                 review_file.unlink(missing_ok=True);done_file.unlink(missing_ok=True)
             compose("restart", "admin-service")
             compose("up", "-d", "--no-deps", "--wait", "admin-service", timeout=180)
+            assert delivery_marks == sql(f"SELECT event_id,published_at,attempts FROM admin_case_outbox WHERE case_id='{case}' AND source_sequence<=3 ORDER BY source_sequence")
             assert json.loads(http(path + "/" + operation, token=token)[1])["status"] == "REJECTED"
             # Exercise failure without ever changing the normal User Service.
             status, login_body=http("/api/users/login","POST",{"email":email,"password":password})

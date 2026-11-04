@@ -157,7 +157,7 @@ wait_checks() {
 }
 
 pids=()
-for topic in user.events order.events credit.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events; do
+for topic in user.events order.events credit.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
   verify_topic "$topic" 3 604800000 &
   pids+=("$!")
 done
@@ -170,7 +170,7 @@ done
 wait_checks "${pids[@]}"
 
 # Fetch exact-resource snapshots concurrently, then use the existing per-resource assertions.
-for topic_set in 'user.events order.events credit.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events' \
+for topic_set in 'user.events order.events credit.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events' \
   'user.events.DLT order.events.DLT credit.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT'; do
   pids=()
   for topic in $topic_set; do
@@ -218,12 +218,17 @@ verify_topic_acl admin_service WRITE credit.admin.events.DLT
 verify_topic_acl admin_service READ credit.admin.events
 verify_group_acl admin_service READ admin-service-credit
 verify_cluster_acl admin_service IDEMPOTENT_WRITE
+verify_topic_acl admin_service WRITE admin.events
+verify_topic_acl admin_service DESCRIBE admin.events
+transaction_acl=$(kafka_command kafka-acls.sh "${admin[@]}" --list --transactional-id admin-case-events- --resource-pattern-type prefixed)
+verify_acl_line "$transaction_acl" admin_service WRITE 'case lifecycle transactional identity'
+verify_acl_line "$transaction_acl" admin_service DESCRIBE 'case lifecycle transactional identity'
 verify_topic_acl credit_service READ admin.credit.commands
 verify_group_acl credit_service READ credit-service-admin
 verify_topic_acl credit_service WRITE credit.admin.events
 verify_topic_acl credit_service WRITE admin.credit.commands.DLT
 
-for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT admin.credit.commands credit.admin.events admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT; do
+for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT admin.credit.commands credit.admin.events admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT admin.events; do
   verify_topic_acl kafka_ui READ "$topic"
   verify_topic_acl kafka_ui DESCRIBE "$topic"
   verify_topic_acl kafka_ui DESCRIBE_CONFIGS "$topic"

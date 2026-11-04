@@ -6,6 +6,11 @@ the document editor; Eldridge reviews Chat/Credit, XueTing Order/Notification, J
 Approved scope: [Admin](../integration/admin-service-spec.md),
 [Chat](../../chat-service/README.md), [Notification](../../notification-service/README.md).
 
+Admin's lifecycle producer now implements the existing `admin.events` shapes without changing
+this catalogue. Its approved delivery refinement requires `read_committed` consumers and original
+event-ID deduplication: see [delivery semantics](../integration/admin-command-contract.md#admin-lifecycle-delivery-refinement).
+Implementation/tests do not ratify the remaining draft interfaces or establish live Chat ingestion.
+
 | File | Purpose |
 | --- | --- |
 | n2h.openapi.json | OpenAPI 3.1 for new Admin, Chat, Notification and internal producer evidence/auth APIs |
