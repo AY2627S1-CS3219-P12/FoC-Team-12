@@ -72,7 +72,7 @@ public class EvidenceExportService {
                 EvidenceValidation.require("USER".equals(event.path("actor").path("type").asText()));
                 UUID actor=EvidenceValidation.uuid(event.path("actor"),"userId");
                 if(!"CaseActionCompleted".equals(type))EvidenceValidation.equalUuid(event.path("data"),"CaseOpened".equals(type)?"reporterId":"reviewerId",actor);
-                else {EvidenceValidation.uuid(event.path("data"),"operationId");EvidenceValidation.uuid(event.path("data"),"ownerEventId");EvidenceValidation.uuid(event.path("data"),"targetUserId");EvidenceValidation.choice(event.path("data"),"result",Set.of("APPLIED","REJECTED"));}
+                else {EvidenceValidation.uuid(event.path("data"),"operationId");EvidenceValidation.uuid(event.path("data"),"ownerEventId");EvidenceValidation.uuid(event.path("data"),"targetUserId");EvidenceValidation.choice(event.path("data"),"result",Set.of("APPLIED","REJECTED","NO_CHANGE"));}
                 EvidenceValidation.choice(event.path("actor"),"role","CaseOpened".equals(type)?Set.of("REQUESTER","COURIER"):Set.of("ADMIN"));
             }catch(Exception ex){throw missingBaseline();}
             Map<String,Object> data=new LinkedHashMap<>();data.put("kind","ADMIN");data.put("caseId",caseId);data.put("operationId",null);data.put("targetUserId",null);data.put("result",null);

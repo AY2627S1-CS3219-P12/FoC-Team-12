@@ -1,31 +1,33 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CaseError,
   isUuid,
   request,
-  type CreditAction,
+  type AdminAction,
   type Summary,
 } from './cases'
 import { formatSingaporeTime } from './time'
 
 type Input = {
-  type: 'CREDIT_ADJUSTMENT'
+  type: 'CREDIT_ADJUSTMENT' | 'BAN'
   targetUserId: string
-  amount: number
+  amount?: number
   reason: string
 }
 type Pending = { key: string; body: Input }
-function validateAction(value: CreditAction, caseId: string): CreditAction {
+function validateAction(value: AdminAction, caseId: string): AdminAction {
   if (
     !value ||
     !isUuid(value.operationId) ||
     value.caseId !== caseId ||
     !isUuid(value.targetUserId) ||
-    value.type !== 'CREDIT_ADJUSTMENT' ||
-    !Number.isInteger(value.amount) ||
-    value.amount === 0 ||
-    value.amount < -2147483648 ||
-    value.amount > 2147483647 ||
+    !['CREDIT_ADJUSTMENT', 'BAN'].includes(value.type) ||
+    (value.type === 'BAN'
+      ? value.amount !== null
+      : !Number.isInteger(value.amount) ||
+        value.amount === 0 ||
+        value.amount < -2147483648 ||
+        value.amount > 2147483647) ||
     typeof value.reason !== 'string' ||
     !value.reason.trim() ||
     value.reason.length > 2000 ||
@@ -42,12 +44,12 @@ function validateAction(value: CreditAction, caseId: string): CreditAction {
     throw new Error('Invalid action response')
   return value
 }
-const failure = (e: unknown) =>
+const actionFailure = (e: unknown, ban: boolean) =>
   e instanceof CaseError && [401, 403, 404].includes(e.status)
     ? 'You no longer have access to these case actions. Refresh case access.'
     : e instanceof CaseError && e.status === 409
       ? 'This request conflicts with the current case or an earlier operation. Refresh case access; do not create a replacement while its outcome is uncertain.'
-      : 'The action service is unavailable. No new financial outcome is confirmed. Retry an unconfirmed submission with the same request.'
+      : `The action service is unavailable. No new ${ban ? 'account' : 'financial'} outcome is confirmed. Retry an unconfirmed submission with the same request.`
 const explanations = {
   PENDING:
     'Accepted by Admin. Waiting for Credit to confirm the financial outcome.',
@@ -62,22 +64,39 @@ export function CreditActions({
   actorId,
   participantIds,
   initialActions = [],
+  kind = 'CREDIT_ADJUSTMENT',
 }: {
   summary: Summary
   actorId: string
   participantIds: string[]
-  initialActions?: CreditAction[]
+  initialActions?: AdminAction[]
+  kind?: 'CREDIT_ADJUSTMENT' | 'BAN'
 }) {
-  const storageKey = `foc.credit-action-pending.${actorId}.${summary.caseId}`
+  const ban = kind === 'BAN'
+  const failure = useCallback((e: unknown) => actionFailure(e, ban), [ban])
+  const headingId = ban ? 'ban-actions-title' : 'credit-actions-title'
+  const storageKey = `foc.${ban ? 'ban' : 'credit'}-action-pending.${actorId}.${summary.caseId}`
+  const labels = ban
+    ? {
+        PENDING:
+          'Accepted by Admin. Waiting for User Service to confirm the account outcome.',
+        UNKNOWN: explanations.UNKNOWN,
+        SUCCEEDED:
+          'User Service confirmed this ban request. The account can later be reactivated through User management.',
+        REJECTED:
+          'User Service rejected this request. Account access was not changed by this operation.',
+      }
+    : explanations
   const [pending, setPending] = useState<Pending | null>(() => {
     try {
       const p = JSON.parse(sessionStorage.getItem(storageKey) || 'null')
       return p &&
         isUuid(p.key) &&
-        p.body?.type === 'CREDIT_ADJUSTMENT' &&
+        p.body?.type === kind &&
         isUuid(p.body.targetUserId) &&
-        Number.isInteger(p.body.amount) &&
-        p.body.amount !== 0 &&
+        (ban
+          ? p.body.amount === undefined
+          : Number.isInteger(p.body.amount) && p.body.amount !== 0) &&
         typeof p.body.reason === 'string'
         ? p
         : null
@@ -85,9 +104,11 @@ export function CreditActions({
       return null
     }
   })
-  const [actions, setActions] = useState<CreditAction[]>(() => {
+  const [actions, setActions] = useState<AdminAction[]>(() => {
     try {
-      return initialActions.map((a) => validateAction(a, summary.caseId))
+      return initialActions
+        .map((a) => validateAction(a, summary.caseId))
+        .filter((a) => a.type === kind)
     } catch {
       return []
     }
@@ -102,10 +123,10 @@ export function CreditActions({
   })
   const [target, setTarget] = useState(pending?.body.targetUserId || '')
   const [direction, setDirection] = useState<'add' | 'subtract'>(
-    pending && pending.body.amount < 0 ? 'subtract' : 'add',
+    pending && (pending.body.amount ?? 0) < 0 ? 'subtract' : 'add',
   )
   const [amount, setAmount] = useState(
-    pending ? String(Math.abs(pending.body.amount)) : '',
+    pending ? String(Math.abs(pending.body.amount ?? 0)) : '',
   )
   const [reason, setReason] = useState(pending?.body.reason || '')
   const [confirm, setConfirm] = useState(false)
@@ -130,10 +151,11 @@ export function CreditActions({
   const numeric = Number(amount)
   const valid =
     eligible.includes(target) &&
-    /^\d+$/.test(amount) &&
-    Number.isSafeInteger(numeric) &&
-    numeric > 0 &&
-    numeric <= 2147483647 &&
+    (ban ||
+      (/^\d+$/.test(amount) &&
+        Number.isSafeInteger(numeric) &&
+        numeric > 0 &&
+        numeric <= 2147483647)) &&
     reason.trim().length > 0 &&
     reason.trim().length <= 2000
   useEffect(() => {
@@ -158,12 +180,13 @@ export function CreditActions({
       try {
         const updates = await Promise.all(
           targets.map((a) =>
-            request<CreditAction>(
+            request<AdminAction>(
               `cases/${summary.caseId}/actions/${a.operationId}`,
               controller.signal,
             ).then((v) => {
               const result = validateAction(v, summary.caseId)
               if (
+                result.type !== kind ||
                 result.operationId !== a.operationId ||
                 result.targetUserId !== a.targetUserId ||
                 result.amount !== a.amount ||
@@ -205,15 +228,17 @@ export function CreditActions({
       controller.abort()
       clearTimeout(timer)
     }
-  }, [summary.caseId, refresh, actions.length])
+  }, [summary.caseId, refresh, actions.length, kind, failure])
   async function submit() {
     if (guard.current || !writable || (!pending && !valid)) return
     const operation: Pending = pending || {
       key: crypto.randomUUID(),
       body: {
-        type: 'CREDIT_ADJUSTMENT',
+        type: kind,
         targetUserId: target,
-        amount: direction === 'subtract' ? -numeric : numeric,
+        ...(!ban
+          ? { amount: direction === 'subtract' ? -numeric : numeric }
+          : {}),
         reason: reason.trim(),
       },
     }
@@ -234,7 +259,7 @@ export function CreditActions({
     const timer = window.setTimeout(() => controller.abort(), 8000)
     try {
       const value = validateAction(
-        await request<CreditAction>(
+        await request<AdminAction>(
           `cases/${summary.caseId}/actions`,
           controller.signal,
           operation,
@@ -243,8 +268,9 @@ export function CreditActions({
       )
       if (!active.current) return
       if (
+        value.type !== kind ||
         value.targetUserId !== operation.body.targetUserId ||
-        value.amount !== operation.body.amount ||
+        value.amount !== (operation.body.amount ?? null) ||
         value.reason !== operation.body.reason
       )
         throw new Error('Mismatched acceptance')
@@ -280,27 +306,28 @@ export function CreditActions({
     }
   }
   return (
-    <section
-      className="case-panel credit-actions"
-      aria-labelledby="credit-actions-title"
-    >
+    <section className="case-panel credit-actions" aria-labelledby={headingId}>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">Administrative correction</p>
-          <h2 id="credit-actions-title">Credit additions and subtractions</h2>
+          <p className="eyebrow">
+            {ban ? 'Account safety' : 'Administrative correction'}
+          </p>
+          <h2 id={headingId}>
+            {ban ? 'Account ban requests' : 'Credit additions and subtractions'}
+          </h2>
         </div>
         <button
           className="button-secondary"
           disabled={busy || denied}
           onClick={() => setRefresh((n) => n + 1)}
         >
-          Refresh action status
+          {ban ? 'Refresh ban status' : 'Refresh action status'}
         </button>
       </div>
       <p>
-        These corrections add or remove available credits independently of an
-        errand’s reward. Credit Service decides and confirms the financial
-        outcome.
+        {ban
+          ? 'Request a reversible ban for a reporting participant. User Service checks current administrator access and protects self-access and the final active administrator.'
+          : 'These corrections add or remove available credits independently of an errand’s reward. Credit Service decides and confirms the financial outcome.'}
       </p>
       {error && (
         <p role="alert" className="workspace-error">
@@ -316,7 +343,14 @@ export function CreditActions({
       {historyUnavailable && (
         <p role="alert" className="workspace-error">
           Action history could not be verified. Refresh the case before
-          requesting a new correction.
+          requesting a new action.
+        </p>
+      )}
+      {ban && (
+        <p>
+          <a className="button-secondary" href="/?view=users">
+            Manage accounts and reactivation
+          </a>
         </p>
       )}
       {!denied && (
@@ -327,8 +361,9 @@ export function CreditActions({
                 <li key={a.operationId}>
                   <div className="section-heading">
                     <h3>
-                      {a.amount > 0 ? 'Add' : 'Subtract'} {Math.abs(a.amount)}{' '}
-                      credits
+                      {ban
+                        ? 'Reversible account ban'
+                        : `${Number(a.amount) > 0 ? 'Add' : 'Subtract'} ${Math.abs(Number(a.amount))} credits`}
                     </h3>
                     <span
                       className={`action-state action-${a.status.toLowerCase()}`}
@@ -336,7 +371,7 @@ export function CreditActions({
                       {a.status}
                     </span>
                   </div>
-                  <p>{explanations[a.status]}</p>
+                  <p>{labels[a.status]}</p>
                   <p>
                     Target:{' '}
                     {eligible.includes(a.targetUserId)
@@ -346,7 +381,20 @@ export function CreditActions({
                   <p className="statement-text">{a.reason}</p>
                   {a.reasonCode && (
                     <p>
-                      Reason: {a.reasonCode.toLowerCase().replaceAll('_', ' ')}
+                      Reason:{' '}
+                      {(
+                        {
+                          SELF_SANCTION_FORBIDDEN:
+                            'Your own account is protected. You cannot ban yourself.',
+                          LAST_ADMIN_PROTECTED:
+                            'The final active administrator is protected.',
+                          ACTOR_NOT_AUTHORIZED:
+                            'The requesting administrator no longer has active Admin access.',
+                          INVALID_ACCOUNT_STATE:
+                            'This account cannot be banned in its current state.',
+                        } as Record<string, string>
+                      )[a.reasonCode] ||
+                        a.reasonCode.toLowerCase().replaceAll('_', ' ')}
                     </p>
                   )}
                   <p className="evidence-meta">
@@ -374,7 +422,11 @@ export function CreditActions({
             </ul>
           ) : (
             !historyUnavailable && (
-              <p>No credit corrections recorded for this case.</p>
+              <p>
+                {ban
+                  ? 'No ban requests recorded for this case.'
+                  : 'No credit corrections recorded for this case.'}
+              </p>
             )
           )}
           {writable ? (
@@ -386,9 +438,9 @@ export function CreditActions({
                 else void submit()
               }}
             >
-              <label htmlFor="credit-target">Participant</label>
+              <label htmlFor={`${kind}-target`}>Participant</label>
               <select
-                id="credit-target"
+                id={`${kind}-target`}
                 value={target}
                 disabled={busy || !!pending || confirm}
                 onChange={(e) => setTarget(e.target.value)}
@@ -401,45 +453,51 @@ export function CreditActions({
                   </option>
                 ))}
               </select>
-              <fieldset
-                className="credit-direction"
-                disabled={busy || !!pending || confirm}
-              >
-                <legend>Correction</legend>
-                <label>
+              {!ban && (
+                <>
+                  <fieldset
+                    className="credit-direction"
+                    disabled={busy || !!pending || confirm}
+                  >
+                    <legend>Correction</legend>
+                    <label>
+                      <input
+                        type="radio"
+                        name="credit-direction"
+                        checked={direction === 'add'}
+                        onChange={() => setDirection('add')}
+                      />{' '}
+                      Add credits
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="credit-direction"
+                        checked={direction === 'subtract'}
+                        onChange={() => setDirection('subtract')}
+                      />{' '}
+                      Subtract credits
+                    </label>
+                  </fieldset>
+                  <label htmlFor={`${kind}-amount`}>Whole credits</label>
                   <input
-                    type="radio"
-                    name="credit-direction"
-                    checked={direction === 'add'}
-                    onChange={() => setDirection('add')}
-                  />{' '}
-                  Add credits
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="credit-direction"
-                    checked={direction === 'subtract'}
-                    onChange={() => setDirection('subtract')}
-                  />{' '}
-                  Subtract credits
-                </label>
-              </fieldset>
-              <label htmlFor="credit-amount">Whole credits</label>
-              <input
-                id="credit-amount"
-                type="number"
-                min="1"
-                max="2147483647"
-                step="1"
-                required
-                value={amount}
-                disabled={busy || !!pending || confirm}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-              <label htmlFor="credit-reason">Reason for correction</label>
+                    id={`${kind}-amount`}
+                    type="number"
+                    min="1"
+                    max="2147483647"
+                    step="1"
+                    required
+                    value={amount}
+                    disabled={busy || !!pending || confirm}
+                    onChange={(e) => setAmount(e.target.value)}
+                  />
+                </>
+              )}
+              <label htmlFor={`${kind}-reason`}>
+                {ban ? 'Reason for ban' : 'Reason for correction'}
+              </label>
               <textarea
-                id="credit-reason"
+                id={`${kind}-reason`}
                 rows={4}
                 required
                 maxLength={2000}
@@ -457,25 +515,34 @@ export function CreditActions({
                 <div
                   className="credit-confirm"
                   role="region"
-                  aria-label="Confirm credit correction"
+                  aria-label={
+                    ban ? 'Confirm account ban' : 'Confirm credit correction'
+                  }
                 >
                   <h3>
-                    Confirm {direction === 'add' ? 'addition' : 'subtraction'}
+                    Confirm{' '}
+                    {ban
+                      ? 'account ban'
+                      : direction === 'add'
+                        ? 'addition'
+                        : 'subtraction'}
                   </h3>
                   <p>
-                    {direction === 'add' ? 'Add' : 'Subtract'} {numeric} credits{' '}
-                    {direction === 'add' ? 'to' : 'from'} Participant{' '}
-                    {eligible.indexOf(target) + 1}. This requests a financial
-                    correction; it is not a reward adjustment.
+                    {ban
+                      ? `Request a reversible ban for Participant ${eligible.indexOf(target) + 1}. User blocks future sign-ins; existing sessions in other services may remain valid until expiry.`
+                      : `${direction === 'add' ? 'Add' : 'Subtract'} ${numeric} credits ${direction === 'add' ? 'to' : 'from'} Participant ${eligible.indexOf(target) + 1}. This requests a financial correction; it is not a reward adjustment.`}
                   </p>
                   <p className="statement-text">{reason.trim()}</p>
                   <div className="conversation-picker">
                     <button
                       type="button"
+                      className={ban ? 'button-danger' : undefined}
                       disabled={busy || !valid}
                       onClick={() => void submit()}
                     >
-                      Confirm credit correction
+                      {ban
+                        ? 'Confirm ban request'
+                        : 'Confirm credit correction'}
                     </button>
                     <button
                       type="button"
@@ -492,15 +559,20 @@ export function CreditActions({
                   {busy
                     ? 'Submitting…'
                     : pending
-                      ? 'Retry same correction'
-                      : 'Review correction'}
+                      ? ban
+                        ? 'Retry same ban request'
+                        : 'Retry same correction'
+                      : ban
+                        ? 'Review ban request'
+                        : 'Review correction'}
                 </button>
               )}
             </form>
           ) : (
             <p>
-              Only the assigned reviewer can request corrections while the case
-              is under review.
+              {ban
+                ? 'Only the assigned reviewer can request bans while this case is under review.'
+                : 'Only the assigned reviewer can request corrections while the case is under review.'}
             </p>
           )}
           <p className="case-scope-note">

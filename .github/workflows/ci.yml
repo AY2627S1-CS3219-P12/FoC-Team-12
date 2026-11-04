@@ -136,6 +136,8 @@ jobs:
       ORDER_DB_NAME: order_db
       ORDER_DB_USER: order_user
       ORDER_DB_PASSWORD: ci-order-password
+      ADMIN_DB_NAME: admin_db
+      ADMIN_DB_USER: admin_user
       ADMIN_DB_PASSWORD: ci-admin-db-password
       ADMIN_SERVICE_PRIVATE_KEY: not-used-by-this-job
       USER_SERVICE_TRUSTED_KEYS: '{}'
@@ -343,6 +345,8 @@ jobs:
       ORDER_DB_NAME: order_db
       ORDER_DB_USER: order_user
       ORDER_DB_PASSWORD: ci-order-password
+      ADMIN_DB_NAME: admin_db
+      ADMIN_DB_USER: admin_user
       ADMIN_DB_PASSWORD: ci-admin-db-password
       ADMIN_SERVICE_PRIVATE_KEY: not-used-by-this-job
       USER_SERVICE_TRUSTED_KEYS: '{}'
@@ -448,6 +452,8 @@ jobs:
       ORDER_DB_NAME: order_db
       ORDER_DB_USER: order_user
       ORDER_DB_PASSWORD: ci-order-password
+      ADMIN_DB_NAME: admin_db
+      ADMIN_DB_USER: admin_user
       ADMIN_DB_PASSWORD: ci-admin-db-password
       ADMIN_SERVICE_PRIVATE_KEY: not-used-by-this-job
       USER_SERVICE_TRUSTED_KEYS: '{}'

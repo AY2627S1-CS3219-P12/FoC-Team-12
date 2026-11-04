@@ -110,3 +110,25 @@ its administrative topics remain absent until affected-owner review and coordina
   producer history or simulated message delivery as a real Chat result.
 - Verify shared routing/trust/network prerequisites with their nominated editor, then run desktop,
   mobile, keyboard and SGT timestamp checks through the real gateway. Obtain manual acceptance.
+
+### Sanctions iteration handoff
+
+Admin/User sanctions are implemented against the existing draft shapes under Darryl's explicit
+scope approval. Admin tracks case permission/reason/operation/outcome; User owns all account effects,
+current actor checks, protections, durable result/inbox/outbox and reason/audit reactivation.
+Shared sanctions topics/ACLs are prepared by this nominated task, pending affected-owner activation
+review. See [sanctions integration](SANCTIONS_INTEGRATION.md). Historical non-reporting targets,
+Chat projection, Admin lifecycle relay, immediate cross-service revocation and resolution remain
+separate dependencies. Wire schemas are unchanged; this is not approval on behalf of other owners.
+
+Sanctions verification now covers real packaged Admin/User, private PostgreSQL and authenticated
+Kafka: applied/NO_CHANGE/rejected outcomes, stable retries, self-ban rejection, reason/audit
+reactivation and original-result replay without re-banning, plus restart persistence and User
+outage. The default consumer-outage phase passed before revealing a User validation/error-dispatch
+issue; after that issue was fixed, the clean focused rerun explicitly skipped that unchanged
+phase. All four captured real sanctions messages validate against the unchanged draft schemas.
+Real-database concurrency/rollback tests and User's final-admin guard pass. A reproduced profile
+save race is fixed inside User with changed-field updates. Credit outcomes remain test-only;
+no real Credit financial acceptance is claimed. GUI behavior tests/build/lint pass, but visual
+desktop/mobile/keyboard acceptance remains pending because browser control is disabled. Existing
+shared services were not activated; affected-owner review still gates shared rollout.

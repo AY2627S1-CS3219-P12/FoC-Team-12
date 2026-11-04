@@ -33,7 +33,7 @@ class ActionKafkaIntegrationTest {
         r.add("spring.datasource.url",postgres::getJdbcUrl);r.add("spring.datasource.username",postgres::getUsername);r.add("spring.datasource.password",postgres::getPassword);
         r.add("spring.kafka.bootstrap-servers",broker::getBootstrapServers);
         try(var admin=AdminClient.create(Map.of("bootstrap.servers",broker.getBootstrapServers()))){
-            admin.createTopics(List.of(new NewTopic("admin.credit.commands",1,(short)1),new NewTopic("credit.admin.events",1,(short)1),new NewTopic("credit.admin.events.DLT",1,(short)1))).all().get(15,TimeUnit.SECONDS);
+            admin.createTopics(List.of(new NewTopic("admin.credit.commands",1,(short)1),new NewTopic("credit.admin.events",1,(short)1),new NewTopic("credit.admin.events.DLT",1,(short)1),new NewTopic("user.admin.events",1,(short)1),new NewTopic("user.admin.events.DLT",1,(short)1))).all().get(15,TimeUnit.SECONDS);
         }
     }
     @Autowired CreditActionService actions;@Autowired ActionKafkaTransport transport;@Autowired JdbcTemplate db;@Autowired KafkaTemplate<String,String> kafka;

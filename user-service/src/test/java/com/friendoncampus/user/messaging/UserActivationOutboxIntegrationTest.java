@@ -181,7 +181,7 @@ class UserActivationOutboxIntegrationTest {
         admin.activate();
         users.saveAndFlush(admin);
         lifecycle.ban(admin.getId(), user.getId());
-        lifecycle.reactivate(admin.getId(), user.getId());
+        lifecycle.reactivate(admin.getId(), user.getId(), "Reviewed appeal");
         assertThat(outbox.findAll()).extracting(UserOutboxEvent::getEventId).containsExactly(originalEventId);
     }
 

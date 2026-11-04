@@ -83,6 +83,17 @@ class AdminLifecycleSecurityTest {
                 .andExpect(status().isConflict());
     }
 
+    @Test
+    void reactivationRequiresReasonAndRecordsAnOwnerAudit() throws Exception {
+        User admin=activeAdmin("appeal-admin@u.nus.edu","AppealAdmin","appealadmin");
+        User member=activeUser("appeal-member@u.nus.edu","AppealMember","appealmember");member.ban();users.save(admin);users.save(member);
+        String path="/api/users/admin/accounts/"+member.getId()+"/status";
+        mvc.perform(patch(path).header("Authorization","Bearer "+token(admin,"ADMIN")).contentType("application/json").content("{\"status\":\"ACTIVE\"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch(path).header("Authorization","Bearer "+token(admin,"ADMIN")).contentType("application/json").content("{\"status\":\"ACTIVE\",\"reason\":\"Reviewed appeal\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("ACTIVE"));
+    }
+
     private String token(User user, String role) {
         JwtClaimsSet claims = JwtClaimsSet.builder().issuer("friend-on-campus-user-service")
                 .subject(user.getId().toString()).audience(List.of("friend-on-campus-api"))

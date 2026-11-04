@@ -28,8 +28,8 @@ services:
     environment:
       ADMIN_DB_HOST: admin-db
       ADMIN_DB_PORT: 5432
-      ADMIN_DB_NAME: admin_db
-      ADMIN_DB_USER: admin_user
+      ADMIN_DB_NAME: ${ADMIN_DB_NAME:?ADMIN_DB_NAME must be set}
+      ADMIN_DB_USER: ${ADMIN_DB_USER:?ADMIN_DB_USER must be set}
       ADMIN_DB_PASSWORD: ${ADMIN_DB_PASSWORD:?ADMIN_DB_PASSWORD must be set}
       ADMIN_USER_URL: http://user-service:8081
       ADMIN_USER_JWKS: http://user-service:8081/.well-known/jwks.json
@@ -60,18 +60,21 @@ services:
   admin-db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: admin_db
-      POSTGRES_USER: admin_user
+      POSTGRES_DB: ${ADMIN_DB_NAME:?ADMIN_DB_NAME must be set}
+      POSTGRES_USER: ${ADMIN_DB_USER:?ADMIN_DB_USER must be set}
       POSTGRES_PASSWORD: ${ADMIN_DB_PASSWORD:?ADMIN_DB_PASSWORD must be set}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin_user -d admin_db"]
+      test: ["CMD-SHELL", "pg_isready -U ${ADMIN_DB_USER} -d ${ADMIN_DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    ports:
+      - "127.0.0.1:${ADMIN_DB_HOST_PORT:-5544}:5432"
     volumes:
       - admin-db-data:/var/lib/postgresql/data
     networks:
       - admin-data
+      - admin-db-host
 
   user-service:
     build:
@@ -96,10 +99,13 @@ services:
       KAFKA_SASL_MECHANISM: PLAIN
       KAFKA_USERNAME: user_service
       USER_EVENTS_PUBLISHER_ENABLED: "true"
+      USER_ADMIN_COMMANDS_ENABLED: ${USER_ADMIN_COMMANDS_ENABLED:-true}
       KAFKA_PASSWORD: ${KAFKA_USER_SERVICE_PASSWORD:?KAFKA_USER_SERVICE_PASSWORD must be set}
     depends_on:
       user-db:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     ports:
       - "8081:8081"
 
@@ -332,6 +338,7 @@ services:
       - "127.0.0.1:${KAFKA_UI_HOST_PORT:-8090}:8080"
 
 networks:
+  admin-db-host:
   admin-data:
     internal: true
 

@@ -334,4 +334,41 @@ class CaseWorkflowTest {
             return List.of(a.get(15,TimeUnit.SECONDS),b.get(15,TimeUnit.SECONDS));
         } finally { executor.shutdownNow(); }
     }
+    @Test void banUsesSharedTrackingButPublishesOnlyAUserCommandWithoutACreditAmount(){
+        UUID id=reviewCase(),key=UUID.randomUUID();
+        var accepted=creditActions.create(jwt(reviewer,"ADMIN"),id,key,"BAN",reporter,null,"  Case ban reason  ");
+        assertEquals(accepted,creditActions.create(jwt(reviewer,"ADMIN"),id,key,"BAN",reporter,null,"Case ban reason"));
+        var body=json.readTree(accepted.body());assertEquals("BAN",body.path("type").asText());assertTrue(body.path("amount").isNull());
+        var delivery=deliveries.claim().get(0);assertEquals("admin.user.commands",delivery.topic());
+        var command=json.readTree(delivery.payload());assertEquals("AdminUserBanRequested",command.path("eventType").asText());
+        assertFalse(command.path("data").has("amount"));assertEquals("Case ban reason",command.path("data").path("reason").asText());
+        assertEquals(1,count("admin_actions"));assertEquals(1,count("admin_action_outbox"));
+        assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"ADMIN"),id,key,"CREDIT_ADJUSTMENT",reporter,json.valueToTree(1),"Case ban reason"));
+    }
+    @Test void banStillRequiresCurrentAssignedReviewerEligibleTargetAndReason(){
+        UUID id=reviewCase();
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(courier,"ADMIN"),id,UUID.randomUUID(),"BAN",reporter,null,"Reason")).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"REQUESTER"),id,UUID.randomUUID(),"BAN",reporter,null,"Reason")).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"BAN",reporter,json.valueToTree(5),"Reason")).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"BAN",reporter,null," ")).getStatusCode());
+        assertEquals(HttpStatus.NOT_FOUND,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"BAN",UUID.randomUUID(),null,"Reason")).getStatusCode());
+        assertEquals(0,count("admin_actions"));
+    }
+    @Test void onlyMatchingUserOutcomesCanFinishABanAndNoChangeIsSuccess(){
+        UUID id=reviewCase();UUID op=operation(creditActions.create(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"BAN",reporter,null,"Reviewed case"));
+        var a=db.queryForMap("SELECT * FROM admin_actions WHERE operation_id=?",op);
+        Map<String,Object> data=new LinkedHashMap<>();data.put("operationId",op);data.put("caseId",id);data.put("orderId",order);data.put("targetUserId",reporter);data.put("requestedBy",reviewer);data.put("completedAt",Instant.now().toString());data.put("result","NO_CHANGE");data.put("previousStatus","BANNED");data.put("status","BANNED");
+        var event=CreditActionService.envelope(UUID.randomUUID(),"AdminUserBanApplied","AdminAction",reporter,1,Instant.now(),"user-service",(UUID)a.get("correlation_id"),(UUID)a.get("command_event_id"),reviewer,data);
+        String wire=json.writeValueAsString(event);
+        assertFalse(creditActions.outcome(reporter.toString(),wire)); // Credit's subscription cannot accept User events.
+        assertTrue(creditActions.outcome(reporter.toString(),wire,"user-service"));
+        assertTrue(creditActions.outcome(reporter.toString(),wire,"user-service"));
+        assertEquals("SUCCEEDED",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());
+        assertEquals(1,count("admin_action_inbox"));assertEquals(1,db.queryForObject("SELECT count(*) FROM admin_case_outbox WHERE event_type='CaseActionCompleted'",Integer.class));
+        assertTrue(exports.read(order,id,null,20).records().stream().anyMatch(record->"NO_CHANGE".equals(record.path("data").path("result").asText())));
+        event.put("eventId",UUID.randomUUID());data.put("result","APPLIED");data.put("previousStatus","ACTIVE");
+        assertFalse(creditActions.outcome(reporter.toString(),json.writeValueAsString(event),"user-service"));
+        assertEquals("SUCCEEDED",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());
+    }
+
 }

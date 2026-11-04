@@ -98,7 +98,7 @@ production data-retention policy.
 | `user_service` | Write/describe `user.events`; cluster idempotent write |
 | `order_service` | Write/describe `order.events`; read/describe `credit.events` as group `order-service`; write/describe `credit.events.DLT`; cluster idempotent write |
 | `credit_service` | Read/describe `user.events` and `order.events` as group `credit-service`; write/describe `credit.events`, `user.events.DLT` and `order.events.DLT`; cluster idempotent write |
-| `kafka_ui` | Read/describe the ten project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
+| `kafka_ui` | Read/describe the fourteen project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
 | `foc_admin` | Broker initialization and local diagnosis (super-user) |
 | `foc_broker` | Broker-to-broker traffic (super-user) |
 
@@ -122,7 +122,7 @@ docker compose ps kafka
 ```
 
 Open `http://localhost:8090` and sign in with `KAFKA_UI_LOGIN_USERNAME` and
-`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the ten
+`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the fourteen
 topics, partitions, configurations, message keys/envelopes, consumer groups and lag. The UI uses
 both Kafbat's read-only mode and broker ACLs: it cannot produce records, create/delete topics,
 change retention, reset business offsets or join a service's consumer group.
@@ -280,3 +280,7 @@ infrastructure owners before production-like deployment:
 
 Changes to this shared foundation require one nominated implementer plus review from the affected
 User, Order and Credit owners.
+
+## Case sanctions integration
+
+See [sanctions ownership, behavior, recovery and verification](../../admin-service/SANCTIONS_INTEGRATION.md).

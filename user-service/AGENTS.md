@@ -8,6 +8,9 @@ For Admin integration read [Admin spec](../docs/integration/admin-service-spec.m
 [Chat/security contract](../docs/integration/chat-admin-contract.md) and
 [sanction commands](../docs/integration/admin-command-contract.md). User owns eligibility/status
 checks and the sanction consumer; do not implement Admin cases or Chat storage here.
+Case bans use a separate durable operation/inbox/outbox and the same lifecycle guard as account
+management. Duplicate commands republish the recorded result without reapplying a ban, including
+after reactivation. Keep reason/audit and account mutations inside User's transaction/database.
 
 Publish stable user UUIDs and signed identity/role claims for consumers. Keep admin assignment and
 account-state checks on the backend; never expose privileged self-service role changes. Resolve

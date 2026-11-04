@@ -10,6 +10,8 @@ import jakarta.persistence.*;
 
 @Entity
 @Table(name = "users")
+// A concurrent profile/password save must not restore a stale account lifecycle status.
+@org.hibernate.annotations.DynamicUpdate
 public class User {
     @Id private UUID id;
     @Column(nullable = false, unique = true, length = 254) private String email;

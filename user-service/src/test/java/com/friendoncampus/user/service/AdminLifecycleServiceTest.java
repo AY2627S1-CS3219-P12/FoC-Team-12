@@ -30,7 +30,7 @@ class AdminLifecycleServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AdminLifecycleService(lifecycleState, users);
+        service = new AdminLifecycleService(lifecycleState, users, mock(UserAccountAudit.class));
         actor = activeAdmin("admin@u.nus.edu", "Admin", "admin");
         target = activeUser("member@u.nus.edu", "Member", "member");
         lenient().when(lifecycleState.lockForLifecycleChange(AdminLifecycleState.ID)).thenReturn(Optional.of(mock(AdminLifecycleState.class)));
@@ -55,7 +55,7 @@ class AdminLifecycleServiceTest {
         User banned = service.ban(actor.getId(), target.getId());
         assertThat(banned.getStatus()).isEqualTo(UserStatus.BANNED);
 
-        User reactivated = service.reactivate(actor.getId(), target.getId());
+        User reactivated = service.reactivate(actor.getId(), target.getId(), "Reviewed account appeal");
         assertThat(reactivated.getStatus()).isEqualTo(UserStatus.ACTIVE);
     }
 
@@ -101,4 +101,11 @@ class AdminLifecycleServiceTest {
         user.promoteToAdmin();
         return user;
     }
+    @Test void caseBanUsesTheSameFinalAdministratorGuardAndRequiresReactivationReason() {
+        target.promoteToAdmin();when(users.countByRolesContainingAndStatus(UserRole.ADMIN, UserStatus.ACTIVE)).thenReturn(1L);
+        assertThat(service.banForCase(actor.getId(),target.getId()).reasonCode()).isEqualTo("LAST_ADMIN_PROTECTED");
+        assertThat(service.banForCase(actor.getId(),actor.getId()).reasonCode()).isEqualTo("SELF_SANCTION_FORBIDDEN");
+        assertThatThrownBy(()->service.reactivate(actor.getId(),target.getId()," ")).isInstanceOf(IllegalArgumentException.class);
+    }
+
 }

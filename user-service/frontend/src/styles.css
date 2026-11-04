@@ -106,6 +106,10 @@ label { display: grid; gap: 0.45rem; color: var(--foc-ink); font-size: 0.9rem; f
 .admin-user-search { display: grid; gap: 0.5rem; margin: 1.5rem 0 1rem; }
 .admin-user-search > span { display: flex; gap: 0.625rem; }
 .admin-user-search input { flex: 1; }
+.account-reactivation { padding: 1.25rem; border: 1px solid var(--foc-line); border-radius: 0.75rem; background: var(--foc-surface); }
+.account-reactivation p { color: var(--foc-muted); line-height: 1.5; }
+.account-reactivation textarea { width: 100%; min-width: 0; padding: 0.75rem; border: 1px solid var(--foc-line); border-radius: 0.5rem; resize: vertical; color: var(--foc-ink); background: var(--foc-surface); font: inherit; }
+.account-reactivation textarea:focus { border-color: var(--foc-action); }
 .admin-user-search button { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; min-width: 7rem; }
 .admin-user-notice { background: var(--foc-action-soft); color: var(--foc-action); }
 .admin-user-success { margin: 0.75rem 0; color: var(--foc-action); font-size: 0.75rem; font-weight: 400; }

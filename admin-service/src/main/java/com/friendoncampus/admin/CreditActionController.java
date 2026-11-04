@@ -16,7 +16,7 @@ import tools.jackson.databind.JsonNode;
 public class CreditActionController {
     private final CreditActionService actions;
     public CreditActionController(CreditActionService actions){this.actions=actions;}
-    public record ActionRequest(@NotBlank String type,@NotNull UUID targetUserId,@NotNull @Schema(type="integer",format="int32") JsonNode amount,@NotBlank @Size(max=2000) String reason) { }
+    public record ActionRequest(@NotBlank String type,@NotNull UUID targetUserId,@Schema(type="integer",format="int32") JsonNode amount,@NotBlank @Size(max=2000) String reason) { }
     @PostMapping("/api/admin/cases/{caseId}/actions")
     public ResponseEntity<String> create(@AuthenticationPrincipal Jwt actor,@PathVariable UUID caseId,@RequestHeader("Idempotency-Key") UUID key,@Valid @RequestBody ActionRequest request){
         var result=actions.create(actor,caseId,key,request.type(),request.targetUserId(),request.amount(),request.reason());

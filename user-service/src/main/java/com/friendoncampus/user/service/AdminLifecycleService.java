@@ -19,10 +19,12 @@ import com.friendoncampus.user.repository.UserRepository;
 public class AdminLifecycleService {
     private final AdminLifecycleStateRepository lifecycleState;
     private final UserRepository users;
+    private final UserAccountAudit audit;
 
-    public AdminLifecycleService(AdminLifecycleStateRepository lifecycleState, UserRepository users) {
+    public AdminLifecycleService(AdminLifecycleStateRepository lifecycleState, UserRepository users, UserAccountAudit audit) {
         this.lifecycleState = lifecycleState;
         this.users = users;
+        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -66,13 +68,39 @@ public class AdminLifecycleService {
     }
 
     @Transactional
-    public User reactivate(UUID actorId, UUID targetId) {
+    public User reactivate(UUID actorId, UUID targetId, String reason) {
+        String text = reason == null ? "" : reason.strip();
+        if (text.isEmpty() || text.length() > 2000) throw new IllegalArgumentException("A reactivation reason of 1–2000 characters is required");
         User target = beginChange(actorId, targetId);
         if (target.getStatus() != UserStatus.BANNED) {
             throw new AdminLifecycleException("Only banned accounts can be reactivated");
         }
         target.activate();
+        audit.record(actorId, targetId, null, "REACTIVATED", "APPLIED", text);
         return users.save(target);
+    }
+
+    public record BanDecision(String result, String previousStatus, String reasonCode) { }
+
+    /** Same lifecycle guard and protections as account management; no remote calls under its lock. */
+    @Transactional
+    public BanDecision banForCase(UUID actorId, UUID targetId) {
+        try {
+            User target = beginChange(actorId, targetId);
+            String before = target.getStatus().name();
+            if (target.getStatus() == UserStatus.BANNED) return new BanDecision("NO_CHANGE", before, null);
+            requireActive(target);
+            if (target.hasRole(UserRole.ADMIN)) requireAnotherActiveAdmin();
+            target.ban();
+            users.save(target);
+            return new BanDecision("APPLIED", before, null);
+        } catch (AdminAccessDeniedException ex) {
+            return new BanDecision("REJECTED", null, "ACTOR_NOT_AUTHORIZED");
+        } catch (AdminAccountNotFoundException ex) {
+            return new BanDecision("REJECTED", null, "ACCOUNT_NOT_FOUND");
+        } catch (AdminLifecycleException ex) {
+            return new BanDecision("REJECTED", null, ex.code());
+        }
     }
 
     private User beginChange(UUID actorId, UUID targetId) {
@@ -81,7 +109,7 @@ public class AdminLifecycleService {
         User actor = requireActiveAdmin(actorId);
         User target = users.findById(targetId).orElseThrow(AdminAccountNotFoundException::new);
         if (actor.getId().equals(target.getId())) {
-            throw new AdminLifecycleException("Administrators cannot revoke their own access");
+            throw new AdminLifecycleException("Administrators cannot revoke their own access", "SELF_SANCTION_FORBIDDEN");
         }
         return target;
     }
@@ -102,7 +130,7 @@ public class AdminLifecycleService {
 
     private void requireAnotherActiveAdmin() {
         if (users.countByRolesContainingAndStatus(UserRole.ADMIN, UserStatus.ACTIVE) <= 1) {
-            throw new AdminLifecycleException("The final active administrator cannot be changed");
+            throw new AdminLifecycleException("The final active administrator cannot be changed", "LAST_ADMIN_PROTECTED");
         }
     }
 }
