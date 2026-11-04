@@ -19,7 +19,13 @@ is outside this local Compose iteration.
 ## Runtime and keys
 
 Admin is `admin-service:8084`; its PostgreSQL 16 database is `admin-db:5432` on the internal
-`admin-data` network. Only Admin joins that network. The database has no host port; its named
+`admin-data` network. Only Admin joins that network. The database also joins a dedicated
+`admin-db-host` bridge so Docker can publish its local inspection port; other services do not join
+that bridge. Local Compose publishes PostgreSQL on
+`127.0.0.1:${ADMIN_DB_HOST_PORT:-5544}` for desktop pgAdmin; it is not bound to LAN interfaces.
+Use host `127.0.0.1`, port `5544` (or `ADMIN_DB_HOST_PORT`), maintenance database `ADMIN_DB_NAME`,
+username `ADMIN_DB_USER` and password `ADMIN_DB_PASSWORD`. Disposable smoke projects suppress
+this mapping to avoid collisions. This does not authorize cross-service database access. Its named
 volume is `<compose-project>_admin-db-data`. No other service receives its credentials.
 The separate `foc-admin-foundation` preview database/volume is not reused, reset or migrated.
 If its data must be retained in the new runtime, arrange a stopped-writer backup/restore with

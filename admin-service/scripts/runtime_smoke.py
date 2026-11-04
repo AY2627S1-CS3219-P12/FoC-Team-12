@@ -72,6 +72,8 @@ def main():
         scripts = directory / "kafka-scripts"
         shutil.copytree(ROOT / "deploy/kafka", scripts, ignore=shutil.ignore_patterns("k8s"))
         override.write_text("""services:
+  admin-db:
+    ports: !override []
   user-db:
     ports: !override []
   user-service:

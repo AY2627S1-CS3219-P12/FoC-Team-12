@@ -68,10 +68,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    ports:
+      - "127.0.0.1:${ADMIN_DB_HOST_PORT:-5544}:5432"
     volumes:
       - admin-db-data:/var/lib/postgresql/data
     networks:
       - admin-data
+      - admin-db-host
 
   user-service:
     build:
@@ -335,6 +338,7 @@ services:
       - "127.0.0.1:${KAFKA_UI_HOST_PORT:-8090}:8080"
 
 networks:
+  admin-db-host:
   admin-data:
     internal: true
 
