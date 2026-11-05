@@ -6,13 +6,18 @@ import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.friendoncampus.notification.service.NotificationPaging;
 import com.friendoncampus.notification.service.NotificationQueryService;
+import com.friendoncampus.notification.service.NotificationReadStateService;
 import com.friendoncampus.notification.web.dto.NotificationPageResponse;
+import com.friendoncampus.notification.web.dto.NotificationResponse;
+import com.friendoncampus.notification.web.dto.UnreadCountResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -25,7 +30,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * The caller's own notifications. The recipient is always the verified JWT subject; there is no
- * {@code userId} parameter, so nobody can ask for another user's notifications.
+ * {@code userId} parameter, so nobody can read or mark another user's notifications.
  */
 @RestController
 @RequestMapping("/api/notifications/me")
@@ -34,9 +39,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class NotificationController {
 
     private final NotificationQueryService queryService;
+    private final NotificationReadStateService readStateService;
 
-    public NotificationController(NotificationQueryService queryService) {
+    public NotificationController(NotificationQueryService queryService,
+            NotificationReadStateService readStateService) {
         this.queryService = queryService;
+        this.readStateService = readStateService;
     }
 
     @Operation(
@@ -69,5 +77,54 @@ public class NotificationController {
             @RequestParam(required = false) String size) {
         NotificationPaging paging = NotificationPaging.from(page, size);
         return NotificationPageResponse.from(queryService.listFor(UUID.fromString(jwt.getSubject()), paging));
+    }
+
+    @Operation(
+            operationId = "notification_patch__api_notifications_me_id_read",
+            summary = "Mark one of my notifications read",
+            description = "Sets readAt the first time; repeating it returns the notification unchanged. "
+                    + "A missing notification and another user's notification are both 404.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "The notification, with readAt set",
+                    content = @Content(schema = @Schema(implementation = NotificationResponse.class))),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "INVALID_ID: the ID is not a UUID",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Missing or invalid bearer token",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "NOTIFICATION_NOT_FOUND: no such notification for the caller",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @PatchMapping("/{id}/read")
+    public NotificationResponse markRead(
+            @AuthenticationPrincipal Jwt jwt,
+            @Parameter(description = "Notification ID") @PathVariable UUID id) {
+        return NotificationResponse.from(readStateService.markRead(UUID.fromString(jwt.getSubject()), id));
+    }
+
+    @Operation(
+            operationId = "notification_get__api_notifications_me_unread_count",
+            summary = "Count my unread notifications",
+            description = "The caller's notifications with no readAt, for the bell badge.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "The caller's unread count",
+                    content = @Content(schema = @Schema(implementation = UnreadCountResponse.class))),
+            @ApiResponse(
+                    responseCode = "401",
+                    description = "Missing or invalid bearer token",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
+    })
+    @GetMapping("/unread-count")
+    public UnreadCountResponse unreadCount(@AuthenticationPrincipal Jwt jwt) {
+        return new UnreadCountResponse(queryService.countUnread(UUID.fromString(jwt.getSubject())));
     }
 }
