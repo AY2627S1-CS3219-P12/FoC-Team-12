@@ -20,6 +20,8 @@ Provide private, durable in-app notifications about successful Order/Credit outc
 events, store one intended notification per recipient/business outcome, and serve that user's
 history. Do not change orders, calculate credits, send verification emails, store chats or inspect
 other databases. No email/push/SMS delivery, Admin-case notifications or translation in this scope.
+In-app only means there is no external provider to fail, so there is no channel fallback: the
+stored notification waits until the user next opens the app ([DESIGN.md](DESIGN.md#fallback)).
 
 Browser -> Gateway -> Notification HTTP API. Order/Credit -> Kafka -> Notification private
 PostgreSQL database. A notification confirms a committed source fact, not an attempted action.

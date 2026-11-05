@@ -191,6 +191,8 @@ Nothing below is changed by iterations 0–2a.
 | Network policies (`deploy/k8s/network/policies.yaml`) | New `foc-notification` and `foc-notification-db` policies. Add `notification-service` to `foc-user` ingress, the Kafka client policy and gateway egress (port 8084) | Darryl, Jun Hui |
 | CI | Add `notification-service` to `SERVICES` in `image_plan.py` and its test, and a backend job in `ci.yml` | All |
 | Header bell | A link and badge in every service's header (iteration 7) | Darryl, Jun Hui, Eldridge |
+| Observability | Expose Notification metrics (endpoint to agree) and add its dashboards and alerts (iteration 9) | Jun Hui |
+| Gateway rate limit | A per-user limit on `/api/notifications/**` against runaway polling | Gateway nominee |
 
 ## Decisions
 
@@ -218,13 +220,74 @@ Approved with iteration 0 (2026-11-04):
 
 To confirm with the team:
 1. Where the bell lives: in all four headers, or only a Notifications page linked from the main page.
+2. How metrics are exposed and collected (iteration 9), and the alert thresholds.
+3. Whether the gateway rate-limits `/api/notifications/**`, and at what rate.
 
 Implementation details (no decision needed):
 - `auto-offset-reset=earliest`: on first start the service reads the 7 days still on `credit.events`,
   so recent accounts get their welcome notification.
-- Live updates use polling first (iteration 7). Server-sent events would need a way to send the
-  token, because the browser's `EventSource` cannot set an `Authorization` header and a token in
-  the URL leaks into logs.
+- Live updates use polling first (iteration 7); server-sent events are optional (iteration 10).
+  They would need a way to send the token, because the browser's `EventSource` cannot set an
+  `Authorization` header and a token in the URL leaks into logs.
+
+## Practices review (2026-11-04)
+
+Checked against a general multi-channel notification design (validator, preference manager,
+template engine, router, one queue and worker pool per channel, provider fallback, monitoring).
+Notification is in-app only (no email/push/SMS, see the README scope), so the channel half does not
+apply.
+
+| Practice | Here | Decision |
+| --- | --- | --- |
+| Versioned event schema: ID, type, version, time, generic data | Blueprint envelope; `eventVersion` checked | In place. An unsupported version of a mapped type goes to the DLT, so this consumer must accept a new version before its producer emits it |
+| At-least-once delivery with idempotency keys | Ack after commit; inbox by `eventId`; business key per operation | In place. Keys live in the same PostgreSQL transaction as the notification, not a Redis cache: a cache check is not atomic with the write and loses keys on eviction. No Redis |
+| Templates outside code | `NotificationMessages`, rendered when read | Keep templates in code, with a test per type. A database template store lets copy change without review or tests, and only the team edits copy. Rendering when read already gives the main benefit: new wording applies to past notifications without a migration |
+| Preference manager | None | Muting types is not in the backlog; adding it is new scope and needs approval |
+| Router, channel queues, workers, provider fallback | None | Not applicable; see [Fallback](#fallback) |
+| Event-driven, not polling a database for new events | Kafka consumer | In place. The bell's polling (iteration 7) is different: a browser asks for its own unread count; no service scans a table to discover events |
+| Horizontal scaling | Stateless service; group `notification-service` on 3 partitions | Up to 3 consumer instances share the work; more sit idle. The record key (order or user ID) sends every event for one aggregate, including a republished Credit outcome, to one partition, so duplicates are handled one after another; the unique business key covers the rest. API instances scale freely |
+| Sharding, multi-region, channel partitioning | One PostgreSQL | Not needed at D3 scale; the recipient indexes cover NF2. Revisit only if NF2 fails under the agreed load |
+| Rate limiting | None | Polling browsers are the main load. Limiting belongs in the gateway (gateway nominee); iteration 7 keeps polling light ([Polling](#polling)) |
+| Observability | Logs with `eventId`, `eventType`, `correlationId`, outcome; health only | Expanded in iteration 9 ([Observability](#observability)) |
+
+### Fallback
+
+No channel fallback is needed.
+
+- **Delivery is a database write** in Notification's own transaction. No provider can fail after a
+  "send". Broker and database errors are retried and then dead-lettered; an outage leaves events on
+  Kafka (7-day retention) to consume on restart. Only an outage longer than that loses
+  notifications.
+- **The inbox is the fallback for an offline user:** the notification waits until they open the app.
+- **Notifications are informational.** The errand page and Credit balance stay authoritative, so a
+  missing notification never hides a fact. Nothing here is security- or time-critical; account
+  emails such as verification belong to User Service.
+- **The in-app equivalent is in the UI:** if a poll fails, keep the last known count or show an
+  error, never a misleading `0`.
+
+### Polling
+
+For the bell (iteration 7): poll only the unread count, about every 30 seconds, and only while the
+tab is visible; refresh when the tab regains focus; back off exponentially after errors. The list
+loads when the Notifications page opens, not on every poll.
+
+### Observability
+
+For iteration 9, with Jun Hui (observability owner, [TASK_SPLIT.md](../TASK_SPLIT.md)):
+
+- **Metrics** (Micrometer through Actuator; the exposure endpoint is agreed with Jun Hui):
+  - events handled per topic and outcome (`NOTIFIED`, `IGNORED`, `DUPLICATE`,
+    `DUPLICATE_OPERATION`, rejected): throughput and failure rate
+  - delay from fact to notification, `created_at - occurred_at`: delivery latency
+  - consumer lag and DLT record count
+  - `/me` requests by status and duration: NF1 success rate and NF2 P95
+  - share of notifications read (`read_at` set), after iteration 6: engagement
+- **Alerts (proposed thresholds):** any new DLT record; consumer lag growing for 5 minutes; `/me`
+  server errors above 1% over 10 minutes (NF1 allows 1%).
+- **Logs:** one structured line per handled event with `eventId`, `eventType`, `correlationId`,
+  outcome, and the notification and recipient UUIDs when one is stored. Put `correlationId` in the
+  log context so every line for one event can be found. `correlationId` already links Order, Credit
+  and Notification for one errand; no tracing system is in the repo. Never log tokens or payloads.
 
 ## Iterations
 
@@ -240,8 +303,10 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 4 | `order-…`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | After 0 and the topic from 3 |
 | 5 | Order lifecycle consumer and recipient rules | After 4 |
 | 6 | Read state: `PATCH /api/notifications/me/{id}/read`, unread count | After 1 |
-| 7 | UI: Notifications page and polled bell badge; header links by each owner | After 3 and 6 |
-| 8 | Retention job and monitoring (consumer lag, DLT count); server-sent events if time allows | After 2 and 5 |
+| 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3 and 6 |
+| 8 | Retention job for the approved 30/90-day policy | After 2 and 5 |
+| 9 | Observability: metrics, alerts and structured logs ([Observability](#observability)) | After 3 |
+| 10 | Optional: server-sent events for the badge | If time allows, after 7 |
 
 ## Verification
 
