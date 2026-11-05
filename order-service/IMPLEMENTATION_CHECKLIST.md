@@ -8,7 +8,8 @@ history) and Lifecycle are built. Events follow the shared
 [event communication blueprint](../docs/integration/event-communication-blueprint.md) through the
 outbox relay and `credit.events` listener, and work end to end with Credit over Kafka in Compose and
 Kubernetes. The errand UI is shipped. Remaining: the async/integration demonstration (iteration 9),
-D3 deployment evidence, and Notifications (N2H, not started). Iteration status and order are tracked in
+D3 deployment evidence, and Notifications (N2H, in progress in
+[`notification-service`](../notification-service/DESIGN.md)). Iteration status and order are tracked in
 [DESIGN.md](DESIGN.md#iterations-each-one-is-a-foc-iterate-feature-order--run).
 
 ```text

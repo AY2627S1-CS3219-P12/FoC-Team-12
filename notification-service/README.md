@@ -1,14 +1,18 @@
-# Notification Service blueprint
+# Notification Service
 
-Shared proposed wire shapes and fixtures: [contract package](../docs/contracts/README.md).
+Owned by **XueTing**. See [`AGENTS.md`](AGENTS.md) for the coding boundary and
+[`../TASK_SPLIT.md`](../TASK_SPLIT.md) for team responsibilities. The design, iteration plan and
+the planned shared changes are in [`DESIGN.md`](DESIGN.md). Shared proposed wire shapes
+and fixtures: [contract package](../docs/contracts/README.md). Source: D3 presentation slides 2-5,
+D1 N2H3.
 
-The latest Kubernetes default-deny policies do not yet allow Notification traffic. Its deployment
-iteration must add reviewed Gateway ingress and DB/User-JWKS/Kafka egress plus matching destination
-ingress and broker ACLs; see the contract package's deployment matrix.
-
-Owner: **XueTing**. Status: planned N2H; documentation only, no application scaffold or runnable
-commands yet. Source: D3 presentation slides 2-5, D1 N2H3. Proposed API/configuration details below
-require owner review before implementation; they do not represent deployed contracts.
+Spring Boot service (Java 17) that turns other services' Kafka events into per-user notifications
+and owns the notification database. Runs on port `8084`. **Status:** the read API and the
+`credit.events` consumer are built and tested; Order lifecycle notifications, read marking, the UI
+and the shared Compose/gateway/Kubernetes/CI wiring are not yet. The latest Kubernetes default-deny
+policies do not yet allow Notification traffic; its deployment iteration must add reviewed Gateway
+ingress and DB/User-JWKS/Kafka egress plus matching destination ingress and broker ACLs (see the
+contract package's deployment matrix).
 
 ## Purpose and boundary
 
@@ -16,90 +20,200 @@ Provide private, durable in-app notifications about successful Order/Credit outc
 events, store one intended notification per recipient/business outcome, and serve that user's
 history. Do not change orders, calculate credits, send verification emails, store chats or inspect
 other databases. No email/push/SMS delivery, Admin-case notifications or translation in this scope.
+In-app only means there is no external provider to fail, so there is no channel fallback: the
+stored notification waits until the user next opens the app ([DESIGN.md](DESIGN.md#fallback)).
 
 Browser -> Gateway -> Notification HTTP API. Order/Credit -> Kafka -> Notification private
 PostgreSQL database. A notification confirms a committed source fact, not an attempted action.
 It must not imply that credits were released before Credit confirms its operation.
 
-## Event integration
+## Authentication
 
-Read the [core event blueprint](../docs/integration/event-communication-blueprint.md) and
-[Chat/Order lifecycle proposal](../docs/integration/chat-admin-contract.md#event-coverage-and-persistence).
-Use `notification-service` as independent consumer group on `credit.events` and proposed
-`order.lifecycle.events`. Never share Order/Credit/Chat groups. Core `order.events` alone does not
-include acceptance/pickup/delivery. Current OrderEventRecorder publishes only the five core
-credit-driving events; add full lifecycle production as an Order-owned iteration before claiming
-notification integration is complete. Do not invent events by polling Order's DB.
+All endpoints except `/actuator/health` and the OpenAPI docs require a `Bearer` JWT issued by the
+**User Service**, verified exactly as Order Service does (see the
+[User JWT contract](../user-service/README.md#login-and-jwt-verification)): RS256 against the
+published JWKS, `iss` = `friend-on-campus-user-service`, `aud` contains `friend-on-campus-api`,
+valid `exp`/`nbf`, a supported `role` and a UUID `sub`.
 
-The Order-owned lifecycle schema must be agreed once for both Chat and Notifications. Its
-proposed `OrderTransitioned` envelope carries stable eventId/orderId, sourceSequence, requesterId,
-previousCourierId/courierId, fromState/toState, occurredAt and snapshot; preserve recipient IDs
-when cancellation/withdrawal clears the live assignment. Reuse the same versioned schema and
-fixtures for both consumers; do not independently rename fields.
+- **The recipient is the token's `sub`.** No parameter, header or body field can name another user,
+  and there is no admin endpoint for all users' notifications.
+- **Any session role may read** (`REQUESTER`, `COURIER` or `ADMIN`): notifications belong to the
+  account, so switching role keeps both kinds visible. An admin reads only their own.
+- **Rejections:** a missing or invalid token returns `401` RFC-7807 `application/problem+json`
+  with `WWW-Authenticate: Bearer`. Any method or path outside the API below returns `403`.
+
+| Property | Env var | Default |
+| --- | --- | --- |
+| `app.security.jwt.jwk-set-uri` | `NOTIFICATION_JWT_JWK_SET_URI` | `http://localhost:8081/.well-known/jwks.json` |
+| `app.security.jwt.issuer` | `NOTIFICATION_JWT_ISSUER` | `friend-on-campus-user-service` |
+| `app.security.jwt.audience` | `NOTIFICATION_JWT_AUDIENCE` | `friend-on-campus-api` |
+
+## List my notifications
+
+`GET /api/notifications/me?page=&size=` (shared contract operation
+`notification_get__api_notifications_me` in [n2h.openapi.json](../docs/contracts/n2h.openapi.json))
+
+- `page` is zero-based (default `0`); `size` is 1–100 (default `20`). A malformed or out-of-range
+  value returns `400` with `code` = `INVALID_QUERY`.
+- Newest first by `occurredAt`, when the fact happened, not when it was stored, so events caught up
+  after downtime still appear in real-time order; the notification ID breaks ties so pages never
+  overlap. Pagination does not imply a 100-record storage cap.
+- **Success:** `200` with the page:
+
+```json
+{
+  "content": [
+    {
+      "id": "0f8b7d2e-4c1a-4a8e-9f33-1d2c3b4a5e6f",
+      "type": "CREDITS_RECEIVED",
+      "orderId": "513ea56a-41d5-49ad-b6c5-df81e2dd2b25",
+      "message": "You received 3 credits for completing an errand.",
+      "occurredAt": "2026-10-30T09:15:00Z",
+      "readAt": null
+    }
+  ],
+  "page": 0,
+  "size": 20,
+  "totalElements": 1,
+  "totalPages": 1
+}
+```
+
+`orderId` is the errand to link to (`/errands/{orderId}`), or `null` for account-level
+notifications; the link grants no access by itself, Order still authorizes the errand page.
+`readAt` is `null` until read marking exists. The message is built when read from the stored type
+and template values, so wording can change without rewriting past notifications:
+
+| `type` | `message` |
+| --- | --- |
+| `CREDITS_WELCOME` | Welcome! You received {n} credits to get started. |
+| `CREDITS_RECEIVED` | You received {n} credits for completing an errand. |
+| `CREDITS_COMPENSATED` | You received {n} credits as compensation for a cancelled errand. |
+
+`{n} credits` reads `1 credit` for one. Proposed next ([DESIGN.md](DESIGN.md#iterations)):
+`PATCH /api/notifications/me/{id}/read` to set the caller's own `readAt` idempotently (`404` for a
+missing or another user's notification), an unread count, and the UI.
+
+## Proposed UI
+
+Not built (iteration 7). Notification UI lives in the Notification-owned area and uses same-origin
+gateway APIs. List loading/empty/error/expired-session states and links to authorized errand pages.
+Proposed UI path `/notifications`; optional badge/read controls require explicit scope approval in
+feature analysis. Polling is sufficient initially; WebSocket delivery is not required by the D3
+notification plan (see [DESIGN.md](DESIGN.md#decisions) for why push is deferred). No browser code
+or untrusted notification link grants access to an order.
+
+## Notifications from Credit events
+
+The service consumes `credit.events` as group `notification-service`, using the shared
+[event communication blueprint](../docs/integration/event-communication-blueprint.md) envelope.
+It never shares Order, Credit or Chat consumer groups.
+
+| Credit event | Recipient | `type` | `orderId` | Template value |
+| --- | --- | --- | --- | --- |
+| `CreditAccountAllocated` | `data.userId` | `CREDITS_WELCOME` | `null` | `amount` = `allocatedAmount` |
+| `CreditSettled` | `data.courierId` | `CREDITS_RECEIVED` | `data.orderId` | `amount` = `transferredAmount` |
+| `CourierCompensated` | `data.courierId` | `CREDITS_COMPENSATED` | `data.orderId` | `amount` = `transferredAmount` |
+| Any other type | nobody | — | — | inbox row `IGNORED` |
+
+The requester is not told about `CourierCompensated`: they cancelled, and the actor is never
+notified. Credit ledger amounts come from Credit; `CREDITS_RECEIVED`/`COMPENSATED` are never
+generated from Order state alone.
+
+**Processing, in one transaction:**
+
+1. Parse the event. `eventId`, `eventType`, `aggregateId` and `correlationId` are required and
+   `producer` must be `credit-service`. For the three events above, `eventVersion` must be `1`,
+   `aggregateType` must be `User` (allocation) or `Order`, `aggregateId` must equal
+   `data.userId`/`data.orderId`, `occurredAt` must be ISO-8601, the recipient and `operationId`
+   must be UUIDs and the amount a positive whole number.
+2. Look up the inbox (`notification_inbox`) by `eventId`. The same content again is a duplicate and
+   changes nothing; the same `eventId` with different content is rejected as `EVENT_ID_CONFLICT`.
+3. Look up the business key: recipient, type and `operationId`. Credit gives each outcome a fresh
+   `eventId`, even when it reprocesses an operation it already applied, so a reconciliation replay
+   arrives as a new event. If this recipient was already notified for this operation, no second
+   notification is stored and the inbox row is `DUPLICATE_OPERATION` (logged as a warning if the
+   values differ).
+4. Insert the notification (if any) and the inbox row (`NOTIFIED`, `IGNORED` or
+   `DUPLICATE_OPERATION`), then commit. The listener acknowledges Kafka only after the commit.
+
+**Failures:** a rejected event (`INVALID_EVENT` or `EVENT_ID_CONFLICT`) stores nothing, is logged
+with its `eventId`, `eventType`, `correlationId` and reason, and goes straight to
+`credit.events.DLT` without retries. Any other failure (for example the database is down) is
+retried three times with backoff and then goes to the DLT. Dead letters keep the original key and
+carry Spring's headers naming the `notification-service` group and the exception, which tells them
+apart from Order's dead letters on the same topic. A valid unhandled fact is acknowledged as
+`IGNORED`; invalid event types or versions never silently disappear.
+
+`NOTIFICATION_KAFKA_ENABLED=false` runs the service without a broker; nothing is then consumed.
+
+| Property | Env var | Default |
+| --- | --- | --- |
+| `spring.kafka.bootstrap-servers` | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` |
+| `spring.kafka.security.protocol` | `KAFKA_SECURITY_PROTOCOL` | `SASL_PLAINTEXT` |
+| `spring.kafka.properties.sasl.mechanism` | `KAFKA_SASL_MECHANISM` | `PLAIN` |
+| Kafka username / password | `KAFKA_USERNAME` / `KAFKA_PASSWORD` | `notification_service` / empty |
+
+## Order lifecycle notifications (planned)
+
+Not built. Read the [core event blueprint](../docs/integration/event-communication-blueprint.md)
+and [Chat/Order lifecycle proposal](../docs/integration/chat-admin-contract.md#event-coverage-and-persistence).
+Core `order.events` alone does not include acceptance/pickup/delivery: current OrderEventRecorder
+publishes only the five core credit-driving events. Full lifecycle production is an Order-owned
+iteration that must land before notification integration is claimed complete. Do not invent
+events by polling Order's DB.
+
+The Order-owned lifecycle schema is agreed once for both Chat and Notifications: `OrderTransitioned`
+on proposed `order.lifecycle.events`, as in
+[n2h-events.schema.json](../docs/contracts/n2h-events.schema.json). It carries stable
+`eventId`/`orderId`, `sourceSequence`, `requesterId`, `previousCourierId`/`courierId`,
+`fromState`/`toState`, `action`, `reasonCode` and `snapshot`; recipient IDs are preserved when
+cancellation/withdrawal clears the live assignment. Both consumers reuse the same versioned schema
+and fixtures and do not rename fields. [DESIGN.md](DESIGN.md#proposed-contract-ordertransitioned-on-orderlifecycleevents)
+has the details, including the `sourceSequence` rules.
 
 | Notification type | Source/condition | Recipient | Message intent |
 | --- | --- | --- | --- |
-| ORDER_OPENED | OrderTransitioned PENDING_CREDIT -> OPEN | Requester | Errand is live |
-| ORDER_RESERVATION_FAILED | OrderTransitioned -> RESERVATION_FAILED | Requester | Creation failed; show safe approved reason |
-| ORDER_ACCEPTED | OrderTransitioned OPEN -> ACCEPTED | Requester | Courier accepted |
-| ORDER_COURIER_WITHDREW | OrderTransitioned ACCEPTED -> OPEN | Requester | Courier withdrew; errand returned to pool |
-| ORDER_EXPIRED | OrderTransitioned -> EXPIRED | Requester | Errand expired; credit release may still be pending |
-| ORDER_CANCELLED | OrderTransitioned ACCEPTED -> CANCELLED | Previous assigned courier | Requester cancelled |
-| ORDER_PICKED_UP | OrderTransitioned -> PICKED_UP | Requester | Item picked up |
-| ORDER_DELIVERED | OrderTransitioned -> DELIVERED | Requester | Delivered; confirm receipt |
-| ORDER_COMPLETED | OrderTransitioned -> COMPLETED | Courier | Requester confirmed receipt |
-| CREDITS_WELCOME | CreditAccountAllocated | userId | Initial credits allocated |
-| CREDITS_RECEIVED | CreditSettled | courierId | Settlement credits received |
-| CREDITS_COMPENSATED | CourierCompensated | courierId | Cancellation compensation received |
+| `ORDER_OPENED` | `PENDING_CREDIT -> OPEN` | Requester | Errand is live |
+| `ORDER_RESERVATION_FAILED` | `-> RESERVATION_FAILED` | Requester | Creation failed; show safe approved reason |
+| `ORDER_ACCEPTED` | `OPEN -> ACCEPTED` | Requester | Courier accepted |
+| `ORDER_COURIER_WITHDREW` | `ACCEPTED -> OPEN` | Requester | Courier withdrew; errand returned to pool |
+| `ORDER_EXPIRED` | `-> EXPIRED` | Requester | Errand expired; credit release may still be pending |
+| `ORDER_CANCELLED` | `ACCEPTED -> CANCELLED` | Previous assigned courier | Requester cancelled |
+| `ORDER_PICKED_UP` | `-> PICKED_UP` | Requester | Item picked up |
+| `ORDER_DELIVERED` | `-> DELIVERED` | Requester | Delivered; confirm receipt |
+| `ORDER_COMPLETED` | `-> COMPLETED` | Courier | Requester confirmed receipt |
 
-Do not generate CREDITS_RECEIVED/COMPENSATED from Order state alone. Credit ledger amounts and
-safe rejection codes come from Credit; Order reason details must be explicitly added to its
-agreed snapshot if absent. Ignore valid source events outside this table. Unsupported schema or
-missing required recipients is a recoverable contract failure, not a notification to an arbitrary
-user. OPEN cancellation does not notify a nonexistent courier. Additional rows require approval.
+Safe rejection codes come from Credit; Order reason details must be explicitly added to its agreed
+snapshot if absent. Ignore valid source events outside this table. Unsupported schema or missing
+required recipients is a recoverable contract failure, not a notification to an arbitrary user.
+OPEN cancellation does not notify a nonexistent courier. Additional rows require approval. The
+business key is `orderId:sourceSequence`, so two genuine reopen/accept cycles stay distinct.
 
-## Persistence and delivery guarantees
+## Data model and delivery guarantees
 
-Suggested tables: notification_inbox (eventId, canonical content hash, source/type, outcome),
-notifications (id, recipientUserId, type, orderId nullable, sourceEventId, businessKey, safe
-message parameters, occurredAt, createdAt, readAt nullable). Unique inbox eventId and notification
-businessKey enforce idempotency. Business key: recipient/type/source-operationId for Credit;
-recipient/type/orderId/sourceSequence for Order (two genuine reopen/accept cycles are distinct).
-Use opaque UUID notification IDs and actor identity only from verified JWT sub.
+Flyway `V1__create_notifications.sql`. It has not been applied in any shared environment yet; once
+it is, it is never edited and changes go in a new migration.
 
-Validate event envelope/topic/producer/version first. Matching eventId/content is duplicate;
-changed content is a conflict. Commit inbox and notifications atomically before Kafka ack.
-Retain past delayed facts rather than discard them on a generic 'older version' check. Sort by
-occurredAt then notificationId for stable presentation. Do not treat gaps as permission to guess
-transitions. Crash-after-commit or source replay creates no second logical notification.
+- **`notification_inbox`**: `event_id` (primary key), `topic`, `event_type`, `aggregate_id`,
+  `correlation_id`, `fingerprint` (SHA-256 of the envelope), `outcome`
+  (`NOTIFIED`/`IGNORED`/`DUPLICATE_OPERATION`), `processed_at`.
+- **`notifications`**: `id` (opaque UUID), `recipient_id`, `type`, `order_id`, `params` (JSONB
+  template values), `source_event_id`, `business_key`, `occurred_at`, `created_at`, `read_at`
+  (null = unread). `UNIQUE (recipient_id, type, business_key)` enforces one notification per
+  business outcome; `UNIQUE (source_event_id, recipient_id)` is a second guard. There is no foreign
+  key to the inbox, so inbox rows can be pruned sooner than notifications.
 
-Transient failures use bounded broker retries/DLT under the existing deployed policy. Jun Hui
-owns ACL/DLT provisioning; XueTing owns consumer/inbox and mapping. Poison records retain original
-IDs, key and failure metadata for restricted replay. A valid unhandled fact may be acknowledged
-as ignored; invalid event types/versions must not silently disappear.
+Inbox and notifications commit atomically before the Kafka ack, so a crash after commit or a source
+replay creates no second logical notification. Past delayed facts are retained rather than
+discarded on a generic "older version" check, and gaps are never treated as permission to guess
+transitions. No profile data, balances, tokens or full event payloads are stored, and the API never
+returns another user's data.
 
-Retention: support stored retrieval; no automatic deletion until the team approves a retention
-period and unread-record policy. Inbox deduplication metadata must survive any later notification
-cleanup for the supported replay horizon. Pagination does not imply a 100-record storage cap.
-
-## Proposed public API and UI
-
-| Method/path | Behaviour |
-| --- | --- |
-| GET /api/notifications/me?page=0&size=20 | Own notifications, newest first; content/page/size/totalElements/totalPages |
-| PATCH /api/notifications/me/{id}/read | Idempotently set own readAt (proposed convenience feature) |
-
-List entry: id, type, orderId nullable, message, occurredAt, readAt nullable. Size 1-100; reject
-invalid pagination with 400. No recipientId override or admin-all-users endpoint. Authenticate
-User RS256 JWT against published JWKS, issuer/audience/expiry/sub; accept valid current session
-roles under the shared User contract. 401 invalid identity; 404 for another user's/missing record;
-Problem Details for errors. Never send full incoming event payloads or another user's data.
-
-Notification UI lives in the Notification-owned area and uses same-origin gateway APIs. List
-loading/empty/error/expired-session states and links to authorized errand pages. Proposed UI path
-`/notifications`; optional badge/read controls require explicit scope approval in feature analysis.
-Polling is sufficient initially; WebSocket delivery is not required by the D3 notification plan.
-No browser code or untrusted notification link grants access to an order.
+**Retention** (approved, [DESIGN.md](DESIGN.md#decisions)): read notifications are deleted after 30
+days and all notifications after 90 days; inbox rows are kept at least 30 days, the DLT replay
+horizon, so deduplication metadata outlives any notification cleanup. The retention job is
+iteration 8; until it exists nothing is deleted.
 
 ## NFRs and acceptance
 
@@ -109,22 +223,42 @@ up to 100 stored notifications, P95 retrieval <=2 seconds, measured request rece
 data, not event-processing time. Agree/record normal-load concurrency and hardware before testing;
 these slides do not specify them. Do not invent a 2,000-user commitment.
 
-Automated: mapping table fixtures, unrelated-recipient denial, each supported source condition,
-source replay/new ID same operation, repeated acceptance cycles, out-of-order delivery, concurrent
-consumption, DB restart, invalid schema -> DLT, safe reason rendering and no credentials in logs.
-Manual real-broker: create/accept/withdraw/pickup/deliver/complete, rejected reservation, expiry,
-cancellation compensation, independent two-user notification histories, consumer outage/replay.
+Automated (built so far): each Credit mapping and message, unrelated-recipient denial, redelivery,
+same operation under a new event ID, `EVENT_ID_CONFLICT`, invalid schema -> DLT, paging limits,
+token contract and role access. Still to add with later iterations: Order mapping fixtures,
+repeated acceptance cycles, out-of-order delivery, concurrent consumption, DB restart, safe reason
+rendering and no credentials in logs. Manual real-broker (after the shared wiring):
+create/accept/withdraw/pickup/deliver/complete, rejected reservation, expiry, cancellation
+compensation, independent two-user notification histories, consumer outage/replay.
 
-## Iteration and handoff
+## Run locally
 
-1. `$foc-iterate-feature notification-service-contract: Finalize lifecycle/credit fixtures and recipient mapping with producer owners.`
-2. `$foc-iterate-feature notification-service-foundation: Scaffold the private database, backend and authenticated history UI shell.`
-3. `$foc-iterate-feature notification-service-consumer: Persist retry-safe notifications from the agreed event mappings.`
-4. `$foc-iterate-feature notification-service-history: Expose private paginated history and update the live GUI.`
-5. `$foc-iterate-feature notification-service-recovery: Verify real-broker recovery, retention policy and D3 retrieval NFRs.`
+The service is not in `compose.yaml`, the gateway, Kubernetes or CI yet; that shared wiring is
+[iteration 3](DESIGN.md#planned-shared-changes). To run it beside the Compose
+stack, use your own PostgreSQL database:
 
-No scaffold means no valid build/test command yet. Add Maven verify and frontend lint/typecheck/
-test/build jobs when those implementations exist. Jun Hui/nominated editor handles routes, broker
-credentials and Compose/CI wiring with affected reviews and compose_env_check. XueTing implements
-Order lifecycle producer coverage in Order; Eldridge approves Credit payloads; no financial changes
-belong here. Existing Admin case notifications remain deferred.
+```bash
+DB_HOST=localhost DB_PORT=5432 DB_NAME=notification_db DB_USER=... DB_PASSWORD=... \
+NOTIFICATION_KAFKA_ENABLED=false ./mvnw spring-boot:run
+```
+
+Consuming the shared broker needs the `notification_service` Kafka identity and ACLs, which are
+part of iteration 3.
+
+## Build and test
+
+```bash
+./mvnw test          # unit, web and security tests, plus PostgreSQL and Kafka integration tests
+./mvnw verify        # full build
+```
+
+The integration tests start a throwaway PostgreSQL and Kafka with Testcontainers, so **Docker must
+be running**. They apply the real Flyway migration.
+
+## Handoffs
+
+Jun Hui (or the nominated editor) handles gateway routes, broker credentials, ACL/DLT provisioning
+and Compose/CI wiring with affected reviews and `compose_env_check`; XueTing owns the consumer,
+inbox and mapping, and implements Order lifecycle producer coverage in Order. Eldridge approves
+Credit payloads; no financial changes belong here. Darryl edits the shared contract package.
+Existing Admin case notifications remain deferred.
