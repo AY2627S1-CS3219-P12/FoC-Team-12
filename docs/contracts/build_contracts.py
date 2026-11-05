@@ -83,6 +83,7 @@ S['Notification'] = obj({'id': UUID,'type': enum('ORDER_OPENED','ORDER_RESERVATI
     'orderId': nullable(UUID),'message': TEXT,'occurredAt': TIME,'readAt': nullable(TIME)})
 S['NotificationPage'] = obj({'content': array(ref('Notification')), 'page': INT,
     'size': {'type':'integer','minimum':1,'maximum':100},'totalElements': INT,'totalPages': INT})
+S['UnreadCount'] = obj({'unreadCount': INT})
 
 api = {'openapi':'3.1.0','info':{'title':'FoC N2H integration contracts - REVIEW DRAFT','version':'0.1.0',
     'description':'Proposed signatures, not implemented endpoints. Read README.md for ownership, approval and semantic constraints.'},
@@ -135,6 +136,7 @@ endpoint('/api/chat/conversations/{conversationId}/attachments/{attachmentId}/co
 endpoint('/api/chat/conversations/{conversationId}/attachments/{attachmentId}/download','get','chat','Download')
 endpoint('/api/notifications/me','get','notification','NotificationPage',params=[param('page',schema={**INT,'default':0}),param('size',schema={'type':'integer','minimum':1,'maximum':100,'default':20})])
 endpoint('/api/notifications/me/{id}/read','patch','notification','Notification')
+endpoint('/api/notifications/me/unread-count','get','notification','UnreadCount')
 S['CaseSummary'] = obj({'caseId':UUID,'orderId':UUID,'state':enum('OPEN','UNDER_REVIEW','RESOLVED'),
     'reviewerId':nullable(UUID),'revision':INT,'createdAt':TIME})
 S['Statement'] = obj({'reporterId':UUID,'description':TEXT,'submittedAt':TIME})

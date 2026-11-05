@@ -271,6 +271,13 @@
     }
   },
   {
+    "operationId": "notification_get__api_notifications_me_unread_count",
+    "status": 200,
+    "body": {
+      "unreadCount": 1
+    }
+  },
+  {
     "operationId": "admin_post__api_admin_reports",
     "status": 201,
     "body": {

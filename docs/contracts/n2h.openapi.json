@@ -2284,6 +2284,93 @@
         }
       }
     },
+    "/api/notifications/me/unread-count": {
+      "get": {
+        "operationId": "notification_get__api_notifications_me_unread_count",
+        "tags": [
+          "notification"
+        ],
+        "x-owner": "notification-service",
+        "security": [
+          {
+            "userBearer": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCount"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/reports": {
       "post": {
         "operationId": "admin_post__api_admin_reports",
@@ -4817,6 +4904,19 @@
           "size",
           "totalElements",
           "totalPages"
+        ],
+        "additionalProperties": false
+      },
+      "UnreadCount": {
+        "type": "object",
+        "properties": {
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "unreadCount"
         ],
         "additionalProperties": false
       },

@@ -132,8 +132,9 @@ These limits are engineering defaults proposed for owner review, not added cours
 
 Historical/replacement-courier access to ordinary chat history needs team approval. Wire schemas
 do not authorize the proposed assignment-epoch visibility rule. Hold that feature boundary;
-do not block unrelated foundations. Optional notification read marking and image/text limits
-also remain proposed features/defaults. Owner review precedes consumers relying on them.
+do not block unrelated foundations. Image/text limits also remain proposed defaults. Owner review
+precedes consumers relying on them. Notification read marking and the unread count are now
+approved by their owner (XueTing) and implemented in Notification Service.
 
 ## Verification and implementation order
 

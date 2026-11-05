@@ -1189,6 +1189,19 @@
       ],
       "additionalProperties": false
     },
+    "UnreadCount": {
+      "type": "object",
+      "properties": {
+        "unreadCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "unreadCount"
+      ],
+      "additionalProperties": false
+    },
     "WebSocketTicket": {
       "type": "object",
       "properties": {
