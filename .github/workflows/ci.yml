@@ -150,6 +150,7 @@ jobs:
       KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
       KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
       KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
+      KAFKA_NOTIFICATION_SERVICE_PASSWORD: ci-kafka-notification-password
       KAFKA_UI_BROKER_PASSWORD: ci-kafka-ui-broker-password
       KAFKA_UI_LOGIN_USERNAME: ci-kafka-viewer
       KAFKA_UI_LOGIN_PASSWORD: ci-kafka-ui-login-password
@@ -359,6 +360,7 @@ jobs:
       KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
       KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
       KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
+      KAFKA_NOTIFICATION_SERVICE_PASSWORD: ci-kafka-notification-password
       KAFKA_UI_BROKER_PASSWORD: ci-kafka-ui-broker-password
       KAFKA_UI_LOGIN_USERNAME: ci-kafka-viewer
       KAFKA_UI_LOGIN_PASSWORD: ci-kafka-ui-login-password
@@ -466,6 +468,7 @@ jobs:
       KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
       KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
       KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
+      KAFKA_NOTIFICATION_SERVICE_PASSWORD: ci-kafka-notification-password
       KAFKA_UI_BROKER_PASSWORD: ci-kafka-ui-broker-password
       KAFKA_UI_LOGIN_USERNAME: ci-kafka-viewer
       KAFKA_UI_LOGIN_PASSWORD: ci-kafka-ui-login-password
