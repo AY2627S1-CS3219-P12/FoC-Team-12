@@ -23,6 +23,7 @@ issue tokens, or replace downstream authorization.
 | `/api/admin/suppliers` and `/api/admin/suppliers/**` | Supplier Service | unchanged |
 | `/api/credits` and `/api/credits/**` | Credit Service | unchanged |
 | `/api/orders` and `/api/orders/**` | Order Service | unchanged |
+| `/api/notifications` and `/api/notifications/**` | Notification Service | unchanged |
 | `GET /.well-known/jwks.json` | User Service | unchanged |
 | `GET /docs/user/openapi.json` | User Service | `/v3/api-docs` |
 | `GET /docs/user/openapi.yaml` | User Service | Converted from `/v3/api-docs` |
@@ -31,6 +32,7 @@ issue tokens, or replace downstream authorization.
 | `GET /docs/credit/openapi.json` | Credit Service | `/v3/api-docs` |
 | `GET /docs/credit/openapi.yaml` | Credit Service | `/v3/api-docs.yaml` |
 | `GET /docs/order/openapi.json` | Order Service | `/v3/api-docs` |
+| `GET /docs/notification/openapi.json` | Notification Service | `/v3/api-docs` |
 
 The UI routes are explicit; the gateway has no catch-all route. Unrecognised paths return `404`.
 Order routes follow its published port `8082` and `/api/orders` contract. Subpaths are forwarded
@@ -58,11 +60,14 @@ SUPPLIER_SERVICE_URL=http://localhost:8080
 CREDIT_SERVICE_URL=http://localhost:8083
 ORDER_SERVICE_URL=http://localhost:8082
 ADMIN_SERVICE_URL=http://localhost:8084
+NOTIFICATION_SERVICE_URL=http://localhost:8086
 ```
 
 Override the corresponding environment variable when a downstream service uses another address.
-Order is included in Compose and Kubernetes. Admin Compose wiring is prepared, with shared
-activation pending the affected-owner reviews in [the runtime handoff](../admin-service/RUNTIME_INTEGRATION.md).
+Order is included in Compose and Kubernetes. Notification is in Compose only; its Kubernetes
+Deployment and network policies come in a later change. Admin Compose wiring is prepared, with
+shared activation pending the affected-owner reviews in
+[the runtime handoff](../admin-service/RUNTIME_INTEGRATION.md).
 
 To run the complete Docker stack from the repository root, first configure the root `.env`,
 including User/Admin keys, trust and broker credentials. After affected-owner review, run:
@@ -91,12 +96,13 @@ troubleshooting during this phase.
 - Credit OpenAPI JSON: `http://localhost:8088/docs/credit/openapi.json`
 - Credit OpenAPI YAML: `http://localhost:8088/docs/credit/openapi.yaml`
 - Order OpenAPI JSON: `http://localhost:8088/docs/order/openapi.json`
+- Notification OpenAPI JSON: `http://localhost:8088/docs/notification/openapi.json`
 - Gateway health: `http://localhost:8088/actuator/health`
 
-The Swagger UI selector switches between the User, Supplier, Credit and Order contracts. Because the current
-specifications do not declare a separate server URL, **Try it out** sends requests through the
-gateway origin. Direct service Swagger remains available for debugging until UI/gateway
-integration is completed.
+The Swagger UI selector switches between the Admin, User, Supplier, Credit, Order and Notification
+contracts. Because the current specifications do not declare a separate server URL, **Try it
+out** sends requests through the gateway origin. Direct service Swagger remains available for
+debugging until UI/gateway integration is completed.
 
 ## Authentication boundary
 

@@ -38,6 +38,7 @@ class GatewayServiceApplicationTests {
     private static HttpServer creditService;
     private static HttpServer orderService;
     private static HttpServer adminService;
+    private static HttpServer notificationService;
 
     @LocalServerPort
     private int gatewayPort;
@@ -54,6 +55,7 @@ class GatewayServiceApplicationTests {
         creditService.stop(0);
         orderService.stop(0);
         adminService.stop(0);
+        notificationService.stop(0);
     }
 
     @DynamicPropertySource
@@ -64,6 +66,7 @@ class GatewayServiceApplicationTests {
         registry.add("CREDIT_SERVICE_URL", () -> serviceUrl(creditService));
         registry.add("ORDER_SERVICE_URL", () -> serviceUrl(orderService));
         registry.add("ADMIN_SERVICE_URL", () -> serviceUrl(adminService));
+        registry.add("NOTIFICATION_SERVICE_URL", () -> serviceUrl(notificationService));
     }
 
     @Test
@@ -184,6 +187,43 @@ class GatewayServiceApplicationTests {
                 .contains("Collect lunch");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/notifications/me", "/api/notifications/me/unread-count"})
+    void forwardsNotificationReadsWithTheBearerTokenAndPreservesProblems(String path) throws Exception {
+        HttpResponse<String> response = send(request(path + "?page=0&size=20")
+                .header("Authorization", "Bearer courier-token")
+                .header("X-Stub-Response-Status", "401")
+                .GET()
+                .build());
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(response.headers().firstValue("Content-Type").orElse(""))
+                .startsWith("application/problem+json");
+        assertThat(response.body())
+                .contains("\"backend\":\"notification\"")
+                .contains("\"method\":\"GET\"")
+                .contains("\"path\":\"" + path + "\"")
+                .contains("\"query\":\"page=0&size=20\"")
+                .contains("\"authorization\":\"Bearer courier-token\"");
+    }
+
+    @Test
+    void forwardsNotificationReadMarkingMethods() throws Exception {
+        HttpResponse<String> single = send(request("/api/notifications/me/example-id/read")
+                .header("Authorization", "Bearer courier-token")
+                .method("PATCH", HttpRequest.BodyPublishers.noBody())
+                .build());
+        HttpResponse<String> all = send(request("/api/notifications/me/read-all")
+                .header("Authorization", "Bearer courier-token")
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build());
+
+        assertThat(single.statusCode()).isEqualTo(200);
+        assertThat(single.body()).contains("\"backend\":\"notification\"", "\"method\":\"PATCH\"");
+        assertThat(all.statusCode()).isEqualTo(200);
+        assertThat(all.body()).contains("\"backend\":\"notification\"", "\"method\":\"POST\"");
+    }
+
     @Test
     void routesJwksToUserService() throws Exception {
         HttpResponse<String> response = get("/.well-known/jwks.json");
@@ -201,6 +241,8 @@ class GatewayServiceApplicationTests {
                 Map.entry("/docs/supplier/openapi.yaml", "openapi: 3.1.0\\nservice: supplier\\n"),
                 Map.entry("/docs/credit/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"credit\"}"),
                 Map.entry("/docs/order/openapi.json", "{\"openapi\":\"3.1.0\",\"service\":\"order\"}"),
+                Map.entry("/docs/notification/openapi.json",
+                        "{\"openapi\":\"3.1.0\",\"service\":\"notification\"}"),
                 Map.entry("/docs/credit/openapi.yaml", "openapi: 3.1.0\\nservice: credit\\n"));
 
         for (Map.Entry<String, String> expected : expectedBodies.entrySet()) {
@@ -259,6 +301,7 @@ class GatewayServiceApplicationTests {
                 .contains("/docs/supplier/openapi.json")
                 .contains("/docs/credit/openapi.json")
                 .contains("/docs/order/openapi.json")
+                .contains("/docs/notification/openapi.json")
                 .contains("Credit Service");
     }
 
@@ -305,6 +348,7 @@ class GatewayServiceApplicationTests {
             creditService = stubService("credit");
             orderService = stubService("order");
             adminService = stubService("admin");
+            notificationService = stubService("notification");
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to start gateway test downstreams", exception);
         }

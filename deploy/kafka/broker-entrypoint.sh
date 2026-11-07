@@ -20,6 +20,13 @@ broker_password=$(jaas_escape "$KAFKA_BROKER_PASSWORD")
 user_password=$(jaas_escape "$KAFKA_USER_SERVICE_PASSWORD")
 order_password=$(jaas_escape "$KAFKA_ORDER_SERVICE_PASSWORD")
 credit_password=$(jaas_escape "$KAFKA_CREDIT_SERVICE_PASSWORD")
+# Optional until every environment provisions it: Compose requires it and the Minikube helper
+# generates it, but an existing AWS broker Secret predates Notification. Without it the
+# notification_service identity simply cannot authenticate.
+notification_user=
+if [ -n "${KAFKA_NOTIFICATION_SERVICE_PASSWORD:-}" ]; then
+  notification_user="  user_notification_service=\"$(jaas_escape "$KAFKA_NOTIFICATION_SERVICE_PASSWORD")\""
+fi
 admin_service_password=$(jaas_escape "$KAFKA_ADMIN_SERVICE_PASSWORD")
 ui_password=$(jaas_escape "$KAFKA_UI_BROKER_PASSWORD")
 
@@ -34,6 +41,7 @@ KafkaServer {
   user_user_service="$user_password"
   user_order_service="$order_password"
   user_credit_service="$credit_password"
+${notification_user}
   user_admin_service="$admin_service_password"
   user_kafka_ui="$ui_password";
 };

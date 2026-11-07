@@ -7,12 +7,13 @@ and fixtures: [contract package](../docs/contracts/README.md). Source: D3 presen
 D1 N2H3.
 
 Spring Boot service (Java 17) that turns other services' Kafka events into per-user notifications
-and owns the notification database. Runs on port `8084`. **Status:** the read API and the
-`credit.events` consumer are built and tested; Order lifecycle notifications, read marking, the UI
-and the shared Compose/gateway/Kubernetes/CI wiring are not yet. The latest Kubernetes default-deny
-policies do not yet allow Notification traffic; its deployment iteration must add reviewed Gateway
-ingress and DB/User-JWKS/Kafka egress plus matching destination ingress and broker ACLs (see the
-contract package's deployment matrix).
+and owns the notification database. Runs on port `8086`. **Status:** the read API, read marking
+with the unread count and the `credit.events` consumer are built and tested, and the service runs
+in Compose behind the gateway with its own Kafka identity and a CI job. Order lifecycle
+notifications, the UI and Kubernetes are not yet. The latest Kubernetes default-deny policies do not yet allow Notification
+traffic; its deployment iteration must add Gateway ingress and DB/User-JWKS/Kafka egress plus
+matching destination ingress (see the contract package's deployment matrix). Its broker ACLs
+already exist.
 
 ## Purpose and boundary
 
@@ -263,19 +264,34 @@ rendering and no credentials in logs. Manual real-broker (after the shared wirin
 create/accept/withdraw/pickup/deliver/complete, rejected reservation, expiry, cancellation
 compensation, independent two-user notification histories, consumer outage/replay.
 
+## Run with Docker Compose
+
+Notification Service and its private database (`notification-db`, host port `127.0.0.1:5437`) are
+part of the root `compose.yaml`. Put `NOTIFICATION_DB_NAME`, `NOTIFICATION_DB_USER`,
+`NOTIFICATION_DB_PASSWORD` and `KAFKA_NOTIFICATION_SERVICE_PASSWORD` in the root `.env` (see
+`.env.example`); Compose also requires the other services' variables. Then:
+
+```bash
+docker compose up -d --build notification-service gateway
+```
+
+The service listens on `127.0.0.1:8086` (override with `NOTIFICATION_HOST_PORT`) and is reached
+through the gateway at `http://localhost:8088/api/notifications/**`. It verifies tokens with User
+Service's JWKS inside the Compose network and consumes `credit.events` as Kafka identity
+`notification_service`, group `notification-service`. The gateway does not wait for it, so
+`/api/notifications/**` returns a gateway error until it is up.
+
 ## Run locally
 
-The service is not in `compose.yaml`, the gateway, Kubernetes or CI yet; that shared wiring is
-[iteration 3](DESIGN.md#planned-shared-changes). To run it beside the Compose
-stack, use your own PostgreSQL database:
+To run it outside Compose, use your own PostgreSQL database:
 
 ```bash
 DB_HOST=localhost DB_PORT=5432 DB_NAME=notification_db DB_USER=... DB_PASSWORD=... \
 NOTIFICATION_KAFKA_ENABLED=false ./mvnw spring-boot:run
 ```
 
-Consuming the shared broker needs the `notification_service` Kafka identity and ACLs, which are
-part of iteration 3.
+To consume the Compose broker from the host instead, set `KAFKA_BOOTSTRAP_SERVERS=localhost:29092`,
+`KAFKA_PASSWORD` to `KAFKA_NOTIFICATION_SERVICE_PASSWORD` and leave `NOTIFICATION_KAFKA_ENABLED` on.
 
 ## Build and test
 
@@ -289,8 +305,8 @@ be running**. They apply the real Flyway migration.
 
 ## Handoffs
 
-Jun Hui (or the nominated editor) handles gateway routes, broker credentials, ACL/DLT provisioning
-and Compose/CI wiring with affected reviews and `compose_env_check`; XueTing owns the consumer,
-inbox and mapping, and implements Order lifecycle producer coverage in Order. Eldridge approves
-Credit payloads; no financial changes belong here. Darryl edits the shared contract package.
-Existing Admin case notifications remain deferred.
+XueTing owns the consumer, inbox and mapping, and Notification's Kafka (identity, ACLs, topics, DLTs,
+broker credentials), Kubernetes and Compose/CI wiring, checked with `compose_env_check`. XueTing also
+implements Order lifecycle producer coverage in Order. Eldridge approves Credit payloads; no
+financial changes belong here. Darryl edits the shared contract package. Existing Admin case
+notifications remain deferred.

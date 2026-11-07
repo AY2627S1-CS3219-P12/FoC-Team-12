@@ -138,6 +138,9 @@ jobs:
       ORDER_DB_NAME: order_db
       ORDER_DB_USER: order_user
       ORDER_DB_PASSWORD: ci-order-password
+      NOTIFICATION_DB_NAME: notification_db
+      NOTIFICATION_DB_USER: notification_user
+      NOTIFICATION_DB_PASSWORD: ci-notification-password
       ADMIN_DB_NAME: admin_db
       ADMIN_DB_USER: admin_user
       ADMIN_DB_PASSWORD: ci-admin-db-password
@@ -150,6 +153,7 @@ jobs:
       KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
       KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
       KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
+      KAFKA_NOTIFICATION_SERVICE_PASSWORD: ci-kafka-notification-password
       KAFKA_UI_BROKER_PASSWORD: ci-kafka-ui-broker-password
       KAFKA_UI_LOGIN_USERNAME: ci-kafka-viewer
       KAFKA_UI_LOGIN_PASSWORD: ci-kafka-ui-login-password
@@ -347,6 +351,9 @@ jobs:
       ORDER_DB_NAME: order_db
       ORDER_DB_USER: order_user
       ORDER_DB_PASSWORD: ci-order-password
+      NOTIFICATION_DB_NAME: notification_db
+      NOTIFICATION_DB_USER: notification_user
+      NOTIFICATION_DB_PASSWORD: ci-notification-password
       ADMIN_DB_NAME: admin_db
       ADMIN_DB_USER: admin_user
       ADMIN_DB_PASSWORD: ci-admin-db-password
@@ -359,6 +366,7 @@ jobs:
       KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
       KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
       KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
+      KAFKA_NOTIFICATION_SERVICE_PASSWORD: ci-kafka-notification-password
       KAFKA_UI_BROKER_PASSWORD: ci-kafka-ui-broker-password
       KAFKA_UI_LOGIN_USERNAME: ci-kafka-viewer
       KAFKA_UI_LOGIN_PASSWORD: ci-kafka-ui-login-password
@@ -389,6 +397,26 @@ jobs:
       - name: Stop test stack
         if: always()
         run: docker compose down --volumes --remove-orphans
+
+  notification-backend:
+    name: Notification backend
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: notification-service
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+          cache-dependency-path: notification-service/pom.xml
+      - name: Make Maven wrapper executable
+        run: chmod +x ./mvnw
+      - name: Verify backend with PostgreSQL and Kafka integration
+        run: ./mvnw --batch-mode --no-transfer-progress verify
 
   admin-backend:
     name: Admin backend
@@ -454,6 +482,9 @@ jobs:
       ORDER_DB_NAME: order_db
       ORDER_DB_USER: order_user
       ORDER_DB_PASSWORD: ci-order-password
+      NOTIFICATION_DB_NAME: notification_db
+      NOTIFICATION_DB_USER: notification_user
+      NOTIFICATION_DB_PASSWORD: ci-notification-password
       ADMIN_DB_NAME: admin_db
       ADMIN_DB_USER: admin_user
       ADMIN_DB_PASSWORD: ci-admin-db-password
@@ -466,6 +497,7 @@ jobs:
       KAFKA_USER_SERVICE_PASSWORD: ci-kafka-user-password
       KAFKA_ORDER_SERVICE_PASSWORD: ci-kafka-order-password
       KAFKA_CREDIT_SERVICE_PASSWORD: ci-kafka-credit-password
+      KAFKA_NOTIFICATION_SERVICE_PASSWORD: ci-kafka-notification-password
       KAFKA_UI_BROKER_PASSWORD: ci-kafka-ui-broker-password
       KAFKA_UI_LOGIN_USERNAME: ci-kafka-viewer
       KAFKA_UI_LOGIN_PASSWORD: ci-kafka-ui-login-password
@@ -522,6 +554,7 @@ jobs:
       - credit-backend
       - credit-frontend
       - credit-container
+      - notification-backend
       - admin-backend
       - admin-frontend
       - admin-container
@@ -543,7 +576,7 @@ jobs:
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
           if [ "$DOCKERHUB_USERNAME" != arkanian4 ] || [ -z "$DOCKERHUB_TOKEN" ]; then
-            echo '::error::Set DOCKERHUB_USERNAME to arkanian4 and configure DOCKERHUB_TOKEN with write access to the six foc-* repositories.'
+            echo '::error::Set DOCKERHUB_USERNAME to arkanian4 and configure DOCKERHUB_TOKEN with write access to the seven foc-* repositories.'
             exit 1
           fi
       - name: Set up Docker Buildx

@@ -87,12 +87,12 @@ def main():
         raise RuntimeError("Install OpenSSL to generate disposable signing keys")
     project = "foc-admin-runtime-test-" + uuid.uuid4().hex[:10]
     env = os.environ.copy()
-    for service in ("USER", "SUPPLIER", "CREDIT", "ORDER"):
+    for service in ("USER", "SUPPLIER", "CREDIT", "ORDER", "NOTIFICATION"):
         env.update({f"{service}_DB_NAME": service.lower() + "_test",
                     f"{service}_DB_USER": service.lower() + "_test",
                     f"{service}_DB_PASSWORD": secrets.token_hex(24)})
     for principal in ("ADMIN", "BROKER", "USER_SERVICE", "ORDER_SERVICE", "CREDIT_SERVICE",
-                      "ADMIN_SERVICE", "UI_BROKER", "UI_LOGIN"):
+                      "NOTIFICATION_SERVICE", "ADMIN_SERVICE", "UI_BROKER", "UI_LOGIN"):
         env[f"KAFKA_{principal}_PASSWORD"] = secrets.token_hex(24)
     email, password = "runtime-test@u.nus.edu", "Test!" + secrets.token_hex(16)
     env.update(ADMIN_DB_NAME="admin_runtime_test", ADMIN_DB_USER="admin_runtime_user",

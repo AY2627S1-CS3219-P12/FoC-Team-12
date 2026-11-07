@@ -9,6 +9,7 @@ services:
       CREDIT_SERVICE_URL: http://credit-service:8083
       ORDER_SERVICE_URL: http://order-service:8082
       ADMIN_SERVICE_URL: http://admin-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8086
     depends_on:
       user-service:
         condition: service_healthy
@@ -247,6 +248,49 @@ services:
     volumes:
       - order-db-data:/var/lib/postgresql/data
 
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: notification-db
+      DB_PORT: 5432
+      DB_NAME: ${NOTIFICATION_DB_NAME:?NOTIFICATION_DB_NAME must be set}
+      DB_USER: ${NOTIFICATION_DB_USER:?NOTIFICATION_DB_USER must be set}
+      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD must be set}
+      NOTIFICATION_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
+      NOTIFICATION_JWT_ISSUER: friend-on-campus-user-service
+      NOTIFICATION_JWT_AUDIENCE: friend-on-campus-api
+      NOTIFICATION_KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
+      KAFKA_SASL_MECHANISM: PLAIN
+      KAFKA_USERNAME: notification_service
+      KAFKA_PASSWORD: ${KAFKA_NOTIFICATION_SERVICE_PASSWORD:?KAFKA_NOTIFICATION_SERVICE_PASSWORD must be set}
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${NOTIFICATION_HOST_PORT:-8086}:8086"
+
+  notification-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME:?NOTIFICATION_DB_NAME must be set}
+      POSTGRES_USER: ${NOTIFICATION_DB_USER:?NOTIFICATION_DB_USER must be set}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER} -d ${NOTIFICATION_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "127.0.0.1:${NOTIFICATION_DB_HOST_PORT:-5437}:5432"
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
+
   kafka:
     image: apache/kafka:4.3.1
     hostname: kafka
@@ -282,6 +326,7 @@ services:
       KAFKA_USER_SERVICE_PASSWORD: ${KAFKA_USER_SERVICE_PASSWORD:?KAFKA_USER_SERVICE_PASSWORD must be set}
       KAFKA_ORDER_SERVICE_PASSWORD: ${KAFKA_ORDER_SERVICE_PASSWORD:?KAFKA_ORDER_SERVICE_PASSWORD must be set}
       KAFKA_CREDIT_SERVICE_PASSWORD: ${KAFKA_CREDIT_SERVICE_PASSWORD:?KAFKA_CREDIT_SERVICE_PASSWORD must be set}
+      KAFKA_NOTIFICATION_SERVICE_PASSWORD: ${KAFKA_NOTIFICATION_SERVICE_PASSWORD:?KAFKA_NOTIFICATION_SERVICE_PASSWORD must be set}
       KAFKA_ADMIN_SERVICE_PASSWORD: ${KAFKA_ADMIN_SERVICE_PASSWORD:?KAFKA_ADMIN_SERVICE_PASSWORD must be set}
       KAFKA_UI_BROKER_PASSWORD: ${KAFKA_UI_BROKER_PASSWORD:?KAFKA_UI_BROKER_PASSWORD must be set}
     healthcheck:
@@ -350,4 +395,5 @@ volumes:
   supplier-db-data:
   credit-db-data:
   order-db-data:
+  notification-db-data:
   kafka-data:
