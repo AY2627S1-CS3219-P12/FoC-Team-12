@@ -340,7 +340,7 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | UI | `order-ui-await-reservation`: Post errand waits for Credit; rejection reason stored as `terminalReason` and explained on the form | Done (PR #90) |
 | k8s | Image bump after #87, #88 and #90 | Done (PR #91) |
 | UI | `order-ui-reason-heading`: errand page heading and status badge name the rejection reason | Done (PR #92) |
-| 10 | `order-lifecycle-events`: `OrderTransitioned` for every transition on `order.lifecycle.events` (shared N2H contract), per-order `sourceSequence` (V4), `causationId` for Credit-driven transitions, per-topic relay blocking; off by default, on in Compose | This change |
+| 10 | `order-lifecycle-events`: `OrderTransitioned` for every transition on `order.lifecycle.events` (shared N2H contract), per-order `sourceSequence` (V4), `causationId` for Credit-driven transitions, per-topic relay blocking; off by default, on in Compose | Done (PR #117) |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
 
 ## Decisions

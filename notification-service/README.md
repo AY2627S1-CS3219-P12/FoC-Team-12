@@ -225,8 +225,8 @@ business key is `orderId:sourceSequence`, so two genuine reopen/accept cycles st
 
 ## Data model and delivery guarantees
 
-Flyway `V1__create_notifications.sql`. It has not been applied in any shared environment yet; once
-it is, it is never edited and changes go in a new migration.
+Flyway `V1__create_notifications.sql` (tables) and `V2__retention_indexes.sql` (indexes for the
+retention job). Applied migrations are never edited; changes go in a new migration.
 
 - **`notification_inbox`**: `event_id` (primary key), `topic`, `event_type`, `aggregate_id`,
   `correlation_id`, `fingerprint` (SHA-256 of the envelope), `outcome`
@@ -243,10 +243,28 @@ discarded on a generic "older version" check, and gaps are never treated as perm
 transitions. No profile data, balances, tokens or full event payloads are stored, and the API never
 returns another user's data.
 
-**Retention** (approved, [DESIGN.md](DESIGN.md#decisions)): read notifications are deleted after 30
-days and all notifications after 90 days; inbox rows are kept at least 30 days, the DLT replay
-horizon, so deduplication metadata outlives any notification cleanup. The retention job is
-iteration 8; until it exists nothing is deleted.
+**Retention** (approved, [DESIGN.md](DESIGN.md#decisions)), enforced by a job every hour:
+
+| Rule | Deleted when | Default |
+| --- | --- | --- |
+| Read notifications | `read_at` is more than the period ago | 30 days |
+| Every notification, read or not | `created_at` is more than the period ago | 90 days |
+| `notification_inbox` rows | `processed_at` is more than the period ago | 30 days |
+
+A row exactly at the limit is kept. The inbox period can never be set below 30 days, the DLT
+replay window, so deduplication data always outlives a replayable record: startup fails instead.
+Each rule deletes in batches, each in its own short transaction, choosing rows with
+`FOR UPDATE SKIP LOCKED`, so several instances can run it at once without waiting on or
+double-counting each other. Each run logs one line with the three counts and its duration.
+
+| Setting | Env var | Default |
+| --- | --- | --- |
+| Turn the job off | `NOTIFICATION_RETENTION_ENABLED` | `true` |
+| Read notifications | `NOTIFICATION_RETENTION_READ` | `30d` |
+| Every notification | `NOTIFICATION_RETENTION_ALL` | `90d` |
+| Inbox rows (minimum `30d`) | `NOTIFICATION_RETENTION_INBOX` | `30d` |
+| Batch size (1–10000) | `NOTIFICATION_RETENTION_BATCH_SIZE` | `500` |
+| Interval | `NOTIFICATION_RETENTION_INTERVAL_MS` | `3600000` (one hour; the first run is a minute after startup) |
 
 ## NFRs and acceptance
 
