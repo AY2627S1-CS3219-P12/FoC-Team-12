@@ -168,7 +168,11 @@ per source/stream/aggregate, not entity version" ([contract notes](../docs/contr
 - **Lazy expiry** (an action on an overdue OPEN order) commits `OPEN → EXPIRED` with the next number
   and a `SYSTEM` actor, then rejects the action. The caller only triggered it, so the expiry is
   not attributed to them and the requester is still notified.
-- Order needs a new `source_sequence` column for this; it is part of iteration 4.
+- Order stores the last number taken in `orders.lifecycle_sequence` (Order V4). Publishing is
+  behind `ORDER_LIFECYCLE_EVENTS_ENABLED`, off by default and on in Compose. While it is off no
+  number is taken; when it is turned on, each order's stream starts at 1 from its next transition
+  and earlier transitions are never published, so a consumer must not expect history from before
+  that point.
 
 Example: submit (1), opened (2), title edited (3), Alice accepts (4), Alice withdraws (5), Bob
 accepts (6). The requester gets `ORDER_ACCEPTED` twice, keys `513ea56a…:4` and `513ea56a…:6`;
@@ -322,9 +326,9 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 1 | Service skeleton: Flyway V1, JWT validation, health, OpenAPI, notification list | Done |
 | 2 | `credit.events` consumer: inbox, fingerprint, DLT; `CREDITS_*` notifications | Done |
 | 2a | `read-api`: shared-contract list API with messages; `operationId` business key | Done (PR #114) |
-| 3 | `wiring`: Kafka identity, ACLs and lifecycle topic, Compose, gateway routes, CI job; port 8086 | Done (this change) |
+| 3 | `wiring`: Kafka identity, ACLs and lifecycle topic, Compose, gateway routes, CI job; port 8086 | Done (PR #116) |
 | 3b | Kubernetes Deployment, network policies and gateway Kubernetes env | Next; XueTing |
-| 4 | `order-…`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | After 0 and the topic from 3 |
+| 4 | `order-lifecycle-events`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | Done (Order change); on in Compose, off in Kubernetes until 3b |
 | 5 | Order lifecycle consumer and recipient rules | After 4 |
 | 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (PR #115) |
 | 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3, 3b and 6 |

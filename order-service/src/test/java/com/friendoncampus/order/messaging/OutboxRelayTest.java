@@ -110,4 +110,24 @@ class OutboxRelayTest {
         assertThat(event.getAttempts()).isEqualTo(1);
         assertThat(event.getPublishedAt()).isNotNull();
     }
+
+    @Test
+    void aFailingLifecycleEventDoesNotHoldBackTheSameOrdersCreditRequests() {
+        UUID orderId = UUID.randomUUID();
+        OutboxEvent lifecycle = new OutboxEvent(UUID.randomUUID(), orderId, 0, "OrderTransitioned",
+                "order.lifecycle.events", null, "{\"lifecycle\":0}", OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC));
+        OutboxEvent laterLifecycle = new OutboxEvent(UUID.randomUUID(), orderId, 1, "OrderTransitioned",
+                "order.lifecycle.events", null, "{\"lifecycle\":1}", OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC));
+        OutboxEvent credit = event(orderId, 1);
+        when(repository.claimUnpublished(100)).thenReturn(List.of(lifecycle, credit, laterLifecycle));
+        when(kafka.send("order.lifecycle.events", orderId.toString(), "{\"lifecycle\":0}")).thenReturn(failed());
+        when(kafka.send("order.events", orderId.toString(), "{\"v\":1}")).thenReturn(acked());
+
+        assertThat(relay.publishPending()).isEqualTo(1);
+
+        assertThat(credit.getPublishedAt()).isNotNull();
+        // Its own topic still keeps order: the later lifecycle event waits.
+        verify(kafka, never()).send(eq("order.lifecycle.events"), eq(orderId.toString()), eq("{\"lifecycle\":1}"));
+        assertThat(laterLifecycle.getPublishedAt()).isNull();
+    }
 }

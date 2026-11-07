@@ -21,6 +21,15 @@ import jakarta.persistence.LockModeType;
 public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecificationExecutor<Order> {
 
     /**
+     * Takes the order's next lifecycle {@code sourceSequence} inside the caller's transaction. A
+     * plain column update, so it neither bumps the JPA version nor needs the entity reloaded; a
+     * rollback returns the number, keeping the stream gap-free.
+     */
+    @Query(value = "update orders set lifecycle_sequence = lifecycle_sequence + 1 where id = :id"
+            + " returning lifecycle_sequence", nativeQuery = true)
+    long nextLifecycleSequence(@Param("id") UUID id);
+
+    /**
      * Loads the order with a row lock ({@code SELECT … FOR UPDATE}) so concurrent transitions on the
      * same order run one at a time; the first one processed wins.
      */
