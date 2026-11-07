@@ -178,17 +178,20 @@ an accept after expiry adds nothing.
 
 The plan was approved on 2026-11-04 (iteration 0). Each shared file still has one nominated editor
 and needs review from the affected owners when it is changed ([root AGENTS.md](../AGENTS.md)).
-Nothing below is changed by iterations 0–2a.
+Iteration 3 applied the Kafka, secrets, Compose/`.env.example`, gateway and CI rows. The
+Kubernetes, network-policy, header, observability and rate-limit rows remain planned.
 
-| Area | Change | Affected owners |
+XueTing owns Notification's Kafka and Kubernetes changes (from 2026-11-07).
+
+| Area | Change | Owner |
 | --- | --- | --- |
-| Kafka topics and ACLs (`deploy/kafka/initialize.sh`, `verify.sh`) | Create `order.lifecycle.events` and its DLT. Add user `notification_service`: Read and Describe on `credit.events` and `order.lifecycle.events`, Read on group `notification-service`, Write on `credit.events.DLT` and `order.lifecycle.events.DLT`, and IdempotentWrite. Give `order_service` Write on `order.lifecycle.events`. Give `kafka_ui` read access to the new topics and group. | Jun Hui |
-| Kafka secrets (`broker-entrypoint.sh`, `k8s/New-KafkaSecrets.ps1`, `k8s/broker.yaml`, `Test-LocalKafka.sh`) | Add the password `KAFKA_NOTIFICATION_SERVICE_PASSWORD` | Jun Hui |
-| DLT sharing | Notification writes failed `credit.events` records to the existing `credit.events.DLT`. Spring's `kafka_dlt-original-consumer-group` header says which consumer failed | Jun Hui, Eldridge |
+| Kafka topics and ACLs (`deploy/kafka/initialize.sh`, `verify.sh`) | Create `order.lifecycle.events` and its DLT. Add user `notification_service`: Read and Describe on `credit.events` and `order.lifecycle.events`, Read on group `notification-service`, Write on `credit.events.DLT` and `order.lifecycle.events.DLT`, and IdempotentWrite. Give `order_service` Write on `order.lifecycle.events`. Give `kafka_ui` read access to the new topics and group. | XueTing |
+| Kafka secrets (`broker-entrypoint.sh`, `k8s/New-KafkaSecrets.ps1`, `k8s/broker.yaml`, `Test-LocalKafka.sh`) | Add the password `KAFKA_NOTIFICATION_SERVICE_PASSWORD` | XueTing |
+| DLT sharing | Notification writes failed `credit.events` records to the existing `credit.events.DLT`. Spring's `kafka_dlt-original-consumer-group` header says which consumer failed | XueTing |
 | Compose and `.env.example` | Add `notification-service` and `notification-db`, the `NOTIFICATION_DB_*` variables and the Kafka password. Every new `${VAR:?}` goes into `.env.example`, every CI job that runs Compose and `Test-LocalKafka.sh` | All |
 | Gateway (`application.yml`, `k8s/deployment.yaml`) | Routes `/api/notifications/**` and `/docs/notification/openapi.json`, later the UI routes, and `NOTIFICATION_SERVICE_URL` | Gateway nominee |
-| Kubernetes | Add `notification-service/k8s/` (copied from Order's layout), and `notification` in `New-DatabaseSecret.ps1` and `Test-LocalDeployment.ps1` | Darryl |
-| Network policies (`deploy/k8s/network/policies.yaml`) | New `foc-notification` and `foc-notification-db` policies. Add `notification-service` to `foc-user` ingress, the Kafka client policy and gateway egress (port 8084) | Darryl, Jun Hui |
+| Kubernetes | Add `notification-service/k8s/` (copied from Order's layout), and `notification` in `New-DatabaseSecret.ps1` and `Test-LocalDeployment.ps1` | XueTing |
+| Network policies (`deploy/k8s/network/policies.yaml`) | New `foc-notification` and `foc-notification-db` policies. Add `notification-service` to `foc-user` ingress, the Kafka client policy and gateway egress (port 8086) | XueTing |
 | CI | Add `notification-service` to `SERVICES` in `image_plan.py` and its test, and a backend job in `ci.yml` | All |
 | Header bell | A link and badge in every service's header (iteration 7) | Darryl, Jun Hui, Eldridge |
 | Observability | Expose Notification metrics (endpoint to agree) and add its dashboards and alerts (iteration 9) | Jun Hui |
@@ -318,12 +321,13 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 0 | Contract proposal and shared-change plan (this document) | Done; approved 2026-11-04 |
 | 1 | Service skeleton: Flyway V1, JWT validation, health, OpenAPI, notification list | Done |
 | 2 | `credit.events` consumer: inbox, fingerprint, DLT; `CREDITS_*` notifications | Done |
-| 2a | `read-api`: shared-contract list API with messages; `operationId` business key | Done |
-| 3 | Shared wiring: Kafka user and ACLs, Compose, gateway, CI, Kubernetes, network policies | Next; by the nominated editor |
+| 2a | `read-api`: shared-contract list API with messages; `operationId` business key | Done (PR #114) |
+| 3 | `wiring`: Kafka identity, ACLs and lifecycle topic, Compose, gateway routes, CI job; port 8086 | Done (this change) |
+| 3b | Kubernetes Deployment, network policies and gateway Kubernetes env | Next; XueTing |
 | 4 | `order-…`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | After 0 and the topic from 3 |
 | 5 | Order lifecycle consumer and recipient rules | After 4 |
-| 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (this change) |
-| 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3 and 6 |
+| 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (PR #115) |
+| 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3, 3b and 6 |
 | 8 | Retention job for the approved 30/90-day policy | After 2 and 5 |
 | 9 | Observability: metrics, alerts and structured logs ([Observability](#observability)) | After 3 |
 | 10 | Optional: server-sent events for the badge | If time allows, after 7 |

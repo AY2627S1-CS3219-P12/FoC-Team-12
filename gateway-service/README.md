@@ -65,8 +65,9 @@ NOTIFICATION_SERVICE_URL=http://localhost:8086
 
 Override the corresponding environment variable when a downstream service uses another address.
 Order is included in Compose and Kubernetes. Notification is in Compose only; its Kubernetes
-Deployment and network policies come in a later change. Admin Compose wiring is prepared, with shared
-activation pending the affected-owner reviews in [the runtime handoff](../admin-service/RUNTIME_INTEGRATION.md).
+Deployment and network policies come in a later change. Admin Compose wiring is prepared, with
+shared activation pending the affected-owner reviews in
+[the runtime handoff](../admin-service/RUNTIME_INTEGRATION.md).
 
 To run the complete Docker stack from the repository root, first configure the root `.env`,
 including User/Admin keys, trust and broker credentials. After affected-owner review, run:
@@ -100,8 +101,8 @@ troubleshooting during this phase.
 
 The Swagger UI selector switches between the Admin, User, Supplier, Credit, Order and Notification
 contracts. Because the current specifications do not declare a separate server URL, **Try it
-out** sends requests through the gateway origin. Direct service Swagger remains available for debugging until UI/gateway
-integration is completed.
+out** sends requests through the gateway origin. Direct service Swagger remains available for
+debugging until UI/gateway integration is completed.
 
 ## Authentication boundary
 
