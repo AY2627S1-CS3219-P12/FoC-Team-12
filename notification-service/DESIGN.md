@@ -329,7 +329,7 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 2a | `read-api`: shared-contract list API with messages; `operationId` business key | Done (PR #114) |
 | 3 | `wiring`: Kafka identity, ACLs and lifecycle topic, Compose, gateway routes, CI job; port 8086 | Done (PR #116) |
 | 3b | Kubernetes Deployment, network policies and gateway Kubernetes env | Next; XueTing |
-| 4 | `order-lifecycle-events`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | Done (Order change); on in Compose, off in Kubernetes until 3b |
+| 4 | `order-lifecycle-events`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | Done (PR #117); on in Compose, off in Kubernetes until 3b |
 | 5 | Order lifecycle consumer and recipient rules | After 4 |
 | 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (PR #115) |
 | 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3, 3b and 6 |
