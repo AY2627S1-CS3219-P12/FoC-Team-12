@@ -12,7 +12,8 @@ import com.friendoncampus.notification.repository.ProcessedEventRepository;
                 + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
                 + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
-        "app.kafka.enabled=false"
+        "app.kafka.enabled=false",
+        "app.retention.enabled=false"
 })
 class NotificationServiceApplicationTests {
 

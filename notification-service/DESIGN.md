@@ -40,7 +40,7 @@ User Service ── JWKS ──► (token verification)│       │ GET /api/no
 
 ## Data model
 
-`V1__create_notifications.sql` (not yet applied in any shared environment; once it is, it is never
+`V1__create_notifications.sql` and `V2__retention_indexes.sql` (applied migrations are never
 edited). The columns and reasons are in the
 [README](README.md#data-model-and-delivery-guarantees). Differences from the first draft:
 
@@ -168,7 +168,11 @@ per source/stream/aggregate, not entity version" ([contract notes](../docs/contr
 - **Lazy expiry** (an action on an overdue OPEN order) commits `OPEN → EXPIRED` with the next number
   and a `SYSTEM` actor, then rejects the action. The caller only triggered it, so the expiry is
   not attributed to them and the requester is still notified.
-- Order needs a new `source_sequence` column for this; it is part of iteration 4.
+- Order stores the last number taken in `orders.lifecycle_sequence` (Order V4). Publishing is
+  behind `ORDER_LIFECYCLE_EVENTS_ENABLED`, off by default and on in Compose. While it is off no
+  number is taken; when it is turned on, each order's stream starts at 1 from its next transition
+  and earlier transitions are never published, so a consumer must not expect history from before
+  that point.
 
 Example: submit (1), opened (2), title edited (3), Alice accepts (4), Alice withdraws (5), Bob
 accepts (6). The requester gets `ORDER_ACCEPTED` twice, keys `513ea56a…:4` and `513ea56a…:6`;
@@ -178,17 +182,20 @@ an accept after expiry adds nothing.
 
 The plan was approved on 2026-11-04 (iteration 0). Each shared file still has one nominated editor
 and needs review from the affected owners when it is changed ([root AGENTS.md](../AGENTS.md)).
-Nothing below is changed by iterations 0–2a.
+Iteration 3 applied the Kafka, secrets, Compose/`.env.example`, gateway and CI rows. The
+Kubernetes, network-policy, header, observability and rate-limit rows remain planned.
 
-| Area | Change | Affected owners |
+XueTing owns Notification's Kafka and Kubernetes changes (from 2026-11-07).
+
+| Area | Change | Owner |
 | --- | --- | --- |
-| Kafka topics and ACLs (`deploy/kafka/initialize.sh`, `verify.sh`) | Create `order.lifecycle.events` and its DLT. Add user `notification_service`: Read and Describe on `credit.events` and `order.lifecycle.events`, Read on group `notification-service`, Write on `credit.events.DLT` and `order.lifecycle.events.DLT`, and IdempotentWrite. Give `order_service` Write on `order.lifecycle.events`. Give `kafka_ui` read access to the new topics and group. | Jun Hui |
-| Kafka secrets (`broker-entrypoint.sh`, `k8s/New-KafkaSecrets.ps1`, `k8s/broker.yaml`, `Test-LocalKafka.sh`) | Add the password `KAFKA_NOTIFICATION_SERVICE_PASSWORD` | Jun Hui |
-| DLT sharing | Notification writes failed `credit.events` records to the existing `credit.events.DLT`. Spring's `kafka_dlt-original-consumer-group` header says which consumer failed | Jun Hui, Eldridge |
+| Kafka topics and ACLs (`deploy/kafka/initialize.sh`, `verify.sh`) | Create `order.lifecycle.events` and its DLT. Add user `notification_service`: Read and Describe on `credit.events` and `order.lifecycle.events`, Read on group `notification-service`, Write on `credit.events.DLT` and `order.lifecycle.events.DLT`, and IdempotentWrite. Give `order_service` Write on `order.lifecycle.events`. Give `kafka_ui` read access to the new topics and group. | XueTing |
+| Kafka secrets (`broker-entrypoint.sh`, `k8s/New-KafkaSecrets.ps1`, `k8s/broker.yaml`, `Test-LocalKafka.sh`) | Add the password `KAFKA_NOTIFICATION_SERVICE_PASSWORD` | XueTing |
+| DLT sharing | Notification writes failed `credit.events` records to the existing `credit.events.DLT`. Spring's `kafka_dlt-original-consumer-group` header says which consumer failed | XueTing |
 | Compose and `.env.example` | Add `notification-service` and `notification-db`, the `NOTIFICATION_DB_*` variables and the Kafka password. Every new `${VAR:?}` goes into `.env.example`, every CI job that runs Compose and `Test-LocalKafka.sh` | All |
 | Gateway (`application.yml`, `k8s/deployment.yaml`) | Routes `/api/notifications/**` and `/docs/notification/openapi.json`, later the UI routes, and `NOTIFICATION_SERVICE_URL` | Gateway nominee |
-| Kubernetes | Add `notification-service/k8s/` (copied from Order's layout), and `notification` in `New-DatabaseSecret.ps1` and `Test-LocalDeployment.ps1` | Darryl |
-| Network policies (`deploy/k8s/network/policies.yaml`) | New `foc-notification` and `foc-notification-db` policies. Add `notification-service` to `foc-user` ingress, the Kafka client policy and gateway egress (port 8084) | Darryl, Jun Hui |
+| Kubernetes | Add `notification-service/k8s/` (copied from Order's layout), and `notification` in `New-DatabaseSecret.ps1` and `Test-LocalDeployment.ps1` | XueTing |
+| Network policies (`deploy/k8s/network/policies.yaml`) | New `foc-notification` and `foc-notification-db` policies. Add `notification-service` to `foc-user` ingress, the Kafka client policy and gateway egress (port 8086) | XueTing |
 | CI | Add `notification-service` to `SERVICES` in `image_plan.py` and its test, and a backend job in `ci.yml` | All |
 | Header bell | A link and badge in every service's header (iteration 7) | Darryl, Jun Hui, Eldridge |
 | Observability | Expose Notification metrics (endpoint to agree) and add its dashboards and alerts (iteration 9) | Jun Hui |
@@ -215,8 +222,9 @@ Approved with iteration 0 (2026-11-04):
 - The courier keeps both notifications for T11 and T14.
 - **Retention:** delete read notifications after 30 days and every notification after 90 days.
   Keep inbox rows **at least 30 days**: DLT topics retain records for 30 days, so a replay after the
-  inbox row was pruned would notify twice. Enforced by the retention job (iteration 8); until then
-  nothing is deleted.
+  inbox row was pruned would notify twice. Enforced by the retention job (iteration 8): "read"
+  counts from `read_at`, "every notification" from `created_at`, and startup refuses an inbox
+  period under 30 days.
 
 Approved with the `read-state` brief (2026-11-05):
 - Read marking follows the shared contract; repeating it keeps the first `readAt`.
@@ -318,13 +326,14 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 0 | Contract proposal and shared-change plan (this document) | Done; approved 2026-11-04 |
 | 1 | Service skeleton: Flyway V1, JWT validation, health, OpenAPI, notification list | Done |
 | 2 | `credit.events` consumer: inbox, fingerprint, DLT; `CREDITS_*` notifications | Done |
-| 2a | `read-api`: shared-contract list API with messages; `operationId` business key | Done |
-| 3 | Shared wiring: Kafka user and ACLs, Compose, gateway, CI, Kubernetes, network policies | Next; by the nominated editor |
-| 4 | `order-…`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | After 0 and the topic from 3 |
+| 2a | `read-api`: shared-contract list API with messages; `operationId` business key | Done (PR #114) |
+| 3 | `wiring`: Kafka identity, ACLs and lifecycle topic, Compose, gateway routes, CI job; port 8086 | Done (PR #116) |
+| 3b | Kubernetes Deployment, network policies and gateway Kubernetes env | Next; XueTing |
+| 4 | `order-lifecycle-events`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | Done (PR #117); on in Compose, off in Kubernetes until 3b |
 | 5 | Order lifecycle consumer and recipient rules | After 4 |
-| 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (this change) |
-| 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3 and 6 |
-| 8 | Retention job for the approved 30/90-day policy | After 2 and 5 |
+| 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (PR #115) |
+| 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3, 3b and 6 |
+| 8 | `retention`: hourly batched deletion for the approved 30/90-day policy (V2 indexes) | Done (this change) |
 | 9 | Observability: metrics, alerts and structured logs ([Observability](#observability)) | After 3 |
 | 10 | Optional: server-sent events for the badge | If time allows, after 7 |
 

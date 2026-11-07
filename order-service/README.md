@@ -244,7 +244,39 @@ per order, `causationId` null, `actor` `{type: USER, userId, role}` or
 `{type: SYSTEM}`). Its `data` carries a UUID `operationId`, generated once and
 stored with the outbox row so retries never create a second operation. Other
 transitions (opened, accepted, reopened, picked up, delivered, reservation
-failed) change no credits and are only recorded in the order's history.
+failed) change no credits and send nothing on `order.events`.
+
+**Published to `order.lifecycle.events`** (key = order UUID) when
+`ORDER_LIFECYCLE_EVENTS_ENABLED=true`: one `OrderTransitioned` for **every**
+committed transition, including edits and reward changes, for Notification and
+Chat. The shape is the shared N2H contract
+([`n2h-events.schema.json`](../docs/contracts/n2h-events.schema.json)); the tests
+validate every action's event against that file.
+
+- `data`: `orderId`, `requesterId`, `previousCourierId`, `courierId`, `fromState`
+  (null for `SUBMIT`), `toState`, `action`, `sourceSequence`, `reasonCode` and
+  `snapshot` (the order right after the change).
+- **`sourceSequence`** counts the order's published transitions: 1, 2, 3… with no
+  gaps. It is taken in the transition's own transaction, so a rejected, raced or
+  repeated request takes no number. It is not the JPA `version`.
+- **`previousCourierId`** is the courier a withdrawal or cancel-after-accept cleared;
+  `courierId` is then null. Otherwise it is null and `courierId` is the order's
+  courier after the change.
+- **`reasonCode`** is the transition's terminal reason (for example
+  `INSUFFICIENT_CREDITS`, `REQUESTER_CANCELLED_ACCEPTED`, `PICKUP_DEADLINE_PASSED`),
+  otherwise null. Rejected reward changes give null: Order does not store
+  Credit's rejection code.
+- **`actor`** is `SYSTEM` for scheduler, Credit-driven and lazy expiries; an action
+  that only triggers a lazy expiry is not its actor.
+- **`causationId`** is the Credit event's `eventId` for transitions it caused
+  (opened, reservation failed, reward applied or rejected), otherwise null.
+- No `operationId`: a lifecycle fact requests no credit effect.
+
+The setting is off by default: the topic and `order_service`'s Write ACL must
+exist first. Compose turns it on (its `kafka-init` creates both). While it is off
+nothing is written and no numbers are taken; each order's stream starts at 1 from
+its first transition after it is turned on, and earlier transitions are not
+published.
 
 **Consumed from `credit.events`** (`CreditOutcomeHandler`): `CreditReserved`
 opens the order, `CreditReservationRejected` ends it, `CreditAdjusted` applies
@@ -257,11 +289,12 @@ inbox, and matched to the Order command it answers by `operationId`, all in one
 transaction.
 
 **Kafka transport.** An outbox relay sends pending `outbox_events` rows to
-`order.events` every second, keyed by the order UUID and reusing each row's stored
+their topic every second, keyed by the order UUID and reusing each row's stored
 `eventId` and payload; a row is marked `published_at` only after Kafka
 acknowledges, and a failed send stays pending with `attempts` increased. Once an
-order's event fails, that order's later events wait, so they are never published
-out of order. A listener consumes `credit.events` as group `order-service` and
+order's event fails, that order's later events **on the same topic** wait, so they
+are never published out of order; a failing `order.lifecycle.events` row never
+holds back that order's credit requests on `order.events`. A listener consumes `credit.events` as group `order-service` and
 acknowledges a record only after `CreditOutcomeHandler` commits; transient
 failures are retried three times with backoff, then the original record goes to
 `credit.events.DLT` (contract violations go there without retries).
@@ -269,6 +302,7 @@ failures are retried three times with backoff, then the original record goes to
 | Setting | Env var | Default |
 | --- | --- | --- |
 | Turn Kafka on/off | `ORDER_KAFKA_ENABLED` | `true` (`false` runs without a broker; events wait unpublished) |
+| Publish `OrderTransitioned` | `ORDER_LIFECYCLE_EVENTS_ENABLED` | `false` (Compose sets `true`) |
 | Bootstrap servers | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` (Compose sets `kafka:9092`) |
 | Security protocol | `KAFKA_SECURITY_PROTOCOL` | `SASL_PLAINTEXT` |
 | SASL mechanism | `KAFKA_SASL_MECHANISM` | `PLAIN` |

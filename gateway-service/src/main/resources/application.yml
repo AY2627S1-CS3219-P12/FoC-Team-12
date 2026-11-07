@@ -68,6 +68,10 @@ spring:
               uri: ${CHAT_SERVICE_URL:http://localhost:8085}
               predicates:
                 - Path=/ws/chat,/ws/chat/**
+            - id: notification-api
+              uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8086}
+              predicates:
+                - Path=/api/notifications,/api/notifications/**
             - id: user-jwks
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:
@@ -122,6 +126,13 @@ spring:
                 - Method=GET
               filters:
                 - SetPath=/v3/api-docs
+            - id: notification-openapi-json
+              uri: ${NOTIFICATION_SERVICE_URL:http://localhost:8086}
+              predicates:
+                - Path=/docs/notification/openapi.json
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs
             - id: credit-openapi-yaml
               uri: ${CREDIT_SERVICE_URL:http://localhost:8083}
               predicates:
@@ -154,4 +165,6 @@ springdoc:
         url: /docs/order/openapi.json
       - name: Chat Service
         url: /docs/chat/openapi.json
+      - name: Notification Service
+        url: /docs/notification/openapi.json
     urls-primary-name: Credit Service

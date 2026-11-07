@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.friendoncampus.order.domain.ActorRole;
@@ -14,9 +15,9 @@ import com.friendoncampus.order.domain.CreditEffect;
 import com.friendoncampus.order.domain.Order;
 import com.friendoncampus.order.domain.OrderTransition;
 import com.friendoncampus.order.domain.OrderTransitionRecord;
+import com.friendoncampus.order.repository.OrderRepository;
 import com.friendoncampus.order.repository.OrderTransitionRepository;
 import com.friendoncampus.order.repository.OutboxEventRepository;
-import com.friendoncampus.order.repository.LifecycleOutboxEventRepository;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -25,7 +26,12 @@ import tools.jackson.databind.json.JsonMapper;
  * for the credit-changing ones, using the envelope and payloads of the shared event communication
  * blueprint ({@code docs/integration/event-communication-blueprint.md}, version 1). Only the five blueprint Order events are published:
  * {@code OrderSubmitted}, {@code OrderRewardChangeRequested}, {@code OrderCancelled},
- * {@code OrderExpired} and {@code OrderCompleted}. Other transitions stay in the history only.
+ * {@code OrderExpired} and {@code OrderCompleted}.
+ *
+ * <p>When lifecycle events are enabled, every transition also writes one {@code OrderTransitioned}
+ * row for {@code order.lifecycle.events}, in the shared N2H contract shape
+ * ({@code docs/contracts/n2h-events.schema.json}). Its {@code sourceSequence} is taken in this same
+ * transaction, so a rolled-back request takes no number.
  *
  * <p>Callers must already be inside the transaction that changed the order, and must have flushed
  * it so {@link Order#getVersion()} is the post-change version.
@@ -34,31 +40,48 @@ import tools.jackson.databind.json.JsonMapper;
 public class OrderEventRecorder {
 
     public static final String ORDER_EVENTS_TOPIC = "order.events";
-    public static final String ORDER_LIFECYCLE_TOPIC = "order.lifecycle.events";
+    public static final String ORDER_LIFECYCLE_EVENTS_TOPIC = "order.lifecycle.events";
+    static final String ORDER_TRANSITIONED = "OrderTransitioned";
     static final int EVENT_VERSION = 1;
     static final String PRODUCER = "order-service";
 
+    private final OrderRepository orderRepository;
     private final OrderTransitionRepository transitionRepository;
     private final OutboxEventRepository outboxEventRepository;
-    private final LifecycleOutboxEventRepository lifecycleOutboxEventRepository;
+    private final boolean lifecycleEventsEnabled;
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     public OrderEventRecorder(
+            OrderRepository orderRepository,
             OrderTransitionRepository transitionRepository,
             OutboxEventRepository outboxEventRepository,
-            LifecycleOutboxEventRepository lifecycleOutboxEventRepository) {
+            @Value("${app.kafka.lifecycle-events.enabled:false}") boolean lifecycleEventsEnabled) {
+        this.orderRepository = orderRepository;
         this.transitionRepository = transitionRepository;
         this.outboxEventRepository = outboxEventRepository;
-        this.lifecycleOutboxEventRepository = lifecycleOutboxEventRepository;
+        this.lifecycleEventsEnabled = lifecycleEventsEnabled;
     }
 
     public void record(Order order, OrderTransition transition) {
+        record(order, transition, null);
+    }
+
+    /**
+     * @param causationId the Credit event that caused this transition, or null for user and
+     *     scheduler actions
+     */
+    public void record(Order order, OrderTransition transition, UUID causationId) {
         long version = order.getVersion();
         transitionRepository.save(OrderTransitionRecord.of(order.getId(), version, transition));
-        if (transition.creditEffect() == CreditEffect.NONE) {
-            recordLifecycle(order, transition, version);
-            return;
+        if (transition.creditEffect() != CreditEffect.NONE) {
+            recordCreditEvent(order, transition, version);
         }
+        if (lifecycleEventsEnabled) {
+            recordLifecycleEvent(order, transition, version, causationId);
+        }
+    }
+
+    private void recordCreditEvent(Order order, OrderTransition transition, long version) {
 
         UUID eventId = UUID.randomUUID();
         // Generated once and stored with the event; a publish retry reuses this exact payload.
@@ -82,15 +105,14 @@ public class OrderEventRecorder {
         outboxEventRepository.save(new OutboxEvent(eventId, order.getId(), version, transition.eventType(),
                 ORDER_EVENTS_TOPIC, operationId, jsonMapper.writeValueAsString(envelope),
                 transition.occurredAt()));
-        recordLifecycle(order, transition, version);
     }
 
-    private void recordLifecycle(Order order, OrderTransition transition, long version) {
-        long sourceSequence = lifecycleOutboxEventRepository.nextSourceSequence(order.getId());
+    private void recordLifecycleEvent(Order order, OrderTransition transition, long version, UUID causationId) {
+        long sourceSequence = orderRepository.nextLifecycleSequence(order.getId());
         UUID eventId = UUID.randomUUID();
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", eventId);
-        envelope.put("eventType", "OrderTransitioned");
+        envelope.put("eventType", ORDER_TRANSITIONED);
         envelope.put("eventVersion", EVENT_VERSION);
         envelope.put("aggregateType", "Order");
         envelope.put("aggregateId", order.getId());
@@ -98,46 +120,56 @@ public class OrderEventRecorder {
         envelope.put("occurredAt", utc(transition.occurredAt()));
         envelope.put("producer", PRODUCER);
         envelope.put("correlationId", order.getCorrelationId());
-        envelope.put("causationId", null);
+        envelope.put("causationId", causationId);
         envelope.put("actor", actor(transition));
-        Map<String, Object> lifecycle = new LinkedHashMap<>();
-        lifecycle.put("orderId", order.getId());
-        lifecycle.put("requesterId", order.getRequesterId());
-        lifecycle.put("courierId", order.getCourierId());
-        lifecycle.put("previousCourierId", previousCourier(transition));
-        lifecycle.put("action", transition.action().name());
-        lifecycle.put("fromState", transition.fromState() == null ? null : transition.fromState().name());
-        lifecycle.put("toState", transition.toState().name());
-        lifecycle.put("sourceSequence", sourceSequence);
-        lifecycle.put("reasonCode", transition.reason() == null ? null : transition.reason().name());
-        lifecycle.put("snapshot", lifecycleSnapshot(order));
-        envelope.put("data", lifecycle);
-        lifecycleOutboxEventRepository.save(new LifecycleOutboxEvent(eventId, order.getId(), version,
-                sourceSequence, "OrderTransitioned", jsonMapper.writeValueAsString(envelope), transition.occurredAt()));
+        envelope.put("data", lifecycleData(order, transition, sourceSequence));
+
+        // No operationId: a lifecycle fact requests no credit effect.
+        outboxEventRepository.save(new OutboxEvent(eventId, order.getId(), version, ORDER_TRANSITIONED,
+                ORDER_LIFECYCLE_EVENTS_TOPIC, null, jsonMapper.writeValueAsString(envelope),
+                transition.occurredAt()));
     }
 
-    private static UUID previousCourier(OrderTransition transition) {
-        return switch (transition.action()) {
-            case WITHDRAW, CANCEL -> transition.courierId();
-            default -> null;
-        };
+    private static Map<String, Object> lifecycleData(Order order, OrderTransition transition, long sourceSequence) {
+        // WITHDRAW and cancel-after-accept clear the assignment; the cleared courier is still named so
+        // consumers can tell them. Otherwise the order's courier after the change is current.
+        boolean clearsCourier = transition.courierId() != null && order.getCourierId() == null;
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("orderId", order.getId());
+        data.put("requesterId", order.getRequesterId());
+        data.put("previousCourierId", clearsCourier ? transition.courierId() : null);
+        data.put("courierId", order.getCourierId());
+        data.put("fromState", transition.fromState() == null ? null : transition.fromState().name());
+        data.put("toState", transition.toState().name());
+        data.put("action", transition.action().name());
+        data.put("sourceSequence", sourceSequence);
+        // Only approved codes, never free text: the terminal reason when the transition has one.
+        data.put("reasonCode", transition.reason() == null ? null : transition.reason().name());
+        data.put("snapshot", snapshot(order, transition));
+        return data;
     }
 
-    private static Map<String, Object> lifecycleSnapshot(Order order) {
+    /** The order as it is right after the change, so consumers never need to call Order. */
+    private static Map<String, Object> snapshot(Order order, OrderTransition transition) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("orderId", order.getId());
         snapshot.put("requesterId", order.getRequesterId());
         snapshot.put("courierId", order.getCourierId());
-        snapshot.put("status", order.getState().name());
+        snapshot.put("status", transition.toState().name());
         snapshot.put("title", order.getTitle());
         snapshot.put("description", order.getDescription());
         snapshot.put("creditReward", order.getCreditReward());
         snapshot.put("pickupDeadline", utc(order.getPickupDeadline()));
         snapshot.put("pickupLocationId", order.getPickupLocationId());
         snapshot.put("dropoffLocationId", order.getDropoffLocationId());
-        snapshot.put("pickupLocationName", order.getPickupLocationName());
-        snapshot.put("dropoffLocationName", order.getDropoffLocationName());
+        snapshot.put("pickupLocationName", blankToNull(order.getPickupLocationName()));
+        snapshot.put("dropoffLocationName", blankToNull(order.getDropoffLocationName()));
         return snapshot;
+    }
+
+    /** The contract requires a non-empty name or null; older orders may have no stored name. */
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     private static Map<String, Object> actor(OrderTransition transition) {

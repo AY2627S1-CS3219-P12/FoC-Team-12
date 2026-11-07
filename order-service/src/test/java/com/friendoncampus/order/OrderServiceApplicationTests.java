@@ -8,7 +8,6 @@ import com.friendoncampus.order.repository.OrderRepository;
 import com.friendoncampus.order.repository.OrderTransitionRepository;
 import com.friendoncampus.order.repository.OutboxEventRepository;
 import com.friendoncampus.order.repository.ProcessedEventRepository;
-import com.friendoncampus.order.repository.LifecycleOutboxEventRepository;
 
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
@@ -28,9 +27,6 @@ class OrderServiceApplicationTests {
 
     @MockitoBean
     private OutboxEventRepository outboxEventRepository;
-
-    @MockitoBean
-    private LifecycleOutboxEventRepository lifecycleOutboxEventRepository;
 
     @MockitoBean
     private ProcessedEventRepository processedEventRepository;

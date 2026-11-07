@@ -21,8 +21,10 @@ import com.friendoncampus.order.repository.OutboxEventRepository;
  * its stored {@code eventId}, payload and order UUID key; {@code published_at} is set only after
  * Kafka acknowledges, and a failed send stays pending with its attempt count increased.
  *
- * <p>Within one run, once an order's event fails, that order's later events wait, so events for
- * one order are never published out of order.
+ * <p>Within one run, once an order's event fails, that order's later events on the same topic
+ * wait, so one order's events are never published out of order on a topic. Topics are blocked
+ * separately: a failing {@code order.lifecycle.events} row never holds back the credit requests on
+ * {@code order.events}.
  */
 public class OutboxRelay {
 
@@ -47,10 +49,10 @@ public class OutboxRelay {
     @Transactional
     public int publishPending() {
         List<OutboxEvent> batch = outboxEventRepository.claimUnpublished(batchSize);
-        Set<UUID> blockedOrders = new HashSet<>();
+        Set<BlockedStream> blockedStreams = new HashSet<>();
         int published = 0;
         for (OutboxEvent event : batch) {
-            if (blockedOrders.contains(event.getAggregateId())) {
+            if (blockedStreams.contains(BlockedStream.of(event))) {
                 continue;
             }
             try {
@@ -60,10 +62,10 @@ public class OutboxRelay {
                 published++;
             } catch (InterruptedException exception) {
                 Thread.currentThread().interrupt();
-                failed(event, blockedOrders, exception);
+                failed(event, blockedStreams, exception);
                 break;
             } catch (Exception exception) {
-                failed(event, blockedOrders, exception);
+                failed(event, blockedStreams, exception);
             }
         }
         if (published > 0) {
@@ -72,11 +74,18 @@ public class OutboxRelay {
         return published;
     }
 
-    private static void failed(OutboxEvent event, Set<UUID> blockedOrders, Exception exception) {
+    private static void failed(OutboxEvent event, Set<BlockedStream> blockedStreams, Exception exception) {
         event.recordFailedAttempt();
-        blockedOrders.add(event.getAggregateId());
+        blockedStreams.add(BlockedStream.of(event));
         log.warn("Could not publish eventId={} eventType={} operationId={} orderId={} attempts={}",
                 event.getId(), event.getEventType(), event.getOperationId(), event.getAggregateId(),
                 event.getAttempts(), exception);
+    }
+
+    /** One order's events on one topic: the unit that keeps its order. */
+    private record BlockedStream(String topic, UUID orderId) {
+        static BlockedStream of(OutboxEvent event) {
+            return new BlockedStream(event.getTopic(), event.getAggregateId());
+        }
     }
 }

@@ -10,6 +10,7 @@ services:
       ORDER_SERVICE_URL: http://order-service:8082
       ADMIN_SERVICE_URL: http://admin-service:8084
       CHAT_SERVICE_URL: http://chat-service:8085
+      NOTIFICATION_SERVICE_URL: http://notification-service:8086
     depends_on:
       user-service:
         condition: service_healthy
@@ -228,6 +229,8 @@ services:
       KAFKA_SASL_MECHANISM: PLAIN
       KAFKA_USERNAME: order_service
       KAFKA_PASSWORD: ${KAFKA_ORDER_SERVICE_PASSWORD:?KAFKA_ORDER_SERVICE_PASSWORD must be set}
+      # kafka-init creates order.lifecycle.events and order_service's Write ACL.
+      ORDER_LIFECYCLE_EVENTS_ENABLED: "true"
     depends_on:
       order-db:
         condition: service_healthy
@@ -296,7 +299,7 @@ services:
       timeout: 5s
       retries: 10
     ports:
-      - "127.0.0.1:${CHAT_DB_HOST_PORT:-5437}:5432"
+      - "127.0.0.1:${CHAT_DB_HOST_PORT:-5438}:5432"
     volumes:
       - chat-db-data:/var/lib/postgresql/data
 
@@ -314,6 +317,49 @@ services:
       - "127.0.0.1:${RABBITMQ_MANAGEMENT_HOST_PORT:-15672}:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
+
+  notification-service:
+    build:
+      context: ./notification-service
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: notification-db
+      DB_PORT: 5432
+      DB_NAME: ${NOTIFICATION_DB_NAME:?NOTIFICATION_DB_NAME must be set}
+      DB_USER: ${NOTIFICATION_DB_USER:?NOTIFICATION_DB_USER must be set}
+      DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD must be set}
+      NOTIFICATION_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
+      NOTIFICATION_JWT_ISSUER: friend-on-campus-user-service
+      NOTIFICATION_JWT_AUDIENCE: friend-on-campus-api
+      NOTIFICATION_KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
+      KAFKA_SASL_MECHANISM: PLAIN
+      KAFKA_USERNAME: notification_service
+      KAFKA_PASSWORD: ${KAFKA_NOTIFICATION_SERVICE_PASSWORD:?KAFKA_NOTIFICATION_SERVICE_PASSWORD must be set}
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${NOTIFICATION_HOST_PORT:-8086}:8086"
+
+  notification-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${NOTIFICATION_DB_NAME:?NOTIFICATION_DB_NAME must be set}
+      POSTGRES_USER: ${NOTIFICATION_DB_USER:?NOTIFICATION_DB_USER must be set}
+      POSTGRES_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?NOTIFICATION_DB_PASSWORD must be set}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${NOTIFICATION_DB_USER} -d ${NOTIFICATION_DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "127.0.0.1:${NOTIFICATION_DB_HOST_PORT:-5437}:5432"
+    volumes:
+      - notification-db-data:/var/lib/postgresql/data
 
   kafka:
     image: apache/kafka:4.3.1
@@ -350,6 +396,7 @@ services:
       KAFKA_USER_SERVICE_PASSWORD: ${KAFKA_USER_SERVICE_PASSWORD:?KAFKA_USER_SERVICE_PASSWORD must be set}
       KAFKA_ORDER_SERVICE_PASSWORD: ${KAFKA_ORDER_SERVICE_PASSWORD:?KAFKA_ORDER_SERVICE_PASSWORD must be set}
       KAFKA_CREDIT_SERVICE_PASSWORD: ${KAFKA_CREDIT_SERVICE_PASSWORD:?KAFKA_CREDIT_SERVICE_PASSWORD must be set}
+      KAFKA_NOTIFICATION_SERVICE_PASSWORD: ${KAFKA_NOTIFICATION_SERVICE_PASSWORD:?KAFKA_NOTIFICATION_SERVICE_PASSWORD must be set}
       KAFKA_ADMIN_SERVICE_PASSWORD: ${KAFKA_ADMIN_SERVICE_PASSWORD:?KAFKA_ADMIN_SERVICE_PASSWORD must be set}
       KAFKA_CHAT_SERVICE_PASSWORD: ${KAFKA_CHAT_SERVICE_PASSWORD:-change-me-kafka-chat}
       KAFKA_UI_BROKER_PASSWORD: ${KAFKA_UI_BROKER_PASSWORD:?KAFKA_UI_BROKER_PASSWORD must be set}
@@ -421,4 +468,5 @@ volumes:
   order-db-data:
   chat-db-data:
   rabbitmq-data:
+  notification-db-data:
   kafka-data:
