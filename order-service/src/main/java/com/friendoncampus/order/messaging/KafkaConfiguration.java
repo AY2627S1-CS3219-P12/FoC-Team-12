@@ -19,6 +19,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.util.backoff.ExponentialBackOff;
 
 import com.friendoncampus.order.repository.OutboxEventRepository;
+import com.friendoncampus.order.repository.LifecycleOutboxEventRepository;
 
 /**
  * Kafka adapters for the event blueprint: the outbox relay to {@code order.events} and the
@@ -46,6 +47,10 @@ public class KafkaConfiguration {
     OutboxRelaySchedule outboxRelaySchedule(OutboxRelay relay) {
         return new OutboxRelaySchedule(relay);
     }
+
+    @Bean LifecycleOutboxRelay lifecycleOutboxRelay(LifecycleOutboxEventRepository repository,
+            KafkaTemplate<String,String> kafkaTemplate,Clock clock){return new LifecycleOutboxRelay(repository,kafkaTemplate,clock);}
+    @Bean LifecycleOutboxRelaySchedule lifecycleOutboxRelaySchedule(LifecycleOutboxRelay relay){return new LifecycleOutboxRelaySchedule(relay);}
 
     @Bean
     CreditEventsListener creditEventsListener(CreditOutcomeHandler handler) {
@@ -87,4 +92,5 @@ public class KafkaConfiguration {
             relay.publishPending();
         }
     }
+    static class LifecycleOutboxRelaySchedule { private final LifecycleOutboxRelay relay; LifecycleOutboxRelaySchedule(LifecycleOutboxRelay relay){this.relay=relay;} @Scheduled(fixedDelayString="${app.kafka.outbox.interval-ms:1000}") void run(){relay.publishPending();} }
 }

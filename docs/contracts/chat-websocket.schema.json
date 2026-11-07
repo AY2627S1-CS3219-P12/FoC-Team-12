@@ -922,6 +922,47 @@
           "type": "string",
           "format": "date-time"
         },
+        "messageType": {
+          "type": "string",
+          "enum": [
+            "TEXT",
+            "QUICK_REPLY",
+            "IMAGE"
+          ]
+        },
+        "originalLanguage": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "en",
+                "zh",
+                "ms",
+                "ta"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "quickReplyKey": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "ON_MY_WAY",
+                "ARRIVED",
+                "RUNNING_LATE_5",
+                "WHERE_MEET",
+                "THANK_YOU"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "text": {
           "anyOf": [
             {
@@ -951,6 +992,9 @@
         "senderUserId",
         "sequence",
         "createdAt",
+        "messageType",
+        "originalLanguage",
+        "quickReplyKey",
         "text",
         "attachment"
       ],
@@ -958,8 +1002,14 @@
       "oneOf": [
         {
           "properties": {
+            "messageType": {
+              "const": "TEXT"
+            },
             "text": {
               "type": "string"
+            },
+            "quickReplyKey": {
+              "type": "null"
             },
             "attachment": {
               "type": "null"
@@ -968,7 +1018,36 @@
         },
         {
           "properties": {
+            "messageType": {
+              "const": "QUICK_REPLY"
+            },
             "text": {
+              "type": "string"
+            },
+            "quickReplyKey": {
+              "type": "string",
+              "enum": [
+                "ON_MY_WAY",
+                "ARRIVED",
+                "RUNNING_LATE_5",
+                "WHERE_MEET",
+                "THANK_YOU"
+              ]
+            },
+            "attachment": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "messageType": {
+              "const": "IMAGE"
+            },
+            "text": {
+              "type": "null"
+            },
+            "quickReplyKey": {
               "type": "null"
             },
             "attachment": {
@@ -1034,6 +1113,30 @@
               "type": "string",
               "format": "uuid"
             },
+            "quickReplyKey": {
+              "type": "string",
+              "enum": [
+                "ON_MY_WAY",
+                "ARRIVED",
+                "RUNNING_LATE_5",
+                "WHERE_MEET",
+                "THANK_YOU"
+              ]
+            }
+          },
+          "required": [
+            "clientMessageId",
+            "quickReplyKey"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "clientMessageId": {
+              "type": "string",
+              "format": "uuid"
+            },
             "attachmentId": {
               "type": "string",
               "format": "uuid"
@@ -1047,6 +1150,74 @@
         }
       ]
     },
+    "ChatPreferences": {
+      "type": "object",
+      "properties": {
+        "preferredLanguage": {
+          "type": "string",
+          "enum": [
+            "en",
+            "zh",
+            "ms",
+            "ta"
+          ]
+        }
+      },
+      "required": [
+        "preferredLanguage"
+      ],
+      "additionalProperties": false
+    },
+    "QuickReply": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "enum": [
+            "ON_MY_WAY",
+            "ARRIVED",
+            "RUNNING_LATE_5",
+            "WHERE_MEET",
+            "THANK_YOU"
+          ]
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "en",
+            "zh",
+            "ms",
+            "ta"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        }
+      },
+      "required": [
+        "key",
+        "language",
+        "text"
+      ],
+      "additionalProperties": false
+    },
+    "QuickReplyList": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/QuickReply"
+          }
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "additionalProperties": false
+    },
     "Translation": {
       "type": "object",
       "properties": {
@@ -1054,10 +1225,23 @@
           "type": "string",
           "format": "uuid"
         },
+        "sourceLanguage": {
+          "type": "string",
+          "enum": [
+            "en",
+            "zh",
+            "ms",
+            "ta"
+          ]
+        },
         "targetLanguage": {
           "type": "string",
-          "minLength": 1,
-          "maxLength": 2000
+          "enum": [
+            "en",
+            "zh",
+            "ms",
+            "ta"
+          ]
         },
         "status": {
           "type": "string",
@@ -1081,6 +1265,7 @@
       },
       "required": [
         "messageId",
+        "sourceLanguage",
         "targetLanguage",
         "status",
         "text"

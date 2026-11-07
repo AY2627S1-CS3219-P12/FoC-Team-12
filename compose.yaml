@@ -9,6 +9,7 @@ services:
       CREDIT_SERVICE_URL: http://credit-service:8083
       ORDER_SERVICE_URL: http://order-service:8082
       ADMIN_SERVICE_URL: http://admin-service:8084
+      CHAT_SERVICE_URL: http://chat-service:8085
     depends_on:
       user-service:
         condition: service_healthy
@@ -18,6 +19,8 @@ services:
         condition: service_healthy
       order-service:
         condition: service_started
+      chat-service:
+        condition: service_healthy
     ports:
       - "${GATEWAY_HOST_PORT:-8088}:8088"
 
@@ -228,6 +231,8 @@ services:
     depends_on:
       order-db:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     ports:
       - "8082:8082"
 
@@ -246,6 +251,69 @@ services:
       - "127.0.0.1:5436:5432"
     volumes:
       - order-db-data:/var/lib/postgresql/data
+
+  chat-service:
+    build:
+      context: ./chat-service
+      dockerfile: Dockerfile
+    environment:
+      DB_HOST: chat-db
+      DB_PORT: 5432
+      DB_NAME: ${CHAT_DB_NAME:-chat_db}
+      DB_USER: ${CHAT_DB_USER:-chat_user}
+      DB_PASSWORD: ${CHAT_DB_PASSWORD:-change-me-chat-db}
+      CHAT_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
+      KAFKA_SASL_MECHANISM: PLAIN
+      KAFKA_USERNAME: chat_service
+      KAFKA_PASSWORD: ${KAFKA_CHAT_SERVICE_PASSWORD:-change-me-kafka-chat}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: ${RABBITMQ_CHAT_USER:-chat_service}
+      RABBITMQ_PASSWORD: ${RABBITMQ_CHAT_PASSWORD:-change-me-rabbit-chat}
+    depends_on:
+      chat-db:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${CHAT_HOST_PORT:-8085}:8085"
+
+  chat-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${CHAT_DB_NAME:-chat_db}
+      POSTGRES_USER: ${CHAT_DB_USER:-chat_user}
+      POSTGRES_PASSWORD: ${CHAT_DB_PASSWORD:-change-me-chat-db}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CHAT_DB_USER:-chat_user} -d ${CHAT_DB_NAME:-chat_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "127.0.0.1:${CHAT_DB_HOST_PORT:-5437}:5432"
+    volumes:
+      - chat-db-data:/var/lib/postgresql/data
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_CHAT_USER:-chat_service}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_CHAT_PASSWORD:-change-me-rabbit-chat}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+    ports:
+      - "127.0.0.1:${RABBITMQ_MANAGEMENT_HOST_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
 
   kafka:
     image: apache/kafka:4.3.1
@@ -283,6 +351,7 @@ services:
       KAFKA_ORDER_SERVICE_PASSWORD: ${KAFKA_ORDER_SERVICE_PASSWORD:?KAFKA_ORDER_SERVICE_PASSWORD must be set}
       KAFKA_CREDIT_SERVICE_PASSWORD: ${KAFKA_CREDIT_SERVICE_PASSWORD:?KAFKA_CREDIT_SERVICE_PASSWORD must be set}
       KAFKA_ADMIN_SERVICE_PASSWORD: ${KAFKA_ADMIN_SERVICE_PASSWORD:?KAFKA_ADMIN_SERVICE_PASSWORD must be set}
+      KAFKA_CHAT_SERVICE_PASSWORD: ${KAFKA_CHAT_SERVICE_PASSWORD:-change-me-kafka-chat}
       KAFKA_UI_BROKER_PASSWORD: ${KAFKA_UI_BROKER_PASSWORD:?KAFKA_UI_BROKER_PASSWORD must be set}
     healthcheck:
       test: ["CMD", "/bin/bash", "/opt/foc-kafka/healthcheck.sh"]
@@ -350,4 +419,6 @@ volumes:
   supplier-db-data:
   credit-db-data:
   order-db-data:
+  chat-db-data:
+  rabbitmq-data:
   kafka-data:

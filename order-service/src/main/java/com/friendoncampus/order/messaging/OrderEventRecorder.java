@@ -16,6 +16,7 @@ import com.friendoncampus.order.domain.OrderTransition;
 import com.friendoncampus.order.domain.OrderTransitionRecord;
 import com.friendoncampus.order.repository.OrderTransitionRepository;
 import com.friendoncampus.order.repository.OutboxEventRepository;
+import com.friendoncampus.order.repository.LifecycleOutboxEventRepository;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -33,24 +34,29 @@ import tools.jackson.databind.json.JsonMapper;
 public class OrderEventRecorder {
 
     public static final String ORDER_EVENTS_TOPIC = "order.events";
+    public static final String ORDER_LIFECYCLE_TOPIC = "order.lifecycle.events";
     static final int EVENT_VERSION = 1;
     static final String PRODUCER = "order-service";
 
     private final OrderTransitionRepository transitionRepository;
     private final OutboxEventRepository outboxEventRepository;
+    private final LifecycleOutboxEventRepository lifecycleOutboxEventRepository;
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     public OrderEventRecorder(
             OrderTransitionRepository transitionRepository,
-            OutboxEventRepository outboxEventRepository) {
+            OutboxEventRepository outboxEventRepository,
+            LifecycleOutboxEventRepository lifecycleOutboxEventRepository) {
         this.transitionRepository = transitionRepository;
         this.outboxEventRepository = outboxEventRepository;
+        this.lifecycleOutboxEventRepository = lifecycleOutboxEventRepository;
     }
 
     public void record(Order order, OrderTransition transition) {
         long version = order.getVersion();
         transitionRepository.save(OrderTransitionRecord.of(order.getId(), version, transition));
         if (transition.creditEffect() == CreditEffect.NONE) {
+            recordLifecycle(order, transition, version);
             return;
         }
 
@@ -76,6 +82,62 @@ public class OrderEventRecorder {
         outboxEventRepository.save(new OutboxEvent(eventId, order.getId(), version, transition.eventType(),
                 ORDER_EVENTS_TOPIC, operationId, jsonMapper.writeValueAsString(envelope),
                 transition.occurredAt()));
+        recordLifecycle(order, transition, version);
+    }
+
+    private void recordLifecycle(Order order, OrderTransition transition, long version) {
+        long sourceSequence = lifecycleOutboxEventRepository.nextSourceSequence(order.getId());
+        UUID eventId = UUID.randomUUID();
+        Map<String, Object> envelope = new LinkedHashMap<>();
+        envelope.put("eventId", eventId);
+        envelope.put("eventType", "OrderTransitioned");
+        envelope.put("eventVersion", EVENT_VERSION);
+        envelope.put("aggregateType", "Order");
+        envelope.put("aggregateId", order.getId());
+        envelope.put("aggregateVersion", version);
+        envelope.put("occurredAt", utc(transition.occurredAt()));
+        envelope.put("producer", PRODUCER);
+        envelope.put("correlationId", order.getCorrelationId());
+        envelope.put("causationId", null);
+        envelope.put("actor", actor(transition));
+        Map<String, Object> lifecycle = new LinkedHashMap<>();
+        lifecycle.put("orderId", order.getId());
+        lifecycle.put("requesterId", order.getRequesterId());
+        lifecycle.put("courierId", order.getCourierId());
+        lifecycle.put("previousCourierId", previousCourier(transition));
+        lifecycle.put("action", transition.action().name());
+        lifecycle.put("fromState", transition.fromState() == null ? null : transition.fromState().name());
+        lifecycle.put("toState", transition.toState().name());
+        lifecycle.put("sourceSequence", sourceSequence);
+        lifecycle.put("reasonCode", transition.reason() == null ? null : transition.reason().name());
+        lifecycle.put("snapshot", lifecycleSnapshot(order));
+        envelope.put("data", lifecycle);
+        lifecycleOutboxEventRepository.save(new LifecycleOutboxEvent(eventId, order.getId(), version,
+                sourceSequence, "OrderTransitioned", jsonMapper.writeValueAsString(envelope), transition.occurredAt()));
+    }
+
+    private static UUID previousCourier(OrderTransition transition) {
+        return switch (transition.action()) {
+            case WITHDRAW, CANCEL -> transition.courierId();
+            default -> null;
+        };
+    }
+
+    private static Map<String, Object> lifecycleSnapshot(Order order) {
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("orderId", order.getId());
+        snapshot.put("requesterId", order.getRequesterId());
+        snapshot.put("courierId", order.getCourierId());
+        snapshot.put("status", order.getState().name());
+        snapshot.put("title", order.getTitle());
+        snapshot.put("description", order.getDescription());
+        snapshot.put("creditReward", order.getCreditReward());
+        snapshot.put("pickupDeadline", utc(order.getPickupDeadline()));
+        snapshot.put("pickupLocationId", order.getPickupLocationId());
+        snapshot.put("dropoffLocationId", order.getDropoffLocationId());
+        snapshot.put("pickupLocationName", order.getPickupLocationName());
+        snapshot.put("dropoffLocationName", order.getDropoffLocationName());
+        return snapshot;
     }
 
     private static Map<String, Object> actor(OrderTransition transition) {

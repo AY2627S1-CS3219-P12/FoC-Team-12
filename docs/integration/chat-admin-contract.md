@@ -63,7 +63,9 @@ normal errand-chat terminal state does not lock an unresolved case conversation.
 
 Chat owns public message/history/upload schemas and WebSocket delivery. Retain D3 text/images,
 S3 attachments, original text, Amazon Translate, Redis translation cache and asynchronous retry.
-Publish Chat OpenAPI before Admin UI consumes it. Do not introduce a second message protocol.
+Publish Chat OpenAPI before Admin UI consumes it. RabbitMQ may be used internally for Chat STOMP
+fan-out and directed translation jobs, but must not duplicate Kafka lifecycle events or expose
+broker credentials to browsers. Admin continues to use the documented HTTP and Kafka contracts.
 
 ## Event coverage and persistence
 

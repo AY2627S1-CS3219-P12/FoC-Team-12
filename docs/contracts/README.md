@@ -70,7 +70,13 @@ remain pending; this is approval of Admin behavior, not approval on behalf of pr
   do not fabricate a Kafka event that would replay a financial effect.
 - All response schemas are successful DATA shapes, not a permission model. Resource authorization,
   case assignment/state and account state remain backend checks on every relevant operation.
-- Message must contain text or one validated READY attachment, never both in this draft. Uploaded
+- A Chat message is exactly one of typed text, a server-owned quick reply, or one validated READY
+  attachment. Quick replies use stable keys (`ON_MY_WAY`, `ARRIVED`, `RUNNING_LATE_5`,
+  `WHERE_MEET`, `THANK_YOU`); the server resolves the localized text using the sender's persisted
+  Chat preference, so a browser cannot redefine a key. Supported initial preferences are English
+  (`en`), Chinese (`zh`), Malay (`ms`) and Tamil (`ta`). Preference changes affect future quick
+  replies and incoming translation targets, never rewrite existing message originals.
+- Uploaded
   byte signature/size must match declared format. No arbitrary object keys or URLs in message body.
 - A schema-valid action/outcome can still be a business rejection. Insufficient credits never
   alter reserved funds. No-op ban must have previousStatus=BANNED. Successful correction is APPLIED,
@@ -127,6 +133,13 @@ are rechecked; close/reject on expired/revoked access. REST owns message writes;
 only notify committed data. Reconnect fetches authoritative REST history by sequence; duplicate
 delivery is allowed and deduplicated by message ID. Translation notifications follow same access.
 These limits are engineering defaults proposed for owner review, not added course requirements.
+
+RabbitMQ is proposed as Chat's internal STOMP broker relay and directed translation-work queue.
+It is not exposed to browsers and does not carry Order lifecycle facts. Kafka remains the
+cross-service event log. Chat persists a message before publishing a delivery notification;
+RabbitMQ or WebSocket downtime therefore cannot erase accepted messages. Translation jobs use a
+bounded retry policy and dead-letter queue, while the original text remains readable. Shared
+RabbitMQ deployment, credentials, network policy and CI wiring still require Jun Hui's review.
 
 ## Remaining product gate
 

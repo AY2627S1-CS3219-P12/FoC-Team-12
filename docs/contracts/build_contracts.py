@@ -18,6 +18,9 @@ def ref(n): return {'$ref': '#/components/schemas/' + n}
 def write(name, value):
     (HERE / name).write_text(json.dumps(value, indent=2) + '\n', encoding='utf-8')
 
+LANGUAGE = enum('en', 'zh', 'ms', 'ta')
+QUICK_REPLY_KEY = enum('ON_MY_WAY', 'ARRIVED', 'RUNNING_LATE_5', 'WHERE_MEET', 'THANK_YOU')
+
 S = {}
 S['Problem'] = obj({'type': {'type':'string'}, 'title': TEXT, 'status': {'type':'integer'},
                     'detail': TEXT, 'instance': {'type':'string'}, 'code': TEXT}, ['title','status'])
@@ -68,14 +71,27 @@ S['Attachment'] = obj({'attachmentId': UUID,'mediaType': enum('image/jpeg','imag
     'sizeBytes': {'type':'integer','minimum':1,'maximum':5242880}})
 S['Message'] = obj({'id': UUID,'conversationId': UUID,'senderUserId': UUID,
     'sequence': {'type':'integer','minimum':1},'createdAt': TIME,
+    'messageType': enum('TEXT','QUICK_REPLY','IMAGE'),
+    'originalLanguage': nullable(LANGUAGE),
+    'quickReplyKey': nullable(QUICK_REPLY_KEY),
     'text': nullable({'type':'string','minLength':1,'maxLength':4000}), 'attachment': nullable(ref('Attachment'))})
 S['Message']['oneOf'] = [
-    {'properties':{'text':{'type':'string'},'attachment':{'type':'null'}}},
-    {'properties':{'text':{'type':'null'},'attachment':{'type':'object'}}}]
+    {'properties':{'messageType':{'const':'TEXT'},'text':{'type':'string'},
+                   'quickReplyKey':{'type':'null'},'attachment':{'type':'null'}}},
+    {'properties':{'messageType':{'const':'QUICK_REPLY'},'text':{'type':'string'},
+                   'quickReplyKey':QUICK_REPLY_KEY,'attachment':{'type':'null'}}},
+    {'properties':{'messageType':{'const':'IMAGE'},'text':{'type':'null'},
+                   'quickReplyKey':{'type':'null'},'attachment':{'type':'object'}}}]
 S['MessagePage'] = obj({'content': array(ref('Message')),'nextCursor': nullable(TEXT)})
-S['MessageRequest'] = {'oneOf': [obj({'clientMessageId': UUID,'text': {'type':'string','minLength':1,'maxLength':4000}}),
+S['MessageRequest'] = {'oneOf': [
+    obj({'clientMessageId': UUID,'text': {'type':'string','minLength':1,'maxLength':4000}}),
+    obj({'clientMessageId': UUID,'quickReplyKey': QUICK_REPLY_KEY}),
     obj({'clientMessageId': UUID,'attachmentId': UUID})]}
-S['Translation'] = obj({'messageId': UUID,'targetLanguage': TEXT,
+S['ChatPreferences'] = obj({'preferredLanguage': LANGUAGE})
+S['QuickReply'] = obj({'key': QUICK_REPLY_KEY,'language': LANGUAGE,
+    'text': {'type':'string','minLength':1,'maxLength':200}})
+S['QuickReplyList'] = obj({'content': array(ref('QuickReply'))})
+S['Translation'] = obj({'messageId': UUID,'sourceLanguage': LANGUAGE,'targetLanguage': LANGUAGE,
     'status': enum('PENDING','READY','FAILED'),'text': nullable({'type':'string','minLength':1})})
 S['Notification'] = obj({'id': UUID,'type': enum('ORDER_OPENED','ORDER_RESERVATION_FAILED','ORDER_ACCEPTED',
     'ORDER_COURIER_WITHDREW','ORDER_EXPIRED','ORDER_CANCELLED','ORDER_PICKED_UP','ORDER_DELIVERED',
@@ -122,9 +138,12 @@ endpoint('/api/chat/orders/{orderId}/conversation','get','chat','Conversation')
 endpoint('/api/chat/conversations/{conversationId}','get','chat','Conversation')
 endpoint('/api/chat/conversations/{conversationId}/messages','get','chat','MessagePage',params=cursor)
 endpoint('/api/chat/conversations/{conversationId}/messages','post','chat','Message',ref('MessageRequest'),code=201)
+endpoint('/api/chat/preferences','get','chat','ChatPreferences')
+endpoint('/api/chat/preferences','put','chat','ChatPreferences',ref('ChatPreferences'))
+endpoint('/api/chat/quick-replies','get','chat','QuickReplyList')
 S['WebSocketTicket'] = obj({'ticket': TEXT,'expiresAt':TIME})
 endpoint('/api/chat/ws-tickets','post','chat','WebSocketTicket',obj({'conversationId':UUID}),code=201)
-endpoint('/api/chat/conversations/{conversationId}/messages/{messageId}/translations','post','chat','Translation',obj({'targetLanguage':TEXT}),code=202)
+endpoint('/api/chat/conversations/{conversationId}/messages/{messageId}/translations','post','chat','Translation',obj({'targetLanguage':LANGUAGE}),code=202)
 # language path is a string, unlike UUID identifiers.
 endpoint('/api/chat/conversations/{conversationId}/messages/{messageId}/translations/{language}','get','chat','Translation')
 api['paths']['/api/chat/conversations/{conversationId}/messages/{messageId}/translations/{language}']['get']['parameters'][-1]['schema']=TEXT
@@ -219,7 +238,8 @@ def sample(s):
     typ=s.get('type')
     if typ=='object':
         value={k:sample(v) for k,v in s.get('properties',{}).items() if k in s.get('required',[])}
-        if {'conversationId','senderUserId','attachment','text'}.issubset(value): value['attachment']=None
+        if {'conversationId','senderUserId','messageType','attachment','text'}.issubset(value):
+            value.update(messageType='TEXT',attachment=None,quickReplyKey=None)
         return value
     if typ=='array': return []
     if typ=='integer': return max(1,s.get('minimum',0))
@@ -251,6 +271,13 @@ for path, methods in api['paths'].items():
             item['requestBody']['rejectedActionExplanations'] = []
             item['body']['case']['state'] = 'RESOLVED'
             item['body']['actions'] = []
+        if path == '/api/chat/quick-replies':
+            item['body']['content'] = [
+                {'key':'ON_MY_WAY','language':'en','text':"I'm on my way."},
+                {'key':'ARRIVED','language':'en','text':"I've arrived."},
+                {'key':'RUNNING_LATE_5','language':'en','text':"I'm running 5 minutes late."},
+                {'key':'WHERE_MEET','language':'en','text':'Where should we meet?'},
+                {'key':'THANK_YOU','language':'en','text':'Thank you!'}]
         http.append(item)
 write('http.examples.json',http)
 websocket={'$schema':'https://json-schema.org/draft/2020-12/schema', 'title':'Chat WebSocket frames - review draft',

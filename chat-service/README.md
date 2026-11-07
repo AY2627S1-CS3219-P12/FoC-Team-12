@@ -6,9 +6,44 @@ The latest Kubernetes isolation rules block new Chat connections until a reviewe
 change enables the caller/destination matrix in that package. Include Kafka, User JWKS/eligibility,
 Admin callback, producer evidence exports, private DB/Redis and AWS HTTPS in deployment planning.
 
-Owner: **Eldridge**. Status: planned N2H; documentation only, no runnable scaffold. Source: D3
-slides 10-14, D1 N2H1 and agreed Admin integration. Product scope is agreed; new API shapes,
-storage limits and security adapters are proposals for owner review before implementation.
+Owner: **Eldridge**. Status: runnable core chat; preferences, localized quick replies, JWT
+security, lifecycle ingestion, durable messages, assignment privacy, local images, WebSockets and
+RabbitMQ fan-out are implemented. Amazon translation and S3 remain staged. Source: D3 slides
+10-14, D1 N2H1 and agreed Admin integration.
+
+## Implemented core chat
+
+The Spring Boot service runs on port `8085` and owns its PostgreSQL schema through Flyway.
+`GET /api/chat/preferences` returns the authenticated account's preferred Chat language, defaulting
+to English without creating a row. `PUT /api/chat/preferences` stores `en`, `zh`, `ms` or `ta`.
+`GET /api/chat/quick-replies` returns the five server-owned phrases localized to that preference.
+All endpoints derive identity from the verified UUID `sub`, never a request parameter. Order
+lifecycle facts create a chat on acceptance, advance courier assignment epochs on reassignment and
+lock it at a terminal state. The requester sees all epochs; each courier sees only their own.
+Message writes are idempotent by conversation, sender and client message ID.
+
+Text, localized one-tap quick replies and JPEG/PNG/WebP images up to 5 MiB work locally. Images are
+temporarily stored in Chat PostgreSQL so the feature is testable without AWS; migrate the same
+authorization boundary to private S3 for cloud deployment. REST commits durable history,
+RabbitMQ fans committed messages across replicas and authenticated STOMP delivers them live.
+
+Run all checks, including the PostgreSQL Testcontainers migration test:
+
+```bash
+cd chat-service
+./mvnw --batch-mode --no-transfer-progress verify
+```
+
+Run against a private PostgreSQL database:
+
+```bash
+DB_HOST=localhost DB_PORT=5432 DB_NAME=chat_db DB_USER=chat_user DB_PASSWORD='local-secret' \
+  CHAT_JWT_JWK_SET_URI=http://localhost:8081/.well-known/jwks.json ./mvnw spring-boot:run
+```
+
+Swagger UI is at `http://localhost:8085/swagger-ui/index.html`; health is
+`http://localhost:8085/actuator/health`. Shared Compose and Gateway routes support local
+end-to-end testing; Kubernetes and AWS manifests remain separate deployment work.
 
 ## Scope, ownership and architecture
 
@@ -19,9 +54,11 @@ projection. Images live in private S3 object storage; Redis caches translations.
 calculates credit changes, bans users, decides Order transitions or writes another service DB.
 
 Browser -> Gateway -> Chat REST/WebSocket; Admin -> Chat authenticated internal HTTP(S). Kafka
-facts -> Chat inbox/projection. Use Java 17/Spring Boot/Maven/Flyway/OpenAPI and existing frontend
-conventions. Do not expose internal evidence endpoints at the gateway. Translation uses Amazon
-Translate via AWS SDK per D3; secrets come from deployment configuration, not bundles or images.
+facts -> Chat inbox/projection. RabbitMQ provides Chat-internal STOMP fan-out and directed
+translation jobs; it does not replace Kafka or become a browser trust boundary. Use Java 17,
+Spring Boot, Maven, Flyway, OpenAPI and existing frontend conventions. Do not expose internal
+evidence endpoints at the gateway. Translation uses Amazon Translate via AWS SDK per D3; secrets
+come from deployment configuration, not bundles or images.
 
 Read [Chat/Admin contract](../docs/integration/chat-admin-contract.md) for canonical internal paths,
 timeline coverage, identity checks and recovery; [Admin spec](../docs/integration/admin-service-spec.md)
@@ -40,12 +77,11 @@ preserve read-only participant history; reject new messages/uploads without muta
 users cannot enumerate messages, identities or image metadata. Admin entitlement alone does not
 grant access to the ordinary errand chat: use separate authorized case conversation/evidence paths.
 
-Assignment changes are a privacy decision not fully specified by D3. Proposed conservative rule:
+Assignment changes use the approved conservative rule:
 keep one conversation ID but segment messages by assignment epoch; requester sees all its epochs,
 courier only its own epoch. New courier cannot read the former courier's messages. Former courier
 has read-only access to its epoch after withdrawal; current courier alone can write. This extends
-D3's 'assigned courier' rule to historical read access and requires explicit team approval before
-implementing reassignment/history exposure. Do not silently grant new couriers full history.
+D3's assigned-courier rule without exposing a former courier's messages to their replacement.
 Until approved, stop that feature boundary; other scaffold/contract work can proceed.
 
 Case conversations are unique by caseId/participantUserId and isolated from each other. Use the
@@ -83,6 +119,8 @@ resource membership on each operation. Shared Admin service-auth profile applies
 | GET /api/chat/conversations/{conversationId} | Authorized conversation reference, including CASE chats |
 | GET /api/chat/conversations/{id}/messages?cursor=&limit= | Authorized paginated ordered message history |
 | POST /api/chat/conversations/{id}/messages | clientMessageId UUID; text or owned uploaded attachment reference; stored message |
+| GET/PUT /api/chat/preferences | Read or replace the caller's Chat preferred language (`en`, `zh`, `ms`, `ta`) |
+| GET /api/chat/quick-replies | Server-owned localized quick replies for the caller's current Chat preference |
 | POST /api/chat/conversations/{id}/attachments | Authorized upload initiation/validation; attachment ID and restricted upload details |
 | POST /api/chat/conversations/{id}/attachments/{attachmentId}/complete | Validate stored object and mark attachment READY before message reference |
 | GET /api/chat/conversations/{id}/attachments/{attachmentId}/download | Recheck membership; short-lived private download URL |
@@ -108,6 +146,13 @@ ticket protocol needs Chat-owned contract tests. Message delivery can be WebSock
 uses REST; both share the same authorization and idempotency rules. 401 invalid identity; 404
 hidden/missing conversation; 409 read-only/idempotency conflict; 413 oversize; Problem Details on REST.
 
+Typed text, quick replies and images are distinct message forms. A quick-reply request sends one
+stable key (`ON_MY_WAY`, `ARRIVED`, `RUNNING_LATE_5`, `WHERE_MEET`, `THANK_YOU`); Chat resolves and
+stores the localized text, so the tap is an immediate ordinary send with the same authorization,
+ordering and idempotency guarantees. Preferred language is account-wide within Chat and affects
+future quick replies and automatic incoming-translation targets. Changing it never rewrites
+message originals or existing translations.
+
 ## Images, translation and privacy
 
 Private S3 bucket, server-generated keys scoped by conversation/upload; do not accept arbitrary
@@ -116,12 +161,18 @@ Pending/failed uploads cannot be messaged; clean up abandoned uploads under an a
 policy. Presigned URLs expire quickly; revocation stops new downloads, but already issued URLs
 remain usable until their short expiry. Do not promise instant revocation of an issued URL.
 
-Translate text only when explicitly requested for an allowed target language; persist original
+Translate incoming text automatically for an authorized recipient's preferred language, or on an
+explicit authorized request for an allowed target language; persist original
 unchanged and translation state PENDING/READY/FAILED in PostgreSQL. Unique message/language/
 provider-version prevents duplicate jobs. Redis caches completed results; cache misses fall back
 to DB. Notify authorized subscribers when translation completes. Provider failure retries boundedly
 and leaves original readable. User text is sent to AWS Translate: disclose this in the UI/privacy
 notice and restrict AWS permissions; no images or unrelated private data sent for translation.
+
+The preferred-language feature changes the target selection but not this durability rule. During
+the core-chat iterations, the translation provider remains disabled/fake and no text leaves the
+local environment. The later translation iteration enables automatic jobs only after provider
+credentials, disclosure and failure behavior are verified.
 
 Do not implement message editing/deletion, arbitrary admin browsing, voice/video, email/SMS or a
 second ledger/logging backend. Retain terminal chat/case history; exact retention periods, user

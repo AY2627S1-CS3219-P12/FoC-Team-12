@@ -84,7 +84,7 @@ limit_jobs() {
 }
 
 pids=()
-for topic in user.events order.events credit.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
+for topic in user.events order.events order.lifecycle.events credit.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
   create_topic "$topic" 3 604800000 &
   pids+=("$!")
   limit_jobs
@@ -113,6 +113,15 @@ add_acl order_service --operation Write --operation Describe --topic order.event
 add_acl order_service --operation Read --operation Describe --topic credit.events
 add_acl order_service --operation Read --group order-service
 add_idempotent_write_acl order_service
+add_acl order_service --operation Write --operation Describe --topic order.lifecycle.events
+} &
+pids+=("$!")
+limit_jobs
+
+# Chat consumes Order lifecycle facts using its own projection group.
+{
+add_acl chat_service --operation Read --operation Describe --topic order.lifecycle.events
+add_acl chat_service --operation Read --group chat-service-lifecycle
 } &
 pids+=("$!")
 limit_jobs
@@ -160,13 +169,13 @@ add_acl admin_service --operation Write --operation Describe --transactional-id 
 # Kafka UI can inspect this local cluster but cannot mutate topics, data or business offsets.
 {
 add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfigs \
-  --topic user.events --topic order.events --topic credit.events \
+  --topic user.events --topic order.events --topic order.lifecycle.events --topic credit.events \
   --topic user.events.DLT --topic order.events.DLT --topic credit.events.DLT \
   --topic admin.credit.commands --topic credit.admin.events \
   --topic admin.credit.commands.DLT --topic credit.admin.events.DLT \
   --topic admin.user.commands --topic user.admin.events --topic admin.user.commands.DLT --topic user.admin.events.DLT --topic admin.events
 add_acl kafka_ui --operation Describe --operation DescribeConfigs --cluster
-add_acl kafka_ui --operation Describe --group order-service --group credit-service --group admin-service-credit --group credit-service-admin --group admin-service-user --group user-service-admin
+add_acl kafka_ui --operation Describe --group order-service --group chat-service-lifecycle --group credit-service --group admin-service-credit --group credit-service-admin --group admin-service-user --group user-service-admin
 add_acl kafka_ui --operation Read --operation Describe --group kafka-ui-browser --resource-pattern-type prefixed
 } &
 pids+=("$!")

@@ -43,6 +43,9 @@ ops={op['operationId']:op for item in api['paths'].values() for op in item.value
 def validate_http(body,schema):
     doc={'components':api['components'],**schema}
     Draft202012Validator(doc,format_checker=FormatChecker()).validate(body)
+def is_valid_http(body,schema):
+    doc={'components':api['components'],**schema}
+    return Draft202012Validator(doc,format_checker=FormatChecker()).is_valid(body)
 for example in read('http.examples.json'):
     op=ops[example['operationId']]
     validate_http(example['body'],op['responses'][str(example['status'])]['content']['application/json']['schema'])
@@ -60,6 +63,22 @@ message_schema={'components':api['components'],**api['components']['schemas']['M
 msg=next(x['message'] for x in read('websocket.examples.json') if x['type']=='MESSAGE_CREATED')
 bad=copy.deepcopy(msg); bad['attachment']={'attachmentId':msg['id'],'mediaType':'image/png','sizeBytes':10}
 assert not Draft202012Validator(message_schema).is_valid(bad),'Text and attachment both accepted'
+
+preference_op=ops['chat_put__api_chat_preferences']
+preference_schema=preference_op['requestBody']['content']['application/json']['schema']
+bad_preference={'preferredLanguage':'xx'}
+assert not is_valid_http(bad_preference,preference_schema),'Unsupported preferred language accepted'
+
+message_request=ops['chat_post__api_chat_conversations_conversationId_messages']['requestBody']['content']['application/json']['schema']
+valid_reply={'clientMessageId':'11111111-1111-4111-8111-111111111111','quickReplyKey':'ARRIVED'}
+assert is_valid_http(valid_reply,message_request),'Valid quick-reply message rejected'
+ambiguous={'clientMessageId':'11111111-1111-4111-8111-111111111111','text':'hello','quickReplyKey':'ARRIVED'}
+assert not is_valid_http(ambiguous,message_request),'Ambiguous typed/quick-reply message accepted'
+unknown_reply={'clientMessageId':'11111111-1111-4111-8111-111111111111','quickReplyKey':'CUSTOM_TEXT'}
+assert not is_valid_http(unknown_reply,message_request),'Unknown quick-reply key accepted'
+
+translation_request=ops['chat_post__api_chat_conversations_conversationId_messages_messageId_translations']['requestBody']['content']['application/json']['schema']
+assert not is_valid_http({'targetLanguage':'xx'},translation_request),'Unsupported translation language accepted'
 
 def check_refs(value,doc):
     if isinstance(value,dict):

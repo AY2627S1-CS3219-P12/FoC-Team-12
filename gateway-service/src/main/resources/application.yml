@@ -60,6 +60,14 @@ spring:
               uri: ${ORDER_SERVICE_URL:http://localhost:8082}
               predicates:
                 - Path=/api/orders,/api/orders/**
+            - id: chat-api
+              uri: ${CHAT_SERVICE_URL:http://localhost:8085}
+              predicates:
+                - Path=/api/chat,/api/chat/**
+            - id: chat-websocket
+              uri: ${CHAT_SERVICE_URL:http://localhost:8085}
+              predicates:
+                - Path=/ws/chat,/ws/chat/**
             - id: user-jwks
               uri: ${USER_SERVICE_URL:http://localhost:8081}
               predicates:
@@ -107,6 +115,13 @@ spring:
                 - Method=GET
               filters:
                 - SetPath=/v3/api-docs
+            - id: chat-openapi-json
+              uri: ${CHAT_SERVICE_URL:http://localhost:8085}
+              predicates:
+                - Path=/docs/chat/openapi.json
+                - Method=GET
+              filters:
+                - SetPath=/v3/api-docs
             - id: credit-openapi-yaml
               uri: ${CREDIT_SERVICE_URL:http://localhost:8083}
               predicates:
@@ -137,4 +152,6 @@ springdoc:
         url: /docs/credit/openapi.json
       - name: Order Service
         url: /docs/order/openapi.json
+      - name: Chat Service
+        url: /docs/chat/openapi.json
     urls-primary-name: Credit Service
