@@ -8,6 +8,7 @@ import { CreateErrandPage } from './pages/CreateErrandPage'
 import { EditErrandPage } from './pages/EditErrandPage'
 import { ErrandPage } from './pages/ErrandPage'
 import { MyErrandsPage } from './pages/MyErrandsPage'
+import { ChatPage } from './pages/ChatPage'
 import { type ErrandRole, homeFor, useSessionRole } from './hooks/useSessionRole'
 
 function SignedOut() {
@@ -43,6 +44,7 @@ export function AppRoutes() {
       <Route element={<MyErrandsPage />} path="/errands/mine" />
       <Route element={<ForRole role="REQUESTER"><CreateErrandPage /></ForRole>} path="/errands/new" />
       <Route element={<ErrandPage />} path="/errands/:orderId" />
+      <Route element={<ChatPage />} path="/errands/:orderId/chat" />
       <Route element={<ForRole role="REQUESTER"><EditErrandPage /></ForRole>} path="/errands/:orderId/edit" />
       <Route element={<RoleHome />} path="*" />
     </Routes>

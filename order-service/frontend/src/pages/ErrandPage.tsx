@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { MessageCircle } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import {
   fetchOrder,
@@ -148,6 +149,9 @@ export function ErrandPage() {
             </div>
           )}
           <div className="actions">
+            {view !== 'browser' && ['ACCEPTED','PICKED_UP','DELIVERED','COMPLETED','CANCELLED'].includes(order.state) && (
+              <Link className="button-secondary" to={`/errands/${order.id}/chat`}><MessageCircle aria-hidden="true" /> Chat</Link>
+            )}
             {view === 'browser' && order.state === 'OPEN' && (
               <button
                 disabled={
