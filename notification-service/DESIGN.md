@@ -40,7 +40,7 @@ User Service ── JWKS ──► (token verification)│       │ GET /api/no
 
 ## Data model
 
-`V1__create_notifications.sql` (not yet applied in any shared environment; once it is, it is never
+`V1__create_notifications.sql` and `V2__retention_indexes.sql` (applied migrations are never
 edited). The columns and reasons are in the
 [README](README.md#data-model-and-delivery-guarantees). Differences from the first draft:
 
@@ -222,8 +222,9 @@ Approved with iteration 0 (2026-11-04):
 - The courier keeps both notifications for T11 and T14.
 - **Retention:** delete read notifications after 30 days and every notification after 90 days.
   Keep inbox rows **at least 30 days**: DLT topics retain records for 30 days, so a replay after the
-  inbox row was pruned would notify twice. Enforced by the retention job (iteration 8); until then
-  nothing is deleted.
+  inbox row was pruned would notify twice. Enforced by the retention job (iteration 8): "read"
+  counts from `read_at`, "every notification" from `created_at`, and startup refuses an inbox
+  period under 30 days.
 
 Approved with the `read-state` brief (2026-11-05):
 - Read marking follows the shared contract; repeating it keeps the first `readAt`.
@@ -332,7 +333,7 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 5 | Order lifecycle consumer and recipient rules | After 4 |
 | 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (PR #115) |
 | 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3, 3b and 6 |
-| 8 | Retention job for the approved 30/90-day policy | After 2 and 5 |
+| 8 | `retention`: hourly batched deletion for the approved 30/90-day policy (V2 indexes) | Done (this change) |
 | 9 | Observability: metrics, alerts and structured logs ([Observability](#observability)) | After 3 |
 | 10 | Optional: server-sent events for the badge | If time allows, after 7 |
 
