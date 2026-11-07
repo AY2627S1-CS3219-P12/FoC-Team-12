@@ -18,6 +18,6 @@ COPY --from=builder --chown=spring:spring /workspace/target/notification-service
 
 USER spring:spring
 
-EXPOSE 8084
+EXPOSE 8086
 
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

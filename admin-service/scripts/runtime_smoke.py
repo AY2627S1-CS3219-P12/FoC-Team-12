@@ -87,7 +87,7 @@ def main():
         raise RuntimeError("Install OpenSSL to generate disposable signing keys")
     project = "foc-admin-runtime-test-" + uuid.uuid4().hex[:10]
     env = os.environ.copy()
-    for service in ("USER", "SUPPLIER", "CREDIT", "ORDER"):
+    for service in ("USER", "SUPPLIER", "CREDIT", "ORDER", "NOTIFICATION"):
         env.update({f"{service}_DB_NAME": service.lower() + "_test",
                     f"{service}_DB_USER": service.lower() + "_test",
                     f"{service}_DB_PASSWORD": secrets.token_hex(24)})
