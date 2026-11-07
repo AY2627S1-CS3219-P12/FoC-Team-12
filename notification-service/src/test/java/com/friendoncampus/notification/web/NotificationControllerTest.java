@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,22 +39,29 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import com.friendoncampus.notification.domain.Notification;
 import com.friendoncampus.notification.domain.NotificationType;
 import com.friendoncampus.notification.service.NotificationPaging;
+import com.friendoncampus.notification.service.NotificationNotFoundException;
 import com.friendoncampus.notification.service.NotificationQueryService;
+import com.friendoncampus.notification.service.NotificationReadStateService;
 import com.friendoncampus.notification.web.error.ApiExceptionHandler;
 
-/** {@code GET /api/notifications/me}: paging defaults and limits, response shape, messages and the recipient. */
+/**
+ * {@code /api/notifications/me}: paging defaults and limits, response shape, messages, read marking,
+ * the unread count, and that the recipient is always the token subject.
+ */
 class NotificationControllerTest {
 
     private static final UUID CALLER = UUID.fromString("97947588-bb2e-42f2-91ba-9abf8e15a8e7");
     private static final UUID ORDER_ID = UUID.fromString("3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64");
 
     private NotificationQueryService queryService;
+    private NotificationReadStateService readStateService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         queryService = mock(NotificationQueryService.class);
-        mockMvc = MockMvcBuilders.standaloneSetup(new NotificationController(queryService))
+        readStateService = mock(NotificationReadStateService.class);
+        mockMvc = MockMvcBuilders.standaloneSetup(new NotificationController(queryService, readStateService))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();
@@ -167,5 +175,58 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.code").value("INVALID_QUERY"));
 
         verifyNoInteractions(queryService);
+    }
+
+    @Test
+    void markingReadReturnsTheNotificationWithReadAt() throws Exception {
+        Notification notification = mock(Notification.class);
+        UUID id = UUID.randomUUID();
+        when(notification.getId()).thenReturn(id);
+        when(notification.getType()).thenReturn(NotificationType.CREDITS_RECEIVED);
+        when(notification.getOrderId()).thenReturn(ORDER_ID);
+        when(notification.getParams()).thenReturn("{\"amount\":3}");
+        when(notification.getOccurredAt()).thenReturn(OCCURRED_AT);
+        when(notification.getReadAt()).thenReturn(OCCURRED_AT.plusMinutes(5));
+        when(readStateService.markRead(CALLER, id)).thenReturn(notification);
+
+        mockMvc.perform(patch("/api/notifications/me/{id}/read", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.message").value("You received 3 credits for completing an errand."))
+                .andExpect(jsonPath("$.readAt").value("2026-10-30T09:20:00Z"));
+
+        verify(readStateService).markRead(CALLER, id);
+    }
+
+    @Test
+    void markingSomeoneElsesOrAMissingNotificationIsNotFound() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(readStateService.markRead(CALLER, id)).thenThrow(new NotificationNotFoundException(id));
+
+        mockMvc.perform(patch("/api/notifications/me/{id}/read", id))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("NOTIFICATION_NOT_FOUND"));
+    }
+
+    @Test
+    void aMalformedIdIsRejectedBeforeAnyLookup() throws Exception {
+        mockMvc.perform(patch("/api/notifications/me/{id}/read", "not-a-uuid"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("INVALID_ID"));
+
+        verifyNoInteractions(readStateService);
+    }
+
+    @Test
+    void theUnreadCountIsTheCallers() throws Exception {
+        when(queryService.countUnread(CALLER)).thenReturn(3L);
+
+        mockMvc.perform(get("/api/notifications/me/unread-count").param("userId", UUID.randomUUID().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.unreadCount").value(3));
+
+        verify(queryService).countUnread(CALLER);
     }
 }

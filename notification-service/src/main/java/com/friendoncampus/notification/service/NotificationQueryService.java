@@ -12,7 +12,7 @@ import com.friendoncampus.notification.domain.Notification;
 import com.friendoncampus.notification.repository.NotificationRepository;
 
 /**
- * Reads one recipient's notifications. The recipient is always the verified JWT subject, passed in
+ * Reads one recipient's notifications and unread count. The recipient is always the verified JWT subject, passed in
  * by the controller, so no caller can read another user's rows.
  */
 @Service
@@ -34,5 +34,10 @@ public class NotificationQueryService {
     public Page<Notification> listFor(UUID recipientId, NotificationPaging paging) {
         return notificationRepository.findByRecipientId(recipientId,
                 PageRequest.of(paging.page(), paging.size(), NEWEST_FIRST));
+    }
+
+    @Transactional(readOnly = true)
+    public long countUnread(UUID recipientId) {
+        return notificationRepository.countByRecipientIdAndReadAtIsNull(recipientId);
     }
 }

@@ -24,7 +24,8 @@ import com.friendoncampus.notification.web.error.ProblemSecurityHandler;
 
 /**
  * Validates User Service RS256 JWTs against its published JWKS. The recipient of every read is the
- * verified {@code sub} claim; it is never taken from a parameter, body or header. Notifications
+ * verified {@code sub} claim; it is never taken from a parameter, body or header. Each endpoint is
+ * listed with its method; everything else is denied. Notifications
  * belong to the account, not the session role, so every supported role may read its own.
  */
 @Configuration
@@ -46,7 +47,9 @@ public class SecurityConfiguration {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Error dispatches must reach the error page, or a 500 would surface as 403.
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/notifications/me").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/notifications/me", "/api/notifications/me/unread-count")
+                        .authenticated()
+                        .requestMatchers(HttpMethod.PATCH, "/api/notifications/me/*/read").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationEntryPoint(problemSecurityHandler)

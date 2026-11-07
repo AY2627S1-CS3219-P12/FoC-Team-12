@@ -36,7 +36,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.friendoncampus.notification.messaging.CreditEventHandler;
+import com.friendoncampus.notification.service.NotificationNotFoundException;
 import com.friendoncampus.notification.service.NotificationQueryService;
+import com.friendoncampus.notification.service.NotificationReadStateService;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.RSASSASigner;
@@ -77,6 +79,9 @@ class NotificationSecurityIntegrationTest {
 
     @MockitoBean
     private NotificationQueryService queryService;
+
+    @MockitoBean
+    private NotificationReadStateService readStateService;
 
     @MockitoBean
     private CreditEventHandler creditEventHandler;
@@ -149,15 +154,60 @@ class NotificationSecurityIntegrationTest {
     }
 
     @Test
+    void readMarkingAndTheUnreadCountNeedAToken() throws Exception {
+        assertThat(send("PATCH", "/api/notifications/me/" + UUID.randomUUID() + "/read", null).statusCode())
+                .isEqualTo(401);
+        assertThat(get("/api/notifications/me/unread-count", null).statusCode()).isEqualTo(401);
+        verify(readStateService, never()).markRead(any(), any());
+        verify(queryService, never()).countUnread(any());
+    }
+
+    @Test
+    void everySessionRoleMarksAndCountsOnlyItsOwn() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(readStateService.markRead(any(), any())).thenThrow(new NotificationNotFoundException(id));
+
+        for (String role : List.of("REQUESTER", "COURIER", "ADMIN")) {
+            String token = token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role, Instant.now().plusSeconds(600));
+            assertThat(get("/api/notifications/me/unread-count?userId=" + UUID.randomUUID(), token).statusCode())
+                    .as(role).isEqualTo(200);
+            HttpResponse<String> patch = send("PATCH", "/api/notifications/me/" + id + "/read", token);
+            assertThat(patch.statusCode()).as(role).isEqualTo(404);
+            assertThat(patch.headers().firstValue("Content-Type")).hasValueSatisfying(
+                    type -> assertThat(type).startsWith("application/problem+json"));
+        }
+        verify(queryService, times(3)).countUnread(UUID.fromString(SUBJECT));
+        verify(readStateService, times(3)).markRead(UUID.fromString(SUBJECT), id);
+    }
+
+    @Test
+    void otherReadStateRoutesAreDenied() throws Exception {
+        String token = token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, "REQUESTER", Instant.now().plusSeconds(600));
+        // Mark-all-read and marking unread are not part of the API.
+        assertThat(send("PATCH", "/api/notifications/me/read", token).statusCode()).isEqualTo(403);
+        assertThat(send("PATCH", "/api/notifications/me/read-all", token).statusCode()).isEqualTo(403);
+        assertThat(send("DELETE", "/api/notifications/me/" + UUID.randomUUID() + "/read", token).statusCode())
+                .isEqualTo(403);
+        assertThat(send("POST", "/api/notifications/me/" + UUID.randomUUID() + "/read", token).statusCode())
+                .isEqualTo(403);
+        assertThat(get("/api/notifications/me/" + UUID.randomUUID() + "/read", token).statusCode()).isEqualTo(403);
+        verify(readStateService, never()).markRead(any(), any());
+    }
+
+    @Test
     void healthAndApiDocsArePublic() throws Exception {
         assertThat(get("/actuator/health", null).statusCode()).isEqualTo(200);
         assertThat(get("/v3/api-docs", null).statusCode()).isEqualTo(200);
     }
 
     private HttpResponse<String> get(String path, String bearerToken) throws Exception {
+        return send("GET", path, bearerToken);
+    }
+
+    private HttpResponse<String> send(String method, String path, String bearerToken) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
-                .GET();
+                .method(method, HttpRequest.BodyPublishers.noBody());
         if (bearerToken != null) {
             request.header("Authorization", "Bearer " + bearerToken);
         }

@@ -218,6 +218,26 @@ Approved with iteration 0 (2026-11-04):
   inbox row was pruned would notify twice. Enforced by the retention job (iteration 8); until then
   nothing is deleted.
 
+Approved with the `read-state` brief (2026-11-05):
+- Read marking follows the shared contract; repeating it keeps the first `readAt`.
+- Errors `NOTIFICATION_NOT_FOUND` (404, including another user's notification) and `INVALID_ID`
+  (400), in Order's style.
+- The unread count is a separate endpoint, added to the shared contract (below). No mark-all-read
+  for now.
+
+### Contract addition: unread count
+
+Added to the shared package with this change (`build_contracts.py`, regenerated
+[n2h.openapi.json](../docs/contracts/n2h.openapi.json) and `http.examples.json`).
+
+| Item | Contract |
+| --- | --- |
+| Operation | `GET /api/notifications/me/unread-count`, `operationId` `notification_get__api_notifications_me_unread_count`, `x-owner` `notification-service`, `security` `userBearer` |
+| `200` body | Schema `UnreadCount`: `{ "unreadCount": integer, minimum 0 }`, required, `additionalProperties: false` |
+| Errors | The package's standard `Problem` set (`400`, `401`, `403`, `404`, `409`, `503`), like every operation; this service returns `401` and `403` |
+| Example | `{"unreadCount": 3}` in `http.examples.json` |
+| Why separate | `NotificationPage` sets `additionalProperties: false`, so a field there is a contract change too; a separate call keeps the bell's poll to one indexed count, without a page query |
+
 To confirm with the team:
 1. Where the bell lives: in all four headers, or only a Notifications page linked from the main page.
 2. How metrics are exposed and collected (iteration 9), and the alert thresholds.
@@ -298,11 +318,11 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 0 | Contract proposal and shared-change plan (this document) | Done; approved 2026-11-04 |
 | 1 | Service skeleton: Flyway V1, JWT validation, health, OpenAPI, notification list | Done |
 | 2 | `credit.events` consumer: inbox, fingerprint, DLT; `CREDITS_*` notifications | Done |
-| 2a | `read-api`: shared-contract list API with messages; `operationId` business key | Done (this change) |
+| 2a | `read-api`: shared-contract list API with messages; `operationId` business key | Done |
 | 3 | Shared wiring: Kafka user and ACLs, Compose, gateway, CI, Kubernetes, network policies | Next; by the nominated editor |
 | 4 | `order-…`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | After 0 and the topic from 3 |
 | 5 | Order lifecycle consumer and recipient rules | After 4 |
-| 6 | Read state: `PATCH /api/notifications/me/{id}/read`, unread count | After 1 |
+| 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (this change) |
 | 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3 and 6 |
 | 8 | Retention job for the approved 30/90-day policy | After 2 and 5 |
 | 9 | Observability: metrics, alerts and structured logs ([Observability](#observability)) | After 3 |
@@ -315,6 +335,9 @@ Each one is a `/foc-iterate-feature notification-…` run.
   `eventId` (`DUPLICATE_OPERATION`), `EVENT_ID_CONFLICT`, and every envelope or field violation
   rejected with nothing stored.
 - **Read API:** the contract shape, each type's message, paging limits 1–100.
+- **Read state:** `readAt` set once and kept on repeat and concurrent calls, `404` for another
+  user's notification with nothing changed, `400` for a malformed ID, the unread count per
+  recipient, and every other read-state route denied.
 - **Kafka:** a published event becomes a notification, a redelivery stays at one row, and a
   rejected event reaches the DLT with its key and the `notification-service` group header.
 - **Security:** `401` without a valid token, every role reads only its own `sub`, and other

@@ -40,7 +40,8 @@ valid `exp`/`nbf`, a supported `role` and a UUID `sub`.
 - **Any session role may read** (`REQUESTER`, `COURIER` or `ADMIN`): notifications belong to the
   account, so switching role keeps both kinds visible. An admin reads only their own.
 - **Rejections:** a missing or invalid token returns `401` RFC-7807 `application/problem+json`
-  with `WWW-Authenticate: Bearer`. Any method or path outside the API below returns `403`.
+  with `WWW-Authenticate: Bearer`. Any method or path outside the API below returns `403`; see
+  [Errors](#errors).
 
 | Property | Env var | Default |
 | --- | --- | --- |
@@ -81,8 +82,8 @@ valid `exp`/`nbf`, a supported `role` and a UUID `sub`.
 
 `orderId` is the errand to link to (`/errands/{orderId}`), or `null` for account-level
 notifications; the link grants no access by itself, Order still authorizes the errand page.
-`readAt` is `null` until read marking exists. The message is built when read from the stored type
-and template values, so wording can change without rewriting past notifications:
+`readAt` is `null` until the user marks it read. The message is built when read from the stored
+type and template values, so wording can change without rewriting past notifications:
 
 | `type` | `message` |
 | --- | --- |
@@ -90,9 +91,40 @@ and template values, so wording can change without rewriting past notifications:
 | `CREDITS_RECEIVED` | You received {n} credits for completing an errand. |
 | `CREDITS_COMPENSATED` | You received {n} credits as compensation for a cancelled errand. |
 
-`{n} credits` reads `1 credit` for one. Proposed next ([DESIGN.md](DESIGN.md#iterations)):
-`PATCH /api/notifications/me/{id}/read` to set the caller's own `readAt` idempotently (`404` for a
-missing or another user's notification), an unread count, and the UI.
+`{n} credits` reads `1 credit` for one.
+
+## Mark one read
+
+`PATCH /api/notifications/me/{id}/read` (shared contract operation
+`notification_patch__api_notifications_me_id_read`), no request body.
+
+- **Success:** `200` with the notification in the same shape as a list entry, with `readAt` set.
+- **Idempotent:** the first call sets `readAt` to the server time; repeating it returns the same
+  notification with the original `readAt`. Concurrent calls all return the first `readAt`.
+- **Not yours or missing:** `404` with `code` = `NOTIFICATION_NOT_FOUND`. Another user's notification
+  is reported exactly like a missing one and is left unchanged.
+- **Malformed ID:** `400` with `code` = `INVALID_ID`.
+
+There is no mark-all-read or mark-unread operation.
+
+## Unread count
+
+`GET /api/notifications/me/unread-count` (shared contract operation
+`notification_get__api_notifications_me_unread_count`, schema `UnreadCount`) returns `200` with
+`{"unreadCount": 3}`: the caller's notifications with no `readAt`, for the bell badge. Served by
+the partial index `ix_notifications_recipient_unread`.
+
+## Errors
+
+All errors are RFC-7807 `application/problem+json`.
+
+| `code` | Status | When |
+| --- | --- | --- |
+| `INVALID_QUERY` | 400 | A malformed or out-of-range `page` or `size` |
+| `INVALID_ID` | 400 | A notification ID that is not a UUID |
+| `NOTIFICATION_NOT_FOUND` | 404 | No such notification for the caller, including another user's |
+| — | 401 | Missing or invalid bearer token (`WWW-Authenticate: Bearer`) |
+| — | 403 | Any method or path outside this API |
 
 ## Proposed UI
 
@@ -225,7 +257,7 @@ these slides do not specify them. Do not invent a 2,000-user commitment.
 
 Automated (built so far): each Credit mapping and message, unrelated-recipient denial, redelivery,
 same operation under a new event ID, `EVENT_ID_CONFLICT`, invalid schema -> DLT, paging limits,
-token contract and role access. Still to add with later iterations: Order mapping fixtures,
+token contract and role access, idempotent and concurrent read marking, and the unread count. Still to add with later iterations: Order mapping fixtures,
 repeated acceptance cycles, out-of-order delivery, concurrent consumption, DB restart, safe reason
 rendering and no credentials in logs. Manual real-broker (after the shared wiring):
 create/accept/withdraw/pickup/deliver/complete, rejected reservation, expiry, cancellation
