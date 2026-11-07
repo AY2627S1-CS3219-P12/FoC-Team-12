@@ -268,7 +268,8 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   history view (F9) and duplicate detection. Every transition is recorded, published or not.
 - **V2 `outbox_events`:** `id` (= `eventId`), `aggregate_id`, `aggregate_version`, `event_type`,
   `topic`, `payload JSONB`, `created_at`, `published_at` (null until Kafka acknowledges),
-  `attempts`. Only the five blueprint events are written here.
+  `attempts`. The five blueprint events (`order.events`) and, when enabled, one
+  `OrderTransitioned` per transition (`order.lifecycle.events`, no `operation_id`).
 - **V3 (blueprint alignment):**
   - `orders.correlation_id`: one UUID per order workflow, set at creation (existing rows reuse the
     order ID);
@@ -278,6 +279,9 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   - `processed_events` (the inbox): `event_id` primary key, `event_type`, `aggregate_id`,
     `operation_id`, `fingerprint` (SHA-256 of the received event, for `EVENT_ID_CONFLICT`),
     `outcome`, `processed_at`.
+- **V4 (lifecycle events):** `orders.lifecycle_sequence` (default 0), the last `sourceSequence`
+  taken. A native `UPDATE … RETURNING` takes the next one in the transition's transaction, so it
+  never bumps the JPA version and a rollback returns the number.
 - **Reward editing** needs no migration: it maps the V1 `pending_credit_reward` column, and the
   new history actions (`EDIT`, `REWARD_CHANGE_APPLIED`, `REWARD_CHANGE_REJECTED`) fit the
   `order_transitions.action` VARCHAR.
@@ -335,7 +339,8 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | UI | `order-my-errands-active`: My errands Active/Past for the header role (`status=active\|past`, `state` filter); role-based underline tabs | Done (PR #88) |
 | UI | `order-ui-await-reservation`: Post errand waits for Credit; rejection reason stored as `terminalReason` and explained on the form | Done (PR #90) |
 | k8s | Image bump after #87, #88 and #90 | Done (PR #91) |
-| UI | `order-ui-reason-heading`: errand page heading and status badge name the rejection reason | This change |
+| UI | `order-ui-reason-heading`: errand page heading and status badge name the rejection reason | Done (PR #92) |
+| 10 | `order-lifecycle-events`: `OrderTransitioned` for every transition on `order.lifecycle.events` (shared N2H contract), per-order `sourceSequence` (V4), `causationId` for Credit-driven transitions, per-topic relay blocking; off by default, on in Compose | This change |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
 
 ## Decisions

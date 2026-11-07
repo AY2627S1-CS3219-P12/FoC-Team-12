@@ -193,12 +193,18 @@ public class OrderService {
      */
     @Transactional
     public boolean applyRewardChange(UUID orderId, int newCreditReward) {
+        return applyRewardChange(orderId, newCreditReward, null);
+    }
+
+    /** As {@link #applyRewardChange(UUID, int)}, caused by the Credit event {@code causationId}. */
+    @Transactional
+    public boolean applyRewardChange(UUID orderId, int newCreditReward, UUID causationId) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (!order.awaitsRewardChange(newCreditReward)) {
             return false;
         }
-        apply(order, order.applyRewardChange(newCreditReward, now()));
+        apply(order, order.applyRewardChange(newCreditReward, now()), causationId);
         return true;
     }
 
@@ -210,12 +216,18 @@ public class OrderService {
      */
     @Transactional
     public boolean rejectRewardChange(UUID orderId, int newCreditReward) {
+        return rejectRewardChange(orderId, newCreditReward, null);
+    }
+
+    /** As {@link #rejectRewardChange(UUID, int)}, caused by the Credit event {@code causationId}. */
+    @Transactional
+    public boolean rejectRewardChange(UUID orderId, int newCreditReward, UUID causationId) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (!order.awaitsRewardChange(newCreditReward)) {
             return false;
         }
-        apply(order, order.rejectRewardChange(newCreditReward, now()));
+        apply(order, order.rejectRewardChange(newCreditReward, now()), causationId);
         return true;
     }
 
@@ -245,23 +257,35 @@ public class OrderService {
      */
     @Transactional
     public Order confirmReservation(UUID orderId, UUID reservationId) {
+        return confirmReservation(orderId, reservationId, null);
+    }
+
+    /** As {@link #confirmReservation(UUID, UUID)}, caused by the Credit event {@code causationId}. */
+    @Transactional
+    public Order confirmReservation(UUID orderId, UUID reservationId, UUID causationId) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getState() != OrderState.PENDING_CREDIT && alreadyHandled(orderId, OrderAction.OPEN)) {
             return order;
         }
-        return apply(order, order.open(reservationId, now()));
+        return apply(order, order.open(reservationId, now()), causationId);
     }
 
     /** Credit rejected the reservation for {@code reason}. A repeated rejection is ignored. */
     @Transactional
     public Order rejectReservation(UUID orderId, TerminalReason reason) {
+        return rejectReservation(orderId, reason, null);
+    }
+
+    /** As {@link #rejectReservation(UUID, TerminalReason)}, caused by the Credit event {@code causationId}. */
+    @Transactional
+    public Order rejectReservation(UUID orderId, TerminalReason reason, UUID causationId) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (order.getState() == OrderState.RESERVATION_FAILED) {
             return order;
         }
-        return apply(order, order.failReservation(reason, now()));
+        return apply(order, order.failReservation(reason, now()), causationId);
     }
 
     private Order lockVisible(UUID orderId, UUID callerId) {
@@ -306,9 +330,14 @@ public class OrderService {
     }
 
     private Order apply(Order order, OrderTransition transition) {
+        return apply(order, transition, null);
+    }
+
+    /** {@code causationId}: the Credit event that caused the transition, or null for user and scheduler actions. */
+    private Order apply(Order order, OrderTransition transition, UUID causationId) {
         // Flush first so the recorded aggregateVersion is the order's post-change version.
         Order saved = orderRepository.saveAndFlush(order);
-        eventRecorder.record(saved, transition);
+        eventRecorder.record(saved, transition, causationId);
         return saved;
     }
 

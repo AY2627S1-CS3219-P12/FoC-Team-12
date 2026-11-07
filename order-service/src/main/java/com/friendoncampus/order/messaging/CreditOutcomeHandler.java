@@ -102,27 +102,28 @@ public class CreditOutcomeHandler {
                 .orElseThrow(() -> reject("UNKNOWN_OPERATION",
                         "No Order command with operationId " + operationId + " for order " + orderId));
 
-        Outcome outcome = apply(eventType, orderId, data, command);
+        Outcome outcome = apply(eventType, orderId, data, command, eventId);
         log.info("{} credit event eventId={} eventType={} operationId={} correlationId={}",
                 outcome == Outcome.APPLIED ? "Applied" : "Ignored", eventId, eventType, operationId,
                 text(envelope, "correlationId"));
         return remember(eventId, eventType, orderId, operationId, fingerprint, outcome);
     }
 
-    private Outcome apply(String eventType, UUID orderId, JsonNode data, OutboxEvent command) {
+    /** {@code eventId} becomes the causationId of any lifecycle event this outcome causes. */
+    private Outcome apply(String eventType, UUID orderId, JsonNode data, OutboxEvent command, UUID eventId) {
         switch (eventType) {
             case "CreditReserved" -> {
                 requireCommand(command, "OrderSubmitted", eventType);
-                orderService.confirmReservation(orderId, requiredUuid(data, "reservationId"));
+                orderService.confirmReservation(orderId, requiredUuid(data, "reservationId"), eventId);
             }
             case "CreditReservationRejected" -> {
                 requireCommand(command, "OrderSubmitted", eventType);
                 orderService.rejectReservation(orderId,
-                        TerminalReason.forReservationRejection(text(data, "reasonCode")));
+                        TerminalReason.forReservationRejection(text(data, "reasonCode")), eventId);
             }
             case "CreditAdjusted", "CreditAdjustmentRejected" -> {
                 requireCommand(command, "OrderRewardChangeRequested", eventType);
-                return applyRewardOutcome(eventType, orderId, command);
+                return applyRewardOutcome(eventType, orderId, command, eventId);
             }
             case "CreditReleased" -> recordCreditStatus(orderId, CreditStatus.RELEASED);
             case "CreditSettled" -> {
@@ -143,14 +144,14 @@ public class CreditOutcomeHandler {
      * answer to an older request, or one arriving after the order left OPEN (for example it was
      * cancelled meanwhile), is recorded in the inbox as IGNORED and changes nothing.
      */
-    private Outcome applyRewardOutcome(String eventType, UUID orderId, OutboxEvent command) {
+    private Outcome applyRewardOutcome(String eventType, UUID orderId, OutboxEvent command, UUID eventId) {
         if (!isLatestRewardChange(command)) {
             return Outcome.IGNORED;
         }
         int newCreditReward = jsonMapper.readTree(command.getPayload()).get("data").get("newCreditReward").asInt();
         boolean changed = eventType.equals("CreditAdjusted")
-                ? orderService.applyRewardChange(orderId, newCreditReward)
-                : orderService.rejectRewardChange(orderId, newCreditReward);
+                ? orderService.applyRewardChange(orderId, newCreditReward, eventId)
+                : orderService.rejectRewardChange(orderId, newCreditReward, eventId);
         return changed ? Outcome.APPLIED : Outcome.IGNORED;
     }
 

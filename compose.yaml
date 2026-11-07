@@ -226,6 +226,8 @@ services:
       KAFKA_SASL_MECHANISM: PLAIN
       KAFKA_USERNAME: order_service
       KAFKA_PASSWORD: ${KAFKA_ORDER_SERVICE_PASSWORD:?KAFKA_ORDER_SERVICE_PASSWORD must be set}
+      # kafka-init creates order.lifecycle.events and order_service's Write ACL.
+      ORDER_LIFECYCLE_EVENTS_ENABLED: "true"
     depends_on:
       order-db:
         condition: service_healthy
