@@ -14,6 +14,10 @@ master data, Order owns lifecycle facts, and Credit owns balance/ledger effects.
 each change and obtain affected-owner review. Cloud infrastructure, integration, CI/CD,
 responsive end-to-end flows, demos and final submission are shared.
 
+All frontend owners follow the shared [product design contract](design.md). This preserves one
+application experience without transferring service behavior or backend ownership. Cross-service
+UI edits still require an explicitly assigned shared editor and affected-owner review.
+
 For the Cloud Deployment N2H staging implementation, **Jun Hui is the nominated shared editor**.
 This is an iteration assignment, not permanent cloud ownership; Gateway, User, Supplier, Order,
 Credit and Admin owners review changes affecting their runtime contracts.

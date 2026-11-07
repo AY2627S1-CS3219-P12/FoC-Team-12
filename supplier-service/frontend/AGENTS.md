@@ -2,6 +2,8 @@
 
 ## Design and API sources
 
+- Apply the root [product design contract](../../design.md) for the shared shell, foundations and
+  cross-service journeys. Use the service-specific sources below for Supplier behavior and detail.
 - Before implementing screens, inspect relevant desktop/mobile/component Figma nodes from
   [design sources](docs/design-source.md). Preserve the visual language; document material
   adaptations for API fit, accessibility or usability. Edit Figma only when explicitly requested.

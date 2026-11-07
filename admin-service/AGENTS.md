@@ -16,3 +16,6 @@ Shared gateway, deployment and CI changes require a separately nominated editor.
 
 Before final integration or acceptance, read `INTEGRATION_READINESS.md` for unresolved owner
 contracts and dependency checks. It records gaps; it does not approve new interfaces.
+
+Admin frontend work also follows the root [product design contract](../design.md). Admin-only
+navigation and controls must remain visually consistent without weakening backend authorization.

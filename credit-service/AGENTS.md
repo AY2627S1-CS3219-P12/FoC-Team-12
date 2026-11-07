@@ -36,3 +36,6 @@ and responsibilities separate. Review proposed interfaces before independent imp
 
 Eldridge's [Chat blueprint](../chat-service/README.md) covers messaging, images, translation and
 timeline work. Implement it in `chat-service/`, not inside Credit.
+
+Credit frontend work also follows the root [product design contract](../design.md), including the
+shared shell and requirement that Credits remain part of the main application journey.

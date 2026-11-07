@@ -1,5 +1,7 @@
 # Order frontend
 
+- Apply the root [product design contract](../../design.md) for the shared shell, foundations and
+  cross-service journeys. Order requirements remain authoritative for errand behavior.
 - Design source and API adaptations: [docs/design-source.md](docs/design-source.md). The Order
   README and running OpenAPI contract define fields and behaviour; Figma example data does not.
 - React + TanStack Query + react-router, same tooling as the Credit frontend. Reuse

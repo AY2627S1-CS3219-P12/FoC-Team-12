@@ -17,3 +17,5 @@ account-state checks on the backend; never expose privileged self-service role c
 missing account/token/OTP/admin rules against the approved backlog.
 
 Read the relevant [README](README.md) behavior, JWT contract and verification sections.
+Frontend work also follows the root [product design contract](../design.md); User owns behavior
+and identity while the shared contract owns cross-service presentation.

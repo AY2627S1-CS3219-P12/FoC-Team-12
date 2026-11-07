@@ -12,6 +12,11 @@ Run completion checks for affected code/API/migrations or frontend work. Use Com
 and health smoke checks for runtime/integration changes when required dependencies/configuration
 exist. Verify affected generated contracts against the running service.
 
+For frontend changes, verify the shared [product design contract](../../../design.md), affected
+role/session behavior, desktop and `375px` layouts, keyboard/focus and error states. Shared-shell
+changes also run `python3 .github/scripts/test_ui_design_contract.py` and compare all affected
+service routes; a single service rendering correctly is not sufficient evidence.
+
 When a change adds or renames a required `compose.yaml` variable (`${NAME:?...}`), touches
 `.env.example` or CI environment blocks, run `python3 .github/scripts/compose_env_check.py`.
 CI does not read `.env`; every job that runs Compose and the Kafka smoke script must provide the

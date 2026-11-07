@@ -4,6 +4,10 @@ Before editing, identify the owning service from [TASK_SPLIT.md](TASK_SPLIT.md) 
 `AGENTS.md`, including any nested instructions for the affected folder. Ask if ownership is
 unclear. For an explicitly assigned shared task, identify its editor and affected service owners.
 
+Before any frontend design or implementation work, read the shared [product design
+contract](design.md). It governs cross-service presentation and journeys; service requirements,
+APIs and backend authorization remain authoritative for behavior.
+
 ## Boundaries
 
 - Work within the assigned service/N2H area and approved shared-file scope. Never change another
@@ -20,6 +24,9 @@ unclear. For an explicitly assigned shared task, identify its editor and affecte
   `.env`. `python3 .github/scripts/compose_env_check.py` checks this on every PR.
 - Use approved backlog/wireframes for product rules; record missing or conflicting rules for
   confirmation. Update affected tests and service documentation when behavior changes.
+- Keep shared UI decisions in `design.md`, not copied service notes. A material shared-design
+  change updates that contract, affected implementations and regression tests together and needs
+  affected frontend-owner review.
 
 ## Reading and workflow
 
