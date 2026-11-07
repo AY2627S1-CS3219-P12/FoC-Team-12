@@ -1,4 +1,5 @@
 import { useLocation, useSearchParams } from 'react-router-dom'
+import { Store } from 'lucide-react'
 import {
   useSupplierListQuery,
   useSupplierMetadataQuery,
@@ -87,12 +88,15 @@ export function SupplierDirectoryPage() {
   return (
     <section aria-labelledby="supplier-heading" className={styles.page}>
       <header className={styles.pageHeading}>
-        <p className={styles.eyebrow}>Explore campus</p>
-        <h1 id="supplier-heading">Campus locations</h1>
-        <p>
-          Find active food, coffee, printing, and shopping locations across
-          campus.
-        </p>
+        <span aria-hidden="true" className={styles.pageIcon}><Store /></span>
+        <div>
+          <p className={styles.eyebrow}>Explore campus</p>
+          <h1 id="supplier-heading">Campus suppliers</h1>
+          <p>
+            Find active food, coffee, printing, and shopping locations across
+            campus.
+          </p>
+        </div>
       </header>
 
       <div aria-label="Filter campus locations" className={styles.filters}>

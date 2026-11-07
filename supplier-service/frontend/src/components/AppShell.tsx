@@ -1,5 +1,13 @@
 import { useRef } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
+import {
+  ClipboardList,
+  Coins,
+  House,
+  LogIn,
+  ShieldCheck,
+  Store,
+} from 'lucide-react'
 import { useAuth } from '../auth/useAuth'
 import bagIcon from '../assets/foc-bag.svg'
 import { navigateTo } from '../navigation'
@@ -42,13 +50,13 @@ export function AppShell() {
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className={styles.serviceNav}>
-            <a href="/">Profile</a>
+            <a href="/"><House aria-hidden="true" />Home</a>
+            <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>
             <Link aria-current="page" to={locationsPath}>
-              Suppliers
+              <Store aria-hidden="true" />Suppliers
             </Link>
-            <a href="/credits">Credits</a>
-            <a href="/errands/browse">Errands</a>
-            {session?.role === 'ADMIN' && <a href="/admin">Admin</a>}
+            <a href="/credits"><Coins aria-hidden="true" />Credits</a>
+            {session?.role === 'ADMIN' && <a href="/admin"><ShieldCheck aria-hidden="true" />Admin</a>}
           </nav>
           <nav
             aria-label="Account and workspace"
@@ -142,7 +150,7 @@ export function AppShell() {
                 </details>
               </>
             ) : (
-              <a href={`/?returnTo=${encodeURIComponent(returnTo)}`}>Sign in</a>
+              <a href={`/?returnTo=${encodeURIComponent(returnTo)}`}><LogIn aria-hidden="true" />Sign in</a>
             )}
           </nav>
         </div>

@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { ArrowRight, ClipboardCheck } from 'lucide-react'
 import { OrderShell } from './components/OrderShell'
 import { readSession } from './auth/session'
 import { signInPath } from './navigation'
@@ -12,12 +13,13 @@ import { type ErrandRole, homeFor, useSessionRole } from './hooks/useSessionRole
 function SignedOut() {
   return (
     <section className="state-panel">
+      <span aria-hidden="true" className="state-icon"><ClipboardCheck /></span>
+      <p className="eyebrow">Campus errands</p>
       <h2>Sign in to see errands</h2>
-      <p>
-        <a className="sign-in-link" href={signInPath()}>
-          Sign in
-        </a>
-      </p>
+      <p>Request help from another student or earn credits by running an errand between classes.</p>
+      <a className="sign-in-link" href={signInPath()}>
+        Sign in <ArrowRight aria-hidden="true" />
+      </a>
     </section>
   )
 }

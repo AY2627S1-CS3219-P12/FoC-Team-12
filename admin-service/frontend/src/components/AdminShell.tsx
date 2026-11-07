@@ -1,5 +1,12 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import {
+  ClipboardList,
+  Coins,
+  House,
+  ShieldCheck,
+  Store,
+} from 'lucide-react'
+import {
   clearSession,
   readSession,
   replaceSessionRole,
@@ -71,15 +78,15 @@ export function AdminShell({
       </a>
       <header className="site-header">
         <div className="header-inner">
-          <a className="brand" href="/?view=profile">
+          <a className="brand" href="/">
             <img alt="" height="24" src={bagIcon} width="24" />
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className="main-nav">
-            <a href="/?view=profile">Profile</a>
-            <a href={suppliersPath}>Suppliers</a>
-            <a href="/credits">Credits</a>
-            <a href="/errands/browse">Errands</a>
+            <a href="/"><House aria-hidden="true" />Home</a>
+            <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>
+            <a href={suppliersPath}><Store aria-hidden="true" />Suppliers</a>
+            <a href="/credits"><Coins aria-hidden="true" />Credits</a>
             <a
               aria-current={
                 window.location.pathname.startsWith('/admin/reports')
@@ -88,7 +95,7 @@ export function AdminShell({
               }
               href="/admin"
             >
-              Admin
+              <ShieldCheck aria-hidden="true" />Admin
             </a>
           </nav>
           <nav aria-label="Account and workspace" className="header-actions">

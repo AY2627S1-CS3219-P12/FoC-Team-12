@@ -1,4 +1,5 @@
 import type { CreditTransaction, TransactionPage } from '../api/creditApi'
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, History } from 'lucide-react'
 import {
   formatDate,
   formatDelta,
@@ -15,7 +16,7 @@ function TransactionRow({ transaction }: { transaction: CreditTransaction }) {
         aria-hidden="true"
         className={`transaction-icon ${change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral'}`}
       >
-        {change > 0 ? '↓' : change < 0 ? '↑' : '↔'}
+        {change > 0 ? <ArrowDownLeft /> : change < 0 ? <ArrowUpRight /> : <ArrowLeftRight />}
       </span>
       <span className="transaction-main">
         <strong>{transactionLabel(transaction.type)}</strong>
@@ -60,7 +61,7 @@ export function TransactionHistory({
       </div>
       {history.content.length === 0 ? (
         <div className="empty-history">
-          <span aria-hidden="true">◎</span>
+          <span aria-hidden="true"><History /></span>
           <h3>No transactions yet</h3>
           <p>
             Your credit activity will appear here once you create or fulfil an

@@ -153,7 +153,7 @@ describe('Public supplier directory', () => {
     renderRoute('/suppliers')
 
     expect(
-      screen.getByRole('heading', { name: 'Campus locations' }),
+      screen.getByRole('heading', { name: 'Campus suppliers' }),
     ).toBeInTheDocument()
     expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
     expect(screen.getByText('Central Library · Floor 1')).toBeInTheDocument()

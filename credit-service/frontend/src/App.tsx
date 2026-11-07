@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
+import { LockKeyhole, ShieldAlert, WifiOff } from 'lucide-react'
 import {
   CreditApiError,
   ensureCreditAccount,
@@ -30,16 +31,18 @@ function MessageState({
   title,
   children,
   action,
+  icon,
 }: {
   eyebrow: string
   title: string
   children: string
   action?: { label: string; onClick: () => void }
+  icon: ReactNode
 }) {
   return (
     <section className="message-card">
       <span aria-hidden="true" className="message-illustration">
-        ◌
+        {icon}
       </span>
       <p className="eyebrow">{eyebrow}</p>
       <h1>{title}</h1>
@@ -82,6 +85,7 @@ export function App() {
             onClick: () => navigateTo(signInPath()),
           }}
           eyebrow="Authentication required"
+          icon={<LockKeyhole />}
           title="Sign in to view your credits"
         >
           Your balance and ledger are private. Sign in with your FoC account to
@@ -101,6 +105,7 @@ export function App() {
             onClick: () => navigateTo(signInPath()),
           }}
           eyebrow="Session expired"
+          icon={<ShieldAlert />}
           title="Please sign in again"
         >
           Your session has ended, so we stopped loading your private credit
@@ -122,6 +127,7 @@ export function App() {
             },
           }}
           eyebrow="Connection problem"
+          icon={<WifiOff />}
           title="We could not load your credits"
         >
           Your balance is safe. Check that the Credit Service is running, then

@@ -1,5 +1,13 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import {
+  ClipboardList,
+  Coins,
+  House,
+  LogIn,
+  ShieldCheck,
+  Store,
+} from 'lucide-react'
+import {
   clearSession,
   readSession,
   replaceSessionRole,
@@ -58,13 +66,13 @@ export function CreditShell({ children }: { children: ReactNode }) {
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className="main-nav">
-            <a href="/">Profile</a>
-            <a href={suppliersPath}>Suppliers</a>
+            <a href="/"><House aria-hidden="true" />Home</a>
+            <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>
+            <a href={suppliersPath}><Store aria-hidden="true" />Suppliers</a>
             <a aria-current="page" href="/credits">
-              Credits
+              <Coins aria-hidden="true" />Credits
             </a>
-            <a href="/errands/browse">Errands</a>
-            {session?.role === 'ADMIN' && <a href="/admin">Admin</a>}
+            {session?.role === 'ADMIN' && <a href="/admin"><ShieldCheck aria-hidden="true" />Admin</a>}
           </nav>
           <nav aria-label="Account and workspace" className="header-actions">
             {session && session.role !== 'ADMIN' && (
@@ -141,7 +149,7 @@ export function CreditShell({ children }: { children: ReactNode }) {
               </details>
             ) : (
               <a className="sign-in-link" href="/?returnTo=%2Fcredits">
-                Sign in
+                <LogIn aria-hidden="true" />Sign in
               </a>
             )}
           </nav>

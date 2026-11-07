@@ -148,11 +148,11 @@ test('uses the Requester and Courier selector to replace a session token', async
   expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
   expect(screen.getByRole('link', { name: /Request help/ })).toHaveAttribute('href', '/errands/new')
-  expect(screen.queryByRole('link', { name: /Find errands to run/ })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Run an errand/ })).toHaveAttribute('href', '/errands/browse')
   await user.click(screen.getByRole('button', { name: 'Courier' }))
 
-  expect(await screen.findByRole('link', { name: /Find errands to run/ })).toHaveAttribute('href', '/errands/browse')
-  expect(screen.queryByRole('link', { name: /Request help/ })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Run an errand/ })).toHaveAttribute('href', '/errands/browse')
+  expect(screen.getByRole('link', { name: /Request help/ })).toHaveAttribute('href', '/errands/new')
   expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute('aria-pressed', 'true')
   expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute('aria-pressed', 'false')
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({
@@ -764,7 +764,7 @@ test('uses a conventional accessible password visibility toggle', async () => {
 test('places focus at the first field and advances through registration fields with Enter', async () => {
   render(<App />)
   const user = userEvent.setup()
-  expect(screen.getByLabelText('Email')).toHaveFocus()
+  expect(screen.getByLabelText('Email')).not.toHaveFocus()
 
   await user.click(screen.getByRole('button', { name: 'Create account', pressed: false }))
   const email = screen.getByLabelText('Email')

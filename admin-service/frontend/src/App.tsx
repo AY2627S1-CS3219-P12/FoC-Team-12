@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { LoaderCircle, LockKeyhole, ShieldX, WifiOff } from 'lucide-react'
 import { AccessError, checkAccess, readSession } from './access'
 import { AdminShell } from './components/AdminShell'
 import { CaseQueue, CaseWorkspace } from './CaseWorkspace'
@@ -103,7 +104,7 @@ function Dashboard() {
       {state === 'loading' && (
         <section className="message-card" role="status">
           <span className="message-illustration" aria-hidden="true">
-            ◌
+            <LoaderCircle className="spin" />
           </span>
           <h2>Checking your access</h2>
           <p>Confirming your current administrator permissions.</p>
@@ -112,7 +113,7 @@ function Dashboard() {
       {state === 'signin' && (
         <section className="message-card" aria-labelledby="state-title">
           <span className="message-illustration" aria-hidden="true">
-            ◌
+            <LockKeyhole />
           </span>
           <p className="eyebrow">Authentication required</p>
           <h2 id="state-title">Sign in to continue</h2>
@@ -127,7 +128,7 @@ function Dashboard() {
       {state === 'denied' && (
         <section className="message-card" aria-labelledby="state-title">
           <span className="message-illustration" aria-hidden="true">
-            ◌
+            <ShieldX />
           </span>
           <p className="eyebrow">Access restricted</p>
           <h2 id="state-title">This workspace is for administrators</h2>
@@ -143,7 +144,7 @@ function Dashboard() {
       {state === 'unavailable' && (
         <section className="message-card" role="alert">
           <span className="message-illustration" aria-hidden="true">
-            ◌
+            <WifiOff />
           </span>
           <p className="eyebrow">Connection problem</p>
           <h2>We couldn’t verify your access</h2>

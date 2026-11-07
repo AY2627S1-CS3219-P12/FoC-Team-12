@@ -216,6 +216,40 @@ describe('Credit dashboard', () => {
     })
   })
 
+  it('keeps the current JWT and workspace when a role change fails', async () => {
+    signedIn()
+    const creditApi = mockSuccessfulApi()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/users/me/session-role') {
+        return response({ title: 'Service unavailable' }, 503)
+      }
+      return creditApi(input)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderApp()
+
+    await user.click(await screen.findByRole('button', { name: 'Courier' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Unable to change workspace right now. Please try again.',
+    )
+    expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    )
+    expect(
+      JSON.parse(sessionStorage.getItem(sessionKey) ?? '{}'),
+    ).toMatchObject({
+      accessToken: 'valid-token',
+      role: 'REQUESTER',
+    })
+  })
+
   it('keeps administrator navigation and account actions consistent', async () => {
     signedInAdmin()
     const creditApi = mockSuccessfulApi()

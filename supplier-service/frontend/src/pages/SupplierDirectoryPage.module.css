@@ -5,8 +5,28 @@
 
 .pageHeading {
   display: grid;
-  gap: var(--foc-space-8);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--foc-space-16);
   max-width: 48rem;
+}
+
+.pageIcon {
+  display: grid;
+  width: 3rem;
+  height: 3rem;
+  margin-top: var(--foc-space-4);
+  border: 1px solid color-mix(in srgb, var(--foc-action) 18%, white);
+  border-radius: var(--foc-radius-12);
+  color: var(--foc-action);
+  background: var(--foc-action-soft);
+  place-items: center;
+}
+
+.pageIcon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  stroke-width: 1.8;
 }
 
 .pageHeading h1,
@@ -21,7 +41,7 @@
   line-height: 1.25;
 }
 
-.pageHeading > p:last-child {
+.pageHeading > div > p:last-child {
   color: var(--foc-muted);
   font-size: var(--foc-text-body);
   line-height: 1.5;

@@ -1,4 +1,22 @@
 import { type FormEvent, type KeyboardEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  ArrowRight,
+  ArrowUpRight,
+  CheckCircle2,
+  ClipboardList,
+  Clock3,
+  Coins,
+  Eye,
+  EyeOff,
+  HandHeart,
+  House,
+  MapPin,
+  PackageCheck,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Store,
+} from 'lucide-react'
 
 import { ApiError, api, type UserProfile } from './api/client'
 import {
@@ -42,7 +60,7 @@ function PasswordInput({
       onChange={event => onChange(event.target.value)} onKeyDown={onKeyDown} disabled={disabled} aria-invalid={invalid} />
     <button type="button" className="password-toggle" aria-label={visible ? 'Hide password' : 'Show password'}
       aria-pressed={visible} onClick={() => setVisible(current => !current)} disabled={disabled}>
-      <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M2.2 12s3.4-6 9.8-6 9.8 6 9.8 6-3.4 6-9.8 6-9.8-6-9.8-6Z" /><circle cx="12" cy="12" r="2.8" />{visible && <path d="m4 4 16 16" />}</svg>
+      {visible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
     </button>
   </span>
 }
@@ -101,7 +119,10 @@ export function App() {
   const [resetResendMessage, setResetResendMessage] = useState('')
   const verificationInFlight = useRef(false)
   const resetVerificationInFlight = useRef(false)
+  const requestedAuthFocus = useRef<View | null>(null)
+  const loginEmailRef = useRef<HTMLInputElement>(null)
   const loginPasswordRef = useRef<HTMLInputElement>(null)
+  const registrationEmailRef = useRef<HTMLInputElement>(null)
   const registrationUsernameRef = useRef<HTMLInputElement>(null)
   const registrationPasswordRef = useRef<HTMLInputElement>(null)
   const newPasswordRef = useRef<HTMLInputElement>(null)
@@ -175,6 +196,13 @@ export function App() {
       loginPasswordRef.current?.focus()
     }
   }, [loginPasswordFocusVersion])
+
+  useLayoutEffect(() => {
+    if (requestedAuthFocus.current !== view) return
+    if (view === 'login') loginEmailRef.current?.focus()
+    if (view === 'register') registrationEmailRef.current?.focus()
+    requestedAuthFocus.current = null
+  }, [view])
 
   useLayoutEffect(() => {
     if (passwordChangeEditing) {
@@ -690,11 +718,11 @@ export function App() {
             <span>Friend on Campus</span>
           </a>
           <nav className="profile-service-nav" aria-label="Main navigation">
-            <a aria-current={adminUsersPage ? undefined : 'page'} href="/">Profile</a>
-            <a href={suppliersPath}>Suppliers</a>
-            <a href="/credits">Credits</a>
-            <a href="/errands/browse">Errands</a>
-            {adminMode && <a href="/admin">Admin</a>}
+            <a aria-current={adminUsersPage ? undefined : 'page'} href="/"><House aria-hidden="true" />Home</a>
+            <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>
+            <a href={suppliersPath}><Store aria-hidden="true" />Suppliers</a>
+            <a href="/credits"><Coins aria-hidden="true" />Credits</a>
+            {adminMode && <a href="/admin"><ShieldCheck aria-hidden="true" />Admin</a>}
           </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">
             {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">
@@ -737,37 +765,53 @@ export function App() {
       {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
       {adminUsersPage
         ? <main className="admin-users-main"><AdminUserManagement currentUserId={session.userId} /></main>
-        : <main className="profile-main"><section aria-labelledby="profile-title">
-      <p className="eyebrow">Friend on Campus</p>
-      <h1 id="profile-title">Profile</h1>
-      <p className="intro">Your Friend on Campus account details.</p>
-      <nav className="service-grid" aria-label="Friend on Campus services">
-        {!adminMode && <a className="service-card" href="/suppliers">
-          <strong>Browse suppliers</strong>
-          <span>Find active food, coffee, printing, and shopping locations across campus.</span>
+        : <main className="profile-main"><section className="dashboard-page" aria-labelledby="dashboard-title">
+      <header className="dashboard-hero">
+        <div>
+          <p className="eyebrow">{adminMode ? 'Administration' : 'Your campus dashboard'}</p>
+          <h1 id="dashboard-title">{adminMode ? 'Keep FoC running smoothly.' : <>Good to see you, <span>{session.username}</span>.</>}</h1>
+          <p className="intro">{adminMode
+            ? 'Manage the people and places that keep Friend on Campus useful and safe.'
+            : 'What would make your day a little easier?'}</p>
+        </div>
+        {!adminMode && <span className="dashboard-role"><Sparkles aria-hidden="true" />{session.role === 'COURIER' ? 'Running errands' : 'Requesting help'}</span>}
+      </header>
+
+      {!adminMode && <nav className="dashboard-actions" aria-label="Start an errand">
+        <a className="dashboard-action dashboard-action-request" href="/errands/new" onClick={event => {
+          if (session.role === 'REQUESTER') return
+          event.preventDefault()
+          void selectWorkspaceRole('REQUESTER').then(changed => { if (changed) navigateTo('/errands/new') })
+        }}>
+          <span className="dashboard-action-icon"><HandHeart aria-hidden="true" /></span>
+          <span><small>I need a hand</small><strong>Request help</strong><em>Post a pickup or delivery and choose the credit reward.</em></span>
+          <ArrowUpRight aria-hidden="true" />
         </a>
-        }
-        {adminMode && <a className="service-card admin-card" href="/admin/suppliers">
-          <strong>Manage suppliers</strong>
-          <span>Create, update, activate, deactivate, and remove campus locations.</span>
-        </a>}
-        {adminMode && <a className="service-card admin-card" href="/?view=users">
-          <strong>Manage users</strong>
-          <span>Search accounts, grant or remove Admin access, and manage account status.</span>
-        </a>}
-        <a className="service-card" href="/credits">
-          <strong>View my credits</strong>
-          <span>Check your available balance, reserved credits, and transaction history.</span>
+        <a className="dashboard-action dashboard-action-courier" href="/errands/browse" onClick={event => {
+          if (session.role === 'COURIER') return
+          event.preventDefault()
+          void selectWorkspaceRole('COURIER').then(changed => { if (changed) navigateTo('/errands/browse') })
+        }}>
+          <span className="dashboard-action-icon"><PackageCheck aria-hidden="true" /></span>
+          <span><small>I have time to help</small><strong>Run an errand</strong><em>Find an open request nearby and earn credits.</em></span>
+          <ArrowUpRight aria-hidden="true" />
         </a>
-        {session.role === 'REQUESTER' && <a className="service-card" href="/errands/new">
-          <strong>Request help</strong>
-          <span>Post an errand with a pickup, drop-off, deadline, and credit reward.</span>
-        </a>}
-        {session.role === 'COURIER' && <a className="service-card" href="/errands/browse">
-          <strong>Find errands to run</strong>
-          <span>Browse open errands from other students and earn credits delivering them.</span>
-        </a>}
-      </nav>
+      </nav>}
+
+      <div className="dashboard-content">
+        <section className="dashboard-explore" aria-labelledby="explore-title">
+          <div className="section-heading"><div><p className="eyebrow">Quick access</p><h2 id="explore-title">Explore Friend on Campus</h2></div></div>
+          <nav className="service-grid" aria-label="Friend on Campus services">
+            {!adminMode && <a className="service-card" href="/errands/mine"><Clock3 aria-hidden="true" /><strong>My errands</strong><span>Track requests, deliveries and completed handoffs.</span><ArrowRight aria-hidden="true" /></a>}
+            {!adminMode && <a className="service-card" href="/suppliers"><Store aria-hidden="true" /><strong>Browse suppliers</strong><span>Find food, coffee, printing and shopping across campus.</span><ArrowRight aria-hidden="true" /></a>}
+            {adminMode && <a className="service-card admin-card" href="/admin/suppliers"><Store aria-hidden="true" /><strong>Manage suppliers</strong><span>Create, update, activate or remove campus locations.</span><ArrowRight aria-hidden="true" /></a>}
+            {adminMode && <a className="service-card admin-card" href="/?view=users"><ShieldCheck aria-hidden="true" /><strong>Manage users</strong><span>Manage roles, account access and account status.</span><ArrowRight aria-hidden="true" /></a>}
+            <a className="service-card" href="/credits"><Coins aria-hidden="true" /><strong>View my credits</strong><span>See available credits, reservations and transaction history.</span><ArrowRight aria-hidden="true" /></a>
+          </nav>
+        </section>
+
+        <section className="account-panel" aria-labelledby="profile-title">
+          <div className="section-heading account-panel-heading"><div><p className="eyebrow">Account settings</p><h2 id="profile-title">Profile</h2></div><span className="account-security"><CheckCircle2 aria-hidden="true" />Verified</span></div>
       {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
       {profileMessage && <p role="alert" className="error">{profileMessage}</p>}
       {displayedProfile && <dl className="identity-card">
@@ -819,6 +863,8 @@ export function App() {
           </form>}
         </dd></div>
       </dl>}
+        </section>
+      </div>
     </section></main>}
     </div>
   }
@@ -827,31 +873,78 @@ export function App() {
     || verificationState === 'loading' || resendState === 'loading'
     || resetRequestState === 'loading' || resetVerificationState === 'loading' || resetConfirmationState === 'loading' || resetResendState === 'loading'
 
-  return <main className="auth-page"><section aria-labelledby="account-title">
-    <a className="auth-brand" href="/suppliers">
-      <img alt="" height="28" src={bagIcon} width="28" />
-      <span>Friend on Campus</span>
-    </a>
+  return <main className="welcome-page">
+    <header className="welcome-header">
+      <a className="welcome-brand" href="/">
+        <span><img alt="" height="26" src={bagIcon} width="26" /></span>
+        <strong>Friend on Campus</strong>
+      </a>
+      <nav aria-label="Welcome navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="/suppliers">Campus suppliers</a>
+        <a className="welcome-sign-in" href="#account">Sign in</a>
+      </nav>
+    </header>
+
+    <div className="welcome-main">
+      <section className="welcome-hero" aria-labelledby="welcome-title">
+        <p className="welcome-kicker"><Sparkles aria-hidden="true" />Made for NUS students</p>
+        <h1 id="welcome-title">One campus.<br /><span>A thousand small favours.</span></h1>
+        <p className="welcome-lede">Need lunch picked up before class? Heading past the library anyway? FoC matches everyday campus errands with students who can help.</p>
+        <div className="welcome-actions">
+          <button type="button" onClick={() => { requestedAuthFocus.current = 'register'; show('register'); document.querySelector('#account')?.scrollIntoView({ behavior: 'smooth' }) }}>Join with NUS email <ArrowRight aria-hidden="true" /></button>
+          <a href="/suppliers"><Search aria-hidden="true" />Explore campus suppliers</a>
+        </div>
+        <div className="welcome-proof" aria-label="What makes Friend on Campus useful">
+          <span><CheckCircle2 aria-hidden="true" /><strong>NUS email verified</strong></span>
+          <span><Coins aria-hidden="true" /><strong>Simple credit rewards</strong></span>
+          <span><MapPin aria-hidden="true" /><strong>Campus-only handoffs</strong></span>
+        </div>
+
+        <div className="errand-preview" aria-label="Example errands">
+          <div className="preview-heading"><span><span className="preview-live-dot" />Open around campus</span><a href="/suppliers">View suppliers <ArrowRight aria-hidden="true" /></a></div>
+          <article className="preview-card preview-card-featured">
+            <span className="preview-icon"><PackageCheck aria-hidden="true" /></span>
+            <div><small>UTown · before 2:30 PM</small><strong>Pick up lunch from Fine Food</strong><span>Drop off at College of Alice &amp; Peter</span></div>
+            <b>3 credits</b>
+          </article>
+          <article className="preview-card">
+            <span className="preview-icon"><Store aria-hidden="true" /></span>
+            <div><small>Central Library · flexible</small><strong>Collect printed notes</strong><span>Drop off near COM3</span></div>
+            <b>2 credits</b>
+          </article>
+        </div>
+      </section>
+
+      <section className="auth-card" id="account" aria-labelledby="account-title">
+      <div className="auth-card-intro">
+        <p className="eyebrow">Your FoC account</p>
+        <p>Use your student identity to request help or run errands.</p>
+      </div>
     {(view === 'login' || view === 'register') && <nav className="tabs" aria-label="Account actions">
-      <button type="button" aria-pressed={view === 'login'} className={view === 'login' ? 'tab active' : 'tab'} onClick={() => show('login')}>Sign in</button>
-      <button type="button" aria-pressed={view === 'register'} className={view === 'register' ? 'tab active' : 'tab'} onClick={() => show('register')}>Create account</button>
+      <button type="button" aria-pressed={view === 'login'} className={view === 'login' ? 'tab active' : 'tab'} onClick={() => { requestedAuthFocus.current = 'login'; show('login') }}>Sign in</button>
+      <button type="button" aria-pressed={view === 'register'} className={view === 'register' ? 'tab active' : 'tab'} onClick={() => { requestedAuthFocus.current = 'register'; show('register') }}>Create account</button>
     </nav>}
+    {(view === 'register' || view === 'email-verification') && <ol className="auth-progress" aria-label="Account creation progress">
+      <li className={view === 'register' ? 'current' : 'complete'}><span>{view === 'register' ? '1' : <CheckCircle2 aria-hidden="true" />}</span>Account</li>
+      <li className={view === 'email-verification' ? 'current' : ''}><span>2</span>Verify email</li>
+    </ol>}
 
     {view === 'login' && <form onSubmit={login} noValidate aria-busy={busy} aria-label="Sign in form">
       <h1 id="account-title">Sign in</h1>
       <p className="intro">Use your NUS student email to continue.</p>
-      <label>Email<input type="email" autoFocus value={loginEmail} onChange={event => setLoginEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, loginPasswordRef)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
+      <label>Email<input ref={loginEmailRef} type="email" autoComplete="email" value={loginEmail} onChange={event => setLoginEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, loginPasswordRef)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
       <label>Password<PasswordInput value={loginPassword} onChange={setLoginPassword} inputRef={loginPasswordRef} disabled={busy} invalid={loginState === 'error'} autoComplete="current-password" /></label>
       <button disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
       <button type="button" className="text-button" onClick={openPasswordReset}>Forgot password?</button>
-      <a className="guest-link" href="/suppliers">Browse suppliers without signing in</a>
+      <a className="guest-link" href="/suppliers">Browse suppliers without signing in <ArrowRight aria-hidden="true" /></a>
       {loginMessage && <p role={loginState === 'error' ? 'alert' : 'status'} className={loginState === 'error' ? 'error' : 'success'}>{loginMessage}</p>}
     </form>}
 
     {view === 'register' && <form onSubmit={register} noValidate aria-busy={busy} aria-label="Create account form">
       <h1 id="account-title">Create your account</h1>
       <p className="intro">Use your NUS student email to join the campus community.</p>
-      <label>Email<input type="email" autoFocus value={email} onChange={event => setEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationUsernameRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
+      <label>Email<input ref={registrationEmailRef} type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationUsernameRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
       <label>Username<input ref={registrationUsernameRef} value={username} maxLength={20} onChange={event => setUsername(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationPasswordRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
       <label>Password<PasswordInput value={password} onChange={setPassword} inputRef={registrationPasswordRef} disabled={busy} invalid={registrationState === 'error'} autoComplete="new-password" /></label>
       <button disabled={busy}>{registrationState === 'loading' ? 'Creating account…' : 'Create account'}</button>
@@ -906,5 +999,17 @@ export function App() {
       <p role="status" className="success">Your password has been updated. You can now sign in.</p>
       <button type="button" onClick={() => show('login')}>Sign in</button>
     </div>}
-  </section></main>
+    <p className="auth-trust"><ShieldCheck aria-hidden="true" />Only eligible NUS student email addresses can join.</p>
+    </section>
+    </div>
+
+    <section className="how-it-works" id="how-it-works" aria-labelledby="how-title">
+      <div className="how-heading"><p className="eyebrow">A clearer way to ask for help</p><h2 id="how-title">From request to handoff, without the guesswork.</h2></div>
+      <ol>
+        <li><span>01</span><div><HandHeart aria-hidden="true" /><h3>Post what you need</h3><p>Add the supplier, destination, deadline and credit reward.</p></div></li>
+        <li><span>02</span><div><PackageCheck aria-hidden="true" /><h3>A student accepts</h3><p>A courier nearby takes the errand and follows the shared details.</p></div></li>
+        <li><span>03</span><div><CheckCircle2 aria-hidden="true" /><h3>Confirm the handoff</h3><p>Track the status, confirm delivery and transfer credits automatically.</p></div></li>
+      </ol>
+    </section>
+  </main>
 }

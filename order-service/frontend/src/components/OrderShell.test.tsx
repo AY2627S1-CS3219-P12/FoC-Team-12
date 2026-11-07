@@ -27,7 +27,7 @@ describe('OrderShell', () => {
       within(nav)
         .getAllByRole('link')
         .map((link) => link.textContent),
-    ).toEqual(['Profile', 'Suppliers', 'Credits', 'Errands'])
+    ).toEqual(['Home', 'Errands', 'Suppliers', 'Credits'])
     expect(within(nav).getByRole('link', { name: 'Errands' })).toHaveAttribute(
       'aria-current',
       'page',

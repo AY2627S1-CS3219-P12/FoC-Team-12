@@ -4,9 +4,10 @@
 }
 
 .header {
-  min-height: 5rem;
+  min-height: 4.5rem;
   border-bottom: 1px solid var(--foc-line);
-  background: var(--foc-surface);
+  background: rgb(255 255 255 / 96%);
+  box-shadow: 0 1px 0 rgb(32 51 45 / 2%);
 }
 
 .headerContent {
@@ -14,7 +15,7 @@
   align-items: center;
   gap: var(--foc-space-16);
   width: min(100%, 80rem);
-  min-height: 5rem;
+  min-height: 4.5rem;
   margin: 0 auto;
   padding: 0 var(--foc-space-32);
 }
@@ -47,15 +48,24 @@
 
 .serviceNav a {
   position: relative;
-  display: grid;
+  display: inline-flex;
   align-self: stretch;
+  align-items: center;
+  gap: 0.42rem;
   min-height: 2.75rem;
   padding: 0 var(--foc-space-12);
   color: var(--foc-muted);
   font-size: var(--foc-text-small);
   font-weight: 600;
-  place-items: center;
   text-decoration: none;
+}
+
+.serviceNav a svg,
+.actions > a svg {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  stroke-width: 1.8;
 }
 
 .serviceNav a:hover,
@@ -93,6 +103,7 @@
 
 .workspaceSelectorOptions {
   display: inline-flex;
+  align-items: center;
   padding: 0.1875rem;
   border: 1px solid var(--foc-line);
   border-radius: var(--foc-radius-8);
@@ -100,18 +111,34 @@
 }
 
 .actions .workspaceSelectorOptions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  appearance: none;
+  height: 2rem;
   min-height: 2rem;
+  margin: 0;
   padding: 0 var(--foc-space-8);
   border: 0;
   border-radius: calc(var(--foc-radius-8) - 0.125rem);
   background: transparent;
+  box-shadow: none;
   color: var(--foc-muted);
   font-size: 0.78rem;
   font-weight: 600;
+  line-height: 1;
   text-decoration: none;
 }
 
-.actions .workspaceSelectorOptions button[aria-pressed='true'] {
+.actions .workspaceSelectorOptions button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--foc-action-soft);
+  box-shadow: none;
+  color: var(--foc-action);
+}
+
+.actions .workspaceSelectorOptions button[aria-pressed='true'],
+.actions .workspaceSelectorOptions button[aria-pressed='true']:hover:not(:disabled) {
   background: var(--foc-action);
   color: var(--foc-surface);
   box-shadow: 0 1px 2px rgb(23 32 51 / 18%);
@@ -270,13 +297,21 @@
   .serviceNav {
     order: 3;
     width: calc(100% + 2rem);
+    max-width: calc(100% + 2rem);
+    min-width: 0;
     min-height: 3rem;
     margin: 0 -1rem;
+    overflow-x: auto;
     border-top: 1px solid var(--foc-line);
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+  .serviceNav::-webkit-scrollbar {
+    display: none;
   }
   .serviceNav a {
-    flex: 1;
-    padding: 0 var(--foc-space-4);
+    flex: 0 0 auto;
+    padding: 0 var(--foc-space-12);
     font-size: 0.82rem;
   }
   .serviceNav a[aria-current='page']::after {
