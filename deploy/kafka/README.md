@@ -42,11 +42,16 @@ KAFKA_BROKER_PASSWORD=...
 KAFKA_USER_SERVICE_PASSWORD=...
 KAFKA_ORDER_SERVICE_PASSWORD=...
 KAFKA_CREDIT_SERVICE_PASSWORD=...
+KAFKA_NOTIFICATION_SERVICE_PASSWORD=...
 KAFKA_ADMIN_SERVICE_PASSWORD=...
 KAFKA_UI_BROKER_PASSWORD=...
 KAFKA_UI_LOGIN_USERNAME=...
 KAFKA_UI_LOGIN_PASSWORD=...
 ```
+
+`KAFKA_NOTIFICATION_SERVICE_PASSWORD` is required by Compose, but the broker treats it as optional
+so an existing Kubernetes or AWS broker Secret without it still starts; the `notification_service`
+identity then cannot authenticate until the password is provisioned.
 
 Never commit `.env`. Use distinct values without quotes, backslashes or line breaks. The broker
 writes a runtime-only JAAS file under `/tmp`; passwords are not written to the repository or Kafka
@@ -79,6 +84,8 @@ pending; broker permissions alone do not implement it. See the
 | `user.events.DLT` | 1 | 30 days | Failed User-event delivery |
 | `order.events.DLT` | 1 | 30 days | Failed Order-event delivery |
 | `credit.events.DLT` | 1 | 30 days | Failed Credit-event delivery |
+| `order.lifecycle.events` | 3 | 7 days | Order lifecycle facts for Notification; producer pending |
+| `order.lifecycle.events.DLT` | 1 | 30 days | Failed Order lifecycle-event delivery |
 | `admin.credit.commands` | 3 | 7 days | Admin correction requests; Credit consumer pending |
 | `credit.admin.events` | 3 | 7 days | Credit correction outcomes; producer pending |
 | `admin.credit.commands.DLT` | 1 | 30 days | Credit-owned command recovery |
@@ -97,9 +104,10 @@ production data-retention policy.
 | `admin_service` | Write/describe `admin.credit.commands`, `credit.admin.events.DLT`, `admin.events`; read/describe `credit.admin.events`; Read group `admin-service-credit`; cluster idempotent write; Write/Describe transactional IDs with prefix `admin-case-events-` |
 | `credit_service` (additional) | Read/describe `admin.credit.commands`; Read group `credit-service-admin`; write/describe `credit.admin.events`, `admin.credit.commands.DLT` |
 | `user_service` | Write/describe `user.events`; cluster idempotent write |
-| `order_service` | Write/describe `order.events`; read/describe `credit.events` as group `order-service`; write/describe `credit.events.DLT`; cluster idempotent write |
+| `order_service` | Write/describe `order.events` and `order.lifecycle.events`; read/describe `credit.events` as group `order-service`; write/describe `credit.events.DLT`; cluster idempotent write |
 | `credit_service` | Read/describe `user.events` and `order.events` as group `credit-service`; write/describe `credit.events`, `user.events.DLT` and `order.events.DLT`; cluster idempotent write |
-| `kafka_ui` | Read/describe the fifteen project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
+| `notification_service` | Read/describe `credit.events` and `order.lifecycle.events` as group `notification-service`; write/describe `credit.events.DLT` and `order.lifecycle.events.DLT`; cluster idempotent write. It cannot write `credit.events` or join another service's group |
+| `kafka_ui` | Read/describe the seventeen project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
 | `foc_admin` | Broker initialization and local diagnosis (super-user) |
 | `foc_broker` | Broker-to-broker traffic (super-user) |
 
@@ -123,7 +131,7 @@ docker compose ps kafka
 ```
 
 Open `http://localhost:8090` and sign in with `KAFKA_UI_LOGIN_USERNAME` and
-`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the fifteen
+`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the seventeen
 topics, partitions, configurations, message keys/envelopes, consumer groups and lag. The UI uses
 both Kafbat's read-only mode and broker ACLs: it cannot produce records, create/delete topics,
 change retention, reset business offsets or join a service's consumer group.

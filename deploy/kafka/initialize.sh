@@ -84,7 +84,7 @@ limit_jobs() {
 }
 
 pids=()
-for topic in user.events order.events credit.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
+for topic in user.events order.events credit.events order.lifecycle.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
   create_topic "$topic" 3 604800000 &
   pids+=("$!")
   limit_jobs
@@ -92,7 +92,7 @@ done
 wait_all "${pids[@]}"
 
 pids=()
-for topic in user.events.DLT order.events.DLT credit.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT; do
+for topic in user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT; do
   create_topic "$topic" 1 2592000000 &
   pids+=("$!")
   limit_jobs
@@ -109,7 +109,8 @@ limit_jobs
 
 # Order Service publishes lifecycle facts and consumes Credit outcomes.
 {
-add_acl order_service --operation Write --operation Describe --topic order.events --topic credit.events.DLT
+add_acl order_service --operation Write --operation Describe --topic order.events --topic credit.events.DLT \
+  --topic order.lifecycle.events
 add_acl order_service --operation Read --operation Describe --topic credit.events
 add_acl order_service --operation Read --group order-service
 add_idempotent_write_acl order_service
@@ -124,6 +125,19 @@ add_acl credit_service --operation Read --group credit-service
 add_acl credit_service --operation Write --operation Describe \
   --topic credit.events --topic user.events.DLT --topic order.events.DLT
 add_idempotent_write_acl credit_service
+} &
+pids+=("$!")
+limit_jobs
+
+# Notification Service consumes Credit outcomes and Order lifecycle facts; it publishes only dead
+# letters. Order owns order.lifecycle.events; Notification is its only consumer.
+{
+add_acl notification_service --operation Read --operation Describe \
+  --topic credit.events --topic order.lifecycle.events
+add_acl notification_service --operation Read --group notification-service
+add_acl notification_service --operation Write --operation Describe \
+  --topic credit.events.DLT --topic order.lifecycle.events.DLT
+add_idempotent_write_acl notification_service
 } &
 pids+=("$!")
 limit_jobs
@@ -162,11 +176,12 @@ add_acl admin_service --operation Write --operation Describe --transactional-id 
 add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfigs \
   --topic user.events --topic order.events --topic credit.events \
   --topic user.events.DLT --topic order.events.DLT --topic credit.events.DLT \
+  --topic order.lifecycle.events --topic order.lifecycle.events.DLT \
   --topic admin.credit.commands --topic credit.admin.events \
   --topic admin.credit.commands.DLT --topic credit.admin.events.DLT \
   --topic admin.user.commands --topic user.admin.events --topic admin.user.commands.DLT --topic user.admin.events.DLT --topic admin.events
 add_acl kafka_ui --operation Describe --operation DescribeConfigs --cluster
-add_acl kafka_ui --operation Describe --group order-service --group credit-service --group admin-service-credit --group credit-service-admin --group admin-service-user --group user-service-admin
+add_acl kafka_ui --operation Describe --group order-service --group credit-service --group notification-service --group admin-service-credit --group credit-service-admin --group admin-service-user --group user-service-admin
 add_acl kafka_ui --operation Read --operation Describe --group kafka-ui-browser --resource-pattern-type prefixed
 } &
 pids+=("$!")
