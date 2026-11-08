@@ -112,6 +112,26 @@ class SharedRoleSelectorDesignTest(unittest.TestCase):
                     )
 
 
+# design.md "Type, spacing and shape": Public Sans with a system sans-serif fallback. Each frontend
+# sets it once on its root rule; without it the browser falls back to its serif default.
+ROOT_FONTS = {
+    "user": (ROOT / "user-service/frontend/src/styles.css", ":root"),
+    "supplier": (ROOT / "supplier-service/frontend/src/styles/global.css", "html"),
+    "order": (ROOT / "order-service/frontend/src/styles.css", ":root"),
+    "credit": (ROOT / "credit-service/frontend/src/styles.css", ":root"),
+    "admin": (ROOT / "admin-service/frontend/src/styles.css", ":root"),
+    "notification": (ROOT / "notification-service/frontend/src/styles.css", ":root"),
+}
+
+
+class SharedTypefaceTest(unittest.TestCase):
+    def test_every_frontend_sets_public_sans_on_its_root(self):
+        for service, (path, selector) in ROOT_FONTS.items():
+            with self.subTest(service=service):
+                root = declarations(path.read_text(), selector)
+                self.assertEqual("'Public Sans', system-ui, sans-serif", root.get("font-family"))
+
+
 class SharedNotificationBellTest(unittest.TestCase):
     def test_every_frontend_has_the_same_bell(self):
         for source in BELL_SOURCES:
