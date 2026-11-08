@@ -483,6 +483,31 @@ jobs:
       - name: Build
         run: npm run build
 
+  notification-frontend:
+    name: Notification frontend
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: notification-service/frontend
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: notification-service/frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Type-check
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+
   admin-container:
     name: Admin authenticated runtime smoke test
     runs-on: ubuntu-24.04
@@ -578,6 +603,7 @@ jobs:
       - notification-backend
       - admin-backend
       - admin-frontend
+      - notification-frontend
       - admin-container
       - cloud-infrastructure-validation
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.image-plan.outputs.has-images == 'true'

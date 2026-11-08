@@ -200,6 +200,15 @@ class NotificationSecurityIntegrationTest {
     }
 
     @Test
+    void theNotificationsPageIsPublicButOnlyForReading() throws Exception {
+        // The page itself carries no data; its API calls still need a token.
+        assertThat(get("/notifications", null).statusCode()).isNotIn(401, 403);
+        assertThat(get("/notification-assets/index.js", null).statusCode()).isNotIn(401, 403);
+        assertThat(get("/api/notifications/me", null).statusCode()).isEqualTo(401);
+        assertThat(send("POST", "/notifications", null).statusCode()).isIn(401, 403);
+    }
+
+    @Test
     void healthAndApiDocsArePublic() throws Exception {
         assertThat(get("/actuator/health", null).statusCode()).isEqualTo(200);
         assertThat(get("/v3/api-docs", null).statusCode()).isEqualTo(200);

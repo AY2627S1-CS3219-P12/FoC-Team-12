@@ -104,6 +104,7 @@ the Credit dashboard at `/credits`, and the current APIs from the same origin:
 /suppliers/**                 -> Supplier public UI
 /admin/suppliers/**           -> Supplier administration UI
 /credits/**                   -> Credit dashboard
+/notifications/**             -> Notifications page (bell in every header)
 /admin/**                     -> Admin dashboard (Supplier admin paths take precedence)
 /api/admin/**                 -> Admin Service (except /api/admin/suppliers/**)
 /api/users/**                -> User Service

@@ -138,14 +138,31 @@ All errors are RFC-7807 `application/problem+json`.
 | — | 401 | Missing or invalid bearer token (`WWW-Authenticate: Bearer`) |
 | — | 403 | Any method or path outside this API |
 
-## Proposed UI
+## Notifications page and header bell
 
-Not built (iteration 7). Notification UI lives in the Notification-owned area and uses same-origin
-gateway APIs. List loading/empty/error/expired-session states and links to authorized errand pages.
-Proposed UI path `/notifications`; optional badge/read controls require explicit scope approval in
-feature analysis. Polling is sufficient initially; WebSocket delivery is not required by the D3
-notification plan (see [DESIGN.md](DESIGN.md#decisions) for why push is deferred). No browser code
-or untrusted notification link grants access to an order.
+The UI lives in `frontend/` (React, Vite, TypeScript, React Query), is packaged into the jar like
+the other services' UIs, and is served at `/notifications` with assets under
+`/notification-assets/`; the gateway routes both here. The page needs no token to load; every API
+call it makes does.
+
+- **The page** lists the caller's notifications newest first, 20 at a time with **Load more**.
+  Unread items say "Unread" in text as well as a coloured edge. **Open errand** marks an item read
+  and goes to `/errands/{orderId}` (it still opens if marking read fails); **Mark as read** marks
+  it without leaving. Account-level items have no errand link. There is no mark-all-read.
+- **States:** placeholders while loading; "No notifications yet." with **Browse errands** when
+  empty; "Couldn't load your notifications." with **Try again** on error; "Your session has ended"
+  with **Sign in again** (returning to `/notifications`) when signed out or the session expired.
+- **The header bell** is in every frontend's header, between the role selector and the account
+  menu (root `design.md` "Shared application shell"): a link to `/notifications` with the unread
+  count, `9+` above nine, also in its accessible name. `src/components/NotificationBell.tsx` and
+  `useUnreadCount.ts` are copied unchanged into each frontend; `test_ui_design_contract.py` fails
+  if a copy differs.
+- **Polling** (DESIGN.md "Polling"): only `GET /api/notifications/me/unread-count`, every 30 s while
+  the tab is visible, at once when it becomes visible again or the page marks one read; after a
+  failure the wait doubles up to 5 minutes and the last count stays. A 401 or sign-out stops it.
+
+Build and test the UI from `frontend/` with `npm ci`, `npm run lint`, `npm run typecheck`,
+`npm test` and `npm run build`. `npm run dev` serves it on port 5178 against a local service.
 
 ## Notifications from Credit events
 
