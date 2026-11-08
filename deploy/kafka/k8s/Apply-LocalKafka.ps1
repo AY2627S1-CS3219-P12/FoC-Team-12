@@ -33,9 +33,15 @@ foreach ($name in @('kafka-topics.sh', 'kafka-configs.sh', 'kafka-acls.sh', 'kaf
 Send-KafkaDocument @{ apiVersion = 'v1'; kind = 'ConfigMap'; metadata = @{
     name = 'kafka-cli'; namespace = $Namespace
 }; data = $cli }
+# Include the broker Secret version without printing or persisting its credential values. A new or
+# rotated client identity must restart Kafka so broker-entrypoint regenerates its JAAS file.
+$brokerSecret = Read-KafkaSecret 'kafka-broker-secrets'
+if (-not $brokerSecret) { throw 'kafka-broker-secrets was not created.' }
 # Put the checksum into the first apply too, avoiding two broker starts on fresh installation.
-$configText = (Get-Content "$PSScriptRoot/broker.yaml" -Raw) + ($scripts | ConvertTo-Json -Compress) + $cliSource
+$configText = (Get-Content "$PSScriptRoot/broker.yaml" -Raw) + ($scripts | ConvertTo-Json -Compress) +
+    $cliSource + $brokerSecret.metadata.resourceVersion
 $checksum = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($configText))).ToLowerInvariant()
+$brokerSecret = $null
 $items = @()
 # kubectl create emits separate JSON objects for multi-document YAML, not one JSON List.
 foreach ($yamlDocument in ((Get-Content "$PSScriptRoot/broker.yaml" -Raw) -split '(?m)^---[ \t]*\r?$')) {

@@ -81,6 +81,13 @@ spec:
       ports:
         - protocol: TCP
           port: 8082
+    - to:
+        - podSelector:
+            matchLabels:
+              app: chat-service
+      ports:
+        - protocol: TCP
+          port: 8085
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -100,7 +107,7 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [gateway, supplier-service, order-service, credit-service, admin-service]
+                values: [gateway, supplier-service, order-service, credit-service, admin-service, chat-service]
       ports:
         # L4 policy cannot restrict the other services to just the JWKS HTTP path.
         - protocol: TCP
@@ -354,7 +361,7 @@ spec:
             matchExpressions:
               - key: app
                 operator: In
-                values: [user-service, order-service, credit-service, admin-service, kafka, kafka-ui, kafka-init]
+                values: [user-service, order-service, credit-service, admin-service, chat-service, kafka, kafka-ui, kafka-init]
       ports:
         - protocol: TCP
           port: 9092

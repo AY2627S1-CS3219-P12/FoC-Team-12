@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: gateway
-          image: foc-gateway-service:local-22bc8cc
+          image: foc-gateway-service:local-323929b
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8088
@@ -36,6 +36,8 @@ spec:
               value: http://order-service:8082
             - name: ADMIN_SERVICE_URL
               value: http://admin-service.foc-local.svc.cluster.local.:8084
+            - name: CHAT_SERVICE_URL
+              value: http://chat-service.foc-local.svc.cluster.local.:8085
             - name: JAVA_TOOL_OPTIONS
               value: "-XX:MaxRAMPercentage=70.0 -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1"
           startupProbe:

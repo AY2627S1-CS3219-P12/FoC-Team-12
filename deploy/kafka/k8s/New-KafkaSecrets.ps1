@@ -14,16 +14,17 @@ if (-not $broker) {
     if ($claim) { throw 'Kafka storage exists without its broker Secret. Recover the original Secret; do not replace credentials.' }
     $passwords = @{}
     foreach ($key in @('KAFKA_ADMIN_PASSWORD', 'KAFKA_BROKER_PASSWORD', 'KAFKA_USER_SERVICE_PASSWORD',
-            'KAFKA_ORDER_SERVICE_PASSWORD', 'KAFKA_CREDIT_SERVICE_PASSWORD', 'KAFKA_NOTIFICATION_SERVICE_PASSWORD',
+            'KAFKA_ORDER_SERVICE_PASSWORD', 'KAFKA_CREDIT_SERVICE_PASSWORD', 'KAFKA_CHAT_SERVICE_PASSWORD',
+            'KAFKA_NOTIFICATION_SERVICE_PASSWORD',
             'KAFKA_ADMIN_SERVICE_PASSWORD', 'KAFKA_UI_BROKER_PASSWORD')) {
         $passwords[$key] = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
     }
     Ensure-KafkaSecret 'kafka-broker-secrets' $passwords
     $broker = Read-KafkaSecret 'kafka-broker-secrets'
 }
-# Upgrade only identities added after the first release (Admin, then Notification). Preserve every
-# existing credential.
+# Upgrade only identities added after the first release. Preserve every existing credential.
 foreach ($identity in @(@{ Key = 'KAFKA_ADMIN_SERVICE_PASSWORD'; Client = 'admin-kafka-client' },
+        @{ Key = 'KAFKA_CHAT_SERVICE_PASSWORD'; Client = 'chat-kafka-client' },
         @{ Key = 'KAFKA_NOTIFICATION_SERVICE_PASSWORD'; Client = 'notification-kafka-client' })) {
     if ($broker.data.ContainsKey($identity.Key)) { continue }
     $client = Read-KafkaSecret $identity.Client
@@ -37,7 +38,8 @@ foreach ($identity in @(@{ Key = 'KAFKA_ADMIN_SERVICE_PASSWORD'; Client = 'admin
 }
 $passwords = @{}
 foreach ($key in @('KAFKA_ADMIN_PASSWORD', 'KAFKA_BROKER_PASSWORD', 'KAFKA_USER_SERVICE_PASSWORD',
-        'KAFKA_ORDER_SERVICE_PASSWORD', 'KAFKA_CREDIT_SERVICE_PASSWORD', 'KAFKA_NOTIFICATION_SERVICE_PASSWORD',
+        'KAFKA_ORDER_SERVICE_PASSWORD', 'KAFKA_CREDIT_SERVICE_PASSWORD', 'KAFKA_CHAT_SERVICE_PASSWORD',
+        'KAFKA_NOTIFICATION_SERVICE_PASSWORD',
         'KAFKA_ADMIN_SERVICE_PASSWORD', 'KAFKA_UI_BROKER_PASSWORD')) {
     if (-not $broker.data.ContainsKey($key)) { throw "Broker Secret is missing $key; recover it before proceeding." }
     $passwords[$key] = ConvertFrom-KafkaSecretValue $broker.data[$key]
@@ -47,7 +49,7 @@ foreach ($key in @('KAFKA_ADMIN_PASSWORD', 'KAFKA_BROKER_PASSWORD', 'KAFKA_USER_
 }
 try {
     Ensure-KafkaSecret 'kafka-admin-client' @{ KAFKA_ADMIN_PASSWORD = $passwords.KAFKA_ADMIN_PASSWORD }
-    foreach ($service in @('user', 'order', 'credit', 'notification')) {
+    foreach ($service in @('user', 'order', 'credit', 'chat', 'notification')) {
         Ensure-KafkaSecret "$service-kafka-client" @{
             KAFKA_PASSWORD = $passwords["KAFKA_$($service.ToUpperInvariant())_SERVICE_PASSWORD"]
         }

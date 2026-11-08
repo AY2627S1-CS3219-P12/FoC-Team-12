@@ -50,6 +50,7 @@ pull without credentials; private repositories additionally require an `imagePul
 | Supplier | `arkanian4/foc-supplier-service:d3-1` |
 | Credit | `arkanian4/foc-credit-service:d3-1` |
 | Order | `arkanian4/foc-order-service:d3-1` |
+| Chat | local `foc-chat-service:local-323929b` until a reviewed published tag is selected |
 
 Runtime passwords/signing keys are created separately in each teammate's cluster. They are not
 included in images or Git. Never add them to application resources or frontend build settings.
@@ -115,9 +116,10 @@ another local port. All packaged frontends must use the same browser origin to s
 Port-forward attaches to one pod; reopen it after a rollout replaces that pod.
 
 Continue one service at a time: [Supplier](../../supplier-service/k8s/README.md),
-[Credit](../../credit-service/k8s/README.md), then [Order](../../order-service/k8s/README.md).
+[Credit](../../credit-service/k8s/README.md), [Order](../../order-service/k8s/README.md), then
+[Chat](../../chat-service/k8s/README.md).
 Their guides create private credentials, wait for their databases, deploy and verify independently.
-All three use cluster-internal Services rather than extra public NodePorts; the gateway is the
+All four use cluster-internal Services rather than extra public NodePorts; the gateway is the
 normal entry. User's NodePort remains available for the original manual exercise.
 
 ## Updates, scaling and future Order work

@@ -19,8 +19,12 @@ if ($Live) {
         Assert-LiveTcp "$service-service" "$service-db" 5432 $true
         if ($service -ne 'user') { Assert-LiveTcp "$service-service" user-service 8081 $true }
     }
+    Assert-LiveTcp chat-service chat-db 5432 $true
+    Assert-LiveTcp chat-service user-service 8081 $true
+    Assert-LiveTcp chat-service kafka 9092 $true
+    Assert-LiveTcp chat-service rabbitmq 5672 $true
     foreach ($service in @('user', 'order', 'credit')) { Assert-LiveTcp "$service-service" kafka 9092 $true }
-    foreach ($pair in @(@('user-service',8081), @('supplier-service',8080), @('order-service',8082), @('credit-service',8083))) {
+    foreach ($pair in @(@('user-service',8081), @('supplier-service',8080), @('order-service',8082), @('credit-service',8083), @('chat-service',8085))) {
         Assert-LiveTcp gateway $pair[0] $pair[1] $true
     }
     Assert-LiveTcp supplier-service user-db 5432 $false
@@ -75,7 +79,8 @@ try {
     # Small listeners model the real pod labels and ports, not the business applications/data.
     $roles = [ordered]@{
         gateway=@(8088); 'user-service'=@(8081); 'supplier-service'=@(8080)
-        'order-service'=@(8082); 'credit-service'=@(8083); 'admin-service'=@(8084); 'chat-service'=@(8085); 'admin-db'=@(5432)
+        'order-service'=@(8082); 'credit-service'=@(8083); 'admin-service'=@(8084); 'chat-service'=@(8085)
+        'admin-db'=@(5432); 'chat-db'=@(5432); rabbitmq=@(5672,15672)
         'user-db'=@(5432); 'supplier-db'=@(5432); 'order-db'=@(5432); 'credit-db'=@(5432)
         kafka=@(9092,9093); 'kafka-ui'=@(8080); 'kafka-init'=@(9999)
     }
@@ -123,10 +128,10 @@ try {
         Assert-TestTcp "$service-service" "$service-db" 5432 $true
         if ($service -ne 'user') { Assert-TestTcp "$service-service" user-service 8081 $true }
     }
-    foreach ($pair in @(@('user-service',8081),@('supplier-service',8080),@('order-service',8082),@('credit-service',8083))) {
+    foreach ($pair in @(@('user-service',8081),@('supplier-service',8080),@('order-service',8082),@('credit-service',8083),@('chat-service',8085))) {
         Assert-TestTcp gateway $pair[0] $pair[1] $true
     }
-    foreach ($service in @('user-service','order-service','credit-service','kafka-ui','kafka-init')) {
+    foreach ($service in @('user-service','order-service','credit-service','chat-service','kafka-ui','kafka-init')) {
         Assert-TestTcp $service kafka 9092 $true
     }
     Assert-TestTcp kafka kafka 9093 $true
@@ -134,7 +139,11 @@ try {
     Assert-TestTcp admin-service admin-db 5432 $true
     Assert-TestTcp admin-service user-service 8081 $true
     Assert-TestTcp admin-service kafka 9092 $true
-    # Chat's own ingress/egress policy is not supplied by Admin. No fake Chat integration.
+    Assert-TestTcp admin-service chat-service 8085 $true
+    Assert-TestTcp chat-service chat-db 5432 $true
+    Assert-TestTcp chat-service user-service 8081 $true
+    Assert-TestTcp chat-service kafka 9092 $true
+    Assert-TestTcp chat-service rabbitmq 5672 $true
     Assert-TestTcp admin-service user-db 5432 $false
     Assert-TestTcp gateway admin-db 5432 $false
     Assert-TestTcp user-service admin-db 5432 $false

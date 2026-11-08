@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('gateway', 'supplier', 'credit', 'order', 'admin')]
+    [ValidateSet('gateway', 'supplier', 'credit', 'order', 'admin', 'chat')]
     [string] $Service,
     [string] $Profile = 'foc-local',
     [switch] $CheckDatabaseRestart
@@ -47,7 +47,7 @@ function Assert-Http {
 
 $deployment = if ($Service -eq 'gateway') { 'gateway' } else { "$Service-service" }
 Invoke-Kubectl @('rollout', 'status', "deployment/$deployment", '--timeout=300s')
-$port = @{ gateway = 8088; supplier = 8080; credit = 8083; order = 8082; admin = 8084 }[$Service]
+$port = @{ gateway = 8088; supplier = 8080; credit = 8083; order = 8082; admin = 8084; chat = 8085 }[$Service]
 $base = "http://${deployment}:$port"
 Assert-Http "$base/actuator/health" 200
 if ($Service -eq 'gateway') {
@@ -88,6 +88,12 @@ switch ($Service) {
         Assert-Http "$base/api/orders" 401 -Method POST
         Assert-Http 'http://gateway:8088/docs/order/openapi.json' 200
         Assert-Http 'http://gateway:8088/api/orders' 401 -Method POST
+    }
+    chat {
+        Assert-Http "$base/api/chat/preferences" 401
+        Assert-Http "$base/api/chat/preferences" 401 -InvalidToken
+        Assert-Http 'http://gateway:8088/api/chat/preferences' 401
+        Invoke-Kubectl @('rollout', 'status', 'statefulset/rabbitmq', '--timeout=180s')
     }
 }
 
