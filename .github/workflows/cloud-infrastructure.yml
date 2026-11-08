@@ -7,7 +7,7 @@ on:
         description: Infrastructure operation
         required: true
         type: choice
-        options: [plan-core, apply-core, provision-runtime, destroy-staging]
+        options: [plan-core, apply-core, provision-runtime, apply-edge, destroy-staging]
       confirmation:
         description: Type DESTROY foc-staging only for destroy-staging
         required: false
@@ -91,6 +91,20 @@ jobs:
               exit 1
             fi
           done
+      - name: Validate CloudFront edge prerequisites
+        if: inputs.operation == 'provision-runtime' || inputs.operation == 'apply-edge'
+        run: |
+          terraform -chdir=deploy/aws/terraform/staging-edge init -backend-config="$RUNNER_TEMP/edge.hcl"
+          terraform -chdir=deploy/aws/terraform/staging-edge validate
+          managed_policies=$(aws cloudfront list-cache-policies --type managed --output json)
+          for name in Managed-CachingDisabled Managed-CachingOptimized; do
+            if ! jq -e --arg name "$name" '
+                any(.CachePolicyList.Items[]?; .CachePolicy.CachePolicyConfig.Name == $name)
+              ' <<< "$managed_policies" >/dev/null; then
+              echo "::error::Required CloudFront managed cache policy $name is unavailable."
+              exit 1
+            fi
+          done
       - uses: docker/setup-buildx-action@v4
         if: inputs.operation == 'provision-runtime'
       - uses: aws-actions/amazon-ecr-login@v2
@@ -128,19 +142,20 @@ jobs:
           export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID EXTERNAL_SECRETS_ROLE_ARN
           deploy/aws/scripts/deploy-platform.sh
       - name: Resolve private ALB
-        if: inputs.operation == 'provision-runtime'
+        if: inputs.operation == 'provision-runtime' || inputs.operation == 'apply-edge'
         id: alb
-        run: deploy/aws/scripts/resolve-alb.sh
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          deploy/aws/scripts/resolve-alb.sh
       - name: Create CloudFront edge
-        if: inputs.operation == 'provision-runtime'
+        if: inputs.operation == 'provision-runtime' || inputs.operation == 'apply-edge'
         env:
           TF_VAR_alb_arn: ${{ steps.alb.outputs.alb_arn }}
           TF_VAR_alb_dns_name: ${{ steps.alb.outputs.alb_dns_name }}
         run: |
-          terraform -chdir=deploy/aws/terraform/staging-edge init -backend-config="$RUNNER_TEMP/edge.hcl"
           terraform -chdir=deploy/aws/terraform/staging-edge apply -auto-approve
       - name: Smoke-test initial deployment
-        if: inputs.operation == 'provision-runtime'
+        if: inputs.operation == 'provision-runtime' || inputs.operation == 'apply-edge'
         run: |
           PUBLIC_URL=$(aws ssm get-parameter --name /foc/staging/public-url --query Parameter.Value --output text)
           export PUBLIC_URL
@@ -153,9 +168,11 @@ jobs:
         run: |
           aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
           terraform -chdir=deploy/aws/terraform/staging-edge init -backend-config="$RUNNER_TEMP/edge.hcl"
-          if terraform -chdir=deploy/aws/terraform/staging-edge state list | grep -q '^aws_cloudfront_distribution.gateway$'; then
-            TF_VAR_alb_arn=$(terraform -chdir=deploy/aws/terraform/staging-edge output -raw origin_alb_arn)
-            TF_VAR_alb_dns_name=$(terraform -chdir=deploy/aws/terraform/staging-edge output -raw origin_alb_dns_name)
+          edge_resources=$(terraform -chdir=deploy/aws/terraform/staging-edge state list)
+          if test -n "$edge_resources"; then
+            alb_json=$(aws elbv2 describe-load-balancers --names foc-staging-gateway)
+            TF_VAR_alb_arn=$(jq -r '.LoadBalancers[0].LoadBalancerArn' <<< "$alb_json")
+            TF_VAR_alb_dns_name=$(jq -r '.LoadBalancers[0].DNSName' <<< "$alb_json")
             export TF_VAR_alb_arn TF_VAR_alb_dns_name
             terraform -chdir=deploy/aws/terraform/staging-edge destroy -auto-approve
           else

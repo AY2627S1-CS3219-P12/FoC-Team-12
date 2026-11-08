@@ -149,6 +149,11 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    pushes immutable tags to ECR, applies the platform, creates CloudFront and smoke-tests the HTTPS
    URL. Set `AWS_STAGING_ENABLED=true` only after this passes.
 
+   The workflow validates the edge Terraform and resolves the required AWS-managed CloudFront
+   policies before building images. If runtime deployment and the private ALB already succeeded but
+   only CloudFront failed, run **apply-edge** after correcting the edge configuration. This resumes
+   the edge stack and smoke test without rebuilding images or redeploying Kubernetes workloads.
+
    Runtime provisioning pins the External Secrets chart and retries its download before invoking
    Helm. This isolates transient GitHub Releases/network timeouts from the Kubernetes installation;
    exhausting all download attempts still fails provisioning before any application rollout. The
