@@ -6,6 +6,9 @@ import { App } from './App'
 import { safeReturnTo, saveSession } from './auth/session'
 import { navigateTo } from './navigation'
 
+// The header bell polls on its own and has its own tests; keep it out of these fetch sequences.
+vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
+
 vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 
 afterEach(() => {
@@ -236,6 +239,7 @@ test('accepts only approved relative service return destinations', () => {
   expect(safeReturnTo('?returnTo=%2Fsuppliers%3Fsearch%3Dcoffee')).toBe('/suppliers?search=coffee')
   expect(safeReturnTo('?returnTo=%2Fadmin%2Fsuppliers%2Fnew')).toBe('/admin/suppliers/new')
   expect(safeReturnTo('?returnTo=%2Fcredits')).toBe('/credits')
+  expect(safeReturnTo('?returnTo=%2Fnotifications')).toBe('/notifications')
   expect(safeReturnTo('?returnTo=%2Fcredits%2Fhistory%3Fpage%3D2')).toBe('/credits/history?page=2')
   expect(safeReturnTo('?returnTo=https%3A%2F%2Fevil.example')).toBeNull()
   expect(safeReturnTo('?returnTo=%2F%2Fevil.example')).toBeNull()

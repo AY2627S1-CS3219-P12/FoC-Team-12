@@ -30,6 +30,7 @@ import {
 } from './auth/session'
 import { OtpInput } from './OtpInput'
 import { AdminUserManagement } from './AdminUserManagement'
+import { NotificationBell } from './components/NotificationBell'
 import { navigateTo } from './navigation'
 import bagIcon from './assets/foc-bag.svg'
 
@@ -733,6 +734,7 @@ export function App() {
                   onClick={() => { void selectWorkspaceRole('COURIER') }}>Courier</button>
               </span>
             </div>}
+            <NotificationBell />
             <details className="profile-account-menu" ref={accountMenuRef}>
               <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
                 <span aria-hidden="true" className="profile-account-avatar">{accountInitial}</span>

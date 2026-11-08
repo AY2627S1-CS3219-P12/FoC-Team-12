@@ -78,6 +78,7 @@ export function safeReturnTo(search = window.location.search): string | null {
       destination.pathname.startsWith("/credits/") ||
       destination.pathname.startsWith("/admin/reports/") ||
       destination.pathname === "/errands" || destination.pathname.startsWith("/errands/") ||
+      destination.pathname === "/notifications" || destination.pathname.startsWith("/notifications/") ||
       destination.pathname === "/admin" || destination.pathname.startsWith("/admin/cases/")
     ) {
       return `${destination.pathname}${destination.search}${destination.hash}`;

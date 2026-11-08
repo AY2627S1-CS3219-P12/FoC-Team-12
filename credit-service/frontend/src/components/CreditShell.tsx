@@ -15,6 +15,7 @@ import {
   type WorkspaceRole,
 } from '../auth/session'
 import { navigateTo } from '../navigation'
+import { NotificationBell } from './NotificationBell'
 import bagIcon from '../assets/foc-bag.svg'
 
 export function CreditShell({ children }: { children: ReactNode }) {
@@ -101,6 +102,7 @@ export function CreditShell({ children }: { children: ReactNode }) {
                 </span>
               </div>
             )}
+            <NotificationBell />
             {session ? (
               <details className="account-menu" ref={accountMenuRef}>
                 <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">

@@ -14,6 +14,7 @@ import {
   sessionChangedEvent,
   type WorkspaceRole,
 } from '../auth/session'
+import { NotificationBell } from './NotificationBell'
 
 import bagIcon from '../assets/foc-bag.svg'
 
@@ -125,6 +126,7 @@ export function AdminShell({
                 </span>
               </div>
             )}
+            <NotificationBell />
             {session ? (
               <details className="account-menu" ref={accountMenuRef}>
                 <summary

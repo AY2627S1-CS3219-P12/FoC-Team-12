@@ -1266,3 +1266,9 @@ button.button-danger {
 button.button-danger:hover:not(:disabled) {
   background: #912018;
 }
+
+/* Notification bell: shared across every frontend's header; keep in step with notification-service. */
+.notification-bell { position: relative; display: inline-grid; flex: 0 0 auto; width: 2.75rem; height: 2.75rem; border-radius: 0.625rem; color: var(--muted); place-items: center; text-decoration: none; transition: background 150ms ease, color 150ms ease; }
+.notification-bell svg { width: 1.25rem; height: 1.25rem; stroke-width: 1.8; }
+.notification-bell:hover, .notification-bell:focus-visible, .notification-bell[aria-current='page'] { background: var(--action-soft); color: var(--action); }
+.notification-badge { position: absolute; top: 0.3rem; right: 0.2rem; min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; border: 2px solid var(--surface); border-radius: 0.6rem; background: var(--danger); color: white; font-size: 0.68rem; font-weight: 700; line-height: 0.85rem; text-align: center; }
