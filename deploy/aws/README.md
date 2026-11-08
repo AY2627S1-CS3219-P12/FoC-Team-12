@@ -21,9 +21,14 @@ Browser
                      private RDS PostgreSQL (five databases/users)
 
 User / Order / Credit / Admin <-> Kafka StatefulSet on encrypted EBS
-External Secrets Operator     <-> AWS Secrets Manager through EKS Pod Identity
+External Secrets Operator     <-> AWS Secrets Manager through EKS IRSA
 Pods and EKS control plane    -> CloudWatch logs, metrics, dashboard and alarms
 ```
+
+External Secrets and the CloudWatch add-on use IAM Roles for Service Accounts (IRSA): their
+Kubernetes service accounts exchange EKS-issued OIDC tokens for short-lived AWS credentials.
+The NUS AWS organization explicitly denies the newer EKS Pod Identity API, so this environment
+uses IRSA instead. No long-lived AWS keys are stored in Kubernetes or GitHub.
 
 Only CloudFront is public. The ALB is internal, RDS is private, Kafka has no public listener and
 application Services are `ClusterIP`. The EKS API has a public authenticated endpoint because

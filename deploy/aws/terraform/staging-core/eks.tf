@@ -206,19 +206,37 @@ resource "aws_eks_addon" "metrics_server" {
   depends_on = [kubernetes_deployment_v1.capacity_bootstrap]
 }
 
-data "aws_iam_policy_document" "pod_identity_assume" {
+resource "aws_iam_openid_connect_provider" "eks" {
+  url            = local.eks_oidc_issuer
+  client_id_list = ["sts.amazonaws.com"]
+}
+
+data "aws_iam_policy_document" "cloudwatch_irsa_assume" {
   statement {
-    actions = ["sts:AssumeRole", "sts:TagSession"]
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
     principals {
-      type        = "Service"
-      identifiers = ["pods.eks.amazonaws.com"]
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:sub"
+      values   = ["system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"]
     }
   }
 }
 
 resource "aws_iam_role" "cloudwatch" {
   name               = "${local.name_prefix}-cloudwatch-observability"
-  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
+  assume_role_policy = data.aws_iam_policy_document.cloudwatch_irsa_assume.json
 }
 
 resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
@@ -227,16 +245,12 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
 }
 
 resource "aws_eks_addon" "cloudwatch" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "amazon-cloudwatch-observability"
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "amazon-cloudwatch-observability"
+  service_account_role_arn = aws_iam_role.cloudwatch.arn
   configuration_values = jsonencode({
     applicationSignals = { enabled = false }
   })
-
-  pod_identity_association {
-    role_arn        = aws_iam_role.cloudwatch.arn
-    service_account = "cloudwatch-agent"
-  }
 
   depends_on = [
     aws_iam_role_policy_attachment.cloudwatch_agent,
@@ -244,9 +258,32 @@ resource "aws_eks_addon" "cloudwatch" {
   ]
 }
 
+data "aws_iam_policy_document" "external_secrets_irsa_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:sub"
+      values   = ["system:serviceaccount:external-secrets:external-secrets"]
+    }
+  }
+}
+
 resource "aws_iam_role" "external_secrets" {
   name               = "${local.name_prefix}-external-secrets"
-  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
+  assume_role_policy = data.aws_iam_policy_document.external_secrets_irsa_assume.json
 }
 
 data "aws_iam_policy_document" "external_secrets" {
@@ -266,11 +303,4 @@ resource "aws_iam_role_policy" "external_secrets" {
   name   = "read-runtime-secrets"
   role   = aws_iam_role.external_secrets.id
   policy = data.aws_iam_policy_document.external_secrets.json
-}
-
-resource "aws_eks_pod_identity_association" "external_secrets" {
-  cluster_name    = aws_eks_cluster.main.name
-  namespace       = "external-secrets"
-  service_account = "external-secrets"
-  role_arn        = aws_iam_role.external_secrets.arn
 }

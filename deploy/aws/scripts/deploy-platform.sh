@@ -6,6 +6,7 @@ set -euo pipefail
 : "${RDS_HOST:?RDS_HOST is required}"
 : "${RDS_MASTER_SECRET_ARN:?RDS_MASTER_SECRET_ARN is required}"
 : "${ALB_SECURITY_GROUP_ID:?ALB_SECURITY_GROUP_ID is required}"
+: "${EXTERNAL_SECRETS_ROLE_ARN:?EXTERNAL_SECRETS_ROLE_ARN is required}"
 : "${GATEWAY_IMAGE:?GATEWAY_IMAGE is required}"
 : "${USER_IMAGE:?USER_IMAGE is required}"
 : "${SUPPLIER_IMAGE:?SUPPLIER_IMAGE is required}"
@@ -26,7 +27,8 @@ helm repo add external-secrets https://charts.external-secrets.io >/dev/null
 helm repo update external-secrets >/dev/null
 helm upgrade --install external-secrets external-secrets/external-secrets \
   --namespace external-secrets --create-namespace --wait --timeout 10m \
-  --set serviceAccount.name=external-secrets
+  --set serviceAccount.name=external-secrets \
+  --set-string "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=$EXTERNAL_SECRETS_ROLE_ARN"
 
 export AWS_REGION RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID
 export GATEWAY_IMAGE USER_IMAGE SUPPLIER_IMAGE ORDER_IMAGE CREDIT_IMAGE ADMIN_IMAGE
@@ -38,7 +40,14 @@ trap 'rm -f "$rendered"' EXIT
 awk 'BEGIN{RS="---"} /kind: (ClusterSecretStore|ExternalSecret)/ {print $0 "---"}' "$rendered" | kubectl apply -f -
 for name in user-service-secrets user-mail-secrets supplier-service-secrets order-service-secrets \
   credit-service-secrets admin-service-secrets kafka-broker-secrets kafka-ui-secrets rds-master; do
-  kubectl -n foc-staging wait --for=condition=Ready "externalsecret/$name" --timeout=5m
+  if ! kubectl -n foc-staging wait --for=condition=Ready "externalsecret/$name" --timeout=5m; then
+    echo "External Secret $name did not become ready; collecting diagnostics." >&2
+    kubectl get clustersecretstore aws-secrets-manager -o wide || true
+    kubectl -n foc-staging get externalsecrets -o wide || true
+    kubectl -n foc-staging describe "externalsecret/$name" || true
+    kubectl -n external-secrets logs deployment/external-secrets --tail=200 || true
+    exit 1
+  fi
 done
 
 kubectl -n foc-staging delete job database-bootstrap --ignore-not-found
