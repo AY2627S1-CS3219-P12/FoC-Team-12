@@ -84,11 +84,62 @@ merge_trust_file() {
     --secret-id "$name" --secret-string "file://$merged" >/dev/null
   printf 'Added missing service-auth fields to %s without rotating existing keys.\n' "$name"
 }
+merge_user_secret() {
+  local name=$1 file=$2 property=$3 current="$tmp/current-user.json" merged="$tmp/merged-user.json"
+  if ! has_value "$name"; then
+    put_file "$name" "$file"
+    return
+  fi
+  aws "${profile_args[@]}" --region "$region" secretsmanager get-secret-value \
+    --secret-id "$name" --query SecretString --output text > "$current"
+  jq -s --arg property "$property" --arg updateBootstrap "${ADMIN_BOOTSTRAP_EMAIL:+true}" '
+    .[0] as $generated
+    | .[1] as $current
+    | ($generated * $current) as $base
+    | (($current[$property] // "{}") | fromjson) as $oldTrust
+    | (($generated[$property] // "{}") | fromjson) as $requiredTrust
+    | ($base + {($property): (($oldTrust * $requiredTrust) | tojson)})
+    | if $updateBootstrap == "true" then
+        . + ($generated | {
+          ADMIN_BOOTSTRAP_EMAIL,
+          ADMIN_BOOTSTRAP_USERNAME,
+          ADMIN_BOOTSTRAP_PASSWORD
+        })
+      else . end
+  ' "$file" "$current" > "$merged"
+  if cmp -s <(jq -S . "$current") <(jq -S . "$merged"); then
+    printf 'Preserved existing %s.\n' "$name"
+    return
+  fi
+  aws "${profile_args[@]}" --region "$region" secretsmanager put-secret-value \
+    --secret-id "$name" --secret-string "file://$merged" >/dev/null
+  printf 'Updated required trust/bootstrap fields in %s without rotating other credentials.\n' "$name"
+}
 
 mail_secret="foc/$environment/user-mail-secrets"
 if ! has_value "$mail_secret"; then
   [[ -n ${SENDGRID_API_KEY:-} ]] || { echo 'Set SENDGRID_API_KEY in your shell; it will not be printed.' >&2; exit 1; }
   [[ -n ${SENDGRID_FROM_EMAIL:-} ]] || { echo 'Set SENDGRID_FROM_EMAIL in your shell.' >&2; exit 1; }
+fi
+
+bootstrap_count=0
+for value in "${ADMIN_BOOTSTRAP_EMAIL:-}" "${ADMIN_BOOTSTRAP_USERNAME:-}" "${ADMIN_BOOTSTRAP_PASSWORD:-}"; do
+  [[ -z $value ]] || bootstrap_count=$((bootstrap_count + 1))
+done
+if (( bootstrap_count != 0 && bootstrap_count != 3 )); then
+  echo 'Set ADMIN_BOOTSTRAP_EMAIL, ADMIN_BOOTSTRAP_USERNAME, and ADMIN_BOOTSTRAP_PASSWORD together.' >&2
+  exit 1
+fi
+if (( bootstrap_count == 3 )); then
+  normalized_email=$(printf '%s' "$ADMIN_BOOTSTRAP_EMAIL" | tr '[:upper:]' '[:lower:]')
+  case "$normalized_email" in
+    *@u.nus.edu|*@u.duke.nus.edu|*@u.yale-nus.edu.sg) ;;
+    *) echo 'ADMIN_BOOTSTRAP_EMAIL must use an eligible NUS student domain.' >&2; exit 1 ;;
+  esac
+  (( ${#ADMIN_BOOTSTRAP_USERNAME} >= 1 && ${#ADMIN_BOOTSTRAP_USERNAME} <= 20 )) \
+    || { echo 'ADMIN_BOOTSTRAP_USERNAME must be between 1 and 20 characters.' >&2; exit 1; }
+  (( ${#ADMIN_BOOTSTRAP_PASSWORD} >= 15 && ${#ADMIN_BOOTSTRAP_PASSWORD} <= 64 )) \
+    || { echo 'ADMIN_BOOTSTRAP_PASSWORD must be between 15 and 64 characters.' >&2; exit 1; }
 fi
 
 user_db=$(random_password)
@@ -121,8 +172,12 @@ jq -n --arg db "$user_db" --arg jwt "$jwt_key" --arg trust "$user_trusted_keys" 
   '{DB_PASSWORD:$db,JWT_PRIVATE_KEY:$jwt,USER_SERVICE_TRUSTED_KEYS:$trust}
    + (if $email == "" then {} else {ADMIN_BOOTSTRAP_EMAIL:$email,ADMIN_BOOTSTRAP_USERNAME:$username,ADMIN_BOOTSTRAP_PASSWORD:$password} end)' \
   > "$tmp/user.json"
-jq -n --arg key "$SENDGRID_API_KEY" --arg from "$SENDGRID_FROM_EMAIL" \
-  '{SENDGRID_API_KEY:$key,SENDGRID_FROM_EMAIL:$from}' > "$tmp/mail.json"
+if has_value "$mail_secret"; then
+  printf '{}\n' > "$tmp/mail.json"
+else
+  jq -n --arg key "$SENDGRID_API_KEY" --arg from "$SENDGRID_FROM_EMAIL" \
+    '{SENDGRID_API_KEY:$key,SENDGRID_FROM_EMAIL:$from}' > "$tmp/mail.json"
+fi
 jq -n --arg value "$supplier_db" '{DB_PASSWORD:$value}' > "$tmp/supplier.json"
 jq -n --arg value "$order_db" --arg trust "$chat_caller_trusted_keys" \
   '{DB_PASSWORD:$value,ORDER_SERVICE_TRUSTED_KEYS:$trust}' > "$tmp/order.json"
@@ -147,7 +202,7 @@ jq -n \
 jq -n --arg username kafka-viewer --arg password "$(random_password)" \
   '{KAFKA_UI_LOGIN_USERNAME:$username,KAFKA_UI_LOGIN_PASSWORD:$password}' > "$tmp/kafka-ui.json"
 
-merge_trust_file "foc/$environment/user-service-secrets" "$tmp/user.json" USER_SERVICE_TRUSTED_KEYS
+merge_user_secret "foc/$environment/user-service-secrets" "$tmp/user.json" USER_SERVICE_TRUSTED_KEYS
 put_file "$mail_secret" "$tmp/mail.json"
 put_file "foc/$environment/supplier-service-secrets" "$tmp/supplier.json"
 merge_trust_file "foc/$environment/order-service-secrets" "$tmp/order.json" ORDER_SERVICE_TRUSTED_KEYS

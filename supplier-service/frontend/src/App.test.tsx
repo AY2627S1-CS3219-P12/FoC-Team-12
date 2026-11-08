@@ -15,6 +15,9 @@ import { App } from './App'
 import { supplierApi } from './api/client'
 import { navigateTo } from './navigation'
 
+// The header bell polls on its own and has its own tests; keep it out of these fetch sequences.
+vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
+
 vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 
 const supplierId = 'ca9bd61f-93da-4500-9e9d-48de1bea52fa'

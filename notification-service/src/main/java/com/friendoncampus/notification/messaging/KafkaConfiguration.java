@@ -13,8 +13,8 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.util.backoff.ExponentialBackOff;
 
 /**
- * Kafka adapters for the event blueprint: the {@code credit.events} listener. Topics and ACLs are
- * created by the shared Kafka initializer, not here. Turned off with
+ * Kafka adapters: the {@code credit.events} and {@code order.lifecycle.events} listeners. Topics and
+ * ACLs are created by the shared Kafka initializer, not here. Turned off with
  * {@code NOTIFICATION_KAFKA_ENABLED=false}; nothing is then consumed.
  */
 @Configuration
@@ -22,10 +22,16 @@ import org.springframework.util.backoff.ExponentialBackOff;
 public class KafkaConfiguration {
 
     static final String CREDIT_EVENTS_DLT = "credit.events.DLT";
+    static final String ORDER_LIFECYCLE_EVENTS_DLT = "order.lifecycle.events.DLT";
 
     @Bean
     CreditEventsListener creditEventsListener(CreditEventHandler handler) {
         return new CreditEventsListener(handler);
+    }
+
+    @Bean
+    OrderLifecycleEventsListener orderLifecycleEventsListener(OrderLifecycleEventHandler handler) {
+        return new OrderLifecycleEventsListener(handler);
     }
 
     /**
@@ -37,11 +43,24 @@ public class KafkaConfiguration {
     @Bean
     ConcurrentKafkaListenerContainerFactory<String, String> creditEventsContainerFactory(
             ConsumerFactory<String, String> consumerFactory, KafkaTemplate<String, String> kafkaTemplate) {
+        return containerFactory(consumerFactory, kafkaTemplate, CREDIT_EVENTS_DLT);
+    }
+
+    /** The same rules for {@code order.lifecycle.events}, dead-lettering to its own one-partition DLT. */
+    @Bean
+    ConcurrentKafkaListenerContainerFactory<String, String> orderLifecycleEventsContainerFactory(
+            ConsumerFactory<String, String> consumerFactory, KafkaTemplate<String, String> kafkaTemplate) {
+        return containerFactory(consumerFactory, kafkaTemplate, ORDER_LIFECYCLE_EVENTS_DLT);
+    }
+
+    private static ConcurrentKafkaListenerContainerFactory<String, String> containerFactory(
+            ConsumerFactory<String, String> consumerFactory, KafkaTemplate<String, String> kafkaTemplate,
+            String deadLetterTopic) {
         ConcurrentKafkaListenerContainerFactory<String, String> factory = new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
         DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate,
-                (record, exception) -> new TopicPartition(CREDIT_EVENTS_DLT, 0));
+                (record, exception) -> new TopicPartition(deadLetterTopic, 0));
         ExponentialBackOff backOff = new ExponentialBackOff(500L, 2.0);
         backOff.setMaxAttempts(3);
         DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, backOff);

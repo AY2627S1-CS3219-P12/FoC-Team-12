@@ -1,6 +1,9 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { App } from './App'
+
+// The header bell polls on its own and has its own tests; keep it out of these fetch sequences.
+vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
 function mockFetch(fetcher: (url: string, options?: RequestInit) => unknown) {
   vi.stubGlobal('fetch', (url: string, options?: RequestInit) =>
     url.startsWith('/api/admin/cases?')

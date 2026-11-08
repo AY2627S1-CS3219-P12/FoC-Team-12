@@ -36,6 +36,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.friendoncampus.notification.messaging.CreditEventHandler;
+import com.friendoncampus.notification.messaging.OrderLifecycleEventHandler;
 import com.friendoncampus.notification.service.NotificationNotFoundException;
 import com.friendoncampus.notification.service.NotificationQueryService;
 import com.friendoncampus.notification.service.NotificationReadStateService;
@@ -86,6 +87,9 @@ class NotificationSecurityIntegrationTest {
 
     @MockitoBean
     private CreditEventHandler creditEventHandler;
+
+    @MockitoBean
+    private OrderLifecycleEventHandler orderLifecycleEventHandler;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
@@ -193,6 +197,15 @@ class NotificationSecurityIntegrationTest {
                 .isEqualTo(403);
         assertThat(get("/api/notifications/me/" + UUID.randomUUID() + "/read", token).statusCode()).isEqualTo(403);
         verify(readStateService, never()).markRead(any(), any());
+    }
+
+    @Test
+    void theNotificationsPageIsPublicButOnlyForReading() throws Exception {
+        // The page itself carries no data; its API calls still need a token.
+        assertThat(get("/notifications", null).statusCode()).isNotIn(401, 403);
+        assertThat(get("/notification-assets/index.js", null).statusCode()).isNotIn(401, 403);
+        assertThat(get("/api/notifications/me", null).statusCode()).isEqualTo(401);
+        assertThat(send("POST", "/notifications", null).statusCode()).isIn(401, 403);
     }
 
     @Test

@@ -22,10 +22,15 @@ Browser
 
 User / Order / Credit / Admin / Chat <-> Kafka StatefulSet on encrypted EBS
 Chat <-> RabbitMQ StatefulSet on encrypted EBS
-Chat -> private S3 attachment bucket through EKS Pod Identity
-External Secrets Operator     <-> AWS Secrets Manager through EKS Pod Identity
+Chat -> private S3 attachment bucket through EKS IRSA
+External Secrets Operator     <-> AWS Secrets Manager through EKS IRSA
 Pods and EKS control plane    -> CloudWatch logs, metrics, dashboard and alarms
 ```
+
+External Secrets and the CloudWatch add-on use IAM Roles for Service Accounts (IRSA): their
+Kubernetes service accounts exchange EKS-issued OIDC tokens for short-lived AWS credentials.
+The NUS AWS organization explicitly denies the newer EKS Pod Identity API, so this environment
+uses IRSA instead. No long-lived AWS keys are stored in Kubernetes or GitHub.
 
 Only CloudFront is public. The ALB is internal, RDS is private, Kafka has no public listener and
 application Services are `ClusterIP`. The EKS API has a public authenticated endpoint because
@@ -76,7 +81,9 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    deploy/aws/scripts/bootstrap-state.sh
    ```
 
-2. Initialize and apply the bootstrap stack. Use this repository's exact `owner/repository` name:
+2. Initialize and apply the bootstrap stack. Use this repository's exact `owner/repository` name.
+   The committed owner and repository IDs match GitHub's immutable OIDC subject for this repository;
+   a fork or replacement repository must override all three values:
 
    ```bash
    terraform -chdir=deploy/aws/terraform/bootstrap init \
@@ -87,9 +94,14 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    terraform -chdir=deploy/aws/terraform/bootstrap output
    ```
 
+   Re-run this bootstrap `apply` after an approved change to either GitHub workflow role. The
+   operation updates the scoped IAM policies in place; it does not recreate the staging cluster.
+
    If the AWS account already has a GitHub Actions OIDC provider, import that provider instead of
-   creating a duplicate. The trust conditions accept only this repository and the named protected
-   GitHub environments.
+   creating a duplicate. The trust conditions accept only this repository's immutable GitHub owner
+   and repository IDs and the named protected GitHub environments. Find replacement IDs through
+   GitHub's repository API and pass `github_repository_owner_id` and `github_repository_id` when
+   bootstrapping a different repository.
 
 3. In GitHub, create protected environments `aws-staging-infra` and `aws-staging-deploy`. Require
    an approver for infrastructure. Add these repository/environment variables:
@@ -116,27 +128,56 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    the scoped infrastructure role receives the new S3 permissions. This creates chargeable
    resources.
 
+   The core stack creates a tiny `foc-capacity-bootstrap/capacity-bootstrap` pause workload before
+   installing node-dependent add-ons. Its only purpose is to make a new EKS Auto Mode cluster
+   provision initial compute deterministically; application workloads still control meaningful
+   capacity and scaling.
+
 5. Initialize runtime values from a trusted workstation. The SendGrid values are read from shell
    variables and are never printed. Optional bootstrap-admin values are handled the same way.
 
    ```bash
    export SENDGRID_API_KEY='set-locally'
    export SENDGRID_FROM_EMAIL='verified@example.com'
-   export ADMIN_BOOTSTRAP_EMAIL='optional@example.com'
+   export ADMIN_BOOTSTRAP_EMAIL='student-id@u.nus.edu'
    export ADMIN_BOOTSTRAP_USERNAME='optional-admin'
    export ADMIN_BOOTSTRAP_PASSWORD='optional-strong-password'
    deploy/aws/scripts/configure-secrets.sh
    unset SENDGRID_API_KEY SENDGRID_FROM_EMAIL ADMIN_BOOTSTRAP_PASSWORD
    ```
 
-   Re-running the helper preserves existing values and adds newly required Kafka credentials
-   without rotating other clients. Rotate a value with an explicit
-   `aws secretsmanager put-secret-value --secret-id ... --secret-string file://...` command, then
-   restart only the affected deployment so External Secrets can project the new version.
+   Re-running the helper preserves existing secret versions. Supplying all three
+   `ADMIN_BOOTSTRAP_*` values explicitly updates only the bootstrap identity, which provides a
+   safe repair path for an invalid initial address without rotating database or signing keys.
+   The helper rejects bootstrap addresses outside the eligible NUS student domains before writing
+   them. Rotate any other value with an explicit `aws secretsmanager put-secret-value --secret-id
+   ... --secret-string file://...` command, then restart only the affected deployment so External
+   Secrets can project the new version.
+
+   The helper also migrates an existing Kafka broker secret forward when new service identities
+   are introduced: it adds only missing fields and never rotates credentials already in use.
+   Runtime provisioning validates the required Chat and Notification identities before building
+   images, then forces External Secrets to synchronize the current AWS version before Kafka starts.
 
 6. Run **AWS staging infrastructure -> provision-runtime**. It builds all seven deployed application images,
    pushes immutable tags to ECR, applies the platform, creates CloudFront and smoke-tests the HTTPS
    URL. Set `AWS_STAGING_ENABLED=true` only after this passes.
+
+   The workflow validates the edge Terraform and resolves the required AWS-managed CloudFront
+   policies before building images. If runtime deployment and the private ALB already succeeded but
+   only CloudFront failed, run **apply-edge** after correcting the edge configuration. This resumes
+   the edge stack and smoke test without rebuilding images or redeploying Kubernetes workloads.
+
+   Runtime provisioning pins the External Secrets chart and retries its download before invoking
+   Helm. This isolates transient GitHub Releases/network timeouts from the Kubernetes installation;
+   exhausting all download attempts still fails provisioning before any application rollout. The
+   deployment then restarts the External Secrets controller so a newly added IRSA service-account
+   annotation is injected into its pod even when Helm did not otherwise change the pod template.
+
+   The database bootstrap temporarily grants the RDS master user membership in each application
+   role while assigning database ownership, then revokes it. RDS master users are not PostgreSQL
+   superusers and cannot assign ownership to an unrelated role without that temporary membership.
+   Failed bootstrap and Kafka initializer jobs are detected immediately and print pod/job logs.
 
 ## Deployment and rollback
 

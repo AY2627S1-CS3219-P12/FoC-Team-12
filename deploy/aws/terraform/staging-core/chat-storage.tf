@@ -29,9 +29,9 @@ resource "aws_s3_bucket_public_access_block" "chat_attachments" {
 
 data "aws_iam_policy_document" "chat_attachment_bucket" {
   statement {
-    sid       = "DenyInsecureTransport"
-    effect    = "Deny"
-    actions   = ["s3:*"]
+    sid     = "DenyInsecureTransport"
+    effect  = "Deny"
+    actions = ["s3:*"]
     resources = [
       aws_s3_bucket.chat_attachments.arn,
       "${aws_s3_bucket.chat_attachments.arn}/*"
@@ -90,20 +90,36 @@ data "aws_iam_policy_document" "chat_attachments" {
   }
 }
 
+data "aws_iam_policy_document" "chat_service_irsa_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:sub"
+      values   = ["system:serviceaccount:foc-staging:chat-service"]
+    }
+  }
+}
+
 resource "aws_iam_role" "chat_service" {
   name               = "${local.name_prefix}-chat-service"
-  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
+  assume_role_policy = data.aws_iam_policy_document.chat_service_irsa_assume.json
 }
 
 resource "aws_iam_role_policy" "chat_attachments" {
   name   = "private-chat-attachments"
   role   = aws_iam_role.chat_service.id
   policy = data.aws_iam_policy_document.chat_attachments.json
-}
-
-resource "aws_eks_pod_identity_association" "chat_service" {
-  cluster_name    = aws_eks_cluster.main.name
-  namespace       = "foc-staging"
-  service_account = "chat-service"
-  role_arn        = aws_iam_role.chat_service.arn
 }

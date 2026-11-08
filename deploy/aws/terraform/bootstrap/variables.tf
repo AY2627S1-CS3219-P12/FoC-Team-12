@@ -19,6 +19,33 @@ variable "github_repository" {
   description = "GitHub owner/repository allowed to assume deployment roles."
   type        = string
   default     = "AY2627S1-CS3219-P12/FoC-Team-12"
+
+  validation {
+    condition     = can(regex("^[^/]+/[^/]+$", var.github_repository))
+    error_message = "github_repository must use the owner/repository format."
+  }
+}
+
+variable "github_repository_owner_id" {
+  description = "Immutable GitHub organization ID included in this repository's OIDC subject."
+  type        = string
+  default     = "332145308"
+
+  validation {
+    condition     = can(regex("^[1-9][0-9]*$", var.github_repository_owner_id))
+    error_message = "github_repository_owner_id must be a positive numeric GitHub ID."
+  }
+}
+
+variable "github_repository_id" {
+  description = "Immutable GitHub repository ID included in this repository's OIDC subject."
+  type        = string
+  default     = "1379941491"
+
+  validation {
+    condition     = can(regex("^[1-9][0-9]*$", var.github_repository_id))
+    error_message = "github_repository_id must be a positive numeric GitHub ID."
+  }
 }
 
 variable "state_bucket_name" {

@@ -38,6 +38,10 @@ public class ProcessedEvent {
     @Column(name = "processed_at", nullable = false)
     private OffsetDateTime processedAt;
 
+    /** Order lifecycle events only: the event's {@code sourceSequence}, for the gap check. */
+    @Column(name = "source_sequence")
+    private Long sourceSequence;
+
     protected ProcessedEvent() {
     }
 
@@ -51,6 +55,13 @@ public class ProcessedEvent {
         this.fingerprint = fingerprint;
         this.outcome = outcome;
         this.processedAt = processedAt;
+    }
+
+    /** An Order lifecycle receipt, which also records its {@code sourceSequence}. */
+    public ProcessedEvent(UUID eventId, String topic, String eventType, UUID aggregateId, UUID correlationId,
+            String fingerprint, String outcome, OffsetDateTime processedAt, long sourceSequence) {
+        this(eventId, topic, eventType, aggregateId, correlationId, fingerprint, outcome, processedAt);
+        this.sourceSequence = sourceSequence;
     }
 
     public UUID getEventId() {

@@ -1,6 +1,9 @@
 data "aws_iam_policy_document" "eks_cluster_assume" {
   statement {
-    actions = ["sts:AssumeRole"]
+    actions = [
+      "sts:AssumeRole",
+      "sts:TagSession"
+    ]
     principals {
       type        = "Service"
       identifiers = ["eks.amazonaws.com"]
@@ -16,6 +19,26 @@ resource "aws_iam_role" "eks_cluster" {
 resource "aws_iam_role_policy_attachment" "eks_cluster" {
   role       = aws_iam_role.eks_cluster.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_compute" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSComputePolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_block_storage" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSBlockStoragePolicyV2"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_load_balancing" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSLoadBalancingPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_networking" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy"
 }
 
 data "aws_iam_policy_document" "eks_node_assume" {
@@ -83,25 +106,17 @@ resource "aws_eks_cluster" "main" {
   depends_on = [
     aws_cloudwatch_log_group.eks_control_plane,
     aws_iam_role_policy_attachment.eks_cluster,
+    aws_iam_role_policy_attachment.eks_compute,
+    aws_iam_role_policy_attachment.eks_block_storage,
+    aws_iam_role_policy_attachment.eks_load_balancing,
+    aws_iam_role_policy_attachment.eks_networking,
     aws_iam_role_policy_attachment.eks_node_minimal,
     aws_iam_role_policy_attachment.eks_node_ecr
   ]
 }
 
-resource "aws_eks_access_entry" "infra" {
-  cluster_name  = aws_eks_cluster.main.name
-  principal_arn = var.github_infra_role_arn
-  type          = "STANDARD"
-}
-
-resource "aws_eks_access_policy_association" "infra" {
-  cluster_name  = aws_eks_cluster.main.name
-  principal_arn = var.github_infra_role_arn
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-
-  access_scope { type = "cluster" }
-  depends_on = [aws_eks_access_entry.infra]
-}
+# The GitHub infrastructure role creates this cluster. EKS therefore grants it the cluster-admin
+# bootstrap access entry automatically; declaring the same entry here causes a 409 duplicate.
 
 resource "aws_eks_access_entry" "deploy" {
   cluster_name  = aws_eks_cluster.main.name
@@ -121,24 +136,107 @@ resource "aws_eks_access_policy_association" "deploy" {
   depends_on = [aws_eks_access_entry.deploy]
 }
 
+# EKS Auto Mode provisions nodes in response to ordinary workload pods. A newly created cluster's
+# managed add-on pods can otherwise remain pending without triggering the first node, which makes
+# Terraform wait until its add-on timeout. This tiny, inert workload establishes initial capacity
+# before Terraform waits for Metrics Server and CloudWatch Observability.
+resource "kubernetes_namespace_v1" "capacity_bootstrap" {
+  metadata {
+    name = "foc-capacity-bootstrap"
+  }
+
+  depends_on = [aws_eks_cluster.main]
+}
+
+resource "kubernetes_deployment_v1" "capacity_bootstrap" {
+  metadata {
+    name      = "capacity-bootstrap"
+    namespace = kubernetes_namespace_v1.capacity_bootstrap.metadata[0].name
+    labels    = { app = "capacity-bootstrap" }
+  }
+
+  spec {
+    replicas                  = 1
+    progress_deadline_seconds = 1200
+
+    selector {
+      match_labels = { app = "capacity-bootstrap" }
+    }
+
+    template {
+      metadata {
+        labels = { app = "capacity-bootstrap" }
+      }
+
+      spec {
+        node_selector = {
+          "eks.amazonaws.com/compute-type" = "auto"
+        }
+
+        container {
+          name  = "pause"
+          image = "registry.k8s.io/pause:3.10.1"
+
+          resources {
+            requests = {
+              cpu    = "5m"
+              memory = "8Mi"
+            }
+            limits = {
+              cpu    = "10m"
+              memory = "16Mi"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  wait_for_rollout = true
+
+  timeouts {
+    create = "20m"
+  }
+}
+
 resource "aws_eks_addon" "metrics_server" {
   cluster_name = aws_eks_cluster.main.name
   addon_name   = "metrics-server"
+
+  depends_on = [kubernetes_deployment_v1.capacity_bootstrap]
 }
 
-data "aws_iam_policy_document" "pod_identity_assume" {
+resource "aws_iam_openid_connect_provider" "eks" {
+  url            = local.eks_oidc_issuer
+  client_id_list = ["sts.amazonaws.com"]
+}
+
+data "aws_iam_policy_document" "cloudwatch_irsa_assume" {
   statement {
-    actions = ["sts:AssumeRole", "sts:TagSession"]
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
     principals {
-      type        = "Service"
-      identifiers = ["pods.eks.amazonaws.com"]
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:sub"
+      values   = ["system:serviceaccount:amazon-cloudwatch:cloudwatch-agent"]
     }
   }
 }
 
 resource "aws_iam_role" "cloudwatch" {
   name               = "${local.name_prefix}-cloudwatch-observability"
-  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
+  assume_role_policy = data.aws_iam_policy_document.cloudwatch_irsa_assume.json
 }
 
 resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
@@ -147,23 +245,45 @@ resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
 }
 
 resource "aws_eks_addon" "cloudwatch" {
-  cluster_name = aws_eks_cluster.main.name
-  addon_name   = "amazon-cloudwatch-observability"
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "amazon-cloudwatch-observability"
+  service_account_role_arn = aws_iam_role.cloudwatch.arn
   configuration_values = jsonencode({
-    applicationSignals = { monitorAllServices = false }
+    applicationSignals = { enabled = false }
   })
 
-  pod_identity_association {
-    role_arn        = aws_iam_role.cloudwatch.arn
-    service_account = "cloudwatch-agent"
-  }
+  depends_on = [
+    aws_iam_role_policy_attachment.cloudwatch_agent,
+    kubernetes_deployment_v1.capacity_bootstrap
+  ]
+}
 
-  depends_on = [aws_iam_role_policy_attachment.cloudwatch_agent]
+data "aws_iam_policy_document" "external_secrets_irsa_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.eks.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "${local.eks_oidc_provider}:sub"
+      values   = ["system:serviceaccount:external-secrets:external-secrets"]
+    }
+  }
 }
 
 resource "aws_iam_role" "external_secrets" {
   name               = "${local.name_prefix}-external-secrets"
-  assume_role_policy = data.aws_iam_policy_document.pod_identity_assume.json
+  assume_role_policy = data.aws_iam_policy_document.external_secrets_irsa_assume.json
 }
 
 data "aws_iam_policy_document" "external_secrets" {
@@ -183,11 +303,4 @@ resource "aws_iam_role_policy" "external_secrets" {
   name   = "read-runtime-secrets"
   role   = aws_iam_role.external_secrets.id
   policy = data.aws_iam_policy_document.external_secrets.json
-}
-
-resource "aws_eks_pod_identity_association" "external_secrets" {
-  cluster_name    = aws_eks_cluster.main.name
-  namespace       = "external-secrets"
-  service_account = "external-secrets"
-  role_arn        = aws_iam_role.external_secrets.arn
 }

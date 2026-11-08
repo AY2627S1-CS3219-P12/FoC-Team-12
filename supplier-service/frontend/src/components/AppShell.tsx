@@ -12,6 +12,7 @@ import { useAuth } from '../auth/useAuth'
 import bagIcon from '../assets/foc-bag.svg'
 import { navigateTo } from '../navigation'
 import styles from './AppShell.module.css'
+import { NotificationBell } from './NotificationBell'
 
 export function AppShell() {
   const accountMenuRef = useRef<HTMLDetailsElement>(null)
@@ -92,6 +93,7 @@ export function AppShell() {
                 </span>
               </div>
             )}
+            <NotificationBell badgeClassName={styles.notificationBadge} className={styles.notificationBell} />
             {session ? (
               <>
                 <details className={styles.userMenu} ref={accountMenuRef}>

@@ -13,6 +13,7 @@ set -euo pipefail
 : "${ADMIN_IMAGE:?ADMIN_IMAGE is required}"
 : "${CHAT_IMAGE:?CHAT_IMAGE is required}"
 : "${CHAT_S3_BUCKET:?CHAT_S3_BUCKET is required}"
+: "${CHAT_SERVICE_ROLE_ARN:?CHAT_SERVICE_ROLE_ARN is required}"
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 manifest=$(mktemp)
@@ -25,6 +26,7 @@ sed \
   -e "s|ALB_SECURITY_GROUP_REPLACED_BY_DEPLOY_SCRIPT|$ALB_SECURITY_GROUP_ID|g" \
   -e "s|AWS_REGION_REPLACED_BY_DEPLOY_SCRIPT|$AWS_REGION|g" \
   -e "s|CHAT_S3_BUCKET_REPLACED_BY_DEPLOY_SCRIPT|$CHAT_S3_BUCKET|g" \
+  -e "s|CHAT_SERVICE_ROLE_ARN_REPLACED_BY_DEPLOY_SCRIPT|$CHAT_SERVICE_ROLE_ARN|g" \
   -e "s|image: foc-gateway-service:bootstrap|image: $GATEWAY_IMAGE|g" \
   -e "s|image: foc-user-service:bootstrap|image: $USER_IMAGE|g" \
   -e "s|image: foc-supplier-service:bootstrap|image: $SUPPLIER_IMAGE|g" \

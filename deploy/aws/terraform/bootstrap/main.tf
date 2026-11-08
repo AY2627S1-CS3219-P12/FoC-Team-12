@@ -1,7 +1,9 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  name_prefix = "foc-${var.environment}"
+  name_prefix                = "foc-${var.environment}"
+  github_repository_parts    = split("/", var.github_repository)
+  github_oidc_subject_prefix = "repo:${local.github_repository_parts[0]}@${var.github_repository_owner_id}/${local.github_repository_parts[1]}@${var.github_repository_id}"
   tags = {
     Project     = "friend-on-campus"
     Environment = var.environment
@@ -39,7 +41,7 @@ data "aws_iam_policy_document" "github_infra_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:aws-staging-infra"]
+      values   = ["${local.github_oidc_subject_prefix}:environment:aws-staging-infra"]
     }
   }
 }
@@ -63,7 +65,7 @@ data "aws_iam_policy_document" "github_deploy_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:aws-staging-deploy"]
+      values   = ["${local.github_oidc_subject_prefix}:environment:aws-staging-deploy"]
     }
   }
 }
@@ -118,6 +120,43 @@ data "aws_iam_policy_document" "infra" {
       "sts:GetCallerIdentity"
     ]
     resources = ["*"]
+  }
+
+  # The staging RDS instance uses the account's AWS-managed RDS key for storage and the
+  # Secrets Manager managed key for its generated master-password secret. Restrict key inspection
+  # to those aliases and restrict grant creation to the RDS key rather than granting the workflow
+  # general KMS access.
+  statement {
+    sid       = "UseRdsManagedKey"
+    actions   = ["kms:DescribeKey"]
+    resources = ["arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:key/*"]
+
+    condition {
+      test     = "ForAnyValue:StringEquals"
+      variable = "kms:ResourceAliases"
+      values = [
+        "alias/aws/rds",
+        "alias/aws/secretsmanager"
+      ]
+    }
+  }
+
+  statement {
+    sid       = "GrantRdsManagedKeyToAws"
+    actions   = ["kms:CreateGrant"]
+    resources = ["arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:key/*"]
+
+    condition {
+      test     = "ForAnyValue:StringEquals"
+      variable = "kms:ResourceAliases"
+      values   = ["alias/aws/rds"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
   }
 
   statement {
@@ -187,6 +226,25 @@ data "aws_iam_policy_document" "infra" {
     ]
   }
 
+  # EKS IAM Roles for Service Accounts (IRSA) requires an IAM OIDC provider for
+  # this cluster's issuer. Scope management to EKS issuer URLs in the staging region.
+  statement {
+    sid = "ManageEksOidcProvider"
+    actions = [
+      "iam:AddClientIDToOpenIDConnectProvider",
+      "iam:CreateOpenIDConnectProvider",
+      "iam:DeleteOpenIDConnectProvider",
+      "iam:GetOpenIDConnectProvider",
+      "iam:RemoveClientIDFromOpenIDConnectProvider",
+      "iam:TagOpenIDConnectProvider",
+      "iam:UntagOpenIDConnectProvider",
+      "iam:UpdateOpenIDConnectProviderThumbprint"
+    ]
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/oidc.eks.${var.aws_region}.amazonaws.com/id/*"
+    ]
+  }
+
   statement {
     sid       = "CreateRequiredServiceLinkedRoles"
     actions   = ["iam:CreateServiceLinkedRole"]
@@ -198,6 +256,7 @@ data "aws_iam_policy_document" "infra" {
       values = [
         "autoscaling.amazonaws.com",
         "cloudfront.amazonaws.com",
+        "vpcorigin.cloudfront.amazonaws.com",
         "eks.amazonaws.com",
         "elasticloadbalancing.amazonaws.com",
         "rds.amazonaws.com",

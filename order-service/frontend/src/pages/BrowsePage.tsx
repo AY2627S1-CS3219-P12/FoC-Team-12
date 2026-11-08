@@ -1,10 +1,14 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
+import { ArrowRight, SearchX } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { fetchOpenPool, type PoolQuery, type PoolSort } from '../api/orderApi'
 import { ErrandTabs } from '../components/ErrandTabs'
+import { RouteLine } from '../components/RouteLine'
+import { ErrandListSkeleton } from '../components/Skeleton'
 import { StateBadge } from '../components/StateBadge'
-import { formatDeadline, locationName } from '../utils/orderFormatting'
+import { StatePanel } from '../components/StatePanel'
+import { formatDeadline } from '../utils/orderFormatting'
 
 const FILTER_KEY = 'foc.errands.browse'
 
@@ -78,6 +82,15 @@ export function BrowsePage() {
     setQuery(next)
   }
 
+  const filtered = query.minReward !== undefined || query.maxReward !== undefined
+  const clearFilters = () => {
+    const next: PoolQuery = { sort: query.sort, page: 0 }
+    setFormError('')
+    setDraft({ minReward: '', maxReward: '', sort: query.sort })
+    saveQuery(next)
+    setQuery(next)
+  }
+
   const page = pool.data
   return (
     <>
@@ -93,19 +106,28 @@ export function BrowsePage() {
           <h2 className="visually-hidden" id="results-heading">
             Open errands
           </h2>
-          {pool.isPending && <p className="subtle">Loading errands…</p>}
+          {pool.isPending && <ErrandListSkeleton label="Loading errands…" />}
           {pool.isError && (
             <div className="notice notice-error" role="alert">
               We couldn't load errands. {pool.error.message}
             </div>
           )}
           {page && page.items.length === 0 && (
-            <div className="card state-panel">
-              <h2>No matching errands</h2>
-              <p>
-                No open errands match these filters. Try a wider reward range.
-              </p>
-            </div>
+            <StatePanel
+              action={
+                filtered && (
+                  <button className="button-secondary" onClick={clearFilters} type="button">
+                    Clear filters
+                  </button>
+                )
+              }
+              icon={SearchX}
+              title="No matching errands"
+            >
+              {filtered
+                ? 'No open errands match these filters. Try a wider reward range.'
+                : 'No open errands right now. New requests appear here as students post them.'}
+            </StatePanel>
           )}
           {page && page.items.length > 0 && (
             <>
@@ -120,10 +142,7 @@ export function BrowsePage() {
                       <h3>{order.title}</h3>
                       <span className="reward">{order.creditReward} cr</span>
                     </div>
-                    <p>
-                      {locationName(order.pickupLocationName)} →{' '}
-                      {locationName(order.dropoffLocationName)}
-                    </p>
+                    <RouteLine order={order} />
                     <p>Pick up by {formatDeadline(order.pickupDeadline)}</p>
                     <div className="errand-card-foot">
                       <StateBadge state={order.state} />
@@ -132,7 +151,7 @@ export function BrowsePage() {
                         className="text-link"
                         to={`/errands/${order.id}`}
                       >
-                        View →
+                        View <ArrowRight aria-hidden="true" />
                       </Link>
                     </div>
                   </li>

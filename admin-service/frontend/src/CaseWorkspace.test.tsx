@@ -3,6 +3,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { saveSession } from './auth/session'
 
+// The header bell polls on its own and has its own tests; keep it out of these fetch sequences.
+vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
+
 const id = '10000000-0000-4000-8000-000000000001'
 const actor = '20000000-0000-4000-8000-000000000001'
 const order = '30000000-0000-4000-8000-000000000001'

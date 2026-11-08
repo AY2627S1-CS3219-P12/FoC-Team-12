@@ -25,7 +25,16 @@ All signed-in service pages use the same shell and order:
 1. Friend on Campus brand, linking to `/`.
 2. `Home`, `Errands`, `Suppliers`, `Credits`; append `Admin` only in Admin mode.
 3. Requester/Courier selector for participant modes.
-4. Account menu with profile, permitted administration actions and sign out.
+4. Notification bell, signed in only: a Lucide `Bell` linking to `/notifications`, with the unread
+   count as a small badge (`9+` above nine) and in its accessible name ("Notifications, 3 unread").
+   It is `2.75rem` square with a `1.25rem` icon, centred, and marked current on the Notifications
+   page. Header rules for `1rem` navigation icons must exclude the bell.
+5. Account menu with profile, permitted administration actions and sign out.
+
+The bell is the same `NotificationBell.tsx` and `useUnreadCount.ts` copied into every frontend's
+`src/components/`; Notification Service owns them and the copies must stay identical. It polls only
+the unread count, about every 30 seconds while the tab is visible, keeps the last count when a poll
+fails rather than showing `0`, and stops when the session ends.
 
 The active route uses text colour plus a 3 px underline. Navigation items use Lucide outline icons
 with accessible text; icons are supporting cues, not replacements for labels. Desktop headers are

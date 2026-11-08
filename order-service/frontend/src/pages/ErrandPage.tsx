@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { MessageCircle } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft, CircleAlert, MessageCircle, RotateCcw, SearchX } from 'lucide-react'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   fetchOrder,
   type Order,
@@ -15,10 +15,15 @@ import { ProgressCard } from '../components/ProgressCard'
 import { RouteSummary } from '../components/RouteSummary'
 import { StateBadge } from '../components/StateBadge'
 import { ErrandReportPanel } from '../components/ErrandReportPanel'
+import { ErrandDetailSkeleton } from '../components/Skeleton'
+import { StatePanel } from '../components/StatePanel'
+import { homeFor, useSessionRole } from '../hooks/useSessionRole'
 import {
   credits,
   errandReference,
   formatDeadline,
+  REPOSTABLE_STATES,
+  repostPath,
   reservationFailure,
 } from '../utils/orderFormatting'
 
@@ -61,6 +66,8 @@ type Confirmation = {
  */
 export function ErrandPage() {
   const { orderId = '' } = useParams()
+  // Re-renders when the header switches role; the session is re-read for the new role.
+  const role = useSessionRole()
   const session = readSession()
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState<Confirmation | null>(null)
@@ -80,25 +87,43 @@ export function ErrandPage() {
     onSettled: () => setConfirming(null),
   })
 
-  if (errand.isPending) return <p className="subtle">Loading errand…</p>
+  if (errand.isPending) return <ErrandDetailSkeleton label="Loading errand…" />
   if (errand.isError) {
     const notFound =
       errand.error instanceof OrderApiError && errand.error.status === 404
     return (
-      <section className="card state-panel">
-        <h2>
-          {notFound ? 'Errand not found' : "We couldn't load this errand"}
-        </h2>
-        <p>
+      <>
+        <StatePanel
+          action={
+            notFound ? (
+              <Link className="button-secondary" to="/errands">
+                <ArrowLeft aria-hidden="true" /> Back to errands
+              </Link>
+            ) : (
+              <button
+                aria-busy={errand.isFetching}
+                disabled={errand.isFetching}
+                onClick={() => void errand.refetch()}
+                type="button"
+              >
+                {errand.isFetching ? 'Trying again…' : 'Try again'}
+              </button>
+            )
+          }
+          icon={notFound ? SearchX : CircleAlert}
+          title={notFound ? 'Errand not found' : "We couldn't load this errand"}
+        >
           {notFound
             ? 'It may have been taken or it is no longer open.'
-            : errand.error.message}
-        </p>
-        <Link className="text-link" to="/errands">
-          Back to errands
-        </Link>
-        {notFound && <ErrandReportPanel key={`${session?.userId}.${session?.role}.${orderId}`} orderId={orderId} />}
-      </section>
+            : `${errand.error.message} Check your connection and try again.`}
+        </StatePanel>
+        {notFound && (
+          <ErrandReportPanel
+            key={`${session?.userId}.${session?.role}.${orderId}`}
+            orderId={orderId}
+          />
+        )}
+      </>
     )
   }
 
@@ -110,6 +135,11 @@ export function ErrandPage() {
       : userId && userId === order.courierId
         ? 'courier'
         : 'browser'
+  // Only the requester's own errand fits Requester mode; Courier mode is for running errands.
+  const participantMode =
+    session?.role === 'REQUESTER' || session?.role === 'COURIER'
+  if (participantMode && (role === 'REQUESTER') !== (view === 'requester'))
+    return <Navigate replace to={homeFor(role)} />
   const run = (next: OrderAction) => action.mutate(next)
   const ask = (confirmation: Confirmation) => {
     action.reset()
@@ -123,7 +153,7 @@ export function ErrandPage() {
           className="text-link"
           to={view === 'browser' ? '/errands/browse' : '/errands/mine'}
         >
-          ← Back
+          <ArrowLeft aria-hidden="true" /> Back
         </Link>
       </div>
       <div className="two-column">
@@ -221,6 +251,13 @@ export function ErrandPage() {
                 Confirm receipt · Transfer {credits(order.creditReward)}
               </button>
             )}
+            {view === 'requester' &&
+              session?.role === 'REQUESTER' &&
+              REPOSTABLE_STATES.includes(order.state) && (
+                <Link className="button-secondary" to={repostPath(order.id)}>
+                  <RotateCcw aria-hidden="true" /> Post again
+                </Link>
+              )}
             {view === 'requester' &&
               session?.role === 'REQUESTER' &&
               order.state === 'OPEN' &&

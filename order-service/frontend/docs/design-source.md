@@ -15,9 +15,15 @@ The frames were shared as screenshots, so node IDs are not recorded yet.
 
 ## Visual language
 
-Same tokens as the Credit and Supplier frontends: Public Sans; canvas `#f5f7f5`, surface white,
-ink `#20332d`, muted `#57655f`, action `#23654e`, border `#d4ddd7`; 12 px card radius; 375 px mobile
-and 1280 px desktop reference widths.
+The shared [product design contract](../../../design.md) defines the shell, colours, type, shape,
+component states and accessibility checks; it is not repeated here. Order-specific choices on top:
+
+- Loading errands show placeholders in the shape of the list or errand detail, labelled for screen
+  readers; they do not animate under reduced motion.
+- Empty, error and not-found screens use one icon panel with the next useful action: Request help
+  or Find errands on an empty Active list, Clear filters when filters hide every open errand, and
+  Try again when an errand fails to load.
+- Routes and links use Lucide icons (pickup and drop-off pins, arrows) instead of text symbols.
 
 ## Adaptations to the API
 
@@ -56,8 +62,18 @@ The backend contract wins over example data in Figma:
   credit account (with a link to set it up), or a generic retry message; a deadline that passes
   while waiting is explained too. After 30 seconds without an answer the form unlocks and links to
   the errand, which opens on its own once Credit answers.
+- **Post again** copies one of the requester's own ended errands (completed, cancelled, expired or
+  not posted) into Request help through `/errands/new?from=<id>`, offered on My errands → Past and on
+  the errand page in a Requester session. Title, locations, reward and description are filled in;
+  Pick up by is left empty and focused. A location Supplier no longer lists is cleared with a note
+  naming it. Only empty fields are filled, and only from the caller's own errand; anything else
+  opens an empty form saying it couldn't be copied. Posting creates a new errand through the usual
+  credit check and reservation wait; the original is unchanged.
 - **Requester/Courier tabs** follow the session role switch in the header, because the API
   authorises actions by the session role. A Requester sees **Request help · My errands**, a Courier
   **Run errands · My errands**, as side-by-side text tabs with an underline on the current one.
   Opening the other role's screen, or switching role while on one, goes to the current role's own
   screen (`/errands/new` for Requester, `/errands/browse` for Courier).
+- **An errand page follows the header role too.** Requester mode shows only the user's own errands;
+  Courier mode shows errands they run or could accept. Opening any other errand in that role, or
+  switching role while on one, goes to the current role's own screen. Admin sessions are unchanged.

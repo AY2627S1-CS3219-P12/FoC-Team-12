@@ -17,3 +17,8 @@ variable "alb_dns_name" {
   type        = string
   description = "Private DNS name of the Gateway ALB."
 }
+
+variable "alb_security_group_id" {
+  type        = string
+  description = "Security group attached to the private Gateway ALB."
+}

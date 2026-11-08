@@ -2,13 +2,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useState } from 'react'
 import { ErrandFormFields } from '../components/ErrandFormFields'
 import { ErrandTabs } from '../components/ErrandTabs'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { createOrder, fetchOrder, OrderApiError } from '../api/orderApi'
 import { fetchCampusLocations, fetchMyCredits } from '../api/sharedApi'
+import { readSession } from '../auth/session'
 import { credits } from '../utils/orderFormatting'
 import {
   EMPTY,
   type Errors,
+  fieldsForRepost,
   type FieldName,
   type Fields,
   validate,
@@ -34,12 +36,15 @@ function serverErrors(error: OrderApiError): Errors {
   return mapped
 }
 
-/** Figma "Create errand" ("Request a hand"). */
+/** Figma "Create errand" ("Request a hand"); `?from=<id>` starts from one of the requester's errands. */
 export function CreateErrandPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [fields, setFields] = useState<Fields>(EMPTY)
   const [errors, setErrors] = useState<Errors>({})
+  const fromId = useSearchParams()[0].get('from')
+  // Which `from` errand the form was already filled from, and how that went.
+  const [copy, setCopy] = useState<{ id: string; title: string | null } | null>(null)
   // The errand just posted while Credit decides on its reservation; the form stays until then.
   const [posted, setPosted] = useState<{ id: string; reward: number } | null>(null)
   const [slowId, setSlowId] = useState<string | null>(null)
@@ -54,6 +59,37 @@ export function CreateErrandPage() {
     queryKey: ['credits', 'me'],
     queryFn: fetchMyCredits,
   })
+  const source = useQuery({
+    queryKey: ['orders', fromId],
+    queryFn: () => fetchOrder(fromId!),
+    enabled: fromId !== null,
+    retry: false,
+  })
+
+  // Fill in once, after the errand and the location list have answered. Only the requester's own
+  // errand is copied, and only into fields that are still empty, so nothing typed is overwritten.
+  const locationsSettled = locations.isSuccess || locations.isError
+  if (fromId && copy?.id !== fromId && !source.isPending && locationsSettled) {
+    const own =
+      source.data && source.data.requesterId === readSession()?.userId
+        ? source.data
+        : null
+    setCopy({ id: fromId, title: own?.title ?? null })
+    if (own) {
+      const repost = fieldsForRepost(own, locations.data)
+      setFields((current) => {
+        const merged = { ...current }
+        for (const name of Object.keys(merged) as FieldName[])
+          if (!merged[name]) merged[name] = repost.fields[name]
+        return merged
+      })
+      setErrors((current) => ({ ...repost.errors, ...current }))
+    }
+  }
+  const copied = copy !== null && copy.id === fromId && copy.title !== null
+  useEffect(() => {
+    if (copied) document.getElementById('field-pickupDeadline')?.focus()
+  }, [copied])
   const create = useMutation({
     mutationFn: createOrder,
     onSuccess: (order) => {
@@ -183,6 +219,18 @@ export function CreateErrandPage() {
           <h2 className="visually-hidden" id="create-heading">
             Errand details
           </h2>
+          {fromId && copy?.id !== fromId && (
+            <p className="notice notice-next" role="status">
+              Copying your errand…
+            </p>
+          )}
+          {copy?.id === fromId && (
+            <p className="notice notice-next" role="status">
+              {copy.title !== null
+                ? `Copied from “${copy.title}”. Choose a new pickup time, then post.`
+                : "We couldn't copy that errand. Fill in the details below."}
+            </p>
+          )}
           <fieldset className="errand-fields" disabled={waiting}>
           <ErrandFormFields
             errors={errors}
@@ -190,6 +238,11 @@ export function CreateErrandPage() {
             locations={locations.data}
             locationsFailed={locations.isError}
             maxReward={balance.data?.availableBalance}
+            deadlineHint={
+              copied
+                ? 'Choose a new pickup time. If nobody accepts by then, your request expires.'
+                : undefined
+            }
             onChange={update}
             rewardHint="Reserved from your credits when you post."
           />
@@ -226,6 +279,7 @@ export function CreateErrandPage() {
               aria-describedby={
                 credit.message ? 'credit-check-message' : undefined
               }
+              aria-busy={create.isPending || waiting}
               disabled={create.isPending || waiting || !credit.canPost}
               id="submit-errand"
               type="submit"

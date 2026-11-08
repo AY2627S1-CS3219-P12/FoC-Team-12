@@ -253,7 +253,11 @@ spec: { type: ClusterIP, selector: { app: admin-service }, ports: [{ name: http,
 ---
 apiVersion: v1
 kind: ServiceAccount
-metadata: { name: chat-service, namespace: foc-staging }
+metadata:
+  name: chat-service
+  namespace: foc-staging
+  annotations:
+    eks.amazonaws.com/role-arn: CHAT_SERVICE_ROLE_ARN_REPLACED_BY_DEPLOY_SCRIPT
 automountServiceAccountToken: true
 ---
 apiVersion: apps/v1

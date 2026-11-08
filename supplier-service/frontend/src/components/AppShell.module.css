@@ -61,7 +61,7 @@
 }
 
 .serviceNav a svg,
-.actions > a svg {
+.actions > a:not(.notificationBell) svg {
   width: 1rem;
   height: 1rem;
   flex: 0 0 auto;
@@ -148,7 +148,7 @@
   cursor: wait;
 }
 
-.actions a,
+.actions a:not(.notificationBell),
 .actions button {
   display: inline-flex;
   align-items: center;
@@ -350,3 +350,9 @@
     padding: 2.25rem var(--foc-space-32) var(--foc-space-56);
   }
 }
+
+/* Notification bell: shared across every frontend's header; keep in step with notification-service. */
+.notificationBell { position: relative; display: inline-grid; flex: 0 0 auto; width: 2.75rem; height: 2.75rem; border-radius: 0.625rem; color: var(--foc-muted); place-items: center; text-decoration: none; transition: background 150ms ease, color 150ms ease; }
+.notificationBell svg { width: 1.25rem; height: 1.25rem; stroke-width: 1.8; }
+.notificationBell:hover, .notificationBell:focus-visible, .notificationBell[aria-current='page'] { background: var(--foc-action-soft); color: var(--foc-action); }
+.notificationBadge { position: absolute; top: 0.3rem; right: 0.2rem; min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; border: 2px solid var(--foc-surface); border-radius: 0.6rem; background: var(--foc-danger); color: white; font-size: 0.68rem; font-weight: 700; line-height: 0.85rem; text-align: center; }

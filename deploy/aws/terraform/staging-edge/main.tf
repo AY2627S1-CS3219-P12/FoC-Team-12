@@ -9,6 +9,16 @@ locals {
   origin_id = "${local.name_prefix}-gateway"
 }
 
+# Resolve AWS-managed policies by their stable names instead of duplicating opaque IDs. A typo in
+# an ID is otherwise accepted by Terraform validation and rejected only during distribution creation.
+data "aws_cloudfront_cache_policy" "caching_disabled" {
+  name = "Managed-CachingDisabled"
+}
+
+data "aws_cloudfront_cache_policy" "caching_optimized" {
+  name = "Managed-CachingOptimized"
+}
+
 resource "aws_cloudfront_vpc_origin" "gateway" {
   vpc_origin_endpoint_config {
     name                   = local.origin_id
@@ -22,6 +32,34 @@ resource "aws_cloudfront_vpc_origin" "gateway" {
       quantity = 1
     }
   }
+}
+
+data "aws_security_group" "gateway_alb" {
+  id = var.alb_security_group_id
+}
+
+# CloudFront creates this service-managed group together with the VPC origin. Referencing the group
+# explicitly follows AWS's VPC-origin guidance and avoids relying on the source IP of its ENIs.
+data "aws_security_group" "cloudfront_vpc_origin" {
+  filter {
+    name   = "group-name"
+    values = ["CloudFront-VPCOrigins-Service-SG"]
+  }
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_security_group.gateway_alb.vpc_id]
+  }
+
+  depends_on = [aws_cloudfront_vpc_origin.gateway]
+}
+
+resource "aws_vpc_security_group_ingress_rule" "cloudfront_to_gateway" {
+  security_group_id            = var.alb_security_group_id
+  referenced_security_group_id = data.aws_security_group.cloudfront_vpc_origin.id
+  description                  = "HTTP from CloudFront VPC origin"
+  ip_protocol                  = "tcp"
+  from_port                    = 80
+  to_port                      = 80
 }
 
 resource "aws_cloudfront_origin_request_policy" "dynamic" {
@@ -59,7 +97,7 @@ resource "aws_cloudfront_distribution" "gateway" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
 
-    cache_policy_id          = "413f160b-67d0-4c5d-9953-2b79a008a20e"
+    cache_policy_id          = data.aws_cloudfront_cache_policy.caching_disabled.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.dynamic.id
   }
 
@@ -72,7 +110,7 @@ resource "aws_cloudfront_distribution" "gateway" {
       allowed_methods        = ["GET", "HEAD", "OPTIONS"]
       cached_methods         = ["GET", "HEAD"]
       compress               = true
-      cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+      cache_policy_id        = data.aws_cloudfront_cache_policy.caching_optimized.id
     }
   }
 
@@ -82,8 +120,12 @@ resource "aws_cloudfront_distribution" "gateway" {
 
   viewer_certificate {
     cloudfront_default_certificate = true
-    minimum_protocol_version       = "TLSv1.2_2021"
+    # AWS fixes this value at TLSv1 for its generated *.cloudfront.net certificate. Selecting a
+    # newer viewer policy requires a custom domain and ACM certificate in us-east-1.
+    minimum_protocol_version = "TLSv1"
   }
+
+  depends_on = [aws_vpc_security_group_ingress_rule.cloudfront_to_gateway]
 }
 
 resource "aws_ssm_parameter" "public_url" {

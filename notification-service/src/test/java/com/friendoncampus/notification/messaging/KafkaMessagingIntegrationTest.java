@@ -42,7 +42,8 @@ import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * The {@code credit.events} listener against a real broker and PostgreSQL (Testcontainers). Topics
+ * The {@code credit.events} and {@code order.lifecycle.events} listeners against a real broker and
+ * PostgreSQL (Testcontainers). Topics
  * are created here, as the shared kafka-init does in Compose. Requires Docker.
  */
 @SpringBootTest(properties = {
@@ -74,7 +75,9 @@ class KafkaMessagingIntegrationTest {
         try (AdminClient admin = AdminClient.create(Map.of("bootstrap.servers", KAFKA.getBootstrapServers()))) {
             admin.createTopics(List.of(
                     new NewTopic("credit.events", 3, (short) 1),
-                    new NewTopic("credit.events.DLT", 1, (short) 1))).all().get();
+                    new NewTopic("credit.events.DLT", 1, (short) 1),
+                    new NewTopic("order.lifecycle.events", 3, (short) 1),
+                    new NewTopic("order.lifecycle.events.DLT", 1, (short) 1))).all().get();
         }
     }
 
@@ -85,10 +88,14 @@ class KafkaMessagingIntegrationTest {
     private JdbcTemplate jdbc;
 
     private static void publish(String key, String value) throws Exception {
+        publish("credit.events", key, value);
+    }
+
+    private static void publish(String topic, String key, String value) throws Exception {
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(Map.<String, Object>of(
                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers()),
                 new StringSerializer(), new StringSerializer())) {
-            producer.send(new ProducerRecord<>("credit.events", key, value)).get();
+            producer.send(new ProducerRecord<>(topic, key, value)).get();
         }
     }
 
@@ -163,5 +170,37 @@ class KafkaMessagingIntegrationTest {
         assertThat(new String(group.value(), StandardCharsets.UTF_8)).isEqualTo("notification-service");
         assertThat(notificationsFor(orderId)).isZero();
         assertThat(handled(event.get("eventId"))).isFalse();
+    }
+
+    @Test
+    void anAcceptedErrandOnOrderLifecycleEventsNotifiesTheRequester() throws Exception {
+        OrderEvents.Errand errand = OrderEvents.Errand.create(REQUESTER);
+        Map<String, Object> accepted = OrderEvents.transition(errand, 3, "ACCEPT", "OPEN", "ACCEPTED",
+                OrderEvents.user(COURIER, "COURIER"), null, COURIER, null);
+
+        publish("order.lifecycle.events", errand.orderId().toString(), OrderEvents.json(accepted));
+
+        await().atMost(Duration.ofSeconds(20)).until(() -> notificationsFor(errand.orderId()) == 1);
+        assertThat(jdbc.queryForObject("select recipient_id from notifications where order_id = ?", UUID.class,
+                errand.orderId())).isEqualTo(REQUESTER);
+    }
+
+    @Test
+    void aBrokenLifecycleEventGoesToItsOwnDltWithItsKey() throws Exception {
+        OrderEvents.Errand errand = OrderEvents.Errand.create(REQUESTER);
+        Map<String, Object> event = OrderEvents.transition(errand, 3, "ACCEPT", "OPEN", "ACCEPTED",
+                OrderEvents.user(COURIER, "COURIER"), null, COURIER, null);
+        OrderEvents.data(event).remove("requesterId");
+
+        publish("order.lifecycle.events", errand.orderId().toString(), OrderEvents.json(event));
+
+        List<ConsumerRecord<String, String>> dlt = readUntil("order.lifecycle.events.DLT",
+                seen -> seen.stream().anyMatch(record -> errand.orderId().toString().equals(record.key())));
+        ConsumerRecord<String, String> deadLetter = dlt.stream()
+                .filter(record -> errand.orderId().toString().equals(record.key())).findFirst().orElseThrow();
+        assertThat(deadLetter.value()).isEqualTo(OrderEvents.json(event));
+        Header group = deadLetter.headers().lastHeader(KafkaHeaders.DLT_ORIGINAL_CONSUMER_GROUP);
+        assertThat(new String(group.value(), StandardCharsets.UTF_8)).isEqualTo("notification-service");
+        assertThat(notificationsFor(errand.orderId())).isZero();
     }
 }
