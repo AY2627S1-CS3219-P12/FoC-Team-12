@@ -15,9 +15,15 @@ The frames were shared as screenshots, so node IDs are not recorded yet.
 
 ## Visual language
 
-Same tokens as the Credit and Supplier frontends: Public Sans; canvas `#f5f7f5`, surface white,
-ink `#20332d`, muted `#57655f`, action `#23654e`, border `#d4ddd7`; 12 px card radius; 375 px mobile
-and 1280 px desktop reference widths.
+The shared [product design contract](../../../design.md) defines the shell, colours, type, shape,
+component states and accessibility checks; it is not repeated here. Order-specific choices on top:
+
+- Loading errands show placeholders in the shape of the list or errand detail, labelled for screen
+  readers; they do not animate under reduced motion.
+- Empty, error and not-found screens use one icon panel with the next useful action: Request help
+  or Find errands on an empty Active list, Clear filters when filters hide every open errand, and
+  Try again when an errand fails to load.
+- Routes and links use Lucide icons (pickup and drop-off pins, arrows) instead of text symbols.
 
 ## Adaptations to the API
 

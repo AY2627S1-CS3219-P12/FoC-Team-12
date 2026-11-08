@@ -1,10 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useState } from 'react'
+import { ArrowLeft, CircleAlert, Lock } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { fetchHistory, fetchOrder, type Order, OrderApiError, updateOrder } from '../api/orderApi'
 import { fetchCampusLocations, fetchMyCredits } from '../api/sharedApi'
 import { readSession } from '../auth/session'
 import { ErrandFormFields } from '../components/ErrandFormFields'
+import { ErrandDetailSkeleton } from '../components/Skeleton'
+import { StatePanel } from '../components/StatePanel'
 import {
   type BalanceStatus,
   EMPTY,
@@ -50,33 +53,39 @@ export function EditErrandPage() {
   const { orderId = '' } = useParams()
   const errand = useQuery({ queryKey: ['orders', orderId], queryFn: () => fetchOrder(orderId) })
 
-  if (errand.isPending) return <p className="subtle">Loading errand…</p>
+  if (errand.isPending) return <ErrandDetailSkeleton label="Loading errand…" />
   if (errand.isError)
     return (
-      <section className="card state-panel">
-        <h2>We couldn't load this errand</h2>
-        <p>{errand.error.message}</p>
-        <Link className="text-link" to="/errands/mine">
-          Back to my errands
-        </Link>
-      </section>
+      <StatePanel
+        action={
+          <Link className="button-secondary" to="/errands/mine">
+            <ArrowLeft aria-hidden="true" /> Back to my errands
+          </Link>
+        }
+        icon={CircleAlert}
+        title="We couldn't load this errand"
+      >
+        {errand.error.message}
+      </StatePanel>
     )
   const order = errand.data
   const editable =
     order.requesterId === readSession()?.userId && order.state === 'OPEN' && order.pendingCreditReward === null
   if (!editable)
     return (
-      <section className="card state-panel">
-        <h2>This errand can’t be edited</h2>
-        <p>
-          {order.pendingCreditReward !== null
-            ? 'A reward change is still waiting for Credit.'
-            : 'Only open errands can be edited, by the person who posted them.'}
-        </p>
-        <Link className="text-link" to={`/errands/${order.id}`}>
-          Back to the errand
-        </Link>
-      </section>
+      <StatePanel
+        action={
+          <Link className="button-secondary" to={`/errands/${order.id}`}>
+            <ArrowLeft aria-hidden="true" /> Back to the errand
+          </Link>
+        }
+        icon={Lock}
+        title="This errand can’t be edited"
+      >
+        {order.pendingCreditReward !== null
+          ? 'A reward change is still waiting for Credit.'
+          : 'Only open errands can be edited, by the person who posted them.'}
+      </StatePanel>
     )
   return <EditForm key={order.version} order={order} />
 }
@@ -210,7 +219,7 @@ function EditForm({ order }: { order: Order }) {
     <>
       <div className="back-row">
         <Link className="text-link" to={`/errands/${order.id}`}>
-          ← Back to the errand
+          <ArrowLeft aria-hidden="true" /> Back to the errand
         </Link>
       </div>
       <div className="page-intro">
@@ -262,6 +271,7 @@ function EditForm({ order }: { order: Order }) {
           <div className="actions">
             <button
               aria-describedby={credit.message ? 'reward-check-message' : undefined}
+              aria-busy={save.isPending || waiting}
               disabled={save.isPending || waiting || stale || !credit.canSave}
               type="submit"
             >

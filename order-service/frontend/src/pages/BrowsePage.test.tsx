@@ -30,7 +30,9 @@ describe('BrowsePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Collect my printed notes' })).toBeInTheDocument()
     expect(screen.getByText('18 cr')).toBeInTheDocument()
-    expect(screen.getByText('Printers@PCCommons → PGP Foyer')).toBeInTheDocument()
+    expect(screen.getByText('Printers@PCCommons', { selector: '.route-line span' }).parentElement).toHaveTextContent(
+      'Printers@PCCommons to PGP Foyer',
+    )
     expect(screen.getByRole('link', { name: 'View Collect my printed notes' })).toHaveAttribute(
       'href',
       '/errands/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64',
@@ -42,6 +44,29 @@ describe('BrowsePage', () => {
     renderPage()
 
     expect(await screen.findByRole('heading', { name: 'No matching errands' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+  })
+
+  it('shows placeholders while the pool loads', () => {
+    vi.stubGlobal('fetch', () => new Promise(() => {}))
+    renderPage()
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading errands…')
+  })
+
+  it('offers to clear reward filters that hide every errand', async () => {
+    sessionStorage.setItem('foc.errands.browse', JSON.stringify({ minReward: 40, sort: 'reward' }))
+    const { fetchMock, calls } = stubFetch(() => ({ body: page([]) }))
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Clear filters' }))
+
+    await waitFor(() => expect(calls.at(-1)?.url).not.toContain('minReward'))
+    expect(calls.at(-1)?.url).toContain('sort=reward')
+    expect(screen.getByLabelText('Minimum reward')).toHaveValue(null)
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
   })
 
   it('sends the chosen filters and sort to the API and remembers them (F4.2-F4.4)', async () => {

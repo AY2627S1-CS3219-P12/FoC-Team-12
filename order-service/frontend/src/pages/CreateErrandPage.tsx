@@ -226,6 +226,7 @@ export function CreateErrandPage() {
               aria-describedby={
                 credit.message ? 'credit-check-message' : undefined
               }
+              aria-busy={create.isPending || waiting}
               disabled={create.isPending || waiting || !credit.canPost}
               id="submit-errand"
               type="submit"
