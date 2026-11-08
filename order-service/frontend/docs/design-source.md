@@ -61,3 +61,6 @@ The backend contract wins over example data in Figma:
   **Run errands · My errands**, as side-by-side text tabs with an underline on the current one.
   Opening the other role's screen, or switching role while on one, goes to the current role's own
   screen (`/errands/new` for Requester, `/errands/browse` for Courier).
+- **An errand page follows the header role too.** Requester mode shows only the user's own errands;
+  Courier mode shows errands they run or could accept. Opening any other errand in that role, or
+  switching role while on one, goes to the current role's own screen. Admin sessions are unchanged.

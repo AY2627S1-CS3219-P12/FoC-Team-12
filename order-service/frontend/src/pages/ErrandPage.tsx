@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { MessageCircle } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   fetchOrder,
   type Order,
@@ -15,6 +15,7 @@ import { ProgressCard } from '../components/ProgressCard'
 import { RouteSummary } from '../components/RouteSummary'
 import { StateBadge } from '../components/StateBadge'
 import { ErrandReportPanel } from '../components/ErrandReportPanel'
+import { homeFor, useSessionRole } from '../hooks/useSessionRole'
 import {
   credits,
   errandReference,
@@ -61,6 +62,8 @@ type Confirmation = {
  */
 export function ErrandPage() {
   const { orderId = '' } = useParams()
+  // Re-renders when the header switches role; the session is re-read for the new role.
+  const role = useSessionRole()
   const session = readSession()
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState<Confirmation | null>(null)
@@ -110,6 +113,11 @@ export function ErrandPage() {
       : userId && userId === order.courierId
         ? 'courier'
         : 'browser'
+  // Only the requester's own errand fits Requester mode; Courier mode is for running errands.
+  const participantMode =
+    session?.role === 'REQUESTER' || session?.role === 'COURIER'
+  if (participantMode && (role === 'REQUESTER') !== (view === 'requester'))
+    return <Navigate replace to={homeFor(role)} />
   const run = (next: OrderAction) => action.mutate(next)
   const ask = (confirmation: Confirmation) => {
     action.reset()
