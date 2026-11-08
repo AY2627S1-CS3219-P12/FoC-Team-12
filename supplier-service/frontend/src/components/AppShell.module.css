@@ -61,7 +61,7 @@
 }
 
 .serviceNav a svg,
-.actions > a svg {
+.actions > a:not(.notificationBell) svg {
   width: 1rem;
   height: 1rem;
   flex: 0 0 auto;
@@ -148,7 +148,7 @@
   cursor: wait;
 }
 
-.actions a,
+.actions a:not(.notificationBell),
 .actions button {
   display: inline-flex;
   align-items: center;

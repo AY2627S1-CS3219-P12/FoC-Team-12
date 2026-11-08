@@ -65,6 +65,21 @@ def declarations(css, selector):
     return result
 
 
+HEADER_ACTIONS = re.compile(r"(?:^|\s|,)\.(?:header-actions|profile-app-actions|actions)\s*>?\s*a(?![\w-])")
+
+
+def header_action_selectors(css):
+    """Selectors that style a link (or its icon) in the header's account/actions area."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.DOTALL)
+    found = []
+    for match in re.finditer(r"([^{}]+)\{[^{}]*\}", css):
+        for selector in match.group(1).split(","):
+            selector = " ".join(selector.split())
+            if HEADER_ACTIONS.search(selector) and not selector.endswith((":hover", ":focus-visible")):
+                found.append(selector)
+    return found
+
+
 class SharedRoleSelectorDesignTest(unittest.TestCase):
     def test_every_frontend_uses_the_same_role_selector_box_model(self):
         for service, (path, options_selector, button_selector) in SELECTORS.items():
@@ -112,6 +127,23 @@ class SharedNotificationBellTest(unittest.TestCase):
                 bell = declarations(path.read_text(), selector)
                 self.assertEqual("2.75rem", bell.get("width"))
                 self.assertEqual("2.75rem", bell.get("height"))
+
+    def test_every_frontend_gives_the_bell_icon_the_same_size(self):
+        for service, (path, selector) in BELL_STYLES.items():
+            with self.subTest(service=service):
+                css = path.read_text()
+                icon = declarations(css, selector + " svg")
+                self.assertEqual("1.25rem", icon.get("width"))
+                self.assertEqual("1.25rem", icon.get("height"))
+                self.assertEqual("inline-grid", declarations(css, selector).get("display"))
+                # Header-action rules for nav-sized icons must exclude the bell, or its icon and
+                # layout differ between frontends (the Errands bell rendered at 1rem, Home at 1.25rem).
+                for rule_selector in header_action_selectors(css):
+                    self.assertIn(
+                        f":not({selector})",
+                        rule_selector,
+                        f"{service} rule '{rule_selector}' also styles the bell",
+                    )
 
 
 if __name__ == "__main__":
