@@ -54,6 +54,11 @@ helm upgrade --install external-secrets "$external_secrets_chart" \
   --set serviceAccount.name=external-secrets \
   --set-string "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=$EXTERNAL_SECRETS_ROLE_ARN"
 
+# Helm can update the ServiceAccount annotation without changing the Deployment template. Restart
+# the controller so an existing pod is recreated with AWS_ROLE_ARN and the projected IRSA token.
+kubectl -n external-secrets rollout restart deployment/external-secrets
+kubectl -n external-secrets rollout status deployment/external-secrets --timeout=10m
+
 export AWS_REGION RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID
 export GATEWAY_IMAGE USER_IMAGE SUPPLIER_IMAGE ORDER_IMAGE CREDIT_IMAGE ADMIN_IMAGE
 rendered=$(mktemp)

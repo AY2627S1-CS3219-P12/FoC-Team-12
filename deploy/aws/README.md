@@ -142,7 +142,9 @@ use short-lived OIDC sessions instead of stored AWS credentials.
 
    Runtime provisioning pins the External Secrets chart and retries its download before invoking
    Helm. This isolates transient GitHub Releases/network timeouts from the Kubernetes installation;
-   exhausting all download attempts still fails provisioning before any application rollout.
+   exhausting all download attempts still fails provisioning before any application rollout. The
+   deployment then restarts the External Secrets controller so a newly added IRSA service-account
+   annotation is injected into its pod even when Helm did not otherwise change the pod template.
 
 ## Deployment and rollback
 
