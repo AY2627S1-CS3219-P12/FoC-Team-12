@@ -196,7 +196,7 @@ XueTing owns Notification's Kafka and Kubernetes changes (from 2026-11-07).
 | Kubernetes | Add `notification-service/k8s/` (copied from Order's layout), and `notification` in `New-DatabaseSecret.ps1` and `Test-LocalDeployment.ps1` | XueTing |
 | Network policies (`deploy/k8s/network/policies.yaml`) | New `foc-notification` and `foc-notification-db` policies. Add `notification-service` to `foc-user` ingress, the Kafka client policy and gateway egress (port 8086) | XueTing |
 | CI | Add `notification-service` to `SERVICES` in `image_plan.py` and its test, and a backend job in `ci.yml` | All |
-| Header bell | A link and badge in every service's header (iteration 7) | Darryl, Jun Hui, Eldridge |
+| Header bell | A link and badge in every service's header (iteration 7, done) | Darryl, Jun Hui, Eldridge |
 | Observability | Expose Notification metrics (endpoint to agree) and add its dashboards and alerts (iteration 9) | Jun Hui |
 | Gateway rate limit | A per-user limit on `/api/notifications/**` against runaway polling | Gateway nominee |
 
@@ -224,6 +224,11 @@ Approved with iteration 0 (2026-11-04):
   inbox row was pruned would notify twice. Enforced by the retention job (iteration 8): "read"
   counts from `read_at`, "every notification" from `created_at`, and startup refuses an inbox
   period under 30 days.
+
+Approved with the `ui` brief (2026-11-08):
+- The bell goes in the header of every frontend (User, Supplier, Order, Credit, Admin and
+  Notification), between the role selector and the account menu; `design.md` records it.
+- The page wording in the README, and opening an errand also marks the notification read.
 
 Approved with the `order-lifecycle` brief (2026-11-08):
 - The 9 `ORDER_*` types of the shared contract and the README wording. No
@@ -253,9 +258,8 @@ Added to the shared package with this change (`build_contracts.py`, regenerated
 | Why separate | `NotificationPage` sets `additionalProperties: false`, so a field there is a contract change too; a separate call keeps the bell's poll to one indexed count, without a page query |
 
 To confirm with the team:
-1. Where the bell lives: in all four headers, or only a Notifications page linked from the main page.
-2. How metrics are exposed and collected (iteration 9), and the alert thresholds.
-3. Whether the gateway rate-limits `/api/notifications/**`, and at what rate.
+1. How metrics are exposed and collected (iteration 9), and the alert thresholds.
+2. Whether the gateway rate-limits `/api/notifications/**`, and at what rate.
 
 Implementation details (no decision needed):
 - `auto-offset-reset=earliest`: on first start the service reads the 7 days still on `credit.events`,
@@ -338,7 +342,7 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 4 | `order-lifecycle-events`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | Done (PR #117); on in Compose, off in Kubernetes until 3b |
 | 5 | `order-lifecycle`: `order.lifecycle.events` consumer, the 9 `ORDER_*` notifications, business key `orderId:sourceSequence`, gap warning (V3) | Done (this change) |
 | 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (PR #115) |
-| 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3, 3b and 6 |
+| 7 | `ui`: Notifications page, header bell in all six frontends, polled unread count ([Polling](#polling)) | Done (this change) |
 | 8 | `retention`: hourly batched deletion for the approved 30/90-day policy (V2 indexes) | Done (this change) |
 | 9 | Observability: metrics, alerts and structured logs ([Observability](#observability)) | After 3 |
 | 10 | Optional: server-sent events for the badge | If time allows, after 7 |

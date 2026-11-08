@@ -47,6 +47,9 @@ public class SecurityConfiguration {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         // Error dispatches must reach the error page, or a 500 would surface as 403.
                         .requestMatchers("/error").permitAll()
+                        // The packaged Notifications UI; the API it calls is protected below.
+                        .requestMatchers(HttpMethod.GET, "/notifications", "/notifications/**", "/notification-assets/**")
+                        .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/notifications/me", "/api/notifications/me/unread-count")
                         .authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/notifications/me/*/read").authenticated()

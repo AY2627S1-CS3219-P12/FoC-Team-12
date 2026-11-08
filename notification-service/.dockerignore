@@ -6,3 +6,5 @@ target/
 k8s/*.key
 k8s/*.pem
 k8s/*.env*
+frontend/node_modules/
+frontend/dist/
