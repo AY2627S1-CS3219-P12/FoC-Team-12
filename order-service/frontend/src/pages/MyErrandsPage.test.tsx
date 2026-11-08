@@ -123,6 +123,39 @@ describe('MyErrandsPage', () => {
     expect(within(section('Past')).queryByRole('link')).not.toBeInTheDocument()
   })
 
+  it('offers Post again on finished requests only', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubFetch((url) => ({
+        body: url.includes('status=active')
+          ? page([order({ id: 'a', state: 'OPEN', title: 'Get my lunch' })])
+          : page([order({ id: 'done', state: 'COMPLETED', courierId: COURIER_ID })]),
+      })).fetchMock,
+    )
+    renderPage()
+
+    expect(await within(section('Past')).findByRole('link', { name: 'Post Collect my printed notes again' })).toHaveAttribute(
+      'href',
+      '/errands/new?from=done',
+    )
+    await within(section('Active')).findByRole('heading', { name: 'Get my lunch' })
+    expect(within(section('Active')).queryByRole('link', { name: /again/ })).not.toBeInTheDocument()
+  })
+
+  it('offers no Post again on errands a courier delivered', async () => {
+    signIn(COURIER_ID, 'COURIER')
+    vi.stubGlobal(
+      'fetch',
+      stubFetch((url) => ({
+        body: url.includes('status=past') ? page([order({ state: 'COMPLETED', courierId: COURIER_ID })]) : page([]),
+      })).fetchMock,
+    )
+    renderPage()
+
+    await within(section('Past')).findByRole('heading', { name: 'Collect my printed notes' })
+    expect(screen.queryByRole('link', { name: /again/ })).not.toBeInTheDocument()
+  })
+
   it('points a courier with no active errands to the open pool', async () => {
     signIn(COURIER_ID, 'COURIER')
     vi.stubGlobal('fetch', stubFetch(() => ({ body: page([]) })).fetchMock)

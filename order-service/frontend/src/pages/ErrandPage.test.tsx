@@ -233,6 +233,29 @@ describe('ErrandPage', () => {
       expect(screen.queryByRole('link', { name: 'Edit errand' })).not.toBeInTheDocument()
     })
 
+    it.each(['COMPLETED', 'CANCELLED', 'EXPIRED', 'RESERVATION_FAILED'] as const)(
+      'offers Post again once the errand is %s',
+      async (state) => {
+        signIn(REQUESTER_ID, 'REQUESTER')
+        vi.stubGlobal('fetch', serve(order({ state })).fetchMock)
+        renderErrand()
+
+        expect(await screen.findByRole('link', { name: 'Post again' })).toHaveAttribute(
+          'href',
+          '/errands/new?from=3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64',
+        )
+      },
+    )
+
+    it('offers no Post again while the errand is still active', async () => {
+      signIn(REQUESTER_ID, 'REQUESTER')
+      vi.stubGlobal('fetch', serve(order({ state: 'DELIVERED', courierId: COURIER_ID })).fetchMock)
+      renderErrand()
+
+      await screen.findByRole('heading', { name: 'Have you received your item?' })
+      expect(screen.queryByRole('link', { name: 'Post again' })).not.toBeInTheDocument()
+    })
+
     it('offers no cancel once the item is picked up (F3.4)', async () => {
       signIn(REQUESTER_ID, 'REQUESTER')
       vi.stubGlobal('fetch', serve(order({ state: 'PICKED_UP', courierId: COURIER_ID })).fetchMock)

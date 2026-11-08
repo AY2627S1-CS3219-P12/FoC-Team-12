@@ -69,3 +69,10 @@ export function formatDeadline(iso: string, now: Date = new Date()): string {
 export function locationName(name: string | null): string {
   return name ?? 'Location not recorded'
 }
+
+/** Ended errands a requester can post again as a new one ("Post again"). */
+export const REPOSTABLE_STATES: readonly OrderState[] = ['COMPLETED', 'CANCELLED', 'EXPIRED', 'RESERVATION_FAILED']
+
+export function repostPath(orderId: string): string {
+  return `/errands/new?from=${encodeURIComponent(orderId)}`
+}
