@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Order } from '../api/orderApi'
+import { sessionChangedEvent } from '../auth/session'
 import { COURIER_ID, order, REQUESTER_ID, signIn, STRANGER_ID, stubFetch } from '../test/fixtures'
 import { ErrandPage } from './ErrandPage'
 
@@ -24,6 +25,8 @@ function renderErrand() {
       <MemoryRouter initialEntries={['/errands/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64']}>
         <Routes>
           <Route element={<ErrandPage />} path="/errands/:orderId" />
+          <Route element={<h1>Request help</h1>} path="/errands/new" />
+          <Route element={<h1>Run errands</h1>} path="/errands/browse" />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -151,8 +154,8 @@ describe('ErrandPage', () => {
       expect(calls.find((call) => call.init?.method === 'POST')?.url).toBe(`${ORDER_URL}/withdraw`)
     })
 
-    it('tells the user to switch role when the session role is wrong', async () => {
-      signIn(COURIER_ID, 'REQUESTER')
+    it('still explains a role refusal from the backend', async () => {
+      signIn(COURIER_ID, 'COURIER')
       vi.stubGlobal(
         'fetch',
         serve(order({ state: 'ACCEPTED', courierId: COURIER_ID }), () => ({ status: 403, body: { detail: 'no' } }))
@@ -253,6 +256,39 @@ describe('ErrandPage', () => {
       expect(await screen.findByRole('heading', { level: 1, name: heading })).toBeInTheDocument()
       expect(screen.getByText(detail)).toBeInTheDocument()
       expect(screen.queryByRole('link', { name: 'Set up your credits' }) !== null).toBe(setUp)
+    })
+  })
+
+  describe('in a header role the errand does not belong to', () => {
+    it.each([
+      ['their own errand as a Courier', REQUESTER_ID, 'COURIER', order(), 'Run errands'],
+      ['an errand they run as a Requester', COURIER_ID, 'REQUESTER', order({ state: 'ACCEPTED', courierId: COURIER_ID }), 'Request help'],
+      ["someone else's open errand as a Requester", STRANGER_ID, 'REQUESTER', order(), 'Request help'],
+    ] as const)('sends a user opening %s to that role\'s screen', async (_, userId, role, current, home) => {
+      signIn(userId, role)
+      vi.stubGlobal('fetch', serve(current).fetchMock)
+      renderErrand()
+
+      expect(await screen.findByRole('heading', { name: home })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Accept errand|Cancel errand|Mark as picked up/ })).not.toBeInTheDocument()
+    })
+
+    it.each([
+      ['the requester switching to Courier', REQUESTER_ID, 'REQUESTER', 'COURIER', order(), 'Waiting for a courier', 'Run errands'],
+      ['the courier switching to Requester', COURIER_ID, 'COURIER', 'REQUESTER', order({ state: 'ACCEPTED', courierId: COURIER_ID }), "You're the courier", 'Request help'],
+    ] as const)('leaves the errand on %s', async (_, userId, from, to, current, heading, home) => {
+      signIn(userId, from)
+      vi.stubGlobal('fetch', serve(current).fetchMock)
+      renderErrand()
+      expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument()
+
+      act(() => {
+        signIn(userId, to)
+        window.dispatchEvent(new Event(sessionChangedEvent))
+      })
+
+      expect(await screen.findByRole('heading', { name: home })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: heading })).not.toBeInTheDocument()
     })
   })
 

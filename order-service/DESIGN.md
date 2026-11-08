@@ -341,6 +341,7 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | k8s | Image bump after #87, #88 and #90 | Done (PR #91) |
 | UI | `order-ui-reason-heading`: errand page heading and status badge name the rejection reason | Done (PR #92) |
 | 10 | `order-lifecycle-events`: `OrderTransitioned` for every transition on `order.lifecycle.events` (shared N2H contract), per-order `sourceSequence` (V4), `causationId` for Credit-driven transitions, per-topic relay blocking; off by default, on in Compose | Done (PR #117) |
+| UI | `order-ui-role-scoped-errand`: an errand page that doesn't belong to the header role (on load or after a switch) goes to that role's own screen | This change |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
 
 ## Decisions
