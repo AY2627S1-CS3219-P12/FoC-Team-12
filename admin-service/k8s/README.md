@@ -1,5 +1,21 @@
 # Admin on local Minikube
 
+Current result: the approved reconciliation is complete, with six services on verified published
+`ce035ee` images, zero selected-manifest drift, V8 and passing lifecycle topic/ACL checks. Existing
+storage/signing identities were retained. Reporting/claiming/Kafka passed; Chat evidence, resolution
+and unresolved CASE-thread locking block full acceptance. The Admin fixes in this change are not deployed.
+See [current evidence](../INTEGRATION_READINESS.md#reconciled-published-deployment-and-real-acceptance-results).
+
+Earlier baseline verification (before published-image reconciliation): the existing cluster was resumed and the read-only Admin
+deployment smoke passed health/routes, token rejection, network isolation and real Kafka consumer
+assignment checks. A controlled User outage hid Admin access; restoring its original single replica
+and retrying recovered the GUI. No case, credit correction or sanction mutations were submitted.
+The baseline image was `foc-admin-service:local-22bc8cc`, with migrations V1–V7 and without the
+current source's conversation-discovery GETs/V8 relay. Chat was not deployed; User sanctions and
+Credit corrections have no active command groups; the lifecycle configuration check fails on
+missing settings/topic/ACLs. Do not treat this operational smoke as end-to-end business acceptance.
+See [deployed evidence and the full GUI checklist](../INTEGRATION_READINESS.md#reconciled-published-deployment-and-real-acceptance-results).
+
 Owner/editor: Darryl's approved Admin Kubernetes task. Jun Hui reviews shared gateway/network/
 Kafka configuration; affected owners review their connection changes before merge. This adds no
 domain interfaces or Chat implementation. User and gateway image updates package already existing
@@ -11,16 +27,15 @@ regular Compose databases and this cluster's databases are independent; `.env` i
 
 ## Images and credentials
 
-The manifests select local versioned images of repository revision `22bc8cc`, loaded into Minikube
-instead of publishing or replacing a Docker Hub release tag. Build them if not already available:
+The manifests now pin the images published by successful CI run `42501172138`, attempt 1, for
+committed revision `ce035eee7ff4eda6972fa4554714051b6314b209`. Admin/User/Chat/Order/Credit/Gateway
+share that source revision. These published images exclude the Admin client changes in this PR.
+Preserve existing keys/storage and initialize only approved missing broker metadata:
 
 ```powershell
-docker build -t foc-admin-service:local-22bc8cc admin-service
-docker build -t foc-user-service:local-22bc8cc user-service
-docker build -t foc-gateway-service:local-22bc8cc gateway-service
-minikube -p foc-local image load --daemon foc-admin-service:local-22bc8cc foc-user-service:local-22bc8cc foc-gateway-service:local-22bc8cc
 pwsh -File admin-service/k8s/New-AdminSecrets.ps1
 pwsh -File deploy/kafka/k8s/Apply-LocalKafka.ps1
+pwsh -File admin-service/k8s/Reconcile-ChatTrust.ps1 -Apply
 ```
 
 Admin's helper creates missing private DB/signing credentials directly in Kubernetes, never in

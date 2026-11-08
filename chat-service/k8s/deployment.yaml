@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: chat-service
-          image: foc-chat-service:local-323929b
+          image: arkanian4/foc-chat-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -61,8 +61,9 @@ spec:
               memory: 1Gi
           securityContext:
             runAsNonRoot: true
-            runAsUser: 10001
-            runAsGroup: 10001
+            # Verified spring UID/GID in the pinned published image; its image user is named.
+            runAsUser: 999
+            runAsGroup: 999
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
