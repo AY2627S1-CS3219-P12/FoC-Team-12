@@ -277,6 +277,7 @@ data "aws_iam_policy_document" "deploy" {
     sid = "PublishImages"
     actions = [
       "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
       "ecr:CompleteLayerUpload",
       "ecr:GetAuthorizationToken",
       "ecr:InitiateLayerUpload",
