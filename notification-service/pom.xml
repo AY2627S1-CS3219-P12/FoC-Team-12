@@ -65,6 +65,13 @@
             <version>3.1.1</version>
         </dependency>
         <dependency>
+            <!-- Validates OrderTransitioned fixtures against the shared docs/contracts schema. -->
+            <groupId>com.networknt</groupId>
+            <artifactId>json-schema-validator</artifactId>
+            <version>3.0.9</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>

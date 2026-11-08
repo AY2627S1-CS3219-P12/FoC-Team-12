@@ -5,6 +5,24 @@ package com.friendoncampus.notification.domain;
  * without a database CHECK, so adding a value needs no migration. See DESIGN.md "Notification types".
  */
 public enum NotificationType {
+    /** {@code OrderTransitioned} PENDING_CREDIT to OPEN: the requester's errand is live. */
+    ORDER_OPENED,
+    /** To RESERVATION_FAILED: Credit could not reserve the reward, so the errand was not posted. */
+    ORDER_RESERVATION_FAILED,
+    /** OPEN to ACCEPTED: a courier accepted the requester's errand. */
+    ORDER_ACCEPTED,
+    /** ACCEPTED to OPEN: the courier withdrew and the errand is back in the pool. */
+    ORDER_COURIER_WITHDREW,
+    /** To EXPIRED: the pickup deadline passed before pickup. */
+    ORDER_EXPIRED,
+    /** ACCEPTED to CANCELLED: the requester cancelled; told to the courier they removed. */
+    ORDER_CANCELLED,
+    /** To PICKED_UP: the courier picked the item up. */
+    ORDER_PICKED_UP,
+    /** To DELIVERED: the courier delivered; the requester should confirm receipt. */
+    ORDER_DELIVERED,
+    /** To COMPLETED: the requester confirmed receipt; told to the courier. */
+    ORDER_COMPLETED,
     /** {@code CreditAccountAllocated}: the new account received its starting credits. */
     CREDITS_WELCOME,
     /** {@code CreditSettled}: the courier was paid the reward for a completed errand. */

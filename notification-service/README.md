@@ -91,8 +91,19 @@ type and template values, so wording can change without rewriting past notificat
 | `CREDITS_WELCOME` | Welcome! You received {n} credits to get started. |
 | `CREDITS_RECEIVED` | You received {n} credits for completing an errand. |
 | `CREDITS_COMPENSATED` | You received {n} credits as compensation for a cancelled errand. |
+| `ORDER_OPENED` | Your errand "{title}" is live. Couriers can now accept it. |
+| `ORDER_RESERVATION_FAILED` | Your errand "{title}" couldn't be posted: {reason}. |
+| `ORDER_ACCEPTED` | A courier accepted your errand "{title}". |
+| `ORDER_COURIER_WITHDREW` | Your courier withdrew from "{title}". It's open for other couriers again. |
+| `ORDER_EXPIRED` | Your errand "{title}" expired before pickup. Your reserved credits are being returned. |
+| `ORDER_CANCELLED` | The requester cancelled "{title}". |
+| `ORDER_PICKED_UP` | Your courier picked up "{title}". |
+| `ORDER_DELIVERED` | Your courier delivered "{title}". Please confirm you received it. |
+| `ORDER_COMPLETED` | The requester confirmed they received "{title}". |
 
-`{n} credits` reads `1 credit` for one.
+`{n} credits` reads `1 credit` for one. `{reason}` is "you don't have enough credits"
+(`INSUFFICIENT_CREDITS`), "your credit account isn't set up yet" (`CREDIT_ACCOUNT_NOT_FOUND`), or
+"the credits couldn't be reserved" for any other code; free text is never shown.
 
 ## Mark one read
 
@@ -187,50 +198,62 @@ apart from Order's dead letters on the same topic. A valid unhandled fact is ack
 | `spring.kafka.properties.sasl.mechanism` | `KAFKA_SASL_MECHANISM` | `PLAIN` |
 | Kafka username / password | `KAFKA_USERNAME` / `KAFKA_PASSWORD` | `notification_service` / empty |
 
-## Order lifecycle notifications (planned)
+## Notifications from Order lifecycle events
 
-Not built. Read the [core event blueprint](../docs/integration/event-communication-blueprint.md)
-and [Chat/Order lifecycle proposal](../docs/integration/chat-admin-contract.md#event-coverage-and-persistence).
-Core `order.events` alone does not include acceptance/pickup/delivery: current OrderEventRecorder
-publishes only the five core credit-driving events. Full lifecycle production is an Order-owned
-iteration that must land before notification integration is claimed complete. Do not invent
-events by polling Order's DB.
+The service consumes `order.lifecycle.events` as group `notification-service`: one `OrderTransitioned`
+per committed Order transition, in the shared shape
+([n2h-events.schema.json](../docs/contracts/n2h-events.schema.json)) that Chat also consumes. The
+tests validate their events, and the shared `events.examples.json` fixture, against that file.
 
-The Order-owned lifecycle schema is agreed once for both Chat and Notifications: `OrderTransitioned`
-on proposed `order.lifecycle.events`, as in
-[n2h-events.schema.json](../docs/contracts/n2h-events.schema.json). It carries stable
-`eventId`/`orderId`, `sourceSequence`, `requesterId`, `previousCourierId`/`courierId`,
-`fromState`/`toState`, `action`, `reasonCode` and `snapshot`; recipient IDs are preserved when
-cancellation/withdrawal clears the live assignment. Both consumers reuse the same versioned schema
-and fixtures and do not rename fields. [DESIGN.md](DESIGN.md#proposed-contract-ordertransitioned-on-orderlifecycleevents)
-has the details, including the `sourceSequence` rules.
+| `action` (transition) | Recipient | `type` |
+| --- | --- | --- |
+| `OPEN` to `OPEN` (Credit reserved) | requester | `ORDER_OPENED` |
+| `OPEN` to `EXPIRED` (reserved after the deadline) | requester | `ORDER_EXPIRED` |
+| `FAIL_RESERVATION` | requester | `ORDER_RESERVATION_FAILED` (`params.reason` = `reasonCode`) |
+| `ACCEPT` | requester | `ORDER_ACCEPTED` |
+| `WITHDRAW` to `OPEN` | requester | `ORDER_COURIER_WITHDREW` |
+| `WITHDRAW` to `EXPIRED`, `EXPIRE` | requester | `ORDER_EXPIRED` |
+| `CANCEL` from `ACCEPTED` | `previousCourierId` (the courier the cancellation removed) | `ORDER_CANCELLED` |
+| `PICK_UP` | requester | `ORDER_PICKED_UP` |
+| `DELIVER` | requester | `ORDER_DELIVERED` |
+| `COMPLETE` | `courierId` | `ORDER_COMPLETED` |
+| `SUBMIT`, `EDIT`, `CANCEL` from `OPEN`, reward changes | nobody | inbox row `IGNORED` |
 
-| Notification type | Source/condition | Recipient | Message intent |
-| --- | --- | --- | --- |
-| `ORDER_OPENED` | `PENDING_CREDIT -> OPEN` | Requester | Errand is live |
-| `ORDER_RESERVATION_FAILED` | `-> RESERVATION_FAILED` | Requester | Creation failed; show safe approved reason |
-| `ORDER_ACCEPTED` | `OPEN -> ACCEPTED` | Requester | Courier accepted |
-| `ORDER_COURIER_WITHDREW` | `ACCEPTED -> OPEN` | Requester | Courier withdrew; errand returned to pool |
-| `ORDER_EXPIRED` | `-> EXPIRED` | Requester | Errand expired; credit release may still be pending |
-| `ORDER_CANCELLED` | `ACCEPTED -> CANCELLED` | Previous assigned courier | Requester cancelled |
-| `ORDER_PICKED_UP` | `-> PICKED_UP` | Requester | Item picked up |
-| `ORDER_DELIVERED` | `-> DELIVERED` | Requester | Delivered; confirm receipt |
-| `ORDER_COMPLETED` | `-> COMPLETED` | Courier | Requester confirmed receipt |
+The actor (`actor.userId`) is never notified, whatever the table says. A cancellation of an OPEN
+errand has no courier to tell. A required recipient that is missing (for example `CANCEL` from
+`ACCEPTED` without `previousCourierId`) rejects the event, so it never goes to an arbitrary user.
+Every lifecycle notification links to the errand (`orderId`) and stores the errand title from the
+snapshot. Credit outcomes are separate: a courier gets both `ORDER_COMPLETED` and `CREDITS_RECEIVED`.
 
-Safe rejection codes come from Credit; Order reason details must be explicitly added to its agreed
-snapshot if absent. Ignore valid source events outside this table. Unsupported schema or missing
-required recipients is a recoverable contract failure, not a notification to an arbitrary user.
-OPEN cancellation does not notify a nonexistent courier. Additional rows require approval. The
-business key is `orderId:sourceSequence`, so two genuine reopen/accept cycles stay distinct.
+**Processing, in one transaction**, with the same rules as Credit events:
+
+1. Parse and validate: `producer` = `order-service`, `eventType` = `OrderTransitioned`,
+   `eventVersion` 1, `aggregateType` `Order`, `aggregateId` = `data.orderId`, ISO-8601 `occurredAt`,
+   UUID recipients, `sourceSequence` a whole number of at least 1, and a `snapshot` with a title.
+2. Look up the inbox by `eventId`: a redelivery changes nothing; a reused `eventId` with different
+   content is `EVENT_ID_CONFLICT`.
+3. Look up the business key `orderId:sourceSequence`. Two genuine accept cycles have different
+   numbers, so both notify; the same transition published again under a new `eventId` is
+   `DUPLICATE_OPERATION`.
+4. If `sourceSequence` is more than one above the highest seen for the order, log a warning with
+   both numbers. The event is still handled; a missing transition is never guessed.
+5. Insert the notification (if any) and the inbox row, which also stores `source_sequence`, then
+   commit; Kafka is acknowledged after the commit.
+
+**Failures:** a rejected event goes straight to `order.lifecycle.events.DLT` without retries; any
+other failure is retried three times with backoff first. Dead letters keep the original key and
+name the `notification-service` group.
 
 ## Data model and delivery guarantees
 
-Flyway `V1__create_notifications.sql` (tables) and `V2__retention_indexes.sql` (indexes for the
-retention job). Applied migrations are never edited; changes go in a new migration.
+Flyway `V1__create_notifications.sql` (tables), `V2__retention_indexes.sql` (indexes for the
+retention job) and `V3__lifecycle_source_sequence.sql` (the inbox's `source_sequence`). Applied
+migrations are never edited; changes go in a new migration.
 
 - **`notification_inbox`**: `event_id` (primary key), `topic`, `event_type`, `aggregate_id`,
   `correlation_id`, `fingerprint` (SHA-256 of the envelope), `outcome`
-  (`NOTIFIED`/`IGNORED`/`DUPLICATE_OPERATION`), `processed_at`.
+  (`NOTIFIED`/`IGNORED`/`DUPLICATE_OPERATION`), `processed_at`, and `source_sequence` for Order
+  lifecycle events (null for Credit).
 - **`notifications`**: `id` (opaque UUID), `recipient_id`, `type`, `order_id`, `params` (JSONB
   template values), `source_event_id`, `business_key`, `occurred_at`, `created_at`, `read_at`
   (null = unread). `UNIQUE (recipient_id, type, business_key)` enforces one notification per
