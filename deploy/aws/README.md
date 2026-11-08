@@ -74,7 +74,9 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    deploy/aws/scripts/bootstrap-state.sh
    ```
 
-2. Initialize and apply the bootstrap stack. Use this repository's exact `owner/repository` name:
+2. Initialize and apply the bootstrap stack. Use this repository's exact `owner/repository` name.
+   The committed owner and repository IDs match GitHub's immutable OIDC subject for this repository;
+   a fork or replacement repository must override all three values:
 
    ```bash
    terraform -chdir=deploy/aws/terraform/bootstrap init \
@@ -86,8 +88,10 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    ```
 
    If the AWS account already has a GitHub Actions OIDC provider, import that provider instead of
-   creating a duplicate. The trust conditions accept only this repository and the named protected
-   GitHub environments.
+   creating a duplicate. The trust conditions accept only this repository's immutable GitHub owner
+   and repository IDs and the named protected GitHub environments. Find replacement IDs through
+   GitHub's repository API and pass `github_repository_owner_id` and `github_repository_id` when
+   bootstrapping a different repository.
 
 3. In GitHub, create protected environments `aws-staging-infra` and `aws-staging-deploy`. Require
    an approver for infrastructure. Add these repository/environment variables:
