@@ -34,6 +34,34 @@ resource "aws_cloudfront_vpc_origin" "gateway" {
   }
 }
 
+data "aws_security_group" "gateway_alb" {
+  id = var.alb_security_group_id
+}
+
+# CloudFront creates this service-managed group together with the VPC origin. Referencing the group
+# explicitly follows AWS's VPC-origin guidance and avoids relying on the source IP of its ENIs.
+data "aws_security_group" "cloudfront_vpc_origin" {
+  filter {
+    name   = "group-name"
+    values = ["CloudFront-VPCOrigins-Service-SG"]
+  }
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_security_group.gateway_alb.vpc_id]
+  }
+
+  depends_on = [aws_cloudfront_vpc_origin.gateway]
+}
+
+resource "aws_vpc_security_group_ingress_rule" "cloudfront_to_gateway" {
+  security_group_id            = var.alb_security_group_id
+  referenced_security_group_id = data.aws_security_group.cloudfront_vpc_origin.id
+  description                  = "HTTP from CloudFront VPC origin"
+  ip_protocol                  = "tcp"
+  from_port                    = 80
+  to_port                      = 80
+}
+
 resource "aws_cloudfront_origin_request_policy" "dynamic" {
   name    = "${local.name_prefix}-dynamic"
   comment = "Forward browser identity and request parameters while replacing the Host header."
@@ -92,8 +120,12 @@ resource "aws_cloudfront_distribution" "gateway" {
 
   viewer_certificate {
     cloudfront_default_certificate = true
-    minimum_protocol_version       = "TLSv1.2_2021"
+    # AWS fixes this value at TLSv1 for its generated *.cloudfront.net certificate. Selecting a
+    # newer viewer policy requires a custom domain and ACM certificate in us-east-1.
+    minimum_protocol_version = "TLSv1"
   }
+
+  depends_on = [aws_vpc_security_group_ingress_rule.cloudfront_to_gateway]
 }
 
 resource "aws_ssm_parameter" "public_url" {
