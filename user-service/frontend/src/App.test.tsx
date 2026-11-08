@@ -149,12 +149,14 @@ test('uses the Requester and Courier selector to replace a session token', async
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
   expect(screen.getByRole('link', { name: /Request help/ })).toHaveAttribute('href', '/errands/new')
   expect(screen.getByRole('link', { name: /Run an errand/ })).toHaveAttribute('href', '/errands/browse')
+  expect(screen.queryByText('Requesting help')).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: 'Courier' }))
 
   expect(screen.getByRole('link', { name: /Run an errand/ })).toHaveAttribute('href', '/errands/browse')
   expect(screen.getByRole('link', { name: /Request help/ })).toHaveAttribute('href', '/errands/new')
   expect(screen.getByRole('button', { name: 'Courier' })).toHaveAttribute('aria-pressed', 'true')
   expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute('aria-pressed', 'false')
+  expect(screen.queryByText('Running errands')).not.toBeInTheDocument()
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({
     accessToken: 'courier.jwt', role: 'COURIER',
   })

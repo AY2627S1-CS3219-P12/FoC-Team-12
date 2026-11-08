@@ -774,7 +774,6 @@ export function App() {
             ? 'Manage the people and places that keep Friend on Campus useful and safe.'
             : 'What would make your day a little easier?'}</p>
         </div>
-        {!adminMode && <span className="dashboard-role"><Sparkles aria-hidden="true" />{session.role === 'COURIER' ? 'Running errands' : 'Requesting help'}</span>}
       </header>
 
       {!adminMode && <nav className="dashboard-actions" aria-label="Start an errand">

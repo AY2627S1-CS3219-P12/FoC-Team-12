@@ -259,8 +259,6 @@ label { display: grid; gap: 0.45rem; color: var(--foc-ink); font-size: 0.9rem; f
 .dashboard-hero h1 { max-width: 18ch; margin-top: 0.65rem; font-size: clamp(2.35rem, 5vw, 4.25rem); letter-spacing: -0.055em; line-height: 1; }
 .dashboard-hero h1 span { color: var(--foc-action); }
 .dashboard-hero .intro { margin-top: 0.9rem; font-size: 1.05rem; }
-.dashboard-role { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.45rem; padding: 0.55rem 0.75rem; border: 1px solid #cadbd2; border-radius: 999px; background: white; color: var(--foc-action); font-size: 0.78rem; font-weight: 700; box-shadow: var(--foc-shadow-soft); }
-.dashboard-role svg { width: 1rem; height: 1rem; }
 .dashboard-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .dashboard-action { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 1rem; min-height: 10rem; padding: 1.5rem; border: 1px solid transparent; border-radius: 1.1rem; color: white; text-decoration: none; box-shadow: 0 14px 34px rgb(28 63 50 / 12%); transition: transform 160ms ease, box-shadow 160ms ease; }
 .dashboard-action:hover { transform: translateY(-2px); box-shadow: 0 20px 45px rgb(28 63 50 / 18%); }
