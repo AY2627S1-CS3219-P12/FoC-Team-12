@@ -3,6 +3,7 @@ set -euo pipefail
 
 : "${AWS_REGION:=ap-southeast-1}"
 : "${EKS_CLUSTER_NAME:=foc-staging}"
+: "${EXTERNAL_SECRETS_CHART_VERSION:=2.14.0}"
 : "${RDS_HOST:?RDS_HOST is required}"
 : "${RDS_MASTER_SECRET_ARN:?RDS_MASTER_SECRET_ARN is required}"
 : "${ALB_SECURITY_GROUP_ID:?ALB_SECURITY_GROUP_ID is required}"
@@ -18,14 +19,37 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 profile_args=()
 if [[ -n ${AWS_PROFILE:-} ]]; then profile_args=(--profile "$AWS_PROFILE"); fi
 
+retry() {
+  local max_attempts=$1
+  local delay_seconds=$2
+  shift 2
+
+  local attempt=1
+  until "$@"; do
+    if ((attempt >= max_attempts)); then
+      echo "Command failed after $attempt attempts: $*" >&2
+      return 1
+    fi
+    echo "Command failed on attempt $attempt/$max_attempts; retrying in ${delay_seconds}s: $*" >&2
+    sleep "$delay_seconds"
+    attempt=$((attempt + 1))
+  done
+}
+
 aws "${profile_args[@]}" --region "$AWS_REGION" eks update-kubeconfig --name "$EKS_CLUSTER_NAME" >/dev/null
 
 sed "s|RDS_HOST_REPLACED_BY_DEPLOY_SCRIPT|$RDS_HOST|g" \
   "$root/deploy/aws/k8s/staging/namespace-storage.yaml" | kubectl apply -f -
 
-helm repo add external-secrets https://charts.external-secrets.io >/dev/null
-helm repo update external-secrets >/dev/null
-helm upgrade --install external-secrets external-secrets/external-secrets \
+chart_dir=$(mktemp -d)
+trap 'rm -rf "$chart_dir"' EXIT
+retry 4 15 helm pull external-secrets \
+  --repo https://charts.external-secrets.io \
+  --version "$EXTERNAL_SECRETS_CHART_VERSION" \
+  --destination "$chart_dir"
+external_secrets_chart="$chart_dir/external-secrets-$EXTERNAL_SECRETS_CHART_VERSION.tgz"
+
+helm upgrade --install external-secrets "$external_secrets_chart" \
   --namespace external-secrets --create-namespace --wait --timeout 10m \
   --set serviceAccount.name=external-secrets \
   --set-string "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=$EXTERNAL_SECRETS_ROLE_ARN"
@@ -33,7 +57,7 @@ helm upgrade --install external-secrets external-secrets/external-secrets \
 export AWS_REGION RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID
 export GATEWAY_IMAGE USER_IMAGE SUPPLIER_IMAGE ORDER_IMAGE CREDIT_IMAGE ADMIN_IMAGE
 rendered=$(mktemp)
-trap 'rm -f "$rendered"' EXIT
+trap 'rm -f "$rendered"; rm -rf "$chart_dir"' EXIT
 "$root/deploy/aws/scripts/render-k8s.sh" > "$rendered"
 
 # Apply secret synchronization before workloads so missing credentials fail early.
@@ -64,7 +88,7 @@ kubectl -n foc-staging create configmap kafka-scripts \
   --dry-run=client -o yaml | kubectl apply -f -
 
 cli_dir=$(mktemp -d)
-trap 'rm -f "$rendered"; rm -rf "$cli_dir"' EXIT
+trap 'rm -f "$rendered"; rm -rf "$chart_dir" "$cli_dir"' EXIT
 for name in kafka-topics.sh kafka-configs.sh kafka-acls.sh kafka-broker-api-versions.sh \
   kafka-console-producer.sh kafka-console-consumer.sh kafka-get-offsets.sh; do
   cp "$root/deploy/kafka/k8s/cli.sh" "$cli_dir/$name"

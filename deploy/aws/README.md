@@ -140,6 +140,10 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    pushes immutable tags to ECR, applies the platform, creates CloudFront and smoke-tests the HTTPS
    URL. Set `AWS_STAGING_ENABLED=true` only after this passes.
 
+   Runtime provisioning pins the External Secrets chart and retries its download before invoking
+   Helm. This isolates transient GitHub Releases/network timeouts from the Kubernetes installation;
+   exhausting all download attempts still fails provisioning before any application rollout.
+
 ## Deployment and rollback
 
 On successful main-branch CI, `.github/workflows/cloud-deploy.yml` determines affected images,
