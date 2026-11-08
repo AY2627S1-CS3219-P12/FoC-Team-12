@@ -30,7 +30,6 @@ jobs:
       EKS_CLUSTER_NAME: foc-staging
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
-      TF_VAR_github_infra_role_arn: ${{ vars.AWS_INFRA_ROLE_ARN }}
       TF_VAR_github_deploy_role_arn: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       TF_VAR_budget_email: ${{ vars.AWS_BUDGET_EMAIL }}
     steps:

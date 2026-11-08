@@ -122,6 +122,39 @@ data "aws_iam_policy_document" "infra" {
     resources = ["*"]
   }
 
+  # The staging RDS instance uses the account's AWS-managed RDS key. RDS needs a grant to use that
+  # key for the encrypted database. Restrict access to the RDS alias and AWS-resource grants rather
+  # than granting the workflow general KMS access.
+  statement {
+    sid       = "UseRdsManagedKey"
+    actions   = ["kms:DescribeKey"]
+    resources = ["arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:key/*"]
+
+    condition {
+      test     = "ForAnyValue:StringEquals"
+      variable = "kms:ResourceAliases"
+      values   = ["alias/aws/rds"]
+    }
+  }
+
+  statement {
+    sid       = "GrantRdsManagedKeyToAws"
+    actions   = ["kms:CreateGrant"]
+    resources = ["arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:key/*"]
+
+    condition {
+      test     = "ForAnyValue:StringEquals"
+      variable = "kms:ResourceAliases"
+      values   = ["alias/aws/rds"]
+    }
+
+    condition {
+      test     = "Bool"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
+  }
+
   statement {
     sid = "PrefixedIamResources"
     actions = [

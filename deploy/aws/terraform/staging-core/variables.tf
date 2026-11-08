@@ -16,11 +16,6 @@ variable "eks_version" {
   default     = "1.35"
 }
 
-variable "github_infra_role_arn" {
-  type        = string
-  description = "OIDC role from the bootstrap stack."
-}
-
 variable "github_deploy_role_arn" {
   type        = string
   description = "OIDC deployment role from the bootstrap stack."

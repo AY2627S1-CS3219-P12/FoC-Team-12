@@ -88,20 +88,8 @@ resource "aws_eks_cluster" "main" {
   ]
 }
 
-resource "aws_eks_access_entry" "infra" {
-  cluster_name  = aws_eks_cluster.main.name
-  principal_arn = var.github_infra_role_arn
-  type          = "STANDARD"
-}
-
-resource "aws_eks_access_policy_association" "infra" {
-  cluster_name  = aws_eks_cluster.main.name
-  principal_arn = var.github_infra_role_arn
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-
-  access_scope { type = "cluster" }
-  depends_on = [aws_eks_access_entry.infra]
-}
+# The GitHub infrastructure role creates this cluster. EKS therefore grants it the cluster-admin
+# bootstrap access entry automatically; declaring the same entry here causes a 409 duplicate.
 
 resource "aws_eks_access_entry" "deploy" {
   cluster_name  = aws_eks_cluster.main.name
@@ -121,9 +109,73 @@ resource "aws_eks_access_policy_association" "deploy" {
   depends_on = [aws_eks_access_entry.deploy]
 }
 
+# EKS Auto Mode provisions nodes in response to ordinary workload pods. A newly created cluster's
+# managed add-on pods can otherwise remain pending without triggering the first node, which makes
+# Terraform wait until its add-on timeout. This tiny, inert workload establishes initial capacity
+# before Terraform waits for Metrics Server and CloudWatch Observability.
+resource "kubernetes_namespace_v1" "capacity_bootstrap" {
+  metadata {
+    name = "foc-capacity-bootstrap"
+  }
+
+  depends_on = [aws_eks_cluster.main]
+}
+
+resource "kubernetes_deployment_v1" "capacity_bootstrap" {
+  metadata {
+    name      = "capacity-bootstrap"
+    namespace = kubernetes_namespace_v1.capacity_bootstrap.metadata[0].name
+    labels    = { app = "capacity-bootstrap" }
+  }
+
+  spec {
+    replicas = 1
+
+    selector {
+      match_labels = { app = "capacity-bootstrap" }
+    }
+
+    template {
+      metadata {
+        labels = { app = "capacity-bootstrap" }
+      }
+
+      spec {
+        node_selector = {
+          "eks.amazonaws.com/compute-type" = "auto"
+        }
+
+        container {
+          name  = "pause"
+          image = "registry.k8s.io/pause:3.10.1"
+
+          resources {
+            requests = {
+              cpu    = "5m"
+              memory = "8Mi"
+            }
+            limits = {
+              cpu    = "10m"
+              memory = "16Mi"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  wait_for_rollout = true
+
+  timeouts {
+    create = "20m"
+  }
+}
+
 resource "aws_eks_addon" "metrics_server" {
   cluster_name = aws_eks_cluster.main.name
   addon_name   = "metrics-server"
+
+  depends_on = [kubernetes_deployment_v1.capacity_bootstrap]
 }
 
 data "aws_iam_policy_document" "pod_identity_assume" {
@@ -150,7 +202,7 @@ resource "aws_eks_addon" "cloudwatch" {
   cluster_name = aws_eks_cluster.main.name
   addon_name   = "amazon-cloudwatch-observability"
   configuration_values = jsonencode({
-    applicationSignals = { monitorAllServices = false }
+    applicationSignals = { enabled = false }
   })
 
   pod_identity_association {
@@ -158,7 +210,10 @@ resource "aws_eks_addon" "cloudwatch" {
     service_account = "cloudwatch-agent"
   }
 
-  depends_on = [aws_iam_role_policy_attachment.cloudwatch_agent]
+  depends_on = [
+    aws_iam_role_policy_attachment.cloudwatch_agent,
+    kubernetes_deployment_v1.capacity_bootstrap
+  ]
 }
 
 resource "aws_iam_role" "external_secrets" {
