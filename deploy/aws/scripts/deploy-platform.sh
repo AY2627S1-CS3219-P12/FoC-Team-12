@@ -72,6 +72,27 @@ wait_for_job() {
   return 1
 }
 
+wait_for_secret_key() {
+  local namespace=$1
+  local secret=$2
+  local key=$3
+  local timeout_seconds=$4
+  local deadline=$((SECONDS + timeout_seconds))
+  local value
+
+  while ((SECONDS < deadline)); do
+    value=$(kubectl -n "$namespace" get secret "$secret" \
+      -o "go-template={{index .data \"$key\"}}" 2>/dev/null || true)
+    if [[ -n $value && $value != '<no value>' ]]; then
+      return 0
+    fi
+    sleep 5
+  done
+
+  echo "Secret $namespace/$secret did not receive required key $key within ${timeout_seconds}s." >&2
+  return 1
+}
+
 aws "${profile_args[@]}" --region "$AWS_REGION" eks update-kubeconfig --name "$EKS_CLUSTER_NAME" >/dev/null
 
 sed "s|RDS_HOST_REPLACED_BY_DEPLOY_SCRIPT|$RDS_HOST|g" \
@@ -103,8 +124,11 @@ trap 'rm -f "$rendered"; rm -rf "$chart_dir"' EXIT
 
 # Apply secret synchronization before workloads so missing credentials fail early.
 awk 'BEGIN{RS="---"} /kind: (ClusterSecretStore|ExternalSecret)/ {print $0 "---"}' "$rendered" | kubectl apply -f -
+secret_sync_token=$(date +%s)
 for name in user-service-secrets user-mail-secrets supplier-service-secrets order-service-secrets \
   credit-service-secrets admin-service-secrets kafka-broker-secrets kafka-ui-secrets rds-master; do
+  kubectl -n foc-staging annotate "externalsecret/$name" \
+    "force-sync=$secret_sync_token" --overwrite >/dev/null
   if ! kubectl -n foc-staging wait --for=condition=Ready "externalsecret/$name" --timeout=5m; then
     echo "External Secret $name did not become ready; collecting diagnostics." >&2
     kubectl get clustersecretstore aws-secrets-manager -o wide || true
@@ -114,6 +138,8 @@ for name in user-service-secrets user-mail-secrets supplier-service-secrets orde
     exit 1
   fi
 done
+wait_for_secret_key foc-staging kafka-broker-secrets KAFKA_CHAT_SERVICE_PASSWORD 120
+wait_for_secret_key foc-staging kafka-broker-secrets KAFKA_NOTIFICATION_SERVICE_PASSWORD 120
 
 kubectl -n foc-staging delete job database-bootstrap --ignore-not-found
 kubectl apply -f "$root/deploy/aws/k8s/staging/database-bootstrap.yaml"
