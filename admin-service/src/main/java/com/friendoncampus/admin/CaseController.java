@@ -45,6 +45,14 @@ public class CaseController {
             @RequestHeader("Idempotency-Key") UUID key, @Valid @RequestBody ConversationRequest request) {
         return mutation(cases.openConversation(actor, key, caseId, request.participantUserId()));
     }
+    @GetMapping("/api/admin/cases/{caseId}/conversations")
+    public ResponseEntity<java.util.List<ChatConversationClient.Conversation>> conversations(@AuthenticationPrincipal Jwt actor, @PathVariable UUID caseId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(cases.confirmedConversations(actor,caseId,false));
+    }
+    @GetMapping("/api/admin/reports/{caseId}/conversations")
+    public ResponseEntity<java.util.List<ChatConversationClient.Conversation>> ownConversations(@AuthenticationPrincipal Jwt actor, @PathVariable UUID caseId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(cases.confirmedConversations(actor,caseId,true));
+    }
     public record ConversationRequest(@NotNull UUID participantUserId) { }
     public record ReportRequest(@NotNull UUID orderId, @NotBlank @Size(max=2000) String description) { }
     public record ClaimRequest(@NotNull @Min(0) Long expectedRevision) { }

@@ -4,7 +4,7 @@ import {
   chatFailure,
   chatMessage,
   chatRequest,
-  conversation,
+  currentConversation,
   mergeMessages,
   messagePage,
   type ChatMessage,
@@ -102,16 +102,15 @@ function Thread({
       controllers.current.add(controller)
       const timer = window.setTimeout(() => controller.abort(), 8000)
       try {
-        const current = conversation(
-          await chatRequest(
-            `conversations/${reference.conversationId}`,
-            controller.signal,
-          ),
+        const current = await currentConversation(
           reference,
+          actorId,
+          controller.signal,
+          participantView,
         )
         const page = messagePage(
           await chatRequest(
-            `conversations/${reference.conversationId}/messages?limit=20`,
+            `conversations/${reference.conversationId}/messages?limit=20&after=0`,
             controller.signal,
           ),
           reference.conversationId,
@@ -141,7 +140,7 @@ function Thread({
       active.current = false
       requests.forEach((c) => c.abort())
     }
-  }, [attempt, reference, permitted, fail])
+  }, [attempt, reference, actorId, participantView, permitted, fail])
 
   async function more() {
     if (inFlight.current || !next) return
@@ -151,14 +150,20 @@ function Thread({
     const cursor = next
     const currentGeneration = generation.current
     try {
+      const access = await bounded((signal) =>
+        currentConversation(reference, actorId, signal, participantView),
+      )
+      if (!active.current || generation.current !== currentGeneration) return
+      setReadOnly(access.readOnly)
       const page = messagePage(
         await bounded((signal) =>
           chatRequest(
-            `conversations/${reference.conversationId}/messages?limit=20&cursor=${encodeURIComponent(cursor)}`,
+            `conversations/${reference.conversationId}/messages?limit=20&after=${cursor}`,
             signal,
           ),
         ),
         reference.conversationId,
+        Number(cursor),
       )
       if (!active.current || generation.current !== currentGeneration) return
       if (
@@ -203,11 +208,8 @@ function Thread({
     inFlight.current = true
     setBusy(true)
     try {
-      const current = conversation(
-        await bounded((signal) =>
-          chatRequest(`conversations/${reference.conversationId}`, signal),
-        ),
-        reference,
+      const current = await bounded((signal) =>
+        currentConversation(reference, actorId, signal, participantView),
       )
       if (!active.current) return
       if (current.readOnly) throw new CaseError(409, 'Read only')
@@ -224,6 +226,7 @@ function Thread({
       if (!active.current) return
       if (
         result.senderUserId !== actorId ||
+        result.clientMessageId !== operation.clientMessageId ||
         result.text !== operation.text ||
         result.attachment !== null
       )
@@ -284,7 +287,9 @@ function Thread({
               <p className="role-chip">
                 {canWrite
                   ? 'Replies enabled'
-                  : 'Read-only until current access is confirmed'}
+                  : !writable
+                    ? 'Read-only'
+                    : 'Read-only until current access is confirmed'}
               </p>
               {messages.length ? (
                 <ol className="conversation-messages">

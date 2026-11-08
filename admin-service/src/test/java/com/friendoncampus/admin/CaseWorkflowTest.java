@@ -33,6 +33,34 @@ class CaseWorkflowTest {
     @Autowired CreditActionService creditActions;
     @Autowired ActionDeliveryStore deliveries;
     @Autowired ResolutionService resolutions;
+    @Test void confirmedReferencesRecoverPrivatelyWithoutChatAndBecomeReadOnlyAfterClosure() {
+        UUID id=reviewCase(), first=UUID.randomUUID(), second=UUID.randomUUID(), otherAdmin=UUID.randomUUID();
+        service.report(jwt(courier,"COURIER"),UUID.randomUUID(),order,"Historical courier statement");
+        when(conversations.open(eq(id),eq(order),eq(reporter),any(),anyString()))
+                .thenReturn(new ChatConversationClient.Conversation(first,id,order,reporter,false));
+        when(conversations.open(eq(id),eq(order),eq(courier),any(),anyString()))
+                .thenReturn(new ChatConversationClient.Conversation(second,id,order,courier,false));
+        assertTrue(service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true).isEmpty());
+        service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,reporter);
+        service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,courier);
+        clearInvocations(conversations,chat);
+        long audit=count("admin_case_audit"), outbox=count("admin_case_outbox");
+        var own=service.confirmedConversations(jwt(courier,"COURIER"),id,true);
+        assertEquals(1,own.size());assertEquals(second,own.get(0).conversationId());assertFalse(own.get(0).readOnly());
+        assertEquals(first,service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true).get(0).conversationId());
+        assertEquals(2,service.confirmedConversations(jwt(reviewer,"ADMIN"),id,false).size());
+        assertTrue(service.confirmedConversations(jwt(otherAdmin,"ADMIN"),id,false).stream().allMatch(ChatConversationClient.Conversation::readOnly));
+        assertEquals(HttpStatus.NOT_FOUND,assertThrows(ResponseStatusException.class,()->service.confirmedConversations(jwt(UUID.randomUUID(),"COURIER"),id,true)).getStatusCode());
+        db.update("UPDATE admin_cases SET state='RESOLVED' WHERE id=?",id);
+        assertTrue(service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true).get(0).readOnly());
+        assertTrue(service.confirmedConversations(jwt(reviewer,"ADMIN"),id,false).stream().allMatch(ChatConversationClient.Conversation::readOnly));
+        when(users.find(courier)).thenReturn(new UserEligibilityClient.Eligibility(courier,false,false));
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.confirmedConversations(jwt(courier,"COURIER"),id,true)).getStatusCode());
+        when(users.find(reporter)).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true)).getStatusCode());
+        assertEquals(audit,count("admin_case_audit"));assertEquals(outbox,count("admin_case_outbox"));
+        verifyNoInteractions(conversations,chat);
+    }
     @Test void ownReportLookupIsPrivateAndWorksWithoutChatButNewReportsFailClosed(){
         UUID id=reviewCase();reset(chat);
         when(chat.check(any(),any(),anyString())).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));

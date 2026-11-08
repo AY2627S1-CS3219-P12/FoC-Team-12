@@ -1,5 +1,5 @@
 import { readSession } from './auth/session'
-import { CaseError, isUuid } from './cases'
+import { CaseError, isUuid, request } from './cases'
 
 export type Conversation = {
   conversationId: string
@@ -12,6 +12,7 @@ export type ChatMessage = {
   id: string
   conversationId: string
   senderUserId: string
+  clientMessageId: string | null
   sequence: number
   createdAt: string
   text: string | null
@@ -76,6 +77,81 @@ export function conversation(
     readOnly: value.readOnly,
   }
 }
+// Public Chat metadata is deliberately smaller than Admin's confirmed case reference.
+export function chatConversation(
+  value: unknown,
+  expected: Conversation,
+): Conversation {
+  object(value)
+  if (
+    value.id !== expected.conversationId ||
+    value.orderId !== expected.orderId ||
+    !['ACTIVE', 'READ_ONLY'].includes(String(value.status)) ||
+    typeof value.readOnly !== 'boolean' ||
+    (value.status === 'READ_ONLY' && !value.readOnly)
+  )
+    throw new Error('Mismatched Chat conversation')
+  return { ...expected, readOnly: expected.readOnly || value.readOnly }
+}
+export async function confirmedConversations(
+  summary: { caseId: string; orderId: string },
+  actorId: string,
+  participantView: boolean,
+  signal: AbortSignal,
+) {
+  const values = await request<unknown>(
+    `${participantView ? 'reports' : 'cases'}/${summary.caseId}/conversations`,
+    signal,
+  )
+  if (!Array.isArray(values)) throw new Error('Invalid conversation references')
+  const ids = new Set<string>(),
+    participants = new Set<string>()
+  return values.map((value: unknown) => {
+    object(value)
+    if (
+      typeof value.conversationId !== 'string' ||
+      !isUuid(value.conversationId) ||
+      typeof value.participantUserId !== 'string' ||
+      !isUuid(value.participantUserId) ||
+      (participantView && value.participantUserId !== actorId) ||
+      ids.has(value.conversationId) ||
+      participants.has(value.participantUserId)
+    )
+      throw new Error('Invalid private reference')
+    ids.add(value.conversationId)
+    participants.add(value.participantUserId)
+    return conversation(value, {
+      conversationId: value.conversationId,
+      caseId: summary.caseId,
+      orderId: summary.orderId,
+      participantUserId: value.participantUserId,
+      readOnly: true,
+    })
+  })
+}
+export async function currentConversation(
+  reference: Conversation,
+  actorId: string,
+  signal: AbortSignal,
+  participantView = false,
+) {
+  const references = await confirmedConversations(
+    reference,
+    actorId,
+    participantView,
+    signal,
+  )
+  const current = references.find(
+    (r) =>
+      r.conversationId === reference.conversationId &&
+      r.participantUserId === reference.participantUserId,
+  )
+  if (!current) throw new CaseError(404, 'Conversation reference unavailable')
+  return chatConversation(
+    await chatRequest(`conversations/${reference.conversationId}`, signal),
+    current,
+  )
+}
 export function chatMessage(value: unknown, id: string): ChatMessage {
   object(value)
   if (
@@ -84,6 +160,11 @@ export function chatMessage(value: unknown, id: string): ChatMessage {
     value.conversationId !== id ||
     typeof value.senderUserId !== 'string' ||
     !isUuid(value.senderUserId) ||
+    !(
+      value.clientMessageId === null ||
+      (typeof value.clientMessageId === 'string' &&
+        isUuid(value.clientMessageId))
+    ) ||
     !Number.isSafeInteger(value.sequence) ||
     Number(value.sequence) < 1 ||
     typeof value.createdAt !== 'string' ||
@@ -100,6 +181,7 @@ export function chatMessage(value: unknown, id: string): ChatMessage {
       id: value.id,
       conversationId: id,
       senderUserId: value.senderUserId,
+      clientMessageId: value.clientMessageId,
       sequence: Number(value.sequence),
       createdAt: value.createdAt,
       text: value.text,
@@ -110,47 +192,50 @@ export function chatMessage(value: unknown, id: string): ChatMessage {
   const a = value.attachment
   if (
     value.text !== null ||
-    typeof a.attachmentId !== 'string' ||
-    !isUuid(a.attachmentId) ||
-    !['image/jpeg', 'image/png', 'image/webp'].includes(String(a.mediaType)) ||
-    !Number.isSafeInteger(a.sizeBytes) ||
-    Number(a.sizeBytes) < 1 ||
-    Number(a.sizeBytes) > 5242880
+    typeof a.id !== 'string' ||
+    !isUuid(a.id) ||
+    !['image/jpeg', 'image/png', 'image/webp'].includes(
+      String(a.contentType),
+    ) ||
+    !Number.isSafeInteger(a.size) ||
+    Number(a.size) < 1 ||
+    Number(a.size) > 5242880
   )
     throw new Error('Invalid attachment')
   return {
     id: value.id,
     conversationId: id,
     senderUserId: value.senderUserId,
+    clientMessageId: value.clientMessageId,
     sequence: Number(value.sequence),
     createdAt: value.createdAt,
     text: null,
     attachment: {
-      attachmentId: a.attachmentId,
-      mediaType: String(a.mediaType),
-      sizeBytes: Number(a.sizeBytes),
+      attachmentId: a.id,
+      mediaType: String(a.contentType),
+      sizeBytes: Number(a.size),
     },
   }
 }
-export function messagePage(value: unknown, id: string): MessagePage {
-  object(value)
-  if (
-    !Array.isArray(value.content) ||
-    value.content.length > 20 ||
-    !(
-      value.nextCursor === null ||
-      (typeof value.nextCursor === 'string' &&
-        value.nextCursor.length > 0 &&
-        value.nextCursor.length <= 2000)
-    )
-  )
+export function messagePage(
+  value: unknown,
+  id: string,
+  after = 0,
+): MessagePage {
+  if (!Array.isArray(value) || value.length > 20)
     throw new Error('Invalid history page')
+  const content = mergeMessages(
+    [],
+    value.map((m) => chatMessage(m, id)),
+  )
+  if (content.some((m) => m.sequence <= after))
+    throw new Error('History did not advance')
   return {
-    content: mergeMessages(
-      [],
-      value.content.map((m) => chatMessage(m, id)),
-    ),
-    nextCursor: value.nextCursor,
+    content,
+    nextCursor:
+      content.length === 20
+        ? String(content[content.length - 1]!.sequence)
+        : null,
   }
 }
 export function mergeMessages(known: ChatMessage[], additions: ChatMessage[]) {

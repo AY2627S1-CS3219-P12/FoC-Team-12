@@ -41,6 +41,8 @@ public class ChatEligibilityClient {
             Instant.parse(coverage.path("asOf").asText());
             boolean complete = "COMPLETE".equals(coverage.path("status").asText()) && coverage.path("blockingGaps").isEmpty()
                     && !coverage.path("checkpoints").isEmpty();
+            boolean orderCheckpoint = false;
+            var streams = new java.util.HashSet<String>();
             for (var checkpoint : coverage.path("checkpoints")) {
                 if (!checkpoint.path("committedSequence").isIntegralNumber() || !checkpoint.path("projectedSequence").isIntegralNumber()
                         || !checkpoint.path("committedSequence").canConvertToLong() || !checkpoint.path("projectedSequence").canConvertToLong()
@@ -48,10 +50,13 @@ public class ChatEligibilityClient {
                         || !checkpoint.path("aggregateId").isString() || !checkpoint.path("checkedAt").isString()
                         || checkpoint.path("committedSequence").asLong() < 0
                         || checkpoint.path("projectedSequence").asLong() < checkpoint.path("committedSequence").asLong()) complete = false;
-                UUID.fromString(checkpoint.path("aggregateId").asText());
+                UUID aggregate = UUID.fromString(checkpoint.path("aggregateId").asText());
+                String source = checkpoint.path("source").asText(), stream = checkpoint.path("stream").asText();
+                if (!streams.add(source + "/" + stream + "/" + aggregate)) complete = false;
+                if ("order-service".equals(source) && "order.lifecycle.events".equals(stream) && orderId.equals(aggregate)) orderCheckpoint = true;
                 Instant.parse(checkpoint.path("checkedAt").asText());
             }
-            return new Eligibility(data.path("eligible").asBoolean(), complete, data.path("evidenceRevision").asText());
+            return new Eligibility(data.path("eligible").asBoolean(), complete && orderCheckpoint, data.path("evidenceRevision").asText());
         } catch (Exception ex) {
             if (ex instanceof InterruptedException) Thread.currentThread().interrupt();
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Reporting eligibility is temporarily unavailable. Please try again.");

@@ -44,4 +44,16 @@ class ChatTimelineClientTest {
         for(int code:List.of(401,403,404,302,500,503)){status=code;unavailable();}
     }
     private void unavailable(){assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->client.fetch(CASE,ORDER,"user",null,20)).getStatusCode());}
+    @Test void mergedChatRecordWithoutStreamRemainsInvalidEvidence() {
+        // AdminChatContractService.Record.wire currently omits stream. Keep the contract guard;
+        // accepting a producer's malformed timeline would hide a producer integration gap.
+        Map<String,Object> data=new LinkedHashMap<>();
+        data.put("kind","ADMIN");data.put("caseId",CASE);data.put("operationId",null);data.put("targetUserId",null);data.put("result",null);
+        Map<String,Object> record=new LinkedHashMap<>(Map.of("eventId",UUID.randomUUID(),"source","admin-service","stream","admin.events",
+                "sourceSequence",1,"orderId",ORDER,"action","CaseOpened","occurredAt",TIME,"ingestedAt",TIME,"data",data));
+        record.put("actorUserId",ACTOR);response.put("records",List.of(record));
+        assertEquals(1,client.fetch(CASE,ORDER,"user",null,20).path("records").size());
+        record.remove("stream");
+        unavailable();
+    }
 }

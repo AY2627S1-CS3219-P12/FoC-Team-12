@@ -501,7 +501,10 @@ function ReportStatusData({ id }: { id: string }) {
         Submitted {formatSingaporeTime(state.data.ownStatement.submittedAt)}
       </p>
       <button onClick={state.retry}>Refresh status</button>
-      <ParticipantConversationStatus summary={state.data.case} />
+      <ParticipantConversationStatus
+        summary={state.data.case}
+        actorId={state.data.ownStatement.reporterId}
+      />
     </section>
   )
 }
