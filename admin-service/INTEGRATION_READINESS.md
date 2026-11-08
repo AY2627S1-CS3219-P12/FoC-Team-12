@@ -6,6 +6,293 @@ requirements or approval of draft interfaces. Product scope remains in the Admin
 wire shapes in `docs/contracts/` remain review drafts until the affected owners agree them.
 Never replace an unavailable dependency with synthetic data in application code.
 
+## Chat integration current state
+
+This section supersedes older handoffs below that describe Chat as documentation-only. The
+merged Chat service implements eligibility, reconciliation/timeline, case initiation and public
+message endpoints. Its implementation is evidence of available code, not full acceptance of the
+cross-service workflow. Darryl is the editor for this Admin-only change; no producer, gateway,
+Compose, CI, shared design or wire-schema files are changed by that consumer work. The separately
+approved local runtime reconciliation below includes Kubernetes and network configuration.
+
+### Admin consumer behavior
+
+- Public Chat metadata is `{id,orderId,status,readOnly}`. Message history is an array with an
+  exclusive numeric `after` and a bounded `limit`; attachments use `{id,contentType,filename,size}`.
+  Admin now maps these actual producer shapes and validates thread/order/message identity, sequence
+  and attachment metadata. The private initiation shape already matches Admin's consumer.
+- Admin exposes read-only, no-store confirmed-reference discovery at
+  `GET /api/admin/cases/{caseId}/conversations` (current active ADMIN) and
+  `GET /api/admin/reports/{caseId}/conversations` (current active reporting participant in
+  REQUESTER/COURIER mode, own reference only). These return arrays of the existing Admin reference
+  shape. No mutation identity, duplicate processing or producer retry is needed: reads create no
+  state/events and may be repeated. Current User verification remains fail-closed; an empty array
+  means no Admin-confirmed reference, while User failure returns 503. Browser errors preserve that
+  distinction and retry the read. Existing request/error status handling supplies observability;
+  private references, tokens and messages are not logged or exported as lifecycle facts.
+- Reload uses confirmed references without a creation POST. Participants automatically open their
+  own thread; admins select a reporting participant, including historical couriers who reported.
+  Existing original-key initiation/send recovery remains scoped to actor/case/participant/thread.
+  Unknown non-reporters stay hidden. Neither browser IDs nor the timeline automatically grant
+  callback membership. Chat's separate REST authorization remains authoritative for message access.
+- Each initial/history-page read and send rechecks current Admin access and Chat metadata. Either
+  service's read-only decision disables replies, including RESOLVED cases with stale Chat metadata.
+  This is client defense only; it does not repair Chat's server-side read/write/revocation races.
+- Reporting completeness now requires the requested order's exact
+  `order-service/order.lifecycle.events` checkpoint, rejecting duplicate checkpoint claims, lag,
+  gaps, identity mismatch and missing coverage. Timeline validation remains strict; no producer
+  data is fabricated or silently relabeled COMPLETE to make integration pass.
+
+### Producer issues requiring owner agreement
+
+These are findings from the merged source, not fixes authorized in another service. Eldridge owns
+Chat; Darryl owns Admin/User; XueTing owns historical Order evidence. Jun Hui coordinates shared
+deployment changes with the affected owners. Agree exact behavior and paired tests before changes.
+
+| Gap | Source evidence and effect | Required agreement / acceptance |
+| --- | --- | --- |
+| Timeline wire mismatch | `AdminChatContractService.Record.wire()` omits `stream`; Admin requires it on every record. Nonempty current responses fail validation with 503. | Chat emits the existing agreed stream identity, with actual-producer consumer tests. Do not remove Admin's validation or infer a stream from action names. |
+| Historical periods | Chat `participants()` sets assignedAt and unassignedAt to the same first-seen timestamp and deduplicates by user, losing subsequent assignment periods. | Preserve authoritative Order assignment history/periods, requester semantics and repeated assignments; unknown facts remain explicit. |
+| Current private reads / other admins | Chat `get`, `messages`, `requireParticipant` and attachment access use stored Chat membership; reads do not call current Admin/User eligibility. Administrators not inserted into that thread are denied despite callback permission to review. | Revalidate current account/case access on REST, images and WebSocket paths; permit authorized reviewing admins without giving write access; test unrelated/revoked accounts. Admin's lookup never grants Chat membership. |
+| Read-only creation and identity | `openConversation()` checks canReadConversation rather than requiring write access for a new thread, creates READ_ONLY rows when write is false, and hashes participantId without binding the initiating actor. | Only the current assigned reviewer creates under UNDER_REVIEW; authorized read-only recovery reads an existing identity without creation. Same key with changed actor/body conflicts according to the agreed operation scope. |
+| Unconfirmed creation recovery | Chat has no case/participant read-only discovery route. Admin can recover only references it confirmed locally. A committed Chat create with a lost response/failed Admin save remains uncertain after closure or revocation. | Agree caller/producer, privacy-filtered absence versus unavailable, stable operation/reference identity, retention, authorized retry/reconciliation owner and observable outcomes. No participant POST lookup or guessed endpoint. |
+| Closure/write races | Chat checks the Admin callback before its message write without a shared state protocol. `CaseConversationAccessGuard` permanently marks the entire thread READ_ONLY after a false per-actor write decision; that can conflate another admin's lack of write permission with case closure. | Separate actor denial from terminal case state; define closure/send race behavior and enforce it on all write paths. A refreshed UI flag is insufficient acceptance. |
+| Recovery/snapshot completeness | Timeline reconciles on every page and rejects cursors when the current revision changes instead of retaining a pinned snapshot. Zero committed sequences are always labeled a gap. Coverage does not reconcile case-linked User sanctions or credit correction streams separately. | Agree snapshot lifetime/restart semantics, valid empty baselines and case-linked action coverage; test mutations between pages, action outcomes, gaps/conflicts, lag and producer outage. Never claim financial/sanction coverage from an unrelated checkpoint. |
+
+### Runtime/trust findings
+
+Repository addresses align for Compose: Admin → `http://chat-service:8085`, Chat → Admin 8084,
+User 8081, Order 8082 and Credit 8083. Gateway has `/api/chat/**` and `/ws/chat` routes; Admin's
+dev proxy forwards `/api/chat` to gateway 8088. Private `/internal/**` calls stay service-to-service.
+
+Both sides validate separate RS256 service assertions and Admin supplies the original JWT using
+`X-Actor-Token`. Runtime must configure independent signing keys and pinned public trust maps:
+Chat trusts Admin; Admin trusts Chat; User/Order/Credit trust Chat for their respective internal
+reads. Every service must validate the same User issuer/audience/JWKS. Optional empty Compose
+key/trust defaults fail closed and are not proof of a working trust chain. No secrets were printed.
+
+Before the approved reconciliation, the Chat Kubernetes ConfigMap omitted CHAT_ADMIN_URL/CHAT_USER_URL/CHAT_ORDER_URL/
+CHAT_CREDIT_URL, leaving loopback defaults inside the Chat pod. Its secret initializer provisions
+database/RabbitMQ passwords only, not Chat service signing/trust. `chat-service/k8s/network.yaml`
+lacked Chat egress to Admin/Order/Credit; both ends of each default-deny path required review. Admin
+already permits its Chat egress and Chat callback ingress. These are Chat/shared deployment handoffs,
+now reconciled under the user's separate explicit runtime authorization, as recorded below.
+
+### Reconciled published deployment and real acceptance results
+
+This current result supersedes the historical deployment below. User explicitly approved trust,
+Kafka, ConfigMaps, narrow network rules and the six-service rollout on existing `foc-local`.
+Selected manifests have zero live diff. Existing PVC identities, data and signing keys were retained.
+
+Admin/User/Chat/Gateway/Order/Credit run published revision
+`ce035eee7ff4eda6972fa4554714051b6314b209`, from successful
+[CI run 42501172138, attempt 1](https://github.com/AY2627S1-CS3219-P12/FoC-Team-12/actions/runs/42501172138).
+Each ready pod's image ID matched its registry index digest. **These images exclude the Admin
+consumer/discovery fixes in this PR.** Admin migrations V1–V8 succeeded.
+
+The checked-in Kafka helper completed topic/ACL reconciliation; lifecycle configuration checks
+now pass. Admin's two outcome groups and Chat's Order lifecycle group have real assignments.
+Signed probes from final Admin/Chat pods reached all five intended producer routes; wrong audiences
+returned 401. Public Order/Credit OpenAPI hides internal exports: absence there does not establish
+absence of the API. Signed probes reached those routes. Deployment smoke passed health, token
+rejection, private-route isolation, allowed service connections and denied cross-database paths.
+Chat connected to RabbitMQ using its corrected FQDN. Explicit Chat dependency URLs, narrow network
+paths and numeric non-root UID/GID now match the runtime. Only missing public Chat pins were added
+to Order/Credit; no signing identity was replaced. Redundant side-chat policies were removed after
+canonical equivalents became active. `Reconcile-ChatTrust.ps1` defaults to read-only verification.
+
+With authorization to create errands, the personal account created the explicitly labeled
+“Integration acceptance test - do not fulfil” errand. No administrative correction or ban was applied.
+
+| Artifact / journey | Actual result |
+| --- | --- |
+| Errand `2b8c6ab2-3aa8-4ef0-b6e7-d618f4a5c926` | Real Order/Credit creation reserved 1 credit; subsequent cancellation released it. Wallet restored to 10 available / 0 reserved with reserve/release ledger entries. |
+| Case `337988df-b138-4a3e-ad6e-9ee1f5bc4589` | Genuine requester eligibility/report succeeded, one statement persisted, reload recovered the same case pointer. Admin claimed it: UNDER_REVIEW revision 2. |
+| Lifecycle Kafka | Read-committed broker reads matched original Admin outbox CaseOpened sequence 1 and CaseClaimed sequence 2 identities. No synthetic events published; operational consumer used no auto-commit. |
+| Conversation `c674f7d7-aec3-48e8-af17-a7a2db21be53` | Real initiation and reference confirmation succeeded, revision 3/source sequence 2. Chat metadata returned HTTP 200 with `{id,orderId,status,readOnly}`. Published Admin showed messaging unavailable because its old client expects different fields. Worktree fixes address this but are not deployed. No messages sent. |
+| Timeline / resolution | Evidence initially unavailable, then snapshot conflict 409. Resolution carrying actual current revision 3 also returned 409. Case retained UNDER_REVIEW revision 3, zero decisions and no CaseResolved. Investigate producer/consumer snapshots; do not weaken validation. |
+| Unresolved conversation after errand cancellation | Chat changed the same thread from ACTIVE/false to READ_ONLY/true while the case stayed UNDER_REVIEW. `OrderLifecycleConsumer.lock()` updates every conversation for an order without filtering CASE threads. This is a Chat-owned failure, not resolved read-only acceptance. |
+
+Acceptance remains **partial**. Only one identity was used. Historical couriers, unrelated-user
+denial, another reviewer, real message/reload recovery and resolved history need dedicated actors
+and producer repairs. No deployed duplicate-delivery or Chat/Kafka outage business acceptance is
+claimed. Isolated PostgreSQL/Kafka tests below cover Admin mechanisms; the controlled User GUI
+outage below used the earlier image. User sanctions remain disabled (flag unset/default false);
+Credit has no correction command handler; neither owner command group exists. No producer database
+access or fabricated outcomes was used.
+
+Next owners: Darryl packages reviewed Admin fixes into a published image and verifies its GUI;
+Eldridge repairs Chat timeline/snapshot, private authorization and CASE terminal behavior and
+implements Credit corrections; Darryl as User owner reviews sanction listener activation;
+XueTing verifies historical assignment evidence. Jun Hui and affected owners review shared runtime
+changes. Obtain behavior/contract agreement before editing producer code. The manual procedure
+below remains the acceptance checklist, with these current prerequisites replacing the old baseline.
+
+### Historical baseline verification and acceptance boundary
+
+The following records the pre-reconciliation deployment only. Its image/configuration failures
+are superseded above; isolated test results remain valid for unchanged Admin code.
+
+Target: existing Minikube context/profile/namespace `foc-local`, gateway
+`http://localhost:8089` through a loopback-only port-forward. Docker Desktop and the existing
+stopped cluster were resumed without replacing storage, applying manifests or rebuilding images.
+Earlier sandbox checks hid the installed Docker/kubectl tools; they were not proof of absence.
+The regular Compose stack remains stopped and was not used for acceptance.
+
+The deployed Admin/User/Gateway images are `local-22bc8cc`; Order/Credit use
+`arkanian4/foc-order-service:d3-1` and `arkanian4/foc-credit-service:d3-1`.
+Admin's live database has successful migrations V1–V7, whereas the current source includes V8.
+Published Admin OpenAPI has conversation POST only: the new confirmed-reference GETs are not
+deployed. There is no Chat Deployment, Service or database/PVC in the namespace, and gateway
+`GET /api/chat/preferences` returns 404. Source availability does not establish deployment readiness.
+
+Live checks passed: gateway health/home 200; unsigned Admin queue 401; private internal route 404;
+real User sign-in and switch to ADMIN; current Admin access verification and empty queue; switching
+back to REQUESTER denies the Admin workspace. An eligibility read using an explicit non-business
+diagnostic UUID showed unavailable/retry, including keyboard retry at 375px with no horizontal
+overflow and no submission form. Admin case/statement/action counts stayed zero. This verifies
+dependency failure presentation, not eligibility or unrelated-user denial on an actual errand/case.
+The deployed Order GUI link `/errands/browse` returned a bearer-token-required 401; its producer/
+gateway owners must verify current frontend routing/image behavior before the real errand journey.
+
+The real authenticated broker recovered after cluster startup. Both `admin-service-credit` and
+`admin-service-user` are Stable with one member, with all three respective outcome partitions
+assigned. The command/outcome topics exist. `user-service-admin`, `credit-service-admin` and
+`chat-service-timeline` do not exist. User has no USER_ADMIN_COMMANDS_ENABLED environment value
+(the source default is false). Neither a healthy Admin listener nor an empty group proves effects.
+
+A controlled deployed User dependency outage was exercised by reducing its existing single replica
+to zero for 45 seconds with automatic restoration in a finally block. Kubernetes confirmed no
+ready User endpoints. Refreshing the real signed-in Admin GUI hid the queue and showed account
+verification unavailable with retry. After restoring the original one ready replica, retry recovered
+current Admin access and the empty queue using the existing session. Admin/User/Gateway/Kafka were
+all ready afterward, and Admin case/statement/action counts remained zero. This establishes live
+identity-dependency outage/recovery; it does not establish Chat recovery or pending owner effects.
+
+The existing Test-AdminDeployment smoke passed actual health/OpenAPI/GUI checks, unsigned and
+invalid-token 401s, private gateway-route 404, Admin's seven successful deployed migrations, allowed
+Admin→DB/User/Kafka and Gateway→Admin connections, and denied Admin→User DB, Gateway→Admin DB and
+User→Admin DB connections. It also required actual Admin partition assignments for both outcome
+topics. No database restart was requested. These are operational checks, not business acceptance.
+
+The old public Order/Credit OpenAPI did not list internal exports. This alone did not establish
+their absence: those routes are intentionally hidden from public specifications. The reconciled
+signed-route probes above supersede the earlier inference of missing internal APIs.
+
+`Check-CaseEventConfiguration.ps1 -Profile foc-local` failed on the actual target: missing
+ADMIN_CASE_EVENTS_ENABLED=true, stable ADMIN_CASE_EVENTS_TRANSACTION_ID, `admin.events`, Admin
+topic Write/Describe and `admin-case-events-` transaction-prefix Write/Describe. Existing single-node
+transaction-state settings 1/1 and Admin cluster idempotent-write permission were present. No topics,
+ACLs or enablement settings were changed. A coordinated reviewed runtime update remains required.
+
+With Docker available, the focused Admin real PostgreSQL/Kafka suite passed **50/50, none skipped**:
+CaseWorkflowTest (39), AdminPersistenceTest (1), CaseEventRelayIntegrationTest (8) and
+ActionKafkaIntegrationTest (2). This includes the previously skipped confirmed-reference privacy/
+closure regression, original command/event redelivery, broker outage/recovery, competing/fenced
+publishers, lost database confirmation and persistence. Combined with the unchanged 44 non-container
+tests already passed, all 94 Admin tests have now run successfully. Chat eligibility/timeline and
+owner outcomes in these Admin tests are explicitly test-produced; no deployed ledger/account result
+is established. User's existing UserSanctionIntegrationTest passed **7/7** against disposable real
+PostgreSQL: actual sanction domain logic, reactivation, duplicate replay without rebanning,
+self/final-admin protection, concurrent account updates and atomic rollback. It does not exercise
+the deployed User Kafka listener, which is disabled. No User implementation files were edited.
+
+Frontend 77 tests, TypeScript, production build, ESLint, changed-file formatting, five shared design
+checks and diff whitespace checks passed in the consumer iteration. Repository-wide formatting
+still reports nine unchanged files. The earlier labeled synthetic browser preview verified the new
+conversation GUI at desktop/375px; the deployed image does not contain that GUI update.
+
+| Requested journey | Actual deployed result / remaining prerequisite |
+| --- | --- |
+| Reporting and historical couriers | Blocked by missing Chat and current producer evidence deployment. Diagnostic failure is unavailable, with no business writes. No historical eligibility is claimed. |
+| Claiming | No real cases exist because reporting cannot complete. Claim/revision/concurrency behavior passes the isolated PostgreSQL suite only. |
+| Timeline evidence | No Chat deployment or lifecycle topic/relay. Current-source wire/history gaps above also need Chat/producer agreement before COMPLETE acceptance. |
+| Private conversations and reload | No deployed Chat; Admin image lacks discovery GETs. New reference persistence/privacy/reload checks pass in isolated tests; real messaging and resolved history are pending. |
+| Credit corrections | Admin Kafka consumers are live; Credit admin-command group/handler is absent. No real ledger correction or reserved-balance invariant was accepted. |
+| Reversible bans | User sanction listener/group is absent. Seven producer-owned database tests pass; deployed ban, outcome delivery and reactivation remain pending dedicated participants and listener activation. |
+| Resolution | Blocked by unavailable complete producer evidence and no real case. Immutable decision/action guards pass in isolated tests with labeled fixture evidence. |
+| Duplicate delivery and recovery | Real isolated Kafka/PostgreSQL tests pass; no duplicate business command was injected into shared topics. Deployed exactly-once owner effects remain unverified. |
+
+No new Admin implementation failure was reproduced in the real database/Kafka suite. The live
+target's stale image/configuration is an activation dependency, not authorization to bypass missing
+producer contracts, seed normal databases, forge outcomes or change another service's code.
+
+### Manual acceptance still required
+
+1. Through the real gateway, use one real errand with requester, current and withdrawn couriers.
+   Verify eligibility/ineligibility and unavailable outcomes; never use synthetic history for a case.
+2. Claim as an active administrator, verify timeline identities/periods/checkpoints and paging;
+   source gaps/outages must block resolution. Check actual action outcome coverage when present.
+3. Start separate reporting-participant threads. Reload reviewer and participant pages and recover
+   only authorized confirmed references without another POST. Test another reviewing administrator,
+   unrelated/revoked/inactive accounts, uncertain initiation, original retries and Chat outage.
+4. Resolve with fresh complete evidence and settled actions. Preserve private readable history;
+   reject new reports/initiation/sends/uploads after closure, including concurrent sends and direct
+   Chat calls. Distinguish read-only authorization failure from permanent thread closure.
+5. Repeat affected GUI journeys at desktop and 375px, using keyboard selection/composer/retry,
+   visible focus and SGT timestamps. Explicit user acceptance is pending these real-service checks.
+
+### Full GUI/business acceptance procedure after owner activation
+
+Use the selected target consistently: cluster gateway 8089 and cluster accounts; regular Compose
+8088 and its accounts are a different database. Allocate dedicated active requester R, withdrawn
+courier H, replacement courier C, unrelated participant U and reviewers A/B. Use intentional
+acceptance accounts/errands; do not ban or change credits on the personal sign-in account. The
+baseline used personal sign-in for access checks only; the later authorized errand/report run is
+recorded above, with its reservation refunded. Owners must supply or establish
+the required participant accounts and genuine Order lifecycle through supported producer journeys.
+
+1. **Reporting/history:** R creates an acceptance errand, H accepts then withdraws, C accepts it.
+   R/H/C each open the same real errand's report destination in participant mode. Verify trusted
+   historical eligibility, one statement per actor and one shared case. U cannot report or see
+   another actor's report/case pointer; participant mode cannot open Admin review. Retry the exact
+   same report request after an interrupted response; it must return the original result with no
+   extra case/statement. A second intentional statement from the same actor must conflict. Preserve
+   the errand URL when Order's historical list cannot discover H's withdrawn assignment.
+2. **Claim/evidence:** A and B open the unclaimed case and attempt to claim the same revision.
+   Exactly one succeeds; refresh the loser. Verify requester and every assignment period, original
+   source/event IDs, stored location snapshots, ordered paginated evidence and per-source committed/
+   projected checkpoints. Cause a gap or owner outage only in the agreed test environment; the GUI
+   must show incomplete/unavailable, and resolution must stay blocked until verified recovery.
+3. **Private conversations:** The assigned reviewer opens separate R/H/C reporting-participant
+   threads. Exchange text with each actor, refresh and reload both sides, and page past 20 messages.
+   No user sees another thread; B's permitted read must never enable replies. Interrupt initiation/
+   send response and retry the original request/clientMessageId. A producer-committed create with
+   no saved Admin reference remains the explicit producer recovery gate; do not invent lookup or
+   use POST as participant discovery. Check revocation/inactivity on direct Chat REST and WebSocket
+   access as well as the GUI. Non-reporting historical entry remains an owner-agreement dependency.
+4. **Credit corrections:** Record target available/reserved values through Credit-owned APIs/UI.
+   A confirms a small nonzero signed correction with reason; 202/PENDING is not success. Wait for
+   the real Credit-owned result and reconcile the actual ledger/balance: one delta, reserved
+   unchanged. Repeat with a debit and insufficient available-credit rejection. During an approved
+   broker/owner outage, PENDING becomes UNKNOWN and blocks closure. Recover using original identity.
+   An owner-approved replay of the exact original command/outcome must not repeat the ledger effect,
+   terminal Admin audit or operation. Never publish a fabricated success as verification.
+5. **Reversible bans:** A requests BAN for a dedicated reporting participant with a reason. Wait
+   for actual User APPLIED/NO_CHANGE; inspect account status through User administration. Verify
+   login denial, current Admin/Chat access denial, self/final-admin protections and no repeated
+   sanction under exact duplicate command delivery. Reactivate through User administration with a
+   reason. Replay the original ban and verify the stored original outcome is republished while the
+   account remains active. This replay requires the owner's approved tool and original IDs.
+6. **Resolution:** With no PENDING/UNKNOWN actions and fresh complete owner evidence, A enters an
+   immutable decision and an explanation for every rejected action, reviews confirmation and
+   resolves. Repeating the same resolution request returns the original result. R/H/C see only
+   safe resolved status, their statement and read-only own history. New reports/actions/initiation/
+   messages/uploads must be rejected, including a send racing closure. B and unrelated actors
+   cannot resolve. Verify original CaseResolved identity through real Kafka and the Chat projection.
+7. **GUI/accessibility/recovery:** Repeat at desktop and 375px with keyboard-only selection,
+   confirmation/cancel, retry and pagination, visible focus and SGT timestamps. Refresh under User,
+   Chat and Kafka outages individually in the agreed test environment; restore each dependency and
+   verify original pending identities, private history and final owner outcomes. Record which
+   operations were actually delivered/committed and which remain uncertain before manual acceptance.
+
+Historical activation plan (runtime/V8/topic reconciliation now completed above): Darryl prepares the current Admin image and verifies the
+existing User sanction listener activation; Jun Hui/nominated shared editor and affected owners
+review/apply the lifecycle topic/ACL/transaction settings and producer network/routing changes;
+Eldridge implements/activates real Credit corrections and resolves/activates Chat; XueTing deploys
+the agreed historical Order evidence and verifies errand GUI routing. Run the read-only metadata
+preflight again before the first business case. No shared rollout is implied by this checklist.
+
 ## Case-event delivery handoff
 
 Admin owns the new V8 outbox progress migration and lifecycle relay. It includes existing pending
@@ -48,8 +335,8 @@ is separate from those broader checks, and does not establish Chat ingestion or 
 Admin owns cases, statements, reviewer/state, audit, request receipts and its private database.
 Chat (Eldridge) owns historical timeline, conversations, messages and all Chat access checks.
 Admin implements consumers against existing documented shapes; this does not certify a producer
-implementation. At this iteration's start Chat contains documentation only. No live Chat
-integration, gateway deployment or end-to-end conversation acceptance has passed.
+implementation. Chat now contains runnable code; the current findings and acceptance limits are
+in the section above. No live Chat acceptance passed in this Admin consumer iteration.
 
 ## Contracts and conversation gaps
 
@@ -65,10 +352,10 @@ integration, gateway deployment or end-to-end conversation acceptance has passed
 
 Admin conversations preparation deliberately supports initiation only for reporting participants,
 including previously eligible historical couriers. An unknown/non-reporting target is hidden;
-the UI explains the pending historical integration. Participant and other-admin discovery remain
-explicitly unavailable. No guessed endpoint or editable conversation-ID input bypasses these gaps.
-The reusable thread UI is prepared for a validated reference but is not wired to participant
-discovery until C2/C3 are agreed. It uses REST refresh/pagination and safe retry; WebSocket
+the UI limits selection to reporting participants. Admin now discovers its locally confirmed
+references for participants and administrators as described above; producer recovery of unconfirmed
+threads remains unresolved. No guessed Chat endpoint or editable conversation-ID input bypasses
+these gaps. The thread UI uses actual REST sequence pagination and safe retry; WebSocket
 notifications/reconnect remain pending C5. Browser pending keys/text are scoped to account/case/
 thread in session storage. No message content is stored in Admin's database.
 

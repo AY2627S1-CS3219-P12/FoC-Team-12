@@ -59,4 +59,11 @@ class ChatEligibilityClientTest {
         status=503; unavailable(); status=403; unavailable(); status=302; unavailable();
     }
     private void unavailable(){assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->client.check(order,actor,"user")).getStatusCode());}
+    @Test void requiresTheRequestedOrdersActualLifecycleCheckpointWithoutDuplicateClaims() {
+        checkpoint.put("aggregateId",UUID.randomUUID().toString());assertFalse(client.check(order,actor,"user").complete());
+        checkpoint.put("aggregateId",order.toString());checkpoint.put("source","credit-service");assertFalse(client.check(order,actor,"user").complete());
+        checkpoint.put("source","order-service");checkpoint.put("stream","other-stream");assertFalse(client.check(order,actor,"user").complete());
+        checkpoint.put("stream","order.lifecycle.events");coverage.put("checkpoints",List.of(checkpoint,checkpoint));assertFalse(client.check(order,actor,"user").complete());
+        coverage.put("checkpoints",List.of(checkpoint));assertTrue(client.check(order,actor,"user").complete());
+    }
 }

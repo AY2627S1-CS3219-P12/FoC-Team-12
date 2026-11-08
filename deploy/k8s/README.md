@@ -45,15 +45,22 @@ pull without credentials; private repositories additionally require an `imagePul
 
 | Component | Published image |
 | --- | --- |
-| User | `arkanian4/foc-user-service:d3-1` |
-| Gateway | `arkanian4/foc-gateway-service:d3-2` |
+| User | `arkanian4/foc-user-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
+| Gateway | `arkanian4/foc-gateway-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 | Supplier | `arkanian4/foc-supplier-service:d3-1` |
-| Credit | `arkanian4/foc-credit-service:d3-1` |
-| Order | `arkanian4/foc-order-service:d3-1` |
-| Chat | local `foc-chat-service:local-323929b` until a reviewed published tag is selected |
+| Credit | `arkanian4/foc-credit-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
+| Order | `arkanian4/foc-order-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
+| Chat | `arkanian4/foc-chat-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
+| Admin | `arkanian4/foc-admin-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 
 Runtime passwords/signing keys are created separately in each teammate's cluster. They are not
 included in images or Git. Never add them to application resources or frontend build settings.
+
+The six workflow images above were verified in successful CI run `42501172138`, attempt 1, for
+committed revision `ce035eee7ff4eda6972fa4554714051b6314b209`. They replace the runtime-only local
+Admin/Chat/Gateway builds during the explicitly approved foc-local reconciliation. Uncommitted
+Admin client edits are not included in these published images. Current pins are in the deployment
+files; a later successful CI run does not automatically select or deploy another version.
 
 ## Apply a CI-published service update
 

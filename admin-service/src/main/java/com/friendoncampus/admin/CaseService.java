@@ -152,6 +152,22 @@ public class CaseService {
         return row(caseId).summary;
     }
 
+    public List<ChatConversationClient.Conversation> confirmedConversations(Jwt jwt, UUID caseId, boolean participantView) {
+        UUID actor = participantView ? requireParticipant(jwt) : requireAdmin(jwt);
+        if (participantView && !hasStatement(caseId, actor)) throw hidden();
+        row(caseId); // Unknown cases stay hidden instead of appearing to have an empty history.
+        // One local statement grants participant access. Discovery never calls Chat or creates a thread.
+        return db.query("""
+                SELECT r.conversation_id,r.participant_user_id,c.order_id,c.state,c.reviewer_id
+                FROM admin_case_conversations r JOIN admin_cases c ON c.id=r.case_id
+                WHERE r.case_id=?
+                """ + (participantView ? " AND r.participant_user_id=?" : "") + " ORDER BY r.participant_user_id",
+                (r,n) -> new ChatConversationClient.Conversation(r.getObject("conversation_id",UUID.class), caseId,
+                        r.getObject("order_id",UUID.class), r.getObject("participant_user_id",UUID.class),
+                        !"UNDER_REVIEW".equals(r.getString("state")) || (!participantView && !actor.equals(r.getObject("reviewer_id",UUID.class)))),
+                participantView ? new Object[]{caseId,actor} : new Object[]{caseId});
+    }
+
     public Mutation openConversation(Jwt jwt, UUID key, UUID caseId, UUID participantId) {
         UUID actor = requireAdmin(jwt);
         if (participantId == null || key == null) throw invalid("A participant and Idempotency-Key UUID are required.");

@@ -55,9 +55,9 @@ public class SecurityConfiguration {
         converter.setJwtGrantedAuthoritiesConverter(jwt -> List.of(new SimpleGrantedAuthority("ROLE_" + jwt.getClaimAsString("role"))));
         return http.authorizeHttpRequests(a -> a
                 .requestMatchers("/admin", "/admin/**", "/admin-assets/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/admin/session", "/api/admin/cases", "/api/admin/cases/*", "/api/admin/cases/*/timeline", "/api/admin/cases/*/actions/*").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/session", "/api/admin/cases", "/api/admin/cases/*", "/api/admin/cases/*/timeline", "/api/admin/cases/*/actions/*", "/api/admin/cases/*/conversations").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/admin/cases/*/claim", "/api/admin/cases/*/conversations", "/api/admin/cases/*/actions", "/api/admin/cases/*/resolve").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.GET,"/api/admin/orders/*/report-context").hasAnyRole("REQUESTER", "COURIER")
+                .requestMatchers(HttpMethod.GET,"/api/admin/orders/*/report-context", "/api/admin/reports/*/conversations").hasAnyRole("REQUESTER", "COURIER")
                 .requestMatchers("/api/admin/reports", "/api/admin/reports/*").hasAnyRole("REQUESTER", "COURIER")
                 .anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o.authenticationEntryPoint((q,r,e) -> problem(r,q,mapper,401))
