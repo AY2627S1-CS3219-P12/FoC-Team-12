@@ -125,16 +125,25 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    ```bash
    export SENDGRID_API_KEY='set-locally'
    export SENDGRID_FROM_EMAIL='verified@example.com'
-   export ADMIN_BOOTSTRAP_EMAIL='optional@example.com'
+   export ADMIN_BOOTSTRAP_EMAIL='student-id@u.nus.edu'
    export ADMIN_BOOTSTRAP_USERNAME='optional-admin'
    export ADMIN_BOOTSTRAP_PASSWORD='optional-strong-password'
    deploy/aws/scripts/configure-secrets.sh
    unset SENDGRID_API_KEY SENDGRID_FROM_EMAIL ADMIN_BOOTSTRAP_PASSWORD
    ```
 
-   Re-running the helper preserves existing secret versions. Rotate a value with an explicit
-   `aws secretsmanager put-secret-value --secret-id ... --secret-string file://...` command, then
-   restart only the affected deployment so External Secrets can project the new version.
+   Re-running the helper preserves existing secret versions. Supplying all three
+   `ADMIN_BOOTSTRAP_*` values explicitly updates only the bootstrap identity, which provides a
+   safe repair path for an invalid initial address without rotating database or signing keys.
+   The helper rejects bootstrap addresses outside the eligible NUS student domains before writing
+   them. Rotate any other value with an explicit `aws secretsmanager put-secret-value --secret-id
+   ... --secret-string file://...` command, then restart only the affected deployment so External
+   Secrets can project the new version.
+
+   The helper also migrates an existing Kafka broker secret forward when new service identities
+   are introduced: it adds only missing fields and never rotates credentials already in use.
+   Runtime provisioning validates the required Chat and Notification identities before building
+   images, then forces External Secrets to synchronize the current AWS version before Kafka starts.
 
 6. Run **AWS staging infrastructure -> provision-runtime**. It builds all six application images,
    pushes immutable tags to ECR, applies the platform, creates CloudFront and smoke-tests the HTTPS

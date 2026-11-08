@@ -69,6 +69,28 @@ jobs:
             credit-service-secrets admin-service-secrets kafka-broker-secrets kafka-ui-secrets; do
             aws secretsmanager get-secret-value --secret-id "foc/staging/$name" --query VersionId --output text >/dev/null
           done
+          user_secret=$(aws secretsmanager get-secret-value \
+            --secret-id foc/staging/user-service-secrets --query SecretString --output text)
+          if jq -e 'has("ADMIN_BOOTSTRAP_EMAIL") or has("ADMIN_BOOTSTRAP_USERNAME") or has("ADMIN_BOOTSTRAP_PASSWORD")' \
+            <<< "$user_secret" >/dev/null; then
+            if ! jq -e '
+                ((.ADMIN_BOOTSTRAP_EMAIL // "") | test("@u\\.(nus\\.edu|duke\\.nus\\.edu|yale-nus\\.edu\\.sg)$"; "i")) and
+                ((.ADMIN_BOOTSTRAP_USERNAME // "") | length >= 1 and length <= 20) and
+                ((.ADMIN_BOOTSTRAP_PASSWORD // "") | length >= 15 and length <= 64)
+              ' <<< "$user_secret" >/dev/null; then
+              echo "::error::User bootstrap identity is incomplete or invalid. Re-run deploy/aws/scripts/configure-secrets.sh with all three ADMIN_BOOTSTRAP_* variables and an eligible NUS student email."
+              exit 1
+            fi
+          fi
+          kafka_secret=$(aws secretsmanager get-secret-value \
+            --secret-id foc/staging/kafka-broker-secrets --query SecretString --output text)
+          for key in KAFKA_CHAT_SERVICE_PASSWORD KAFKA_NOTIFICATION_SERVICE_PASSWORD; do
+            if ! jq -e --arg key "$key" 'has($key) and (.[$key] | type == "string" and length > 0)' \
+              <<< "$kafka_secret" >/dev/null; then
+              echo "::error::Kafka broker secret is missing $key. Run deploy/aws/scripts/configure-secrets.sh from a trusted workstation."
+              exit 1
+            fi
+          done
       - uses: docker/setup-buildx-action@v4
         if: inputs.operation == 'provision-runtime'
       - uses: aws-actions/amazon-ecr-login@v2
