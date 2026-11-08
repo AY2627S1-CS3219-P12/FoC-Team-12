@@ -36,6 +36,42 @@ retry() {
   done
 }
 
+job_diagnostics() {
+  local namespace=$1
+  local job=$2
+
+  kubectl -n "$namespace" get job "$job" -o wide || true
+  kubectl -n "$namespace" get pods -l "job-name=$job" -o wide || true
+  kubectl -n "$namespace" describe job "$job" || true
+  kubectl -n "$namespace" logs "job/$job" --all-containers=true --tail=300 || true
+}
+
+wait_for_job() {
+  local namespace=$1
+  local job=$2
+  local timeout_seconds=$3
+  local deadline=$((SECONDS + timeout_seconds))
+  local conditions
+
+  while ((SECONDS < deadline)); do
+    conditions=$(kubectl -n "$namespace" get job "$job" \
+      -o jsonpath='{range .status.conditions[*]}{.type}={.status}{"\n"}{end}' 2>/dev/null || true)
+    if [[ $conditions == *"Complete=True"* ]]; then
+      return 0
+    fi
+    if [[ $conditions == *"Failed=True"* ]]; then
+      echo "Job $namespace/$job failed." >&2
+      job_diagnostics "$namespace" "$job"
+      return 1
+    fi
+    sleep 5
+  done
+
+  echo "Timed out waiting ${timeout_seconds}s for job $namespace/$job." >&2
+  job_diagnostics "$namespace" "$job"
+  return 1
+}
+
 aws "${profile_args[@]}" --region "$AWS_REGION" eks update-kubeconfig --name "$EKS_CLUSTER_NAME" >/dev/null
 
 sed "s|RDS_HOST_REPLACED_BY_DEPLOY_SCRIPT|$RDS_HOST|g" \
@@ -81,7 +117,7 @@ done
 
 kubectl -n foc-staging delete job database-bootstrap --ignore-not-found
 kubectl apply -f "$root/deploy/aws/k8s/staging/database-bootstrap.yaml"
-kubectl -n foc-staging wait --for=condition=complete job/database-bootstrap --timeout=15m
+wait_for_job foc-staging database-bootstrap 900
 
 kubectl -n foc-staging create configmap kafka-scripts \
   --from-file=lib.sh="$root/deploy/kafka/lib.sh" \
@@ -107,7 +143,7 @@ kubectl -n foc-staging rollout status statefulset/kafka --timeout=20m
 job="kafka-init-$(date +%s)"
 sed "s/name: kafka-init/name: $job/" "$root/deploy/kafka/k8s/initialize-job.yaml" \
   | kubectl -n foc-staging create -f -
-kubectl -n foc-staging wait --for=condition=complete "job/$job" --timeout=20m
+wait_for_job foc-staging "$job" 1200
 
 for deployment in user-service supplier-service order-service credit-service admin-service gateway kafka-ui; do
   kubectl -n foc-staging rollout status "deployment/$deployment" --timeout=20m
