@@ -1,4 +1,10 @@
 :root {
+  color-scheme: light;
+  color: #20332d;
+  background: #f3f6f4;
+  font-family: 'Public Sans', system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
   --ink: #20332d;
   --muted: #57655f;
   --action: #23654e;
