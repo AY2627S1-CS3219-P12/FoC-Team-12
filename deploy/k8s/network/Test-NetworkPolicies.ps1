@@ -27,6 +27,12 @@ if ($Live) {
     foreach ($pair in @(@('user-service',8081), @('supplier-service',8080), @('order-service',8082), @('credit-service',8083), @('chat-service',8085))) {
         Assert-LiveTcp gateway $pair[0] $pair[1] $true
     }
+    Assert-LiveTcp notification-service notification-db 5432 $true
+    Assert-LiveTcp notification-service user-service 8081 $true
+    Assert-LiveTcp notification-service kafka 9092 $true
+    Assert-LiveTcp gateway notification-service 8086 $true
+    Assert-LiveTcp notification-service order-db 5432 $false
+    Assert-LiveTcp order-service notification-db 5432 $false
     Assert-LiveTcp supplier-service user-db 5432 $false
     Assert-LiveTcp user-service supplier-db 5432 $false
     Assert-LiveTcp gateway user-db 5432 $false
@@ -81,6 +87,7 @@ try {
         gateway=@(8088); 'user-service'=@(8081); 'supplier-service'=@(8080)
         'order-service'=@(8082); 'credit-service'=@(8083); 'admin-service'=@(8084); 'chat-service'=@(8085)
         'admin-db'=@(5432); 'chat-db'=@(5432); rabbitmq=@(5672,15672)
+        'notification-service'=@(8086); 'notification-db'=@(5432)
         'user-db'=@(5432); 'supplier-db'=@(5432); 'order-db'=@(5432); 'credit-db'=@(5432)
         kafka=@(9092,9093); 'kafka-ui'=@(8080); 'kafka-init'=@(9999)
     }
@@ -121,6 +128,8 @@ try {
     Assert-TestTcp user-service kafka-ui 8080 $true
     Assert-TestTcp gateway admin-db 5432 $true
     Assert-TestTcp admin-service user-db 5432 $true
+    Assert-TestTcp order-service notification-db 5432 $true
+    Assert-TestTcp notification-service order-db 5432 $true
     Send-NetDocument (Get-NetPolicies $namespace) -Arguments @('apply','--dry-run=server','-f','-')
     Send-NetDocument (Get-NetPolicies $namespace)
     Start-Sleep -Seconds 3
@@ -144,6 +153,16 @@ try {
     Assert-TestTcp chat-service user-service 8081 $true
     Assert-TestTcp chat-service kafka 9092 $true
     Assert-TestTcp chat-service rabbitmq 5672 $true
+    Assert-TestTcp gateway notification-service 8086 $true
+    Assert-TestTcp notification-service notification-db 5432 $true
+    Assert-TestTcp notification-service user-service 8081 $true
+    Assert-TestTcp notification-service kafka 9092 $true
+    Assert-TestTcp notification-service order-db 5432 $false
+    Assert-TestTcp notification-service order-service 8082 $false
+    Assert-TestTcp order-service notification-db 5432 $false
+    Assert-TestTcp gateway notification-db 5432 $false
+    Assert-TestTcp chat-service notification-db 5432 $false
+    Assert-TestTcp user-service notification-service 8086 $false
     Assert-TestTcp admin-service user-db 5432 $false
     Assert-TestTcp gateway admin-db 5432 $false
     Assert-TestTcp user-service admin-db 5432 $false

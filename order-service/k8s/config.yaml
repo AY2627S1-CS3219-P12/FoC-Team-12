@@ -16,4 +16,6 @@ data:
   KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
   KAFKA_SASL_MECHANISM: PLAIN
   KAFKA_USERNAME: order_service
+  # Apply only after the cluster's kafka-init has created order.lifecycle.events and Order's Write ACL.
+  ORDER_LIFECYCLE_EVENTS_ENABLED: "true"
   JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"

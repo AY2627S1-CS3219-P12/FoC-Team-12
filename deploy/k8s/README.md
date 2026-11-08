@@ -116,8 +116,10 @@ another local port. All packaged frontends must use the same browser origin to s
 Port-forward attaches to one pod; reopen it after a rollout replaces that pod.
 
 Continue one service at a time: [Supplier](../../supplier-service/k8s/README.md),
-[Credit](../../credit-service/k8s/README.md), [Order](../../order-service/k8s/README.md), then
-[Chat](../../chat-service/k8s/README.md).
+[Credit](../../credit-service/k8s/README.md), [Order](../../order-service/k8s/README.md),
+[Chat](../../chat-service/k8s/README.md), then
+[Notification](../../notification-service/k8s/README.md), whose guide also switches on Order's
+lifecycle events once the topic exists.
 Their guides create private credentials, wait for their databases, deploy and verify independently.
 All four use cluster-internal Services rather than extra public NodePorts; the gateway is the
 normal entry. User's NodePort remains available for the original manual exercise.
