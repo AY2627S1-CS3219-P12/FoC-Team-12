@@ -6,7 +6,7 @@ immutable ECR images and deploys them through GitHub OIDC. Compose and Minikube 
 local development environments.
 
 Jun Hui is the nominated editor for this Cloud Deployment N2H iteration. Gateway, User, Supplier,
-Order, Credit, Admin and Chat owners must review changes affecting their image, runtime
+Order, Credit, Admin, Chat and Notification owners must review changes affecting their image, runtime
 configuration or route contract before merge.
 
 ## Architecture
@@ -16,11 +16,11 @@ Browser
   -> CloudFront HTTPS hostname
   -> private ALB VPC origin
   -> Gateway ClusterIP
-  -> User / Supplier / Order / Credit / Admin / Chat ClusterIP services
+  -> User / Supplier / Order / Credit / Admin / Chat / Notification ClusterIP services
                                               |
-                             private RDS PostgreSQL (six databases/users)
+                             private RDS PostgreSQL (seven databases/users)
 
-User / Order / Credit / Admin / Chat <-> Kafka StatefulSet on encrypted EBS
+User / Order / Credit / Admin / Chat / Notification <-> Kafka StatefulSet on encrypted EBS
 Chat <-> RabbitMQ StatefulSet on encrypted EBS
 Chat -> private S3 attachment bucket through EKS IRSA
 External Secrets Operator     <-> AWS Secrets Manager through EKS IRSA
@@ -159,7 +159,15 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    Runtime provisioning validates the required Chat and Notification identities before building
    images, then forces External Secrets to synchronize the current AWS version before Kafka starts.
 
-6. Run **AWS staging infrastructure -> provision-runtime**. It builds all seven deployed application images,
+   **Adding Notification to an existing staging environment.** Run **apply-core** first (it adds
+   the `foc-notification-service` ECR repository and the empty `notification-service-secrets`
+   container), then re-run this helper so it fills only the new secret's `DB_PASSWORD`, then run
+   **provision-runtime**. Until then, merged changes that rebuild Notification fail the automatic
+   deployment before any rollout, so staging keeps its current images. Order publishes
+   `order.lifecycle.events` in staging (`ORDER_LIFECYCLE_EVENTS_ENABLED=true`); `kafka-init`
+   creates the topic and its ACLs in every deployment before workloads roll out.
+
+6. Run **AWS staging infrastructure -> provision-runtime**. It builds all eight deployed application images,
    pushes immutable tags to ECR, applies the platform, creates CloudFront and smoke-tests the HTTPS
    URL. Set `AWS_STAGING_ENABLED=true` only after this passes.
 
@@ -215,7 +223,7 @@ kubectl -n foc-staging logs statefulset/kafka --since=15m
 kubectl -n foc-staging get events --sort-by=.lastTimestamp | tail -100
 ```
 
-Gateway and all six applications use HPA `1-3` at 70% CPU. To collect N2H evidence, run the load
+Gateway and all seven applications use HPA `1-3` at 70% CPU. To collect N2H evidence, run the load
 helper in one terminal and watch both pod and node scaling in others:
 
 ```bash

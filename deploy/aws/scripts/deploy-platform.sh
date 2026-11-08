@@ -15,6 +15,7 @@ set -euo pipefail
 : "${CREDIT_IMAGE:?CREDIT_IMAGE is required}"
 : "${ADMIN_IMAGE:?ADMIN_IMAGE is required}"
 : "${CHAT_IMAGE:?CHAT_IMAGE is required}"
+: "${NOTIFICATION_IMAGE:?NOTIFICATION_IMAGE is required}"
 : "${CHAT_S3_BUCKET:?CHAT_S3_BUCKET is required}"
 : "${CHAT_SERVICE_ROLE_ARN:?CHAT_SERVICE_ROLE_ARN is required}"
 
@@ -120,7 +121,7 @@ kubectl -n external-secrets rollout restart deployment/external-secrets
 kubectl -n external-secrets rollout status deployment/external-secrets --timeout=10m
 
 export AWS_REGION RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID
-export GATEWAY_IMAGE USER_IMAGE SUPPLIER_IMAGE ORDER_IMAGE CREDIT_IMAGE ADMIN_IMAGE CHAT_IMAGE
+export GATEWAY_IMAGE USER_IMAGE SUPPLIER_IMAGE ORDER_IMAGE CREDIT_IMAGE ADMIN_IMAGE CHAT_IMAGE NOTIFICATION_IMAGE
 export CHAT_S3_BUCKET
 export CHAT_SERVICE_ROLE_ARN
 rendered=$(mktemp)
@@ -131,8 +132,8 @@ trap 'rm -f "$rendered"; rm -rf "$chart_dir"' EXIT
 awk 'BEGIN{RS="---"} /kind: (ClusterSecretStore|ExternalSecret)/ {print $0 "---"}' "$rendered" | kubectl apply -f -
 secret_sync_token=$(date +%s)
 for name in user-service-secrets user-mail-secrets supplier-service-secrets order-service-secrets \
-  credit-service-secrets admin-service-secrets chat-service-secrets kafka-broker-secrets \
-  chat-kafka-client kafka-ui-secrets rds-master; do
+  credit-service-secrets admin-service-secrets chat-service-secrets notification-service-secrets \
+  kafka-broker-secrets chat-kafka-client notification-kafka-client kafka-ui-secrets rds-master; do
   kubectl -n foc-staging annotate "externalsecret/$name" \
     "force-sync=$secret_sync_token" --overwrite >/dev/null
   if ! kubectl -n foc-staging wait --for=condition=Ready "externalsecret/$name" --timeout=5m; then
@@ -178,7 +179,8 @@ sed "s/name: kafka-init/name: $job/" "$root/deploy/kafka/k8s/initialize-job.yaml
   | kubectl -n foc-staging create -f -
 wait_for_job foc-staging "$job" 1200
 
-for deployment in user-service supplier-service order-service credit-service admin-service chat-service gateway kafka-ui; do
+for deployment in user-service supplier-service order-service credit-service admin-service chat-service \
+  notification-service gateway kafka-ui; do
   kubectl -n foc-staging rollout status "deployment/$deployment" --timeout=20m
 done
 

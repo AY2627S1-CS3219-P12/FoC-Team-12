@@ -115,10 +115,13 @@ jobs:
           account_id=$(aws sts get-caller-identity --query Account --output text)
           registry="$account_id.dkr.ecr.$AWS_REGION.amazonaws.com"
           : > "$RUNNER_TEMP/previous-images"
-          for pair in gateway:gateway-service user:user-service supplier:supplier-service order:order-service credit:credit-service admin:admin-service chat:chat-service; do
+          for pair in gateway:gateway-service user:user-service supplier:supplier-service order:order-service credit:credit-service admin:admin-service chat:chat-service notification:notification-service; do
             key=${pair%%:*}; service=${pair##*:}
             deployment=$service; [ "$key" = gateway ] && deployment=gateway
-            old=$(kubectl -n foc-staging get deployment "$deployment" -o jsonpath='{.spec.template.spec.containers[0].image}')
+            if ! old=$(kubectl -n foc-staging get deployment "$deployment" -o jsonpath='{.spec.template.spec.containers[0].image}'); then
+              echo "::error::Deployment $deployment is not in staging yet. Run AWS staging infrastructure -> apply-core, then provision-runtime."
+              exit 1
+            fi
             printf '%s %s %s\n' "$deployment" "$deployment" "$old" >> "$RUNNER_TEMP/previous-images"
             if jq -e --arg value "$service" 'index($value) != null' <<< "$CHANGED_SERVICES" >/dev/null; then
               image="$registry/foc-$service:$TAG"
@@ -129,7 +132,7 @@ jobs:
           done
           CHAT_S3_BUCKET="foc-team-12-chat-attachments-${account_id}-${AWS_REGION}"
           export CHAT_S3_BUCKET
-          env | grep -E '^(GATEWAY|USER|SUPPLIER|ORDER|CREDIT|ADMIN|CHAT)_IMAGE=' >> "$GITHUB_ENV"
+          env | grep -E '^(GATEWAY|USER|SUPPLIER|ORDER|CREDIT|ADMIN|CHAT|NOTIFICATION)_IMAGE=' >> "$GITHUB_ENV"
           echo "CHAT_S3_BUCKET=$CHAT_S3_BUCKET" >> "$GITHUB_ENV"
       - name: Deploy and smoke-test with rollback on failure
         run: |

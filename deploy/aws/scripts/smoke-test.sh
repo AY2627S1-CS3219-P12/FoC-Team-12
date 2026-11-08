@@ -25,4 +25,6 @@ retry "$base/.well-known/jwks.json" 200
 retry "$base/api/users/me" 401
 retry "$base/api/admin/suppliers" 401
 retry "$base/api/chat/preferences" 401
+retry "$base/notifications" 200
+retry "$base/api/notifications/me/unread-count" 401
 echo "Cloud smoke checks passed at $base"
