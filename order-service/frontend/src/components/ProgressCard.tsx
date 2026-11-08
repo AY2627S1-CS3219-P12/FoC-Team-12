@@ -38,7 +38,7 @@ export function ProgressCard({
         <dt>{rewardLabel}</dt>
         <dd>{credits(order.creditReward)}</dd>
       </dl>
-      {children}
+      {children && <div className="progress-note">{children}</div>}
     </aside>
   )
 }

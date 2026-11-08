@@ -2,9 +2,9 @@
 
 Shared proposed wire shapes and fixtures: [contract package](../docs/contracts/README.md).
 
-The latest Kubernetes isolation rules block new Chat connections until a reviewed network-policy
-change enables the caller/destination matrix in that package. Include Kafka, User JWKS/eligibility,
-Admin callback, producer evidence exports, private DB/Redis and AWS HTTPS in deployment planning.
+The local Kubernetes package includes Chat, PostgreSQL and RabbitMQ workloads plus the reviewed
+Gateway/User/Kafka/Chat network-policy paths. AWS staging remains separate deployment work; include
+managed database/broker choices, Admin callbacks, private object storage and HTTPS in that review.
 
 Owner: **Eldridge**. Status: runnable core chat; preferences, localized quick replies, JWT
 security, lifecycle ingestion, durable messages, assignment privacy, local images, WebSockets and
@@ -18,9 +18,10 @@ The Spring Boot service runs on port `8085` and owns its PostgreSQL schema throu
 to English without creating a row. `PUT /api/chat/preferences` stores `en`, `zh`, `ms` or `ta`.
 `GET /api/chat/quick-replies` returns the five server-owned phrases localized to that preference.
 All endpoints derive identity from the verified UUID `sub`, never a request parameter. Order
-lifecycle facts create a chat on acceptance, advance courier assignment epochs on reassignment and
-lock it at a terminal state. The requester sees all epochs; each courier sees only their own.
-Message writes are idempotent by conversation, sender and client message ID.
+lifecycle facts create a chat on acceptance, append timestamped system activity, advance courier
+assignment epochs on reassignment and lock it at a terminal state. The requester sees all epochs;
+each courier sees only their own. Message writes are idempotent by conversation, sender and client
+message ID, while lifecycle activity is idempotent by source event ID.
 
 Text, localized one-tap quick replies and JPEG/PNG/WebP images up to 5 MiB work locally. Images are
 temporarily stored in Chat PostgreSQL so the feature is testable without AWS; migrate the same
@@ -43,7 +44,8 @@ DB_HOST=localhost DB_PORT=5432 DB_NAME=chat_db DB_USER=chat_user DB_PASSWORD='lo
 
 Swagger UI is at `http://localhost:8085/swagger-ui/index.html`; health is
 `http://localhost:8085/actuator/health`. Shared Compose and Gateway routes support local
-end-to-end testing; Kubernetes and AWS manifests remain separate deployment work.
+end-to-end testing. Local Kubernetes manifests are under `chat-service/k8s`; AWS manifests remain
+separate deployment work owned by the cloud-staging editor.
 
 ## Scope, ownership and architecture
 
@@ -130,9 +132,11 @@ resource membership on each operation. Shared Admin service-auth profile applies
 These are proposed path signatures. Eldridge publishes exact OpenAPI schemas plus browser fixture
 examples before Admin/Order UI implementation depends on them. History page default 20/max 100.
 Message response includes id, conversationId, senderUserId, sequence, createdAt, text nullable,
-attachment metadata nullable. Sort/paginate by immutable per-conversation sequence. Sender comes
-from verified actor, never supplied body. Proposed limits: 1-4000 text characters; one JPEG/PNG/WebP
-image <=5 MiB per message. Owner/team approve limits and supported languages in analysis.
+attachment metadata nullable. A system activity entry has a null sender/client message ID plus its
+sourceEventId, sourceSequence, lifecycle action and state transition; browsers cannot create one.
+Sort/paginate by immutable per-conversation sequence. A participant sender comes from the verified
+actor, never the supplied body. Proposed limits: 1-4000 text characters; one JPEG/PNG/WebP image
+<=5 MiB per message. Owner/team approve limits and supported languages in analysis.
 
 Server assigns sequence and commits message before responding/broadcasting. Unique
 (conversationId, senderUserId, clientMessageId); same content returns original message, different

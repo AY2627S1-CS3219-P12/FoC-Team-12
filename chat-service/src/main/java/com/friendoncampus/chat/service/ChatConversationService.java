@@ -36,7 +36,9 @@ public class ChatConversationService {
     public record Attachment(UUID id, String contentType, String filename, long size) {}
     public record Message(UUID id, UUID conversationId, UUID senderUserId, long sequence,
             UUID clientMessageId, String messageType, String originalLanguage, String quickReplyKey,
-            String text, Attachment attachment, OffsetDateTime createdAt) {}
+            String text, Attachment attachment, UUID sourceEventId, Long sourceSequence,
+            String lifecycleAction, String lifecycleFromState, String lifecycleToState,
+            OffsetDateTime createdAt) {}
     public record StoredAttachment(String contentType, String filename, byte[] content) {}
 
     @Transactional(readOnly = true)
@@ -73,6 +75,7 @@ public class ChatConversationService {
         return db.sql("""
             SELECT m.id,m.conversation_id,m.sender_user_id,m.sequence,m.client_message_id,m.message_type,
               m.original_language,m.quick_reply_key,m.text_content,m.created_at,m.attachment_id,
+              m.source_event_id,m.source_sequence,m.lifecycle_action,m.lifecycle_from_state,m.lifecycle_to_state,
               a.content_type,a.original_filename,a.size_bytes
             FROM chat_messages m LEFT JOIN chat_attachments a ON a.id=m.attachment_id
             WHERE m.conversation_id=:id AND m.sequence>:after
@@ -134,6 +137,40 @@ public class ChatConversationService {
         return insertMessage(id,actor,clientId,"IMAGE",null,null,null,attachmentId);
     }
 
+    /**
+     * Appends one immutable, user-visible lifecycle entry derived from an Order event. The source
+     * identifiers remain structured fields so a future Admin evidence view never has to parse the
+     * display text. This method is internal to Chat's Kafka projection; browser callers cannot
+     * create SYSTEM messages.
+     */
+    @Transactional
+    public Message appendLifecycleMessage(UUID conversationId, UUID eventId, long sourceSequence,
+            String action, String fromState, String toState, String text, Integer assignmentEpoch,
+            OffsetDateTime occurredAt) {
+        Message existing = findBySourceEvent(eventId);
+        if (existing != null) return existing;
+        long sequence = db.sql("UPDATE chat_conversations SET next_sequence=next_sequence+1,updated_at=:at WHERE id=:id RETURNING next_sequence-1")
+                .param("at", now()).param("id", conversationId).query(Long.class).single();
+        UUID messageId = UUID.randomUUID();
+        db.sql("""
+                INSERT INTO chat_messages(
+                    id,conversation_id,sender_user_id,sequence,client_message_id,message_type,
+                    original_language,quick_reply_key,text_content,attachment_id,assignment_epoch,
+                    source_event_id,source_sequence,lifecycle_action,lifecycle_from_state,
+                    lifecycle_to_state,created_at)
+                VALUES(:id,:conversationId,NULL,:sequence,NULL,'SYSTEM',NULL,NULL,:text,NULL,:epoch,
+                    :eventId,:sourceSequence,:action,:fromState,:toState,:occurredAt)
+                """).param("id", messageId).param("conversationId", conversationId)
+                .param("sequence", sequence).param("text", text)
+                .param("epoch", assignmentEpoch, java.sql.Types.INTEGER)
+                .param("eventId", eventId).param("sourceSequence", sourceSequence)
+                .param("action", action).param("fromState", fromState).param("toState", toState)
+                .param("occurredAt", occurredAt).update();
+        Message saved = findMessage(messageId);
+        events.publishEvent(new ChatMessageSaved(saved));
+        return saved;
+    }
+
     @Transactional(readOnly = true)
     public StoredAttachment attachment(UUID conversationId, UUID attachmentId, UUID actor) {
         return db.sql("""
@@ -178,8 +215,9 @@ public class ChatConversationService {
         Message saved=findMessage(mid);events.publishEvent(new ChatMessageSaved(saved));return saved;
     }
     private Message findByClient(UUID id,UUID actor,UUID client){return db.sql("SELECT m.*,a.content_type,a.original_filename,a.size_bytes FROM chat_messages m LEFT JOIN chat_attachments a ON a.id=m.attachment_id WHERE m.conversation_id=:id AND m.sender_user_id=:actor AND m.client_message_id=:client").param("id",id).param("actor",actor).param("client",client).query((rs,n)->mapMessage(rs)).optional().orElse(null);}
+    private Message findBySourceEvent(UUID eventId){return db.sql("SELECT m.*,a.content_type,a.original_filename,a.size_bytes FROM chat_messages m LEFT JOIN chat_attachments a ON a.id=m.attachment_id WHERE m.source_event_id=:eventId").param("eventId",eventId).query((rs,n)->mapMessage(rs)).optional().orElse(null);}
     private Message findMessage(UUID id){return db.sql("SELECT m.*,a.content_type,a.original_filename,a.size_bytes FROM chat_messages m LEFT JOIN chat_attachments a ON a.id=m.attachment_id WHERE m.id=:id").param("id",id).query((rs,n)->mapMessage(rs)).single();}
-    private static Message mapMessage(java.sql.ResultSet rs)throws java.sql.SQLException{UUID aid=rs.getObject("attachment_id",UUID.class);Attachment a=aid==null?null:new Attachment(aid,rs.getString("content_type"),rs.getString("original_filename"),rs.getLong("size_bytes"));return new Message(rs.getObject("id",UUID.class),rs.getObject("conversation_id",UUID.class),rs.getObject("sender_user_id",UUID.class),rs.getLong("sequence"),rs.getObject("client_message_id",UUID.class),rs.getString("message_type"),rs.getString("original_language"),rs.getString("quick_reply_key"),rs.getString("text_content"),a,rs.getObject("created_at",OffsetDateTime.class));}
+    private static Message mapMessage(java.sql.ResultSet rs)throws java.sql.SQLException{UUID aid=rs.getObject("attachment_id",UUID.class);Attachment a=aid==null?null:new Attachment(aid,rs.getString("content_type"),rs.getString("original_filename"),rs.getLong("size_bytes"));return new Message(rs.getObject("id",UUID.class),rs.getObject("conversation_id",UUID.class),rs.getObject("sender_user_id",UUID.class),rs.getLong("sequence"),rs.getObject("client_message_id",UUID.class),rs.getString("message_type"),rs.getString("original_language"),rs.getString("quick_reply_key"),rs.getString("text_content"),a,rs.getObject("source_event_id",UUID.class),rs.getObject("source_sequence",Long.class),rs.getString("lifecycle_action"),rs.getString("lifecycle_from_state"),rs.getString("lifecycle_to_state"),rs.getObject("created_at",OffsetDateTime.class));}
     private OffsetDateTime now(){return OffsetDateTime.now(clock);}
     private static boolean matchesImageSignature(String type,byte[] c){
         if(c==null)return false;

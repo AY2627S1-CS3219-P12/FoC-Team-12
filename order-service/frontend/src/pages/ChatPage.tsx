@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ImagePlus, Languages, Send, X } from 'lucide-react'
+import { Clock3, ImagePlus, Languages, Send, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { fetchConversation, fetchImage, fetchMessages, fetchPreference, fetchQuickReplies, savePreference, sendMessage, subscribeToChat, uploadImage, type ChatMessage } from '../api/chatApi'
@@ -8,12 +8,16 @@ import { readSession } from '../auth/session'
 const languages={en:'English',zh:'中文',ms:'Bahasa Melayu',ta:'தமிழ்'}
 export function ChatPage(){
   const {orderId=''}=useParams();const session=readSession();const client=useQueryClient();const [text,setText]=useState('');const [image,setImage]=useState<File|null>(null)
-  const conversation=useQuery({queryKey:['chat',orderId],queryFn:()=>fetchConversation(orderId),retry:(n,e)=>n<5&&(e as {status?:number}).status===404,retryDelay:1000})
+  const conversation=useQuery({queryKey:['chat',orderId],queryFn:()=>fetchConversation(orderId),retry:(n,e)=>n<5&&(e as {status?:number}).status===404,retryDelay:1000,refetchInterval:(query)=>query.state.data?false:2000})
   const id=conversation.data?.id
-  const messages=useQuery({queryKey:['chat-messages',id],queryFn:()=>fetchMessages(id!),enabled:!!id})
+  const messages=useQuery({queryKey:['chat-messages',id],queryFn:()=>fetchMessages(id!),enabled:!!id,refetchInterval:5000})
   const quick=useQuery({queryKey:['chat-quick'],queryFn:fetchQuickReplies})
   const preference=useQuery({queryKey:['chat-preference'],queryFn:fetchPreference})
-  useEffect(()=>id?subscribeToChat(id,(message)=>client.setQueryData<ChatMessage[]>(['chat-messages',id],(old)=>old?.some(x=>x.id===message.id)?old:[...(old??[]),message])):undefined,[id,client])
+  useEffect(()=>id?subscribeToChat(
+    id,
+    (message)=>client.setQueryData<ChatMessage[]>(['chat-messages',id],(old)=>old?.some(x=>x.id===message.id)?old:[...(old??[]),message]),
+    ()=>void client.invalidateQueries({queryKey:['chat-messages',id]}),
+  ):undefined,[id,client])
   const mutation=useMutation({mutationFn:async(input:{type:'TEXT'|'QUICK_REPLY'|'IMAGE';key?:string})=>{if(!id)throw new Error('Chat is not ready');if(input.type==='IMAGE'){if(!image)throw new Error('Choose an image');const a=await uploadImage(id,image);return sendMessage(id,{messageType:'IMAGE',attachmentId:a.id})}return sendMessage(id,{messageType:input.type,text:input.type==='TEXT'?text:undefined,quickReplyKey:input.key})},onSuccess:(saved)=>{client.setQueryData<ChatMessage[]>(['chat-messages',id],(old)=>old?.some(x=>x.id===saved.id)?old:[...(old??[]),saved]);setText('');setImage(null)}})
   if(conversation.isPending)return <section className="card state-panel"><h1>Preparing your private chat…</h1><p>The chat opens automatically when the courier assignment is confirmed.</p></section>
   if(conversation.isError)return <section className="card state-panel"><h1>Chat isn’t available yet</h1><p>The errand may not have an assigned courier, or the lifecycle event is still being processed.</p><Link className="text-link" to={`/errands/${orderId}`}>Back to errand</Link></section>
@@ -28,4 +32,4 @@ export function ChatPage(){
     </>}
   </section>
 }
-function MessageBubble({message,mine}:{message:ChatMessage;mine:boolean}){const [url,setUrl]=useState('');useEffect(()=>{if(!message.attachment)return;let current='';void fetchImage(message.conversationId,message.attachment.id).then(v=>{current=v;setUrl(v)});return()=>{if(current)URL.revokeObjectURL(current)}},[message]);return <article className={`message-bubble ${mine?'message-mine':''}`}><span className="message-author">{mine?'You':'Other participant'}</span>{message.messageType==='IMAGE'?url?<img alt={message.attachment?.filename??'Shared image'} src={url}/>:<span>Loading image…</span>:<p>{message.text}</p>}<time>{new Date(message.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</time></article>}
+export function MessageBubble({message,mine}:{message:ChatMessage;mine:boolean}){const [url,setUrl]=useState('');useEffect(()=>{if(!message.attachment)return;let current='';void fetchImage(message.conversationId,message.attachment.id).then(v=>{current=v;setUrl(v)});return()=>{if(current)URL.revokeObjectURL(current)}},[message]);if(message.messageType==='SYSTEM')return <article className="system-message"><Clock3 aria-hidden="true"/><div><p>{message.text}</p><time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleString([],{dateStyle:'medium',timeStyle:'short'})}</time></div></article>;return <article className={`message-bubble ${mine?'message-mine':''}`}><span className="message-author">{mine?'You':'Other participant'}</span>{message.messageType==='IMAGE'?url?<img alt={message.attachment?.filename??'Shared image'} src={url}/>:<span>Loading image…</span>:<p>{message.text}</p>}<time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</time></article>}

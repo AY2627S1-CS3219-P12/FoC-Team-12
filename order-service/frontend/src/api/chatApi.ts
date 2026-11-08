@@ -3,7 +3,7 @@ import { expireSession, readSession } from '../auth/session'
 
 export type Conversation = { id: string; orderId: string; status: 'ACTIVE' | 'READ_ONLY'; readOnly: boolean }
 export type Attachment = { id: string; contentType: string; filename: string; size: number }
-export type ChatMessage = { id: string; conversationId: string; senderUserId: string; sequence: number; clientMessageId: string; messageType: 'TEXT'|'QUICK_REPLY'|'IMAGE'; originalLanguage: string|null; quickReplyKey: string|null; text: string|null; attachment: Attachment|null; createdAt: string }
+export type ChatMessage = { id: string; conversationId: string; senderUserId: string|null; sequence: number; clientMessageId: string|null; messageType: 'TEXT'|'QUICK_REPLY'|'IMAGE'|'SYSTEM'; originalLanguage: string|null; quickReplyKey: string|null; text: string|null; attachment: Attachment|null; sourceEventId: string|null; sourceSequence: number|null; lifecycleAction: string|null; lifecycleFromState: string|null; lifecycleToState: string|null; createdAt: string }
 export type QuickReply = { key: string; language: string; text: string }
 
 export class ChatApiError extends Error { constructor(readonly status:number,message:string){super(message)} }
@@ -25,4 +25,27 @@ function chatSocketUrl():string{
   const authority=location.hostname==='localhost'&&location.port==='8088'?`${location.hostname}:8085`:location.host
   return `${scheme}://${authority}/ws/chat`
 }
-export function subscribeToChat(id:string,onMessage:(message:ChatMessage)=>void):()=>void{const s=readSession();if(!s)return()=>{};const client=new Client({brokerURL:chatSocketUrl(),connectHeaders:{Authorization:`Bearer ${s.accessToken}`},reconnectDelay:2000,onConnect:()=>client.subscribe('/user/queue/chat',(frame)=>{const message=JSON.parse(frame.body) as ChatMessage;if(message.conversationId===id)onMessage(message)})});client.activate();return()=>void client.deactivate()}
+export function subscribeToChat(
+  id:string,
+  onMessage:(message:ChatMessage)=>void,
+  onConnected?:()=>void,
+):()=>void{
+  const s=readSession()
+  if(!s)return()=>{}
+  const client=new Client({
+    brokerURL:chatSocketUrl(),
+    connectHeaders:{Authorization:`Bearer ${s.accessToken}`},
+    reconnectDelay:2000,
+    onConnect:()=>{
+      // Reconcile persisted history before listening again. This closes the gap where
+      // Kafka/RabbitMQ handled a lifecycle event while this browser was reconnecting.
+      onConnected?.()
+      client.subscribe('/user/queue/chat',(frame)=>{
+        const message=JSON.parse(frame.body) as ChatMessage
+        if(message.conversationId===id)onMessage(message)
+      })
+    },
+  })
+  client.activate()
+  return()=>void client.deactivate()
+}

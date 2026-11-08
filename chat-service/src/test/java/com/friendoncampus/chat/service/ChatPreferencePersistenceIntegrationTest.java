@@ -83,10 +83,21 @@ class ChatPreferencePersistenceIntegrationTest {
     @Test
     void lifecycleCreatesPrivateChatSegmentsCourierHistoryAndLocksTerminalConversation() {
         UUID order=UUID.randomUUID(), requester=UUID.randomUUID(), first=UUID.randomUUID(), second=UUID.randomUUID();
-        OrderLifecycleConsumer consumer=new OrderLifecycleConsumer(jdbcClient,clock);
-        String accepted=event(order,requester,first,"ACCEPT","ACCEPTED",1);
+        OrderLifecycleConsumer consumer=new OrderLifecycleConsumer(jdbcClient,clock,chats);
+        OffsetDateTime acceptedAt=OffsetDateTime.parse("2026-11-08T04:30:00Z");
+        String accepted=event(order,requester,first,"ACCEPT","ACCEPTED",1,first,acceptedAt);
         consumer.process(accepted);
         consumer.process(accepted); // exact Kafka retry is harmless
+        var acceptedActivity=chats.messages(chats.byOrder(order,requester).id(),requester,0,100).get(0);
+        assertThat(acceptedActivity.messageType()).isEqualTo("SYSTEM");
+        assertThat(acceptedActivity.senderUserId()).isNull();
+        assertThat(acceptedActivity.clientMessageId()).isNull();
+        assertThat(acceptedActivity.lifecycleAction()).isEqualTo("ACCEPT");
+        assertThat(acceptedActivity.lifecycleToState()).isEqualTo("ACCEPTED");
+        assertThat(acceptedActivity.sourceEventId()).isNotNull();
+        assertThat(acceptedActivity.sourceSequence()).isEqualTo(1L);
+        assertThat(acceptedActivity.text()).isEqualTo("Courier accepted the errand.");
+        assertThat(acceptedActivity.createdAt()).isEqualTo(acceptedAt);
         assertThatThrownBy(() -> consumer.process(event(order,requester,first,"ACCEPT","ACCEPTED",1)))
                 .isInstanceOf(IllegalStateException.class);
         var conversation=chats.byOrder(order,requester);
@@ -97,8 +108,12 @@ class ChatPreferencePersistenceIntegrationTest {
         var secondMessage=chats.sendText(conversation.id(),second,UUID.randomUUID(),"TEXT","On my way",null);
         assertThat(chats.messageRecipients(secondMessage.id())).containsExactlyInAnyOrder(requester,second);
 
-        assertThat(chats.messages(conversation.id(),requester,0,100)).hasSize(2);
-        assertThat(chats.messages(conversation.id(),second,0,100)).extracting(ChatConversationService.Message::id).containsExactly(secondMessage.id());
+        assertThat(chats.messages(conversation.id(),requester,0,100)).hasSize(5);
+        var secondHistory=chats.messages(conversation.id(),second,0,100);
+        assertThat(secondHistory).extracting(ChatConversationService.Message::messageType)
+                .containsExactly("SYSTEM", "TEXT");
+        assertThat(secondHistory.get(0).lifecycleAction()).isEqualTo("ACCEPT");
+        assertThat(secondHistory.get(1).id()).isEqualTo(secondMessage.id());
         assertThat(chats.byOrder(order,first).readOnly()).isTrue();
         assertThatThrownBy(() -> chats.sendText(conversation.id(),first,UUID.randomUUID(),"TEXT","still here",null))
                 .isInstanceOf(ChatConflictException.class);
@@ -111,14 +126,41 @@ class ChatPreferencePersistenceIntegrationTest {
         assertThatThrownBy(() -> chats.upload(conversation.id(),second,new MockMultipartFile("file","fake.png","image/png","not an image".getBytes())))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        consumer.process(event(order,requester,second,"COMPLETE","COMPLETED",4));
+        consumer.process(event(order,requester,second,"PICK_UP","PICKED_UP",4));
+        consumer.process(event(order,requester,second,"DELIVER","DELIVERED",5));
+        consumer.process(event(order,requester,second,"COMPLETE","COMPLETED",6));
+        assertThat(chats.messages(conversation.id(),requester,0,100).stream()
+                .filter(message -> "SYSTEM".equals(message.messageType()))
+                .map(ChatConversationService.Message::lifecycleAction))
+                .containsExactly("ACCEPT", "WITHDRAW", "ACCEPT", "PICK_UP", "DELIVER", "COMPLETE");
         assertThat(chats.byOrder(order,requester).readOnly()).isTrue();
         assertThatThrownBy(() -> chats.sendText(conversation.id(),requester,UUID.randomUUID(),"TEXT","thanks",null))
                 .isInstanceOf(ChatConflictException.class);
     }
 
+    @Test
+    void lifecycleAfterWithdrawalRemainsVisibleToRequesterWithoutLeakingToFormerCourier() {
+        UUID order=UUID.randomUUID(), requester=UUID.randomUUID(), courier=UUID.randomUUID();
+        OrderLifecycleConsumer consumer=new OrderLifecycleConsumer(jdbcClient,clock,chats);
+        consumer.process(event(order,requester,courier,"ACCEPT","ACCEPTED",1));
+        var conversation=chats.byOrder(order,requester);
+        consumer.process(event(order,requester,null,"WITHDRAW","OPEN",2,courier));
+        consumer.process(event(order,requester,null,"EXPIRE","EXPIRED",3,null));
+
+        assertThat(chats.messages(conversation.id(),requester,0,100))
+                .extracting(ChatConversationService.Message::lifecycleAction)
+                .containsExactly("ACCEPT", "WITHDRAW", "EXPIRE");
+        assertThat(chats.messages(conversation.id(),courier,0,100))
+                .extracting(ChatConversationService.Message::lifecycleAction)
+                .containsExactly("ACCEPT", "WITHDRAW");
+        assertThat(chats.byOrder(order,requester).readOnly()).isTrue();
+    }
+
     private static String event(UUID order,UUID requester,UUID courier,String action,String to,long version){return event(order,requester,courier,action,to,version,courier);}
     private static String event(UUID order,UUID requester,UUID courier,String action,String to,long version,UUID previous){
-        return "{\"eventId\":\""+UUID.randomUUID()+"\",\"eventType\":\"OrderTransitioned\",\"occurredAt\":\""+OffsetDateTime.now()+"\",\"data\":{\"orderId\":\""+order+"\",\"requesterId\":\""+requester+"\",\"courierId\":"+(courier==null?"null":"\""+courier+"\"")+",\"previousCourierId\":"+(previous==null?"null":"\""+previous+"\"")+",\"action\":\""+action+"\",\"toState\":\""+to+"\",\"sourceSequence\":"+version+"}}";
+        return event(order,requester,courier,action,to,version,previous,OffsetDateTime.now());
+    }
+    private static String event(UUID order,UUID requester,UUID courier,String action,String to,long version,UUID previous,OffsetDateTime occurredAt){
+        return "{\"eventId\":\""+UUID.randomUUID()+"\",\"eventType\":\"OrderTransitioned\",\"occurredAt\":\""+occurredAt+"\",\"data\":{\"orderId\":\""+order+"\",\"requesterId\":\""+requester+"\",\"courierId\":"+(courier==null?"null":"\""+courier+"\"")+",\"previousCourierId\":"+(previous==null?"null":"\""+previous+"\"")+",\"action\":\""+action+"\",\"toState\":\""+to+"\",\"sourceSequence\":"+version+"}}";
     }
 }
