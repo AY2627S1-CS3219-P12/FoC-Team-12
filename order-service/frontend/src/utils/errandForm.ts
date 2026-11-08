@@ -170,6 +170,43 @@ export function fieldsFromOrder(order: {
 }
 
 /**
+ * "Post again": an earlier errand's details for a new one. Pick up by is left for the requester to
+ * choose. A location Supplier no longer lists is left empty with a note naming it.
+ */
+export function fieldsForRepost(
+  order: {
+    title: string
+    description: string
+    pickupLocationId: string
+    pickupLocationName: string | null
+    dropoffLocationId: string
+    dropoffLocationName: string | null
+    creditReward: number
+  },
+  locations: CampusLocation[] | undefined,
+): { fields: Fields; errors: Errors } {
+  const fields: Fields = {
+    ...fieldsFromOrder({ ...order, pickupDeadline: new Date().toISOString() }),
+    pickupDeadline: '',
+  }
+  const errors: Errors = {}
+  if (locations) {
+    const listed = new Set(locations.map((location) => location.id))
+    const gone = (name: string | null) =>
+      `${name ?? 'That location'} is no longer available. Choose another location.`
+    if (!listed.has(order.pickupLocationId)) {
+      fields.pickupLocationId = ''
+      errors.pickupLocationId = gone(order.pickupLocationName)
+    }
+    if (!listed.has(order.dropoffLocationId)) {
+      fields.dropoffLocationId = ''
+      errors.dropoffLocationId = gone(order.dropoffLocationName)
+    }
+  }
+  return { fields, errors }
+}
+
+/**
  * Whether a reward change is affordable. Only an increase needs more credits: Credit reserves the
  * difference from the available balance. A decrease (or no change) is always allowed.
  */

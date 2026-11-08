@@ -17,6 +17,7 @@ export function ErrandFormFields({
   locationsFailed,
   maxReward,
   rewardHint,
+  deadlineHint = 'If nobody accepts by this time, your request expires.',
 }: {
   fields: Fields
   errors: Errors
@@ -25,6 +26,7 @@ export function ErrandFormFields({
   locationsFailed: boolean
   maxReward?: number
   rewardHint: string
+  deadlineHint?: string
 }) {
   return (
     <>
@@ -59,7 +61,7 @@ export function ErrandFormFields({
       />
       <Field
         error={errors.pickupDeadline}
-        hint="If nobody accepts by this time, your request expires."
+        hint={deadlineHint}
         id="field-pickupDeadline"
         label="Pick up by"
       >

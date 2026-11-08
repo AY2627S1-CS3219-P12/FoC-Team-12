@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { ArrowLeft, CircleAlert, MessageCircle, SearchX } from 'lucide-react'
+import { ArrowLeft, CircleAlert, MessageCircle, RotateCcw, SearchX } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   fetchOrder,
@@ -22,6 +22,8 @@ import {
   credits,
   errandReference,
   formatDeadline,
+  REPOSTABLE_STATES,
+  repostPath,
   reservationFailure,
 } from '../utils/orderFormatting'
 
@@ -249,6 +251,13 @@ export function ErrandPage() {
                 Confirm receipt · Transfer {credits(order.creditReward)}
               </button>
             )}
+            {view === 'requester' &&
+              session?.role === 'REQUESTER' &&
+              REPOSTABLE_STATES.includes(order.state) && (
+                <Link className="button-secondary" to={repostPath(order.id)}>
+                  <RotateCcw aria-hidden="true" /> Post again
+                </Link>
+              )}
             {view === 'requester' &&
               session?.role === 'REQUESTER' &&
               order.state === 'OPEN' &&

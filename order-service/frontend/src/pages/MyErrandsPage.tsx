@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { ArrowRight, ClipboardList } from 'lucide-react'
+import { ArrowRight, ClipboardList, RotateCcw } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { fetchMyOrders, type Order, type OrderState } from '../api/orderApi'
 import { ErrandTabs } from '../components/ErrandTabs'
@@ -9,7 +9,7 @@ import { ErrandListSkeleton } from '../components/Skeleton'
 import { StateBadge } from '../components/StateBadge'
 import { StatePanel } from '../components/StatePanel'
 import { useSessionRole } from '../hooks/useSessionRole'
-import { credits, formatDeadline, stateLabel } from '../utils/orderFormatting'
+import { credits, formatDeadline, REPOSTABLE_STATES, repostPath, stateLabel } from '../utils/orderFormatting'
 
 type Kind = 'requested' | 'delivered'
 type Status = 'active' | 'past'
@@ -141,7 +141,7 @@ function ErrandSection({
         <>
           <ul className="errand-list">
             {list.data.items.map((order) => (
-              <ErrandCard key={order.id} order={order} status={status} />
+              <ErrandCard canRepost={kind === 'requested'} key={order.id} order={order} status={status} />
             ))}
           </ul>
           {list.data.totalPages > 1 && (
@@ -173,7 +173,7 @@ function ErrandSection({
   )
 }
 
-function ErrandCard({ order, status }: { order: Order; status: Status }) {
+function ErrandCard({ order, status, canRepost }: { order: Order; status: Status; canRepost: boolean }) {
   return (
     <li className="card errand-card">
       <div className="errand-card-head">
@@ -191,9 +191,16 @@ function ErrandCard({ order, status }: { order: Order; status: Status }) {
       )}
       <div className="errand-card-foot">
         <StateBadge state={order.state} />
-        <Link aria-label={`View ${order.title}`} className="text-link" to={`/errands/${order.id}`}>
-          View <ArrowRight aria-hidden="true" />
-        </Link>
+        <div className="errand-card-links">
+          {canRepost && REPOSTABLE_STATES.includes(order.state) && (
+            <Link aria-label={`Post ${order.title} again`} className="text-link" to={repostPath(order.id)}>
+              <RotateCcw aria-hidden="true" /> Post again
+            </Link>
+          )}
+          <Link aria-label={`View ${order.title}`} className="text-link" to={`/errands/${order.id}`}>
+            View <ArrowRight aria-hidden="true" />
+          </Link>
+        </div>
       </div>
     </li>
   )

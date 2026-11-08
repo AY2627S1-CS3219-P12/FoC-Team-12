@@ -62,6 +62,13 @@ The backend contract wins over example data in Figma:
   credit account (with a link to set it up), or a generic retry message; a deadline that passes
   while waiting is explained too. After 30 seconds without an answer the form unlocks and links to
   the errand, which opens on its own once Credit answers.
+- **Post again** copies one of the requester's own ended errands (completed, cancelled, expired or
+  not posted) into Request help through `/errands/new?from=<id>`, offered on My errands → Past and on
+  the errand page in a Requester session. Title, locations, reward and description are filled in;
+  Pick up by is left empty and focused. A location Supplier no longer lists is cleared with a note
+  naming it. Only empty fields are filled, and only from the caller's own errand; anything else
+  opens an empty form saying it couldn't be copied. Posting creates a new errand through the usual
+  credit check and reservation wait; the original is unchanged.
 - **Requester/Courier tabs** follow the session role switch in the header, because the API
   authorises actions by the session role. A Requester sees **Request help · My errands**, a Courier
   **Run errands · My errands**, as side-by-side text tabs with an underline on the current one.

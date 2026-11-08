@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { order, REQUESTER_ID, signIn, stubFetch } from '../test/fixtures'
+import { order, REQUESTER_ID, signIn, STRANGER_ID, stubFetch } from '../test/fixtures'
 import { validate } from '../utils/errandForm'
 import { CreateErrandPage } from './CreateErrandPage'
 
@@ -55,14 +55,14 @@ function api(
   })
 }
 
-function renderPage() {
+function renderPage(path = '/errands/new') {
   return render(
     <QueryClientProvider
       client={
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter initialEntries={['/errands/new']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route element={<CreateErrandPage />} path="/errands/new" />
           <Route element={<h1>Errand page</h1>} path="/errands/:orderId" />
@@ -427,5 +427,84 @@ describe('CreateErrandPage', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('posting an earlier errand again', () => {
+    const PAST = order({ id: 'past-1', state: 'COMPLETED', creditReward: 4 })
+
+    it('fills in everything except the pickup time from the requester’s own errand', async () => {
+      vi.stubGlobal('fetch', api({ reads: [PAST] }).fetchMock)
+      renderPage('/errands/new?from=past-1')
+
+      expect(await screen.findByText(/Copied from “Collect my printed notes”/)).toBeInTheDocument()
+      expect(screen.getByLabelText('Errand title')).toHaveValue('Collect my printed notes')
+      expect(screen.getByLabelText('Pickup location')).toHaveValue(PICKUP.id)
+      expect(screen.getByLabelText('Drop-off location')).toHaveValue(DROPOFF.id)
+      expect(screen.getByLabelText('Reward (credits)')).toHaveValue(4)
+      expect(screen.getByLabelText('Description')).toHaveValue('A bound set of CS3219 lecture notes.')
+      expect(screen.getByLabelText('Pick up by')).toHaveValue('')
+      await waitFor(() => expect(screen.getByLabelText('Pick up by')).toHaveFocus())
+    })
+
+    it('posts the copy as a new errand with the new pickup time', async () => {
+      const { fetchMock, calls } = api({ reads: [PAST, order()] })
+      vi.stubGlobal('fetch', fetchMock)
+      const user = userEvent.setup()
+      renderPage('/errands/new?from=past-1')
+      await screen.findByText(/Copied from/)
+
+      const deadline = inAnHour()
+      await user.type(screen.getByLabelText('Pick up by'), deadline)
+      await user.click(screen.getByRole('button', { name: 'Post errand' }))
+
+      expect(await screen.findByRole('heading', { name: 'Errand page' })).toBeInTheDocument()
+      const post = calls.find((call) => call.init?.method === 'POST')
+      expect(post?.url).toBe('/api/orders')
+      const body = JSON.parse(String(post?.init?.body)) as Record<string, unknown>
+      expect(body).toMatchObject({
+        title: 'Collect my printed notes',
+        pickupLocationName: 'Printers@PCCommons',
+        dropoffLocationName: 'PGP Foyer',
+        creditReward: 4,
+        pickupDeadline: new Date(deadline).toISOString(),
+      })
+    })
+
+    it('clears a location Supplier no longer lists and says which one', async () => {
+      const gone = order({ id: 'past-1', state: 'EXPIRED', pickupLocationId: 'removed', pickupLocationName: 'Old Kiosk' })
+      vi.stubGlobal('fetch', api({ reads: [gone] }).fetchMock)
+      renderPage('/errands/new?from=past-1')
+
+      expect(await screen.findByText('Old Kiosk is no longer available. Choose another location.')).toBeInTheDocument()
+      expect(screen.getByLabelText('Pickup location')).toHaveValue('')
+      expect(screen.getByLabelText('Drop-off location')).toHaveValue(DROPOFF.id)
+    })
+
+    it('still checks the copied reward against the available credits', async () => {
+      vi.stubGlobal(
+        'fetch',
+        api({ reads: [order({ id: 'past-1', state: 'COMPLETED', creditReward: 12 })] }).fetchMock,
+      )
+      renderPage('/errands/new?from=past-1')
+
+      expect(await screen.findByText(/Lower the reward to 10 or less/)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Post errand' })).toBeDisabled()
+    })
+
+    it.each([
+      ['someone else’s errand', { status: 200, body: order({ id: 'past-1', requesterId: STRANGER_ID }) }],
+      ['an errand that cannot be loaded', { status: 404, body: { code: 'ORDER_NOT_FOUND' } }],
+    ])('starts empty for %s', async (_, answer) => {
+      const fallback = api().fetchMock
+      vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
+        String(input) === '/api/orders/past-1'
+          ? Promise.resolve(new Response(JSON.stringify(answer.body), { status: answer.status }))
+          : fallback(input, init),
+      )
+      renderPage('/errands/new?from=past-1')
+
+      expect(await screen.findByText("We couldn't copy that errand. Fill in the details below.")).toBeInTheDocument()
+      expect(screen.getByLabelText('Errand title')).toHaveValue('')
+    })
   })
 })
