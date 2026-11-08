@@ -29,37 +29,47 @@ spec:
               SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'user_name', :'user_password')
               WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'user_name') \gexec
               SELECT format('ALTER ROLE %I PASSWORD %L', :'user_name', :'user_password') \gexec
+              SELECT format('GRANT %I TO %I', :'user_name', current_user) \gexec
               SELECT format('CREATE DATABASE %I OWNER %I', :'user_db', :'user_name')
               WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'user_db') \gexec
               SELECT format('ALTER DATABASE %I OWNER TO %I', :'user_db', :'user_name') \gexec
+              SELECT format('REVOKE %I FROM %I', :'user_name', current_user) \gexec
 
               SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'supplier_name', :'supplier_password')
               WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'supplier_name') \gexec
               SELECT format('ALTER ROLE %I PASSWORD %L', :'supplier_name', :'supplier_password') \gexec
+              SELECT format('GRANT %I TO %I', :'supplier_name', current_user) \gexec
               SELECT format('CREATE DATABASE %I OWNER %I', :'supplier_db', :'supplier_name')
               WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'supplier_db') \gexec
               SELECT format('ALTER DATABASE %I OWNER TO %I', :'supplier_db', :'supplier_name') \gexec
+              SELECT format('REVOKE %I FROM %I', :'supplier_name', current_user) \gexec
 
               SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'order_name', :'order_password')
               WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'order_name') \gexec
               SELECT format('ALTER ROLE %I PASSWORD %L', :'order_name', :'order_password') \gexec
+              SELECT format('GRANT %I TO %I', :'order_name', current_user) \gexec
               SELECT format('CREATE DATABASE %I OWNER %I', :'order_db', :'order_name')
               WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'order_db') \gexec
               SELECT format('ALTER DATABASE %I OWNER TO %I', :'order_db', :'order_name') \gexec
+              SELECT format('REVOKE %I FROM %I', :'order_name', current_user) \gexec
 
               SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'credit_name', :'credit_password')
               WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'credit_name') \gexec
               SELECT format('ALTER ROLE %I PASSWORD %L', :'credit_name', :'credit_password') \gexec
+              SELECT format('GRANT %I TO %I', :'credit_name', current_user) \gexec
               SELECT format('CREATE DATABASE %I OWNER %I', :'credit_db', :'credit_name')
               WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'credit_db') \gexec
               SELECT format('ALTER DATABASE %I OWNER TO %I', :'credit_db', :'credit_name') \gexec
+              SELECT format('REVOKE %I FROM %I', :'credit_name', current_user) \gexec
 
               SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'admin_name', :'admin_password')
               WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'admin_name') \gexec
               SELECT format('ALTER ROLE %I PASSWORD %L', :'admin_name', :'admin_password') \gexec
+              SELECT format('GRANT %I TO %I', :'admin_name', current_user) \gexec
               SELECT format('CREATE DATABASE %I OWNER %I', :'admin_db', :'admin_name')
               WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'admin_db') \gexec
               SELECT format('ALTER DATABASE %I OWNER TO %I', :'admin_db', :'admin_name') \gexec
+              SELECT format('REVOKE %I FROM %I', :'admin_name', current_user) \gexec
               SQL
           env:
             - { name: RDS_HOST, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: RDS_HOST } } }

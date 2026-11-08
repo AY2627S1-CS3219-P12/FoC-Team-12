@@ -146,6 +146,11 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    deployment then restarts the External Secrets controller so a newly added IRSA service-account
    annotation is injected into its pod even when Helm did not otherwise change the pod template.
 
+   The database bootstrap temporarily grants the RDS master user membership in each application
+   role while assigning database ownership, then revokes it. RDS master users are not PostgreSQL
+   superusers and cannot assign ownership to an unrelated role without that temporary membership.
+   Failed bootstrap and Kafka initializer jobs are detected immediately and print pod/job logs.
+
 ## Deployment and rollback
 
 On successful main-branch CI, `.github/workflows/cloud-deploy.yml` determines affected images,
