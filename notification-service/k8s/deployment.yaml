@@ -16,7 +16,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: notification-service
-          image: arkanian4/foc-notification-service:sha-0cb8c40ccaa16fa693d3378910c532bc38200992-r42487079611-1
+          image: arkanian4/foc-notification-service:sha-cae5639f07dfb5ac214c969f1b66f6958e2d4b86-r42501061891-1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8086
