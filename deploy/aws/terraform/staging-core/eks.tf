@@ -1,6 +1,9 @@
 data "aws_iam_policy_document" "eks_cluster_assume" {
   statement {
-    actions = ["sts:AssumeRole"]
+    actions = [
+      "sts:AssumeRole",
+      "sts:TagSession"
+    ]
     principals {
       type        = "Service"
       identifiers = ["eks.amazonaws.com"]
@@ -16,6 +19,26 @@ resource "aws_iam_role" "eks_cluster" {
 resource "aws_iam_role_policy_attachment" "eks_cluster" {
   role       = aws_iam_role.eks_cluster.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_compute" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSComputePolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_block_storage" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSBlockStoragePolicyV2"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_load_balancing" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSLoadBalancingPolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "eks_networking" {
+  role       = aws_iam_role.eks_cluster.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSNetworkingPolicy"
 }
 
 data "aws_iam_policy_document" "eks_node_assume" {
@@ -83,6 +106,10 @@ resource "aws_eks_cluster" "main" {
   depends_on = [
     aws_cloudwatch_log_group.eks_control_plane,
     aws_iam_role_policy_attachment.eks_cluster,
+    aws_iam_role_policy_attachment.eks_compute,
+    aws_iam_role_policy_attachment.eks_block_storage,
+    aws_iam_role_policy_attachment.eks_load_balancing,
+    aws_iam_role_policy_attachment.eks_networking,
     aws_iam_role_policy_attachment.eks_node_minimal,
     aws_iam_role_policy_attachment.eks_node_ecr
   ]
@@ -129,7 +156,8 @@ resource "kubernetes_deployment_v1" "capacity_bootstrap" {
   }
 
   spec {
-    replicas = 1
+    replicas                  = 1
+    progress_deadline_seconds = 1200
 
     selector {
       match_labels = { app = "capacity-bootstrap" }

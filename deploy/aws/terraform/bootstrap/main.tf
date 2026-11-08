@@ -122,9 +122,10 @@ data "aws_iam_policy_document" "infra" {
     resources = ["*"]
   }
 
-  # The staging RDS instance uses the account's AWS-managed RDS key. RDS needs a grant to use that
-  # key for the encrypted database. Restrict access to the RDS alias and AWS-resource grants rather
-  # than granting the workflow general KMS access.
+  # The staging RDS instance uses the account's AWS-managed RDS key for storage and the
+  # Secrets Manager managed key for its generated master-password secret. Restrict key inspection
+  # to those aliases and restrict grant creation to the RDS key rather than granting the workflow
+  # general KMS access.
   statement {
     sid       = "UseRdsManagedKey"
     actions   = ["kms:DescribeKey"]
@@ -133,7 +134,10 @@ data "aws_iam_policy_document" "infra" {
     condition {
       test     = "ForAnyValue:StringEquals"
       variable = "kms:ResourceAliases"
-      values   = ["alias/aws/rds"]
+      values = [
+        "alias/aws/rds",
+        "alias/aws/secretsmanager"
+      ]
     }
   }
 
