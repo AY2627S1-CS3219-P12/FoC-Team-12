@@ -153,6 +153,9 @@ jobs:
           TF_VAR_alb_arn: ${{ steps.alb.outputs.alb_arn }}
           TF_VAR_alb_dns_name: ${{ steps.alb.outputs.alb_dns_name }}
         run: |
+          TF_VAR_alb_security_group_id=$(aws ssm get-parameter \
+            --name /foc/staging/alb-security-group-id --query Parameter.Value --output text)
+          export TF_VAR_alb_security_group_id
           terraform -chdir=deploy/aws/terraform/staging-edge apply -auto-approve
       - name: Smoke-test initial deployment
         if: inputs.operation == 'provision-runtime' || inputs.operation == 'apply-edge'
@@ -173,7 +176,9 @@ jobs:
             alb_json=$(aws elbv2 describe-load-balancers --names foc-staging-gateway)
             TF_VAR_alb_arn=$(jq -r '.LoadBalancers[0].LoadBalancerArn' <<< "$alb_json")
             TF_VAR_alb_dns_name=$(jq -r '.LoadBalancers[0].DNSName' <<< "$alb_json")
-            export TF_VAR_alb_arn TF_VAR_alb_dns_name
+            TF_VAR_alb_security_group_id=$(aws ssm get-parameter \
+              --name /foc/staging/alb-security-group-id --query Parameter.Value --output text)
+            export TF_VAR_alb_arn TF_VAR_alb_dns_name TF_VAR_alb_security_group_id
             terraform -chdir=deploy/aws/terraform/staging-edge destroy -auto-approve
           else
             echo 'Edge stack is already empty.'

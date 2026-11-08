@@ -6,9 +6,12 @@ base=${PUBLIC_URL%/}
 
 retry() {
   local url=$1 expected=${2:-200}
-  for _ in $(seq 1 60); do
-    code=$(curl --silent --output /dev/null --write-out '%{http_code}' "$url" || true)
+  local code attempt
+  for attempt in $(seq 1 6); do
+    code=$(curl --silent --show-error --connect-timeout 3 --max-time 10 \
+      --output /dev/null --write-out '%{http_code}' "$url" || true)
     [[ $code == "$expected" ]] && return 0
+    echo "Attempt $attempt/6: expected HTTP $expected from $url, received ${code:-no response}." >&2
     sleep 5
   done
   echo "Expected HTTP $expected from $url, received ${code:-no response}." >&2
