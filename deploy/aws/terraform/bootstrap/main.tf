@@ -221,6 +221,7 @@ data "aws_iam_policy_document" "infra" {
       values = [
         "autoscaling.amazonaws.com",
         "cloudfront.amazonaws.com",
+        "vpcorigin.cloudfront.amazonaws.com",
         "eks.amazonaws.com",
         "elasticloadbalancing.amazonaws.com",
         "rds.amazonaws.com",
