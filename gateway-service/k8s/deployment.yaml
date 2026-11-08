@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: gateway
-          image: foc-gateway-service:local-323929b
+          image: arkanian4/foc-gateway-service:sha-323929b57e3e89ceda1198c3f5f1a391822840db-r42401211890-1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8088
@@ -34,6 +34,8 @@ spec:
               value: http://credit-service:8083
             - name: ORDER_SERVICE_URL
               value: http://order-service:8082
+            - name: NOTIFICATION_SERVICE_URL
+              value: http://notification-service:8086
             - name: ADMIN_SERVICE_URL
               value: http://admin-service.foc-local.svc.cluster.local.:8084
             - name: CHAT_SERVICE_URL

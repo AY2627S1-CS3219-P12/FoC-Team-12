@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('gateway', 'supplier', 'credit', 'order', 'admin', 'chat')]
+    [ValidateSet('gateway', 'supplier', 'credit', 'order', 'admin', 'chat', 'notification')]
     [string] $Service,
     [string] $Profile = 'foc-local',
     [switch] $CheckDatabaseRestart
@@ -47,7 +47,7 @@ function Assert-Http {
 
 $deployment = if ($Service -eq 'gateway') { 'gateway' } else { "$Service-service" }
 Invoke-Kubectl @('rollout', 'status', "deployment/$deployment", '--timeout=300s')
-$port = @{ gateway = 8088; supplier = 8080; credit = 8083; order = 8082; admin = 8084; chat = 8085 }[$Service]
+$port = @{ gateway = 8088; supplier = 8080; credit = 8083; order = 8082; admin = 8084; chat = 8085; notification = 8086 }[$Service]
 $base = "http://${deployment}:$port"
 Assert-Http "$base/actuator/health" 200
 if ($Service -eq 'gateway') {
@@ -88,6 +88,13 @@ switch ($Service) {
         Assert-Http "$base/api/orders" 401 -Method POST
         Assert-Http 'http://gateway:8088/docs/order/openapi.json' 200
         Assert-Http 'http://gateway:8088/api/orders' 401 -Method POST
+    }
+    notification {
+        Assert-Http "$base/api/notifications/me" 401
+        Assert-Http "$base/api/notifications/me" 401 -InvalidToken
+        Assert-Http "$base/api/notifications/me/unread-count" 401
+        Assert-Http 'http://gateway:8088/api/notifications/me' 401
+        Assert-Http 'http://gateway:8088/docs/notification/openapi.json' 200
     }
     chat {
         Assert-Http "$base/api/chat/preferences" 401

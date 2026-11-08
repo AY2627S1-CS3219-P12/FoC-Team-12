@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('supplier', 'credit', 'order')]
+    [ValidateSet('supplier', 'credit', 'order', 'notification')]
     [string] $Service,
     [string] $Profile = 'foc-local'
 )

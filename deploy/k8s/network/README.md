@@ -26,14 +26,14 @@ All `foc-local` pods are default-denied for ingress/egress. These explicit rules
 | Source | Destination | TCP port / purpose |
 | --- | --- | --- |
 | External browser | Gateway | 8088 |
-| Gateway | User / Supplier / Order / Credit / Chat | 8081 / 8080 / 8082 / 8083 / 8085 |
+| Gateway | User / Supplier / Order / Credit / Chat / Notification | 8081 / 8080 / 8082 / 8083 / 8085 / 8086 |
 | Each backend | Its own PostgreSQL pod | 5432 |
 | Gateway | Admin | 8084 |
 | Admin | User / Kafka | 8081 current eligibility and JWKS / 9092 authenticated actions |
 | Admin | Chat (when deployed) | 8085, agreed private APIs |
 | Chat | Its PostgreSQL / User / Kafka / RabbitMQ | 5432 / 8081 / 9092 / 5672 |
-| Supplier / Order / Credit / Chat | User | 8081, JWT public-key discovery |
-| User / Order / Credit / Chat / Kafka UI / Kafka initializer | Kafka | 9092 |
+| Supplier / Order / Credit / Chat / Notification | User | 8081, JWT public-key discovery |
+| User / Order / Credit / Chat / Notification / Kafka UI / Kafka initializer | Kafka | 9092 |
 | Kafka | Kafka | 9092 / 9093, broker/controller |
 | All namespace pods | kube-system CoreDNS | UDP and TCP 53 |
 | User | Public IPv4 HTTPS | 443, needed for SendGrid |
@@ -44,8 +44,9 @@ not grant permission to produce/consume. Frontend calls go through the gateway; 
 backend-to-backend business API calls beyond the published JWKS connection are assumed.
 Future services, monitoring, Jobs and new integrations need a reviewed rule before rollout.
 
-Admin and Chat policies live in their service-local `k8s/network.yaml` files; `Common.ps1`
-combines them with this directory's policies for isolated checks and the shared application.
+Admin, Chat and Notification policies live in their service-local `k8s/network.yaml` files;
+`Common.ps1` combines them with this directory's policies for isolated checks and the shared
+application.
 These exceptions grant network reachability only, not HTTP authorization. Admin cannot reach
 service databases.
 
