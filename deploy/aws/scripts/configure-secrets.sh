@@ -148,6 +148,7 @@ order_db=$(random_password)
 credit_db=$(random_password)
 admin_db=$(random_password)
 chat_db=$(random_password)
+notification_db=$(random_password)
 rabbitmq=$(random_password)
 jwt_key=$(private_key)
 admin_secret="foc/$environment/admin-service-secrets"
@@ -189,6 +190,7 @@ jq -n --arg db "$admin_db" --arg key "$admin_key" --arg trust "$chat_caller_trus
 jq -n --arg db "$chat_db" --arg rabbit "$rabbitmq" --arg key "$chat_key" --arg trust "$chat_trusted_keys" \
   '{DB_PASSWORD:$db,RABBITMQ_PASSWORD:$rabbit,CHAT_SERVICE_PRIVATE_KEY:$key,
     CHAT_SERVICE_KEY_ID:"chat-staging-1",CHAT_SERVICE_TRUSTED_KEYS:$trust}' > "$tmp/chat.json"
+jq -n --arg value "$notification_db" '{DB_PASSWORD:$value}' > "$tmp/notification.json"
 jq -n \
   --arg admin "$(random_password)" --arg broker "$(random_password)" \
   --arg user "$(random_password)" --arg order "$(random_password)" \
@@ -209,6 +211,7 @@ merge_trust_file "foc/$environment/order-service-secrets" "$tmp/order.json" ORDE
 merge_trust_file "foc/$environment/credit-service-secrets" "$tmp/credit.json" CREDIT_SERVICE_TRUSTED_KEYS
 merge_trust_file "$admin_secret" "$tmp/admin.json" ADMIN_SERVICE_TRUSTED_KEYS
 merge_trust_file "$chat_secret" "$tmp/chat.json" CHAT_SERVICE_TRUSTED_KEYS
+put_file "foc/$environment/notification-service-secrets" "$tmp/notification.json"
 merge_file "foc/$environment/kafka-broker-secrets" "$tmp/kafka.json"
 put_file "foc/$environment/kafka-ui-secrets" "$tmp/kafka-ui.json"
 

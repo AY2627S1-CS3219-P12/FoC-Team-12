@@ -26,7 +26,9 @@ spec:
                 -v order_name="$order_name" -v order_db="$order_db" -v order_password="$order_password" \
                 -v credit_name="$credit_name" -v credit_db="$credit_db" -v credit_password="$credit_password" \
                 -v admin_name="$admin_name" -v admin_db="$admin_db" -v admin_password="$admin_password" \
-                -v chat_name="$chat_name" -v chat_db="$chat_db" -v chat_password="$chat_password" <<'SQL'
+                -v chat_name="$chat_name" -v chat_db="$chat_db" -v chat_password="$chat_password" \
+                -v notification_name="$notification_name" -v notification_db="$notification_db" \
+                -v notification_password="$notification_password" <<'SQL'
               SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'user_name', :'user_password')
               WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'user_name') \gexec
               SELECT format('ALTER ROLE %I PASSWORD %L', :'user_name', :'user_password') \gexec
@@ -80,6 +82,15 @@ spec:
               WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'chat_db') \gexec
               SELECT format('ALTER DATABASE %I OWNER TO %I', :'chat_db', :'chat_name') \gexec
               SELECT format('REVOKE %I FROM %I', :'chat_name', current_user) \gexec
+
+              SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'notification_name', :'notification_password')
+              WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'notification_name') \gexec
+              SELECT format('ALTER ROLE %I PASSWORD %L', :'notification_name', :'notification_password') \gexec
+              SELECT format('GRANT %I TO %I', :'notification_name', current_user) \gexec
+              SELECT format('CREATE DATABASE %I OWNER %I', :'notification_db', :'notification_name')
+              WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'notification_db') \gexec
+              SELECT format('ALTER DATABASE %I OWNER TO %I', :'notification_db', :'notification_name') \gexec
+              SELECT format('REVOKE %I FROM %I', :'notification_name', current_user) \gexec
               SQL
           env:
             - { name: RDS_HOST, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: RDS_HOST } } }
@@ -104,6 +115,9 @@ spec:
             - { name: chat_name, value: chat_user }
             - { name: chat_db, value: chat_db }
             - { name: chat_password, valueFrom: { secretKeyRef: { name: chat-service-secrets, key: DB_PASSWORD } } }
+            - { name: notification_name, value: notification_user }
+            - { name: notification_db, value: notification_db }
+            - { name: notification_password, valueFrom: { secretKeyRef: { name: notification-service-secrets, key: DB_PASSWORD } } }
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 500m, memory: 256Mi }
