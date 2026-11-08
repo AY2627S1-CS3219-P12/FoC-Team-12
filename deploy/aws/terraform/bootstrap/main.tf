@@ -121,6 +121,41 @@ data "aws_iam_policy_document" "infra" {
   }
 
   statement {
+    sid = "ChatAttachmentBucket"
+    actions = [
+      "s3:CreateBucket",
+      "s3:DeleteBucket",
+      "s3:DeleteBucketPolicy",
+      "s3:DeleteBucketPublicAccessBlock",
+      "s3:Get*",
+      "s3:List*",
+      "s3:PutBucketOwnershipControls",
+      "s3:PutBucketPolicy",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:PutBucketTagging",
+      "s3:PutBucketVersioning",
+      "s3:PutEncryptionConfiguration"
+    ]
+    resources = [
+      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
+    ]
+  }
+
+  statement {
+    sid = "ChatAttachmentObjectsForTeardown"
+    actions = [
+      "s3:AbortMultipartUpload",
+      "s3:DeleteObject",
+      "s3:DeleteObjectVersion",
+      "s3:GetObject",
+      "s3:ListMultipartUploadParts"
+    ]
+    resources = [
+      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}/*"
+    ]
+  }
+
+  statement {
     sid = "PrefixedIamResources"
     actions = [
       "iam:AttachRolePolicy",

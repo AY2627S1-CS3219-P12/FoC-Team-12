@@ -2,6 +2,7 @@ package com.friendoncampus.chat.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -16,7 +17,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -52,9 +55,13 @@ class ChatPreferencePersistenceIntegrationTest {
     @Autowired Clock clock;
     @Autowired ChatConversationService chats;
 
+    @Autowired AdminChatContractService adminChat;
+
+    @MockitoBean InternalServiceClient internalServices;
+
     @BeforeEach
     void clearPreferences() {
-        jdbc.execute("TRUNCATE chat_messages,chat_attachments,chat_participants,chat_conversations,chat_processed_events,chat_preferences CASCADE");
+        jdbc.execute("TRUNCATE chat_messages,chat_attachments,chat_participants,chat_conversations,chat_processed_events,chat_preferences,chat_evidence_records,chat_projection_checkpoints,chat_case_conversation_requests CASCADE");
     }
 
     @Test
@@ -122,6 +129,13 @@ class ChatPreferencePersistenceIntegrationTest {
         var attachment=chats.upload(conversation.id(),second,new MockMultipartFile("file","proof.png","image/png",png));
         chats.sendImage(conversation.id(),second,UUID.randomUUID(),attachment.id());
         assertThat(chats.attachment(conversation.id(),attachment.id(),requester).content()).isEqualTo(png);
+        assertThat(jdbc.queryForMap("""
+                SELECT storage_provider,object_key,checksum_sha256,content IS NOT NULL AS has_content
+                FROM chat_attachments WHERE id=?
+                """, attachment.id()))
+                .containsEntry("storage_provider", "DATABASE")
+                .containsEntry("object_key", null)
+                .containsEntry("has_content", true);
         assertThatThrownBy(() -> chats.attachment(conversation.id(),attachment.id(),first)).isInstanceOf(ChatAccessException.class);
         assertThatThrownBy(() -> chats.upload(conversation.id(),second,new MockMultipartFile("file","fake.png","image/png","not an image".getBytes())))
                 .isInstanceOf(IllegalArgumentException.class);
@@ -154,6 +168,92 @@ class ChatPreferencePersistenceIntegrationTest {
                 .extracting(ChatConversationService.Message::lifecycleAction)
                 .containsExactly("ACCEPT", "WITHDRAW");
         assertThat(chats.byOrder(order,requester).readOnly()).isTrue();
+    }
+
+    @Test
+    void liveKafkaAndBackfillOverlapIsIdempotentButChangedEvidenceConflicts() {
+        UUID eventId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        UUID courierId = UUID.randomUUID();
+        OffsetDateTime occurredAt = OffsetDateTime.parse("2026-11-08T04:30:00Z");
+        String payload = """
+                {"eventId":"%s","eventType":"OrderTransitioned","occurredAt":"%s",
+                 "actor":{"userId":"%s"},"data":{"orderId":"%s","requesterId":"%s",
+                 "courierId":"%s","previousCourierId":null,"action":"ACCEPT",
+                 "toState":"ACCEPTED","sourceSequence":1}}
+                """.formatted(eventId, occurredAt, courierId, orderId, requesterId, courierId);
+        new OrderLifecycleConsumer(jdbcClient, clock, chats).process(payload);
+
+        var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+        var exported = mapper.createObjectNode();
+        exported.put("eventId", eventId.toString());
+        exported.put("sourceSequence", 1);
+        exported.put("orderId", orderId.toString());
+        exported.put("action", "ACCEPT");
+        exported.put("actorUserId", courierId.toString());
+        exported.put("occurredAt", occurredAt.toString());
+        exported.put("ingestedAt", occurredAt.toString());
+        var data = mapper.readTree(payload).path("data").deepCopy();
+        ((tools.jackson.databind.node.ObjectNode) data).put("kind", "ORDER");
+        exported.set("data", data);
+        var checkpoint = mapper.createObjectNode();
+        checkpoint.put("source", "order-service");
+        checkpoint.put("stream", "order.lifecycle.events");
+        checkpoint.put("aggregateId", orderId.toString());
+        checkpoint.put("committedSequence", 1);
+        checkpoint.put("checkedAt", occurredAt.toString());
+        var page = mapper.createObjectNode();
+        page.set("checkpoint", checkpoint);
+        page.putArray("records").add(exported);
+
+        when(internalServices.orderEvidence(orderId)).thenReturn(java.util.List.of(page));
+        when(internalServices.userEligibility(requesterId))
+                .thenReturn(mapper.readTree("{\"active\":true}"));
+        Jwt requester = Jwt.withTokenValue("actor")
+                .header("alg", "none")
+                .subject(requesterId.toString())
+                .claim("role", "REQUESTER")
+                .build();
+
+        assertThat(adminChat.eligibility(orderId, requesterId, requester))
+                .containsEntry("eligible", true);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_evidence_records", Long.class))
+                .isEqualTo(1L);
+
+        exported.put("action", "WITHDRAW");
+        assertThatThrownBy(() -> adminChat.eligibility(orderId, requesterId, requester))
+                .isInstanceOf(ChatConflictException.class);
+    }
+
+    @Test
+    void resolvedAdminCaseIsLockedBeforeTheNextParticipantWrite() {
+        UUID caseId=UUID.randomUUID(), orderId=UUID.randomUUID(), participant=UUID.randomUUID(), reviewer=UUID.randomUUID();
+        var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+        when(internalServices.caseAccess(caseId,reviewer,participant)).thenReturn(mapper.readTree("""
+                {"caseId":"%s","orderId":"%s","state":"UNDER_REVIEW",
+                 "reviewerId":"%s","allowedParticipantIds":["%s"],
+                 "canReadEvidence":true,"canReadConversation":true,"canWriteConversation":true}
+                """.formatted(caseId,orderId,reviewer,participant)));
+        when(internalServices.userEligibility(reviewer))
+                .thenReturn(mapper.readTree("{\"active\":true,\"administrator\":true}"));
+        Jwt admin=Jwt.withTokenValue("actor").header("alg","none").subject(reviewer.toString())
+                .claim("role","ADMIN").build();
+        UUID conversationId=(UUID)adminChat.openConversation(caseId,participant,UUID.randomUUID(),admin)
+                .get("conversationId");
+
+        when(internalServices.caseAccess(caseId,participant,participant)).thenReturn(mapper.readTree("""
+                {"caseId":"%s","orderId":"%s","state":"RESOLVED",
+                 "reviewerId":"%s","allowedParticipantIds":["%s"],
+                 "canReadEvidence":false,"canReadConversation":true,"canWriteConversation":false}
+                """.formatted(caseId,orderId,reviewer,participant)));
+
+        assertThatThrownBy(() -> chats.sendText(conversationId,participant,UUID.randomUUID(),"TEXT","late message",null))
+                .isInstanceOf(ChatConflictException.class)
+                .hasMessage("This conversation is read-only");
+        assertThat(chats.get(conversationId,participant).readOnly()).isTrue();
+        assertThat(jdbc.queryForObject("SELECT status FROM chat_conversations WHERE id=?",String.class,conversationId))
+                .isEqualTo("READ_ONLY");
     }
 
     private static String event(UUID order,UUID requester,UUID courier,String action,String to,long version){return event(order,requester,courier,action,to,version,courier);}

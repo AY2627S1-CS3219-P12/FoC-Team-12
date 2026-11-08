@@ -6,8 +6,8 @@ immutable ECR images and deploys them through GitHub OIDC. Compose and Minikube 
 local development environments.
 
 Jun Hui is the nominated editor for this Cloud Deployment N2H iteration. Gateway, User, Supplier,
-Order, Credit and Admin owners must review changes affecting their image, runtime configuration or
-route contract before merge.
+Order, Credit, Admin and Chat owners must review changes affecting their image, runtime
+configuration or route contract before merge.
 
 ## Architecture
 
@@ -16,11 +16,13 @@ Browser
   -> CloudFront HTTPS hostname
   -> private ALB VPC origin
   -> Gateway ClusterIP
-  -> User / Supplier / Order / Credit / Admin ClusterIP services
-                                      |
-                     private RDS PostgreSQL (five databases/users)
+  -> User / Supplier / Order / Credit / Admin / Chat ClusterIP services
+                                              |
+                             private RDS PostgreSQL (six databases/users)
 
-User / Order / Credit / Admin <-> Kafka StatefulSet on encrypted EBS
+User / Order / Credit / Admin / Chat <-> Kafka StatefulSet on encrypted EBS
+Chat <-> RabbitMQ StatefulSet on encrypted EBS
+Chat -> private S3 attachment bucket through EKS Pod Identity
 External Secrets Operator     <-> AWS Secrets Manager through EKS Pod Identity
 Pods and EKS control plane    -> CloudWatch logs, metrics, dashboard and alarms
 ```
@@ -100,7 +102,19 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    | `AWS_STAGING_ENABLED` | Keep `false` until the first full deployment succeeds |
 
 4. Run **AWS staging infrastructure -> apply-core** manually and approve it. Review a
-   **plan-core** run first. This creates chargeable resources.
+   **plan-core** run first. This creates chargeable resources. If the Chat attachment bucket was
+   created manually before Terraform, the apply workflow imports it automatically. For a manual
+   apply, adopt it once before applying:
+
+   ```bash
+   terraform -chdir=deploy/aws/terraform/staging-core import \
+     aws_s3_bucket.chat_attachments \
+     foc-team-12-chat-attachments-070096877754-ap-southeast-1
+   ```
+
+   Reapply the bootstrap stack first when introducing this bucket to an existing environment so
+   the scoped infrastructure role receives the new S3 permissions. This creates chargeable
+   resources.
 
 5. Initialize runtime values from a trusted workstation. The SendGrid values are read from shell
    variables and are never printed. Optional bootstrap-admin values are handled the same way.
@@ -115,11 +129,12 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    unset SENDGRID_API_KEY SENDGRID_FROM_EMAIL ADMIN_BOOTSTRAP_PASSWORD
    ```
 
-   Re-running the helper preserves existing secret versions. Rotate a value with an explicit
+   Re-running the helper preserves existing values and adds newly required Kafka credentials
+   without rotating other clients. Rotate a value with an explicit
    `aws secretsmanager put-secret-value --secret-id ... --secret-string file://...` command, then
    restart only the affected deployment so External Secrets can project the new version.
 
-6. Run **AWS staging infrastructure -> provision-runtime**. It builds all six application images,
+6. Run **AWS staging infrastructure -> provision-runtime**. It builds all seven deployed application images,
    pushes immutable tags to ECR, applies the platform, creates CloudFront and smoke-tests the HTTPS
    URL. Set `AWS_STAGING_ENABLED=true` only after this passes.
 
@@ -159,7 +174,7 @@ kubectl -n foc-staging logs statefulset/kafka --since=15m
 kubectl -n foc-staging get events --sort-by=.lastTimestamp | tail -100
 ```
 
-Gateway and all five applications use HPA `1-3` at 70% CPU. To collect N2H evidence, run the load
+Gateway and all six applications use HPA `1-3` at 70% CPU. To collect N2H evidence, run the load
 helper in one terminal and watch both pod and node scaling in others:
 
 ```bash
@@ -212,6 +227,11 @@ syntax and internal consistency, not OIDC trust, AWS quotas, service health or t
 - The USD 25 budget, one-NAT design and single RDS/Kafka instances favor a short-lived demo.
 - RDS deletion protection and final snapshots are disabled because staging data is disposable.
 - Kafka replication factor one persists on encrypted EBS but does not survive broker/AZ failure.
+- RabbitMQ is also a single staging StatefulSet and does not survive a node/AZ failure without
+  rescheduling; production should use a managed or clustered broker.
+- Chat attachments are private and encrypted in S3. Chat streams authorized downloads through its
+  API, and its Pod receives short-lived AWS credentials through EKS Pod Identity; no AWS access
+  key is stored in Kubernetes or GitHub.
 - The EKS API remains public for GitHub-hosted runners; a production platform should use private
   runners/network access and make it private-only.
 - Replace local Kafka `SASL_PLAINTEXT` with encrypted transport and rotate all credentials.

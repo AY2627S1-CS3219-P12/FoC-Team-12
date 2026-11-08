@@ -2,9 +2,11 @@
 
 Machine-readable review drafts, examples and validation: [contract package](../contracts/README.md).
 
-Status: proposed v1 interfaces for Eldridge/Darryl review; XueTing approves Order evidence;
-Jun Hui reviews broker/deployment changes. See [Admin spec](admin-service-spec.md) and
-[Kafka actions](admin-command-contract.md). None of these new interfaces is implemented here.
+Status: v1 interfaces are implemented for Chat, Admin, User, Order and Credit. The live local
+acceptance flow verifies reporting eligibility, case claim, a complete reconciled timeline and
+idempotent participant-conversation creation. XueTing reviews Order evidence ownership and Jun Hui
+reviews broker/deployment changes. See [Admin spec](admin-service-spec.md) and
+[Kafka actions](admin-command-contract.md).
 
 The complete [Chat blueprint](../../chat-service/README.md) covers public messaging, images,
 translation and pending participant-history policy. The [Notification blueprint](../../notification-service/README.md)

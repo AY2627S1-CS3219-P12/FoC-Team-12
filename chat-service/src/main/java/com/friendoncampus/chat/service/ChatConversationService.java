@@ -13,23 +13,34 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.friendoncampus.chat.domain.ChatLanguage;
 import com.friendoncampus.chat.domain.QuickReplyKey;
+import com.friendoncampus.chat.storage.AttachmentStorageException;
+import com.friendoncampus.chat.storage.AttachmentStorageRouter;
 
 @Service
 public class ChatConversationService {
+    private static final Logger log = LoggerFactory.getLogger(ChatConversationService.class);
     private final JdbcClient db;
     private final Clock clock;
     private final QuickReplyCatalog quickReplies;
     private final ChatPreferenceService preferences;
     private final ApplicationEventPublisher events;
+    private final AttachmentStorageRouter attachmentStorage;
+    private final CaseConversationAccessGuard caseAccessGuard;
 
     public ChatConversationService(JdbcClient db, Clock clock, QuickReplyCatalog quickReplies,
-            ChatPreferenceService preferences, ApplicationEventPublisher events) {
+            ChatPreferenceService preferences, ApplicationEventPublisher events,
+            AttachmentStorageRouter attachmentStorage, CaseConversationAccessGuard caseAccessGuard) {
         this.db = db; this.clock = clock; this.quickReplies = quickReplies;
-        this.preferences = preferences; this.events = events;
+        this.preferences = preferences; this.events = events; this.attachmentStorage = attachmentStorage;
+        this.caseAccessGuard = caseAccessGuard;
     }
 
     public record Conversation(UUID id, UUID orderId, String status, boolean readOnly) {}
@@ -121,9 +132,19 @@ public class ChatConversationService {
             if(!matchesImageSignature(type,content))throw new IllegalArgumentException("Image content does not match its declared type");
             String name = file.getOriginalFilename() == null ? "image" : file.getOriginalFilename().replaceAll("[\\r\\n]", "");
             if(name.length()>255)name=name.substring(0,255);
-            db.sql("INSERT INTO chat_attachments(id,conversation_id,owner_user_id,content_type,original_filename,size_bytes,content,created_at) VALUES(:id,:cid,:actor,:type,:name,:size,:content,:at)")
+            var stored = attachmentStorage.put(id, attachmentId, type, content);
+            registerStorageRollback(stored.provider(), stored.objectKey());
+            db.sql("""
+                    INSERT INTO chat_attachments(
+                        id,conversation_id,owner_user_id,content_type,original_filename,size_bytes,
+                        content,storage_provider,object_key,checksum_sha256,created_at)
+                    VALUES(:id,:cid,:actor,:type,:name,:size,:content,:provider,:objectKey,:checksum,:at)
+                    """)
                 .param("id",attachmentId).param("cid",id).param("actor",actor).param("type",type)
-                .param("name",name).param("size",file.getSize()).param("content",content).param("at",now()).update();
+                .param("name",name).param("size",file.getSize())
+                .param("content",stored.inlineContent(),java.sql.Types.BINARY)
+                .param("provider",stored.provider()).param("objectKey",stored.objectKey())
+                .param("checksum",sha256(content)).param("at",now()).update();
             return new Attachment(attachmentId,type,name,file.getSize());
         } catch (java.io.IOException e) { throw new IllegalArgumentException("Image could not be read", e); }
     }
@@ -173,16 +194,25 @@ public class ChatConversationService {
 
     @Transactional(readOnly = true)
     public StoredAttachment attachment(UUID conversationId, UUID attachmentId, UUID actor) {
-        return db.sql("""
-                SELECT a.content_type,a.original_filename,a.content FROM chat_attachments a
+        StoredAttachmentRecord stored = db.sql("""
+                SELECT a.content_type,a.original_filename,a.content,a.storage_provider,a.object_key,a.checksum_sha256
+                FROM chat_attachments a
                 JOIN chat_messages m ON m.attachment_id=a.id
                 WHERE a.id=:aid AND a.conversation_id=:cid AND (
                   a.owner_user_id=:actor OR EXISTS(
                     SELECT 1 FROM chat_participants p WHERE p.conversation_id=:cid AND p.user_id=:actor
                       AND (p.relationship='REQUESTER' OR p.assignment_epoch=m.assignment_epoch)))
                 """).param("aid",attachmentId).param("cid",conversationId).param("actor",actor)
-                .query((rs,n)->new StoredAttachment(rs.getString(1),rs.getString(2),rs.getBytes(3))).optional()
+                .query((rs,n)->new StoredAttachmentRecord(rs.getString("content_type"),
+                        rs.getString("original_filename"),rs.getBytes("content"),
+                        rs.getString("storage_provider"),rs.getString("object_key"),
+                        rs.getString("checksum_sha256"))).optional()
                 .orElseThrow(ChatAccessException::new);
+        byte[] content = attachmentStorage.get(stored.provider(), stored.objectKey(), stored.inlineContent());
+        if (stored.checksum() != null && !stored.checksum().equals(sha256(content))) {
+            throw new AttachmentStorageException("Stored image checksum does not match its metadata");
+        }
+        return new StoredAttachment(stored.contentType(), stored.filename(), content);
     }
 
     public void requireParticipant(UUID id, UUID actor) {
@@ -200,6 +230,7 @@ public class ChatConversationService {
     }
     private String relationship(UUID id,UUID actor){return db.sql("SELECT relationship FROM chat_participants WHERE conversation_id=:id AND user_id=:actor ORDER BY assignment_epoch DESC LIMIT 1").param("id",id).param("actor",actor).query(String.class).optional().orElseThrow(ChatAccessException::new);}
     private void requireWritable(UUID id, UUID actor){
+        if (!caseAccessGuard.refresh(id, actor)) throw new ChatConflictException("This conversation is read-only");
         int count=db.sql("SELECT count(*) FROM chat_participants p JOIN chat_conversations c ON c.id=p.conversation_id WHERE p.conversation_id=:id AND p.user_id=:actor AND p.can_write AND p.valid_until IS NULL AND c.status='ACTIVE'").param("id",id).param("actor",actor).query(Integer.class).single();
         if(count==0) throw new ChatConflictException("This conversation is read-only");
     }
@@ -219,6 +250,20 @@ public class ChatConversationService {
     private Message findMessage(UUID id){return db.sql("SELECT m.*,a.content_type,a.original_filename,a.size_bytes FROM chat_messages m LEFT JOIN chat_attachments a ON a.id=m.attachment_id WHERE m.id=:id").param("id",id).query((rs,n)->mapMessage(rs)).single();}
     private static Message mapMessage(java.sql.ResultSet rs)throws java.sql.SQLException{UUID aid=rs.getObject("attachment_id",UUID.class);Attachment a=aid==null?null:new Attachment(aid,rs.getString("content_type"),rs.getString("original_filename"),rs.getLong("size_bytes"));return new Message(rs.getObject("id",UUID.class),rs.getObject("conversation_id",UUID.class),rs.getObject("sender_user_id",UUID.class),rs.getLong("sequence"),rs.getObject("client_message_id",UUID.class),rs.getString("message_type"),rs.getString("original_language"),rs.getString("quick_reply_key"),rs.getString("text_content"),a,rs.getObject("source_event_id",UUID.class),rs.getObject("source_sequence",Long.class),rs.getString("lifecycle_action"),rs.getString("lifecycle_from_state"),rs.getString("lifecycle_to_state"),rs.getObject("created_at",OffsetDateTime.class));}
     private OffsetDateTime now(){return OffsetDateTime.now(clock);}
+    private void registerStorageRollback(String provider,String objectKey){
+        if(objectKey==null)return;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization(){
+            @Override public void afterCompletion(int status){
+                if(status!=TransactionSynchronization.STATUS_COMMITTED){
+                    try {
+                        attachmentStorage.delete(provider,objectKey);
+                    } catch (RuntimeException exception) {
+                        log.error("Could not remove rolled-back attachment object {}", objectKey, exception);
+                    }
+                }
+            }
+        });
+    }
     private static boolean matchesImageSignature(String type,byte[] c){
         if(c==null)return false;
         return switch(type){
@@ -229,5 +274,7 @@ public class ChatConversationService {
         };
     }
     private static String hash(Object... parts){try{MessageDigest d=MessageDigest.getInstance("SHA-256");for(Object p:parts)d.update(String.valueOf(p).getBytes(java.nio.charset.StandardCharsets.UTF_8));return HexFormat.of().formatHex(d.digest());}catch(Exception e){throw new IllegalStateException(e);}}
+    private static String sha256(byte[] content){try{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));}catch(Exception e){throw new IllegalStateException(e);}}
+    private record StoredAttachmentRecord(String contentType,String filename,byte[] inlineContent,String provider,String objectKey,String checksum){}
     public record ChatMessageSaved(Message message) {}
 }

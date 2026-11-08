@@ -7,6 +7,7 @@ import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -43,6 +44,7 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    @Order(2)
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtDecoder jwtDecoder,
@@ -59,7 +61,7 @@ public class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
-                                "/actuator/health",
+                                "/actuator/health", "/error",
                                 "/credits", "/credits/**", "/credit-assets/**",
                                 "/v3/api-docs/**", "/v3/api-docs.yaml",
                                 "/swagger-ui/**", "/swagger-ui.html")

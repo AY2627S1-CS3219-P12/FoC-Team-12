@@ -6,5 +6,7 @@ output "gateway_alb_security_group_id" { value = aws_security_group.gateway_alb.
 output "rds_endpoint" { value = aws_db_instance.postgres.address }
 output "rds_master_secret_arn" { value = aws_db_instance.postgres.master_user_secret[0].secret_arn }
 output "external_secrets_role_arn" { value = aws_iam_role.external_secrets.arn }
+output "chat_attachment_bucket_name" { value = aws_s3_bucket.chat_attachments.id }
+output "chat_service_role_arn" { value = aws_iam_role.chat_service.arn }
 output "ecr_repository_urls" { value = { for key, repo in aws_ecr_repository.service : key => repo.repository_url } }
 output "runtime_secret_arns" { value = { for key, secret in aws_secretsmanager_secret.runtime : key => secret.arn } }

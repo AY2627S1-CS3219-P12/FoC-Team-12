@@ -14,6 +14,7 @@ locals {
     order    = "order-service"
     credit   = "credit-service"
     admin    = "admin-service"
+    chat     = "chat-service"
   }
 
   secret_names = toset([
@@ -23,6 +24,7 @@ locals {
     "order-service-secrets",
     "credit-service-secrets",
     "admin-service-secrets",
+    "chat-service-secrets",
     "kafka-broker-secrets",
     "kafka-ui-secrets"
   ])

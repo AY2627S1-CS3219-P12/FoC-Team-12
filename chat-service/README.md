@@ -3,12 +3,12 @@
 Shared proposed wire shapes and fixtures: [contract package](../docs/contracts/README.md).
 
 The local Kubernetes package includes Chat, PostgreSQL and RabbitMQ workloads plus the reviewed
-Gateway/User/Kafka/Chat network-policy paths. AWS staging remains separate deployment work; include
-managed database/broker choices, Admin callbacks, private object storage and HTTPS in that review.
+Gateway/User/Kafka/Chat network-policy paths. AWS staging deploys Chat with RDS, RabbitMQ, Kafka,
+private S3 object storage and EKS Pod Identity behind the shared HTTPS gateway.
 
 Owner: **Eldridge**. Status: runnable core chat; preferences, localized quick replies, JWT
-security, lifecycle ingestion, durable messages, assignment privacy, local images, WebSockets and
-RabbitMQ fan-out are implemented. Amazon translation and S3 remain staged. Source: D3 slides
+security, lifecycle ingestion, durable messages, assignment privacy, private images, WebSockets
+and RabbitMQ fan-out are implemented. Amazon translation remains staged. Source: D3 slides
 10-14, D1 N2H1 and agreed Admin integration.
 
 ## Implemented core chat
@@ -23,10 +23,18 @@ assignment epochs on reassignment and lock it at a terminal state. The requester
 each courier sees only their own. Message writes are idempotent by conversation, sender and client
 message ID, while lifecycle activity is idempotent by source event ID.
 
-Text, localized one-tap quick replies and JPEG/PNG/WebP images up to 5 MiB work locally. Images are
-temporarily stored in Chat PostgreSQL so the feature is testable without AWS; migrate the same
-authorization boundary to private S3 for cloud deployment. REST commits durable history,
+Text, localized one-tap quick replies and JPEG/PNG/WebP images up to 5 MiB are supported. Local
+development defaults to PostgreSQL image bytes, while AWS staging stores private encrypted objects
+under `attachments/{conversationId}/{attachmentId}` in S3. PostgreSQL retains authorization and
+metadata, and every download is streamed through the authenticated Chat endpoint after participant
+checks and checksum verification; the bucket is never public. REST commits durable history,
 RabbitMQ fans committed messages across replicas and authenticated STOMP delivers them live.
+
+For an explicit local S3 test, set `CHAT_ATTACHMENT_STORAGE=s3`, `CHAT_S3_BUCKET`,
+`CHAT_S3_REGION` and temporary AWS credentials in the ignored root `.env`. Shared AWS staging does
+not use those keys: the AWS SDK default credential chain receives short-lived credentials from the
+Chat ServiceAccount's EKS Pod Identity. Keep `CHAT_ATTACHMENT_STORAGE=database` for ordinary local
+work and CI.
 
 Run all checks, including the PostgreSQL Testcontainers migration test:
 
@@ -44,8 +52,8 @@ DB_HOST=localhost DB_PORT=5432 DB_NAME=chat_db DB_USER=chat_user DB_PASSWORD='lo
 
 Swagger UI is at `http://localhost:8085/swagger-ui/index.html`; health is
 `http://localhost:8085/actuator/health`. Shared Compose and Gateway routes support local
-end-to-end testing. Local Kubernetes manifests are under `chat-service/k8s`; AWS manifests remain
-separate deployment work owned by the cloud-staging editor.
+end-to-end testing. Local Kubernetes manifests are under `chat-service/k8s`; the AWS overlay is
+under `deploy/aws/k8s/staging` and its S3/IAM resources are Terraform-managed.
 
 ## Scope, ownership and architecture
 
@@ -123,9 +131,8 @@ resource membership on each operation. Shared Admin service-auth profile applies
 | POST /api/chat/conversations/{id}/messages | clientMessageId UUID; text or owned uploaded attachment reference; stored message |
 | GET/PUT /api/chat/preferences | Read or replace the caller's Chat preferred language (`en`, `zh`, `ms`, `ta`) |
 | GET /api/chat/quick-replies | Server-owned localized quick replies for the caller's current Chat preference |
-| POST /api/chat/conversations/{id}/attachments | Authorized upload initiation/validation; attachment ID and restricted upload details |
-| POST /api/chat/conversations/{id}/attachments/{attachmentId}/complete | Validate stored object and mark attachment READY before message reference |
-| GET /api/chat/conversations/{id}/attachments/{attachmentId}/download | Recheck membership; short-lived private download URL |
+| POST /api/chat/conversations/{id}/attachments | Authorized multipart image upload; validates/stores bytes and returns attachment metadata |
+| GET /api/chat/conversations/{id}/attachments/{attachmentId} | Recheck membership and stream private image bytes with the stored media type |
 | POST /api/chat/conversations/{id}/messages/{messageId}/translations | targetLanguage; existing/pending translated result |
 | GET /api/chat/conversations/{id}/messages/{messageId}/translations/{language} | Original retained; translation status/content |
 
@@ -161,9 +168,10 @@ message originals or existing translations.
 
 Private S3 bucket, server-generated keys scoped by conversation/upload; do not accept arbitrary
 object URLs as owned attachments. Validate byte size and actual media signature, not extension.
-Pending/failed uploads cannot be messaged; clean up abandoned uploads under an approved retention
-policy. Presigned URLs expire quickly; revocation stops new downloads, but already issued URLs
-remain usable until their short expiry. Do not promise instant revocation of an issued URL.
+The current implementation deliberately avoids presigned browser URLs: Chat rechecks participant
+access and streams each download from S3, so object keys and AWS credentials never reach the UI.
+Failed metadata transactions trigger best-effort object cleanup; define an approved retention and
+orphan-reconciliation policy before introducing automatic deletion of valid chat history.
 
 Translate incoming text automatically for an authorized recipient's preferred language, or on an
 explicit authorized request for an allowed target language; persist original

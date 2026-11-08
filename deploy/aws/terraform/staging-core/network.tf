@@ -104,6 +104,17 @@ resource "aws_route_table_association" "database" {
   subnet_id      = each.value.id
 }
 
+# Keep private Chat attachment traffic off the NAT gateway. S3 gateway endpoints have no hourly
+# charge and apply to the private application route table used by EKS workloads.
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.aws_region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = [aws_route_table.private.id]
+
+  tags = { Name = "${local.name_prefix}-s3" }
+}
+
 resource "aws_security_group" "gateway_alb" {
   name        = "${local.name_prefix}-gateway-alb"
   description = "Internal ALB reached only from CloudFront VPC-origin ENIs inside the VPC"

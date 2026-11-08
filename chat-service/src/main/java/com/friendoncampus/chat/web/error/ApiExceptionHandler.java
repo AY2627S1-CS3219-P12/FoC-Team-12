@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.friendoncampus.chat.domain.UnsupportedChatLanguageException;
 import com.friendoncampus.chat.service.ChatAccessException;
 import com.friendoncampus.chat.service.ChatConflictException;
+import com.friendoncampus.chat.storage.AttachmentStorageException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -36,6 +37,15 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
         problem.setTitle("Unsupported Chat language");
         problem.setProperty("code", "UNSUPPORTED_LANGUAGE");
+        return problem;
+    }
+
+    @ExceptionHandler(AttachmentStorageException.class)
+    ProblemDetail attachmentStorage(AttachmentStorageException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
+                "The image store is temporarily unavailable");
+        problem.setTitle("Image unavailable");
+        problem.setProperty("code", "CHAT_IMAGE_STORAGE_UNAVAILABLE");
         return problem;
     }
 

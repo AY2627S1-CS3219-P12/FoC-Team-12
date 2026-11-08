@@ -179,6 +179,7 @@ services:
       CREDIT_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
       CREDIT_JWT_ISSUER: friend-on-campus-user-service
       CREDIT_JWT_AUDIENCE: friend-on-campus-api
+      CREDIT_SERVICE_TRUSTED_KEYS: ${CREDIT_SERVICE_TRUSTED_KEYS:-{}}
       SPRING_PROFILES_ACTIVE: ${CREDIT_SPRING_PROFILES_ACTIVE:-}
       CREDIT_DEMO_USER_ID: ${CREDIT_DEMO_USER_ID:-}
       KAFKA_ENABLED: "true"
@@ -224,6 +225,7 @@ services:
       ORDER_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
       ORDER_JWT_ISSUER: friend-on-campus-user-service
       ORDER_JWT_AUDIENCE: friend-on-campus-api
+      ORDER_SERVICE_TRUSTED_KEYS: ${ORDER_SERVICE_TRUSTED_KEYS:-{}}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
       KAFKA_SASL_MECHANISM: PLAIN
@@ -266,6 +268,13 @@ services:
       DB_USER: ${CHAT_DB_USER:-chat_user}
       DB_PASSWORD: ${CHAT_DB_PASSWORD:-change-me-chat-db}
       CHAT_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
+      CHAT_ADMIN_URL: http://admin-service:8084
+      CHAT_USER_URL: http://user-service:8081
+      CHAT_ORDER_URL: http://order-service:8082
+      CHAT_CREDIT_URL: http://credit-service:8083
+      CHAT_SERVICE_KEY_ID: ${CHAT_SERVICE_KEY_ID:-chat-service-1}
+      CHAT_SERVICE_PRIVATE_KEY: ${CHAT_SERVICE_PRIVATE_KEY:-}
+      CHAT_SERVICE_TRUSTED_KEYS: ${CHAT_SERVICE_TRUSTED_KEYS:-{}}
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       KAFKA_SECURITY_PROTOCOL: SASL_PLAINTEXT
       KAFKA_SASL_MECHANISM: PLAIN
@@ -275,6 +284,13 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USERNAME: ${RABBITMQ_CHAT_USER:-chat_service}
       RABBITMQ_PASSWORD: ${RABBITMQ_CHAT_PASSWORD:-change-me-rabbit-chat}
+      CHAT_ATTACHMENT_STORAGE: ${CHAT_ATTACHMENT_STORAGE:-database}
+      CHAT_S3_BUCKET: ${CHAT_S3_BUCKET:-}
+      CHAT_S3_REGION: ${CHAT_S3_REGION:-ap-southeast-1}
+      CHAT_S3_KEY_PREFIX: ${CHAT_S3_KEY_PREFIX:-attachments}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
     depends_on:
       chat-db:
         condition: service_healthy

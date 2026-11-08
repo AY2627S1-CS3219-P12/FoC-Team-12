@@ -91,6 +91,28 @@ public class OrderLifecycleConsumer {
         String toState = data.path("toState").asText();
         OffsetDateTime occurredAt = OffsetDateTime.parse(root.path("occurredAt").asText());
 
+        var evidenceData = data.deepCopy();
+        ((tools.jackson.databind.node.ObjectNode) evidenceData).put("kind", "ORDER");
+        UUID actorUserId = nullableUuid(root.path("actor"), "userId");
+        db.sql("""
+                INSERT INTO chat_evidence_records(event_id,source,stream,aggregate_id,source_sequence,
+                    order_id,action,actor_user_id,occurred_at,ingested_at,data,payload_hash)
+                VALUES(:eventId,'order-service','order.lifecycle.events',:orderId,:sequence,
+                    :orderId,:action,:actor,:occurredAt,:ingestedAt,CAST(:data AS jsonb),:hash)
+                ON CONFLICT(event_id) DO NOTHING
+                """).param("eventId",eventId).param("orderId",orderId).param("sequence",sourceSequence)
+                .param("action",action).param("actor",actorUserId,java.sql.Types.OTHER)
+                .param("occurredAt",occurredAt).param("ingestedAt",OffsetDateTime.now(clock))
+                .param("data",json.writeValueAsString(evidenceData)).param("hash",payloadHash).update();
+        db.sql("""
+                INSERT INTO chat_projection_checkpoints(source,stream,aggregate_id,committed_sequence,checked_at)
+                VALUES('order-service','order.lifecycle.events',:orderId,:sequence,:checkedAt)
+                ON CONFLICT(source,stream,aggregate_id) DO UPDATE SET
+                  committed_sequence=GREATEST(chat_projection_checkpoints.committed_sequence,EXCLUDED.committed_sequence),
+                  checked_at=EXCLUDED.checked_at
+                """).param("orderId",orderId).param("sequence",sourceSequence)
+                .param("checkedAt",OffsetDateTime.now(clock)).update();
+
         if ("ACCEPT".equals(action)) {
             accept(orderId, requesterId, uuid(data, "courierId"), occurredAt);
             appendActivity(orderId, eventId, sourceSequence, action, fromState, toState, occurredAt);

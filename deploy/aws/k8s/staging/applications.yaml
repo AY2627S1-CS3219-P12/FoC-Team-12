@@ -20,6 +20,7 @@ spec:
             - { name: ORDER_SERVICE_URL, value: "http://order-service:8082" }
             - { name: CREDIT_SERVICE_URL, value: "http://credit-service:8083" }
             - { name: ADMIN_SERVICE_URL, value: "http://admin-service:8084" }
+            - { name: CHAT_SERVICE_URL, value: "http://chat-service:8085" }
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70.0 -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1" }
           startupProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 120 }
           readinessProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 10, timeoutSeconds: 3 }
@@ -143,6 +144,7 @@ spec:
             - { name: ORDER_JWT_JWK_SET_URI, value: "http://user-service:8081/.well-known/jwks.json" }
             - { name: ORDER_JWT_ISSUER, value: friend-on-campus-user-service }
             - { name: ORDER_JWT_AUDIENCE, value: friend-on-campus-api }
+            - { name: ORDER_SERVICE_TRUSTED_KEYS, valueFrom: { secretKeyRef: { name: order-service-secrets, key: ORDER_SERVICE_TRUSTED_KEYS } } }
             - { name: ORDER_KAFKA_ENABLED, value: "true" }
             - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
             - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_PLAINTEXT }
@@ -186,6 +188,7 @@ spec:
             - { name: CREDIT_JWT_JWK_SET_URI, value: "http://user-service:8081/.well-known/jwks.json" }
             - { name: CREDIT_JWT_ISSUER, value: friend-on-campus-user-service }
             - { name: CREDIT_JWT_AUDIENCE, value: friend-on-campus-api }
+            - { name: CREDIT_SERVICE_TRUSTED_KEYS, valueFrom: { secretKeyRef: { name: credit-service-secrets, key: CREDIT_SERVICE_TRUSTED_KEYS } } }
             - { name: KAFKA_ENABLED, value: "true" }
             - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
             - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_PLAINTEXT }
@@ -247,3 +250,68 @@ apiVersion: v1
 kind: Service
 metadata: { name: admin-service, namespace: foc-staging }
 spec: { type: ClusterIP, selector: { app: admin-service }, ports: [{ name: http, port: 8084, targetPort: http }] }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: chat-service, namespace: foc-staging }
+automountServiceAccountToken: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: chat-service, namespace: foc-staging }
+spec:
+  replicas: 1
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  selector: { matchLabels: { app: chat-service } }
+  template:
+    metadata: { labels: { app: chat-service } }
+    spec:
+      serviceAccountName: chat-service
+      automountServiceAccountToken: true
+      containers:
+        - name: chat-service
+          image: foc-chat-service:bootstrap
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8085 }]
+          env:
+            - { name: DB_HOST, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: RDS_HOST } } }
+            - { name: DB_PORT, value: "5432" }
+            - { name: DB_NAME, value: chat_db }
+            - { name: DB_USER, value: chat_user }
+            - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: chat-service-secrets, key: DB_PASSWORD } } }
+            - { name: CHAT_JWT_JWK_SET_URI, value: "http://user-service:8081/.well-known/jwks.json" }
+            - { name: CHAT_JWT_ISSUER, value: friend-on-campus-user-service }
+            - { name: CHAT_JWT_AUDIENCE, value: friend-on-campus-api }
+            - { name: CHAT_SERVICE_KEY_ID, valueFrom: { secretKeyRef: { name: chat-service-secrets, key: CHAT_SERVICE_KEY_ID } } }
+            - { name: CHAT_SERVICE_PRIVATE_KEY, valueFrom: { secretKeyRef: { name: chat-service-secrets, key: CHAT_SERVICE_PRIVATE_KEY } } }
+            - { name: CHAT_SERVICE_TRUSTED_KEYS, valueFrom: { secretKeyRef: { name: chat-service-secrets, key: CHAT_SERVICE_TRUSTED_KEYS } } }
+            - { name: CHAT_ADMIN_URL, value: "http://admin-service:8084" }
+            - { name: CHAT_USER_URL, value: "http://user-service:8081" }
+            - { name: CHAT_ORDER_URL, value: "http://order-service:8082" }
+            - { name: CHAT_CREDIT_URL, value: "http://credit-service:8083" }
+            - { name: CHAT_KAFKA_ENABLED, value: "true" }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
+            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_PLAINTEXT }
+            - { name: KAFKA_SASL_MECHANISM, value: PLAIN }
+            - { name: KAFKA_USERNAME, value: chat_service }
+            - { name: KAFKA_PASSWORD, valueFrom: { secretKeyRef: { name: chat-kafka-client, key: KAFKA_PASSWORD } } }
+            - { name: CHAT_RABBIT_ENABLED, value: "true" }
+            - { name: RABBITMQ_HOST, value: rabbitmq }
+            - { name: RABBITMQ_PORT, value: "5672" }
+            - { name: RABBITMQ_USERNAME, value: chat_service }
+            - { name: RABBITMQ_PASSWORD, valueFrom: { secretKeyRef: { name: chat-service-secrets, key: RABBITMQ_PASSWORD } } }
+            - { name: CHAT_ATTACHMENT_STORAGE, value: s3 }
+            - { name: CHAT_S3_BUCKET, value: CHAT_S3_BUCKET_REPLACED_BY_DEPLOY_SCRIPT }
+            - { name: CHAT_S3_KEY_PREFIX, value: attachments }
+            - { name: AWS_REGION, value: AWS_REGION_REPLACED_BY_DEPLOY_SCRIPT }
+            - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70.0 -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1" }
+          startupProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 120 }
+          readinessProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 10, timeoutSeconds: 3 }
+          livenessProbe: { tcpSocket: { port: http }, periodSeconds: 20, timeoutSeconds: 3, failureThreshold: 6 }
+          resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: "1", memory: 1Gi } }
+          securityContext: { runAsNonRoot: true, allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: chat-service, namespace: foc-staging }
+spec: { type: ClusterIP, selector: { app: chat-service }, ports: [{ name: http, port: 8085, targetPort: http }] }

@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -32,7 +33,7 @@ import com.friendoncampus.order.web.error.ProblemSecurityHandler;
 @EnableConfigurationProperties(JwtResourceServerProperties.class)
 public class SecurityConfiguration {
 
-    @Bean
+    @Bean @Order(2)
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtDecoder jwtDecoder,

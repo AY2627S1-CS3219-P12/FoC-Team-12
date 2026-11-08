@@ -6,6 +6,9 @@ import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -28,7 +31,32 @@ import com.friendoncampus.chat.web.error.ProblemSecurityHandler;
 public class SecurityConfiguration {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder,
+    ServiceTokens serviceTokens(@Value("${app.service-auth.trusted-keys}") String trust,
+            @Value("${app.service-auth.key-id}") String kid,
+            @Value("${app.service-auth.private-key}") String key) {
+        return new ServiceTokens("chat-service", "chat-service", kid, key, trust);
+    }
+
+    @Bean @Order(1)
+    SecurityFilterChain internalSecurityFilterChain(HttpSecurity http, ServiceTokens tokens,
+            ProblemSecurityHandler errors) throws Exception {
+        http.securityMatcher("/internal/**")
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/internal/chat/orders/*/report-eligibility",
+                                "/internal/chat/cases/*/timeline").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/internal/chat/cases/*/conversations").authenticated()
+                        .anyRequest().denyAll())
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .authenticationEntryPoint(errors).accessDeniedHandler(errors)
+                        .jwt(jwt -> jwt.decoder(raw -> tokens.decode(raw, java.util.Set.of("admin-service")))))
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(errors).accessDeniedHandler(errors));
+        return http.build();
+    }
+
+    @Bean @Order(2)
+    SecurityFilterChain securityFilterChain(HttpSecurity http, @Qualifier("userJwtDecoder") JwtDecoder jwtDecoder,
             JwtAuthenticationConverter converter, ProblemSecurityHandler errors) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -52,7 +80,7 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    JwtDecoder jwtDecoder(JwtResourceServerProperties properties) {
+    JwtDecoder userJwtDecoder(JwtResourceServerProperties properties) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(properties.jwkSetUri().toString())
                 .jwsAlgorithm(SignatureAlgorithm.RS256)
                 .build();

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy_all:
-        description: Rebuild and deploy all six services
+        description: Rebuild and deploy all staging application services
         required: true
         type: boolean
         default: true
@@ -115,7 +115,7 @@ jobs:
           account_id=$(aws sts get-caller-identity --query Account --output text)
           registry="$account_id.dkr.ecr.$AWS_REGION.amazonaws.com"
           : > "$RUNNER_TEMP/previous-images"
-          for pair in gateway:gateway-service user:user-service supplier:supplier-service order:order-service credit:credit-service admin:admin-service; do
+          for pair in gateway:gateway-service user:user-service supplier:supplier-service order:order-service credit:credit-service admin:admin-service chat:chat-service; do
             key=${pair%%:*}; service=${pair##*:}
             deployment=$service; [ "$key" = gateway ] && deployment=gateway
             old=$(kubectl -n foc-staging get deployment "$deployment" -o jsonpath='{.spec.template.spec.containers[0].image}')
@@ -127,7 +127,10 @@ jobs:
             fi
             export "${key^^}_IMAGE=$image"
           done
-          env | grep -E '^(GATEWAY|USER|SUPPLIER|ORDER|CREDIT|ADMIN)_IMAGE=' >> "$GITHUB_ENV"
+          CHAT_S3_BUCKET="foc-team-12-chat-attachments-${account_id}-${AWS_REGION}"
+          export CHAT_S3_BUCKET
+          env | grep -E '^(GATEWAY|USER|SUPPLIER|ORDER|CREDIT|ADMIN|CHAT)_IMAGE=' >> "$GITHUB_ENV"
+          echo "CHAT_S3_BUCKET=$CHAT_S3_BUCKET" >> "$GITHUB_ENV"
       - name: Deploy and smoke-test with rollback on failure
         run: |
           RDS_HOST=$(aws ssm get-parameter --name /foc/staging/rds-host --query Parameter.Value --output text)

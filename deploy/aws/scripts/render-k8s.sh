@@ -11,6 +11,8 @@ set -euo pipefail
 : "${ORDER_IMAGE:?ORDER_IMAGE is required}"
 : "${CREDIT_IMAGE:?CREDIT_IMAGE is required}"
 : "${ADMIN_IMAGE:?ADMIN_IMAGE is required}"
+: "${CHAT_IMAGE:?CHAT_IMAGE is required}"
+: "${CHAT_S3_BUCKET:?CHAT_S3_BUCKET is required}"
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 manifest=$(mktemp)
@@ -22,10 +24,12 @@ sed \
   -e "s|RDS_MASTER_SECRET_ARN_REPLACED_BY_DEPLOY_SCRIPT|$RDS_MASTER_SECRET_ARN|g" \
   -e "s|ALB_SECURITY_GROUP_REPLACED_BY_DEPLOY_SCRIPT|$ALB_SECURITY_GROUP_ID|g" \
   -e "s|AWS_REGION_REPLACED_BY_DEPLOY_SCRIPT|$AWS_REGION|g" \
+  -e "s|CHAT_S3_BUCKET_REPLACED_BY_DEPLOY_SCRIPT|$CHAT_S3_BUCKET|g" \
   -e "s|image: foc-gateway-service:bootstrap|image: $GATEWAY_IMAGE|g" \
   -e "s|image: foc-user-service:bootstrap|image: $USER_IMAGE|g" \
   -e "s|image: foc-supplier-service:bootstrap|image: $SUPPLIER_IMAGE|g" \
   -e "s|image: foc-order-service:bootstrap|image: $ORDER_IMAGE|g" \
   -e "s|image: foc-credit-service:bootstrap|image: $CREDIT_IMAGE|g" \
   -e "s|image: foc-admin-service:bootstrap|image: $ADMIN_IMAGE|g" \
+  -e "s|image: foc-chat-service:bootstrap|image: $CHAT_IMAGE|g" \
   "$manifest"

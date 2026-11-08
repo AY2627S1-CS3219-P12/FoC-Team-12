@@ -78,7 +78,9 @@ resource "aws_cloudwatch_metric_alarm" "service_pods_unavailable" {
     "order-service",
     "credit-service",
     "admin-service",
-    "kafka"
+    "chat-service",
+    "kafka",
+    "rabbitmq"
   ])
 
   alarm_name          = "${local.name_prefix}-${each.value}-unavailable"
@@ -130,7 +132,7 @@ resource "aws_cloudwatch_dashboard" "staging" {
           title  = "Application and Kafka running pods"
           region = var.aws_region
           metrics = [
-            for service in ["gateway", "user-service", "supplier-service", "order-service", "credit-service", "admin-service", "kafka"] :
+            for service in ["gateway", "user-service", "supplier-service", "order-service", "credit-service", "admin-service", "chat-service", "kafka", "rabbitmq"] :
             ["ContainerInsights", "service_number_of_running_pods", "ClusterName", aws_eks_cluster.main.name, "Namespace", "foc-staging", "Service", service]
           ]
           period = 60

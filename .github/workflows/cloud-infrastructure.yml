@@ -56,6 +56,14 @@ jobs:
           echo "account_id=$account_id" >> "$GITHUB_OUTPUT"
       - name: Initialize core stack
         run: terraform -chdir=deploy/aws/terraform/staging-core init -backend-config="$RUNNER_TEMP/core.hcl"
+      - name: Adopt the existing private Chat attachment bucket
+        if: inputs.operation == 'apply-core'
+        run: |
+          bucket="foc-team-12-chat-attachments-${{ steps.backend.outputs.account_id }}-${AWS_REGION}"
+          if aws s3api head-bucket --bucket "$bucket" 2>/dev/null && \
+             ! terraform -chdir=deploy/aws/terraform/staging-core state list | grep -qx 'aws_s3_bucket.chat_attachments'; then
+            terraform -chdir=deploy/aws/terraform/staging-core import aws_s3_bucket.chat_attachments "$bucket"
+          fi
       - name: Plan core infrastructure
         if: inputs.operation == 'plan-core'
         run: terraform -chdir=deploy/aws/terraform/staging-core plan -out="$RUNNER_TEMP/core.tfplan"
@@ -67,7 +75,7 @@ jobs:
         run: |
           test -n "$TF_VAR_budget_email"
           for name in user-service-secrets user-mail-secrets supplier-service-secrets order-service-secrets \
-            credit-service-secrets admin-service-secrets kafka-broker-secrets kafka-ui-secrets; do
+            credit-service-secrets admin-service-secrets chat-service-secrets kafka-broker-secrets kafka-ui-secrets; do
             aws secretsmanager get-secret-value --secret-id "foc/staging/$name" --query VersionId --output text >/dev/null
           done
       - uses: docker/setup-buildx-action@v4
@@ -80,7 +88,7 @@ jobs:
         run: |
           registry="${{ steps.backend.outputs.account_id }}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           tag="bootstrap-${GITHUB_SHA}-r${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          for service in gateway-service user-service supplier-service order-service credit-service admin-service; do
+          for service in gateway-service user-service supplier-service order-service credit-service admin-service chat-service; do
             docker buildx build --platform linux/amd64 --push \
               -t "$registry/foc-$service:$tag" "$service"
           done
@@ -99,6 +107,8 @@ jobs:
           ORDER_IMAGE: ${{ steps.images.outputs.registry }}/foc-order-service:${{ steps.images.outputs.tag }}
           CREDIT_IMAGE: ${{ steps.images.outputs.registry }}/foc-credit-service:${{ steps.images.outputs.tag }}
           ADMIN_IMAGE: ${{ steps.images.outputs.registry }}/foc-admin-service:${{ steps.images.outputs.tag }}
+          CHAT_IMAGE: ${{ steps.images.outputs.registry }}/foc-chat-service:${{ steps.images.outputs.tag }}
+          CHAT_S3_BUCKET: foc-team-12-chat-attachments-${{ steps.backend.outputs.account_id }}-ap-southeast-1
         run: |
           RDS_HOST=$(aws ssm get-parameter --name /foc/staging/rds-host --query Parameter.Value --output text)
           RDS_MASTER_SECRET_ARN=$(aws ssm get-parameter --name /foc/staging/rds-master-secret-arn --query Parameter.Value --output text)
