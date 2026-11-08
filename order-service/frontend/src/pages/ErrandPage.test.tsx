@@ -298,5 +298,34 @@ describe('ErrandPage', () => {
     renderErrand()
 
     expect(await screen.findByRole('heading', { name: 'Errand not found' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Back to errands' })).toHaveAttribute('href', '/errands')
+  })
+
+  it('shows placeholders while the errand loads', () => {
+    signIn(STRANGER_ID, 'COURIER')
+    vi.stubGlobal('fetch', () => new Promise(() => {}))
+    renderErrand()
+
+    expect(screen.getByRole('status')).toHaveTextContent('Loading errand…')
+  })
+
+  it('offers a retry when the errand fails to load', async () => {
+    signIn(STRANGER_ID, 'COURIER')
+    let failing = true
+    vi.stubGlobal(
+      'fetch',
+      stubFetch((url) => {
+        if (url.startsWith('/api/admin/orders/')) return { body: { orderId: order().id, status: 'INELIGIBLE', caseId: null, state: null } }
+        return failing ? { status: 500, body: { detail: 'Server unavailable' } } : { body: order() }
+      }).fetchMock,
+    )
+    const user = userEvent.setup()
+    renderErrand()
+
+    expect(await screen.findByRole('heading', { name: "We couldn't load this errand" })).toBeInTheDocument()
+    failing = false
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+
+    expect(await screen.findByRole('heading', { name: 'Collect my printed notes' })).toBeInTheDocument()
   })
 })

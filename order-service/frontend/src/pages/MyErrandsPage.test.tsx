@@ -118,6 +118,19 @@ describe('MyErrandsPage', () => {
     renderPage()
 
     expect(await within(section('Active')).findByText(/Errands you post appear here until they finish/)).toBeInTheDocument()
+    expect(within(section('Active')).getByRole('link', { name: 'Request help' })).toHaveAttribute('href', '/errands/new')
     expect(await within(section('Past')).findByText(/once they’re completed, cancelled or expired/)).toBeInTheDocument()
+    expect(within(section('Past')).queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('points a courier with no active errands to the open pool', async () => {
+    signIn(COURIER_ID, 'COURIER')
+    vi.stubGlobal('fetch', stubFetch(() => ({ body: page([]) })).fetchMock)
+    renderPage()
+
+    expect(await within(section('Active')).findByRole('link', { name: 'Find errands' })).toHaveAttribute(
+      'href',
+      '/errands/browse',
+    )
   })
 })

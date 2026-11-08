@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { MessageCircle } from 'lucide-react'
+import { ArrowLeft, CircleAlert, MessageCircle, SearchX } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   fetchOrder,
@@ -15,6 +15,8 @@ import { ProgressCard } from '../components/ProgressCard'
 import { RouteSummary } from '../components/RouteSummary'
 import { StateBadge } from '../components/StateBadge'
 import { ErrandReportPanel } from '../components/ErrandReportPanel'
+import { ErrandDetailSkeleton } from '../components/Skeleton'
+import { StatePanel } from '../components/StatePanel'
 import { homeFor, useSessionRole } from '../hooks/useSessionRole'
 import {
   credits,
@@ -83,25 +85,43 @@ export function ErrandPage() {
     onSettled: () => setConfirming(null),
   })
 
-  if (errand.isPending) return <p className="subtle">Loading errand…</p>
+  if (errand.isPending) return <ErrandDetailSkeleton label="Loading errand…" />
   if (errand.isError) {
     const notFound =
       errand.error instanceof OrderApiError && errand.error.status === 404
     return (
-      <section className="card state-panel">
-        <h2>
-          {notFound ? 'Errand not found' : "We couldn't load this errand"}
-        </h2>
-        <p>
+      <>
+        <StatePanel
+          action={
+            notFound ? (
+              <Link className="button-secondary" to="/errands">
+                <ArrowLeft aria-hidden="true" /> Back to errands
+              </Link>
+            ) : (
+              <button
+                aria-busy={errand.isFetching}
+                disabled={errand.isFetching}
+                onClick={() => void errand.refetch()}
+                type="button"
+              >
+                {errand.isFetching ? 'Trying again…' : 'Try again'}
+              </button>
+            )
+          }
+          icon={notFound ? SearchX : CircleAlert}
+          title={notFound ? 'Errand not found' : "We couldn't load this errand"}
+        >
           {notFound
             ? 'It may have been taken or it is no longer open.'
-            : errand.error.message}
-        </p>
-        <Link className="text-link" to="/errands">
-          Back to errands
-        </Link>
-        {notFound && <ErrandReportPanel key={`${session?.userId}.${session?.role}.${orderId}`} orderId={orderId} />}
-      </section>
+            : `${errand.error.message} Check your connection and try again.`}
+        </StatePanel>
+        {notFound && (
+          <ErrandReportPanel
+            key={`${session?.userId}.${session?.role}.${orderId}`}
+            orderId={orderId}
+          />
+        )}
+      </>
     )
   }
 
@@ -131,7 +151,7 @@ export function ErrandPage() {
           className="text-link"
           to={view === 'browser' ? '/errands/browse' : '/errands/mine'}
         >
-          ← Back
+          <ArrowLeft aria-hidden="true" /> Back
         </Link>
       </div>
       <div className="two-column">

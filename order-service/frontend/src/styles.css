@@ -91,11 +91,14 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 
 /* Order screens: errand details, discovery, forms and active work. */
 .back-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }
-.text-link { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--action); font-size: 0.875rem; font-weight: 600; text-decoration: none; }
+.text-link { display: inline-flex; align-items: center; gap: 0.35rem; min-height: 2.75rem; color: var(--action); font-size: 0.875rem; font-weight: 600; text-decoration: none; }
 .text-link:hover { text-decoration: underline; }
+.text-link svg { width: 1rem; height: 1rem; flex: 0 0 auto; stroke-width: 2; }
+.route-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.route-line svg { width: 0.9rem; height: 0.9rem; flex: 0 0 auto; color: var(--muted); }
 .subtle { margin: 0.4rem 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
 .two-column { display: grid; grid-template-columns: minmax(0, 1fr) minmax(16rem, 20rem); gap: 1.5rem; align-items: start; }
-.card { padding: 1.25rem 1.5rem; border: 1px solid var(--line); border-radius: 0.75rem; background: var(--surface); }
+.card { padding: 1.25rem 1.5rem; border: 1px solid var(--line); border-radius: 0.875rem; background: var(--surface); }
 .errand-report { margin-top: 1.25rem; }
 .card h2 { margin: 0 0 0.75rem; color: var(--ink); font-size: 1.05rem; }
 .card p { margin: 0 0 0.75rem; color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
@@ -112,7 +115,7 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .route li { display: grid; grid-template-columns: 1.25rem 1fr; gap: 0.5rem; }
 .route small { display: block; color: var(--muted); font-size: 0.72rem; }
 .route span { color: var(--ink); }
-.pin { color: var(--action); }
+.pin { width: 1.1rem; height: 1.1rem; margin-top: 0.1rem; color: var(--action); stroke-width: 2; }
 .divider { height: 1px; margin: 1.25rem 0; border: 0; background: var(--line); }
 .notice { margin: 1rem 0; padding: 0.85rem 1rem; border-radius: 0.5rem; font-size: 0.875rem; line-height: 1.45; }
 .notice strong { display: block; margin-bottom: 0.15rem; }
@@ -120,8 +123,14 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .notice-warn { background: var(--warning-soft); color: #8a5a12; }
 .notice-error { background: #f9ece9; color: var(--danger); }
 .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.25rem; }
+/* Page content only: the shared header controls stay identical across frontends. */
+.page-shell button:active:not(:disabled), .page-shell a.button-secondary:active { box-shadow: none; transform: translateY(1px); }
 .button-secondary { border-color: var(--line); background: var(--surface); color: var(--ink); }
 .button-danger { border-color: var(--danger); background: var(--surface); color: var(--danger); }
+/* The shared button hover paints dark green; outline buttons keep readable text instead. */
+.button-secondary:hover:not(:disabled), a.button-secondary:hover { border-color: var(--action); background: var(--action-soft); box-shadow: none; color: var(--action); }
+.button-danger:hover:not(:disabled) { border-color: var(--danger); background: #f9ece9; box-shadow: none; color: var(--danger); }
+button[aria-busy='true'] { cursor: progress; }
 .progress { display: grid; gap: 0.55rem; margin: 0 0 1rem; padding: 0; list-style: none; font-size: 0.82rem; }
 .progress li { display: flex; align-items: center; gap: 0.6rem; color: var(--muted); }
 .progress .step { display: inline-grid; width: 1.35rem; height: 1.35rem; border-radius: 0.35rem; background: #eceeed; font-size: 0.72rem; font-weight: 700; place-items: center; }
@@ -137,7 +146,7 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .state-icon { display: grid; width: 3.5rem; height: 3.5rem; margin: 0 auto 1rem; border: 1px solid #c9ddd4; border-radius: 1rem; background: var(--action-soft); color: var(--action); place-items: center; }
 .state-icon svg { width: 1.55rem; height: 1.55rem; stroke-width: 1.8; }
 .state-panel > .sign-in-link { justify-self: center; }
-dialog.confirm { max-width: 26rem; padding: 1.5rem; border: 1px solid var(--line); border-radius: 0.75rem; box-shadow: var(--shadow); }
+dialog.confirm { max-width: 26rem; padding: 1.5rem; border: 1px solid var(--line); border-radius: 0.875rem; box-shadow: var(--shadow); }
 dialog.confirm::backdrop { background: rgb(32 51 45 / 35%); }
 dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
 @media (max-width: 48rem) {
@@ -191,15 +200,32 @@ dialog.confirm h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
 .filter-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .filter-chip { min-height: 2.25rem; padding: 0.3rem 0.85rem; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font-size: 0.85rem; font-weight: 600; }
 .filter-chip[aria-pressed='true'] { border-color: var(--action-soft); background: var(--action-soft); color: var(--action); }
+.filter-chip:hover:not(:disabled) { border-color: var(--action); background: var(--action-soft); box-shadow: none; color: var(--action); }
 .state-panel-compact { min-height: 0; padding: 1.25rem; }
-.state-panel-compact p { margin: 0; }
+.state-panel-compact p { margin: 0 auto 0.75rem; }
+.state-panel-compact .state-icon { width: 2.75rem; height: 2.75rem; margin-bottom: 0.75rem; border-radius: 0.875rem; }
+.state-panel-compact .state-icon svg { width: 1.25rem; height: 1.25rem; }
+.state-panel h3 { margin: 0 0 0.35rem; color: var(--ink); font-size: 1rem; }
+.state-panel > .button-secondary, .state-panel > button { justify-self: center; }
+.state-panel-compact > :last-child { margin-bottom: 0; }
+
+/* Loading placeholders keep the final layout (design.md "Feedback"). */
+.skeleton-list { display: grid; gap: 1rem; margin-top: 0.75rem; }
+.skeleton-card { display: grid; gap: 0.6rem; }
+.skeleton { display: block; height: 0.9rem; border-radius: 0.375rem; background: linear-gradient(90deg, #e7ece9 25%, #f1f4f2 50%, #e7ece9 75%); background-size: 200% 100%; animation: skeleton-shimmer 1.4s ease-in-out infinite; }
+.skeleton-title { width: 55%; height: 1.1rem; }
+.skeleton-line { width: 85%; margin-top: 0.6rem; }
+.skeleton-short { width: 40%; }
+.skeleton-heading { width: 60%; height: 2rem; }
+.skeleton-block { width: 100%; height: 5.5rem; margin-top: 1.25rem; border-radius: 0.875rem; }
+@keyframes skeleton-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 .errand-tabs { display: flex; gap: 1.75rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--line); }
 .errand-tab { display: inline-flex; align-items: center; min-height: 2.75rem; margin-bottom: -1px; padding: 0 0.15rem; border-bottom: 3px solid transparent; color: var(--muted); font-weight: 600; text-decoration: none; }
 .errand-tab:hover { color: var(--ink); }
 .errand-tab[aria-current='page'] { border-bottom-color: var(--action); color: var(--action); }
-.errand-tab:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; border-radius: 0.25rem; }
+.errand-tab:focus-visible { border-radius: 0.25rem; }
 .errand-fields { display: grid; gap: 1rem; margin: 0; padding: 0; border: 0; min-width: 0; }
-a.button-secondary { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--line); border-radius: 0.5rem; font-weight: 700; text-decoration: none; }
+a.button-secondary { display: inline-flex; align-items: center; min-height: 2.75rem; padding: 0 1rem; border: 1px solid var(--line); border-radius: 0.625rem; font-weight: 700; text-decoration: none; transition: background 150ms ease, border-color 150ms ease, color 150ms ease; }
 a.button-secondary svg { width: 1rem; margin-right: .4rem; }
 .chat-page { width: 100%; }
 .chat-heading { display:flex; justify-content:space-between; gap:1rem; align-items:end; margin-bottom:1rem; }
@@ -232,3 +258,4 @@ a.button-secondary svg { width: 1rem; margin-right: .4rem; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 @media(max-width:600px){.chat-heading{align-items:stretch;flex-direction:column}.message-list{min-height:20rem;max-height:50vh}.message-bubble{max-width:88%}}
 .button-link { min-height: auto; padding: 0; border: 0; background: none; color: inherit; font-weight: 700; text-decoration: underline; }
+.button-link:hover:not(:disabled) { border-color: transparent; background: none; box-shadow: none; color: inherit; text-decoration-thickness: 2px; }

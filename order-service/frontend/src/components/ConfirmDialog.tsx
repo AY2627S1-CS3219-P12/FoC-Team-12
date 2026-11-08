@@ -30,7 +30,7 @@ export function ConfirmDialog({
       <h2 id="confirm-title">{title}</h2>
       <p className="subtle">{body}</p>
       <div className="actions">
-        <button disabled={busy} onClick={onConfirm} type="button">
+        <button aria-busy={busy} disabled={busy} onClick={onConfirm} type="button">
           {confirmLabel}
         </button>
         <button className="button-secondary" disabled={busy} onClick={onCancel} type="button">
