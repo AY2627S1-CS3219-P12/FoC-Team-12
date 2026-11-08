@@ -105,3 +105,9 @@ resource "aws_ssm_parameter" "alb_security_group_id" {
   type  = "String"
   value = aws_security_group.gateway_alb.id
 }
+
+resource "aws_ssm_parameter" "external_secrets_role_arn" {
+  name  = "/foc/${var.environment}/external-secrets-role-arn"
+  type  = "String"
+  value = aws_iam_role.external_secrets.arn
+}

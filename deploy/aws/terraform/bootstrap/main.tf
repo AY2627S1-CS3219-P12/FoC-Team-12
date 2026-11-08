@@ -191,6 +191,25 @@ data "aws_iam_policy_document" "infra" {
     ]
   }
 
+  # EKS IAM Roles for Service Accounts (IRSA) requires an IAM OIDC provider for
+  # this cluster's issuer. Scope management to EKS issuer URLs in the staging region.
+  statement {
+    sid = "ManageEksOidcProvider"
+    actions = [
+      "iam:AddClientIDToOpenIDConnectProvider",
+      "iam:CreateOpenIDConnectProvider",
+      "iam:DeleteOpenIDConnectProvider",
+      "iam:GetOpenIDConnectProvider",
+      "iam:RemoveClientIDFromOpenIDConnectProvider",
+      "iam:TagOpenIDConnectProvider",
+      "iam:UntagOpenIDConnectProvider",
+      "iam:UpdateOpenIDConnectProviderThumbprint"
+    ]
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/oidc.eks.${var.aws_region}.amazonaws.com/id/*"
+    ]
+  }
+
   statement {
     sid       = "CreateRequiredServiceLinkedRoles"
     actions   = ["iam:CreateServiceLinkedRole"]
