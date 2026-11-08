@@ -87,6 +87,9 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    terraform -chdir=deploy/aws/terraform/bootstrap output
    ```
 
+   Re-run this bootstrap `apply` after an approved change to either GitHub workflow role. The
+   operation updates the scoped IAM policies in place; it does not recreate the staging cluster.
+
    If the AWS account already has a GitHub Actions OIDC provider, import that provider instead of
    creating a duplicate. The trust conditions accept only this repository's immutable GitHub owner
    and repository IDs and the named protected GitHub environments. Find replacement IDs through
@@ -105,6 +108,11 @@ use short-lived OIDC sessions instead of stored AWS credentials.
 
 4. Run **AWS staging infrastructure -> apply-core** manually and approve it. Review a
    **plan-core** run first. This creates chargeable resources.
+
+   The core stack creates a tiny `foc-capacity-bootstrap/capacity-bootstrap` pause workload before
+   installing node-dependent add-ons. Its only purpose is to make a new EKS Auto Mode cluster
+   provision initial compute deterministically; application workloads still control meaningful
+   capacity and scaling.
 
 5. Initialize runtime values from a trusted workstation. The SendGrid values are read from shell
    variables and are never printed. Optional bootstrap-admin values are handled the same way.
