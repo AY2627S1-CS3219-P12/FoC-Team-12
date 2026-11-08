@@ -69,7 +69,7 @@ edited). The columns and reasons are in the
 Credit events carry no errand title, so these messages do not name the errand; the notification
 links to it through `orderId`.
 
-### From `order.lifecycle.events` (proposed, iteration 5)
+### From `order.lifecycle.events` (built, iteration 5)
 
 The actor (`actor.userId`) is never notified.
 
@@ -77,7 +77,6 @@ The actor (`actor.userId`) is never notified.
 | --- | --- | --- |
 | T2 `PENDING_CREDIT → OPEN` | requester | `ORDER_OPENED` |
 | T3 `→ RESERVATION_FAILED` | requester | `ORDER_RESERVATION_FAILED` (`params.reason`) |
-| T5b reward change rejected | requester | `ORDER_REWARD_CHANGE_REJECTED` |
 | T8 `OPEN → ACCEPTED` | requester | `ORDER_ACCEPTED` |
 | T9 `ACCEPTED → OPEN` (courier withdrew) | requester | `ORDER_COURIER_WITHDREW` |
 | T10 `ACCEPTED → EXPIRED` (withdrew after deadline) | requester | `ORDER_EXPIRED` |
@@ -86,7 +85,7 @@ The actor (`actor.userId`) is never notified.
 | T12 `→ PICKED_UP` | requester | `ORDER_PICKED_UP` |
 | T13 `→ DELIVERED` | requester | `ORDER_DELIVERED` |
 | T14 `→ COMPLETED` | courier | `ORDER_COMPLETED` |
-| T1, T4, T5, T5a, T6 | nobody (the requester acted, or no one else is involved) | recorded `IGNORED` |
+| T1, T4, T5, T5a, T5b, T6 | nobody (the requester acted, no one else is involved, or no contract type) | recorded `IGNORED` |
 
 The courier gets two notifications for T11 and T14: `ORDER_CANCELLED` + `CREDITS_COMPENSATED`, and
 `ORDER_COMPLETED` + `CREDITS_RECEIVED`. Both are kept, so the lifecycle news is not delayed by
@@ -226,6 +225,13 @@ Approved with iteration 0 (2026-11-04):
   counts from `read_at`, "every notification" from `created_at`, and startup refuses an inbox
   period under 30 days.
 
+Approved with the `order-lifecycle` brief (2026-11-08):
+- The 9 `ORDER_*` types of the shared contract and the README wording. No
+  `ORDER_REWARD_CHANGE_REJECTED`: it is not in the contract, so a rejected reward change notifies
+  nobody for now.
+- The errand title from the snapshot is stored in `params`; the reservation reason as its code.
+- A `sourceSequence` gap is logged and the event still handled.
+
 Approved with the `read-state` brief (2026-11-05):
 - Read marking follows the shared contract; repeating it keeps the first `readAt`.
 - Errors `NOTIFICATION_NOT_FOUND` (404, including another user's notification) and `INVALID_ID`
@@ -330,7 +336,7 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 3 | `wiring`: Kafka identity, ACLs and lifecycle topic, Compose, gateway routes, CI job; port 8086 | Done (PR #116) |
 | 3b | `k8s`: Notification and its database in `foc-local`, network policies, gateway env, Order lifecycle events on | Done (this change) |
 | 4 | `order-lifecycle-events`: Order publishes `OrderTransitioned` to `order.lifecycle.events` | Done (PR #117); on in Compose, off in Kubernetes until 3b |
-| 5 | Order lifecycle consumer and recipient rules | After 4 |
+| 5 | `order-lifecycle`: `order.lifecycle.events` consumer, the 9 `ORDER_*` notifications, business key `orderId:sourceSequence`, gap warning (V3) | Done (this change) |
 | 6 | `read-state`: `PATCH /api/notifications/me/{id}/read`, unread count | Done (PR #115) |
 | 7 | UI: Notifications page and polled bell badge ([Polling](#polling)); header links by each owner | After 3, 3b and 6 |
 | 8 | `retention`: hourly batched deletion for the approved 30/90-day policy (V2 indexes) | Done (this change) |

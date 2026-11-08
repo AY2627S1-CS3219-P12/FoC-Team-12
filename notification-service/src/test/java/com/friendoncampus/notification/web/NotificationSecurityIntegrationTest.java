@@ -36,6 +36,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.friendoncampus.notification.messaging.CreditEventHandler;
+import com.friendoncampus.notification.messaging.OrderLifecycleEventHandler;
 import com.friendoncampus.notification.service.NotificationNotFoundException;
 import com.friendoncampus.notification.service.NotificationQueryService;
 import com.friendoncampus.notification.service.NotificationReadStateService;
@@ -86,6 +87,9 @@ class NotificationSecurityIntegrationTest {
 
     @MockitoBean
     private CreditEventHandler creditEventHandler;
+
+    @MockitoBean
+    private OrderLifecycleEventHandler orderLifecycleEventHandler;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
