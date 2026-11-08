@@ -153,7 +153,10 @@ class GatewayServiceApplicationTests {
                 Map.entry("/credit-assets/index.js", "credit"),
                 Map.entry("/errands", "order"),
                 Map.entry("/errands/browse", "order"),
-                Map.entry("/order-assets/index.js", "order"));
+                Map.entry("/order-assets/index.js", "order"),
+                Map.entry("/notifications", "notification"),
+                Map.entry("/notifications/anything", "notification"),
+                Map.entry("/notification-assets/index.js", "notification"));
 
         for (Map.Entry<String, String> expected : expectedBackends.entrySet()) {
             HttpResponse<String> response = get(expected.getKey());

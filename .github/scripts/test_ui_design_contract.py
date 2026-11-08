@@ -31,6 +31,24 @@ SELECTORS = {
         ".workspace-selector-options",
         ".workspace-selector-options button",
     ),
+    "notification": (
+        ROOT / "notification-service/frontend/src/styles.css",
+        ".workspace-selector-options",
+        ".workspace-selector-options button",
+    ),
+}
+
+# The header bell (design.md "Shared application shell") is copied into every frontend. The copies
+# must stay identical; Notification Service owns them.
+BELL_SOURCES = ("NotificationBell.tsx", "useUnreadCount.ts", "NotificationBell.test.tsx")
+BELL_FRONTENDS = ("user", "supplier", "order", "credit", "admin", "notification")
+BELL_STYLES = {
+    "user": (ROOT / "user-service/frontend/src/styles.css", ".notification-bell"),
+    "supplier": (ROOT / "supplier-service/frontend/src/components/AppShell.module.css", ".notificationBell"),
+    "order": (ROOT / "order-service/frontend/src/styles.css", ".notification-bell"),
+    "credit": (ROOT / "credit-service/frontend/src/styles.css", ".notification-bell"),
+    "admin": (ROOT / "admin-service/frontend/src/styles.css", ".notification-bell"),
+    "notification": (ROOT / "notification-service/frontend/src/styles.css", ".notification-bell"),
 }
 
 
@@ -77,6 +95,23 @@ class SharedRoleSelectorDesignTest(unittest.TestCase):
                         button.get(property_name),
                         f"{service} differs for {property_name}",
                     )
+
+
+class SharedNotificationBellTest(unittest.TestCase):
+    def test_every_frontend_has_the_same_bell(self):
+        for source in BELL_SOURCES:
+            reference = (ROOT / "notification-service/frontend/src/components" / source).read_text()
+            for service in BELL_FRONTENDS:
+                with self.subTest(service=service, source=source):
+                    copy = ROOT / f"{service}-service/frontend/src/components" / source
+                    self.assertEqual(reference, copy.read_text(), f"{service} {source} differs")
+
+    def test_every_frontend_gives_the_bell_the_same_control_size(self):
+        for service, (path, selector) in BELL_STYLES.items():
+            with self.subTest(service=service):
+                bell = declarations(path.read_text(), selector)
+                self.assertEqual("2.75rem", bell.get("width"))
+                self.assertEqual("2.75rem", bell.get("height"))
 
 
 if __name__ == "__main__":

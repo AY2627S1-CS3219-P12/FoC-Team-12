@@ -18,6 +18,7 @@ issue tokens, or replace downstream authorization.
 | `GET /supplier-assets/**` | Supplier Service | unchanged |
 | `GET /credits` and `GET /credits/**` | Credit Service | unchanged |
 | `GET /credit-assets/**` | Credit Service | unchanged |
+| `GET /notifications`, `GET /notifications/**` and `GET /notification-assets/**` | Notification Service | unchanged |
 | `/api/users` and `/api/users/**` | User Service | unchanged |
 | `/api/suppliers` and `/api/suppliers/**` | Supplier Service | unchanged |
 | `/api/admin/suppliers` and `/api/admin/suppliers/**` | Supplier Service | unchanged |

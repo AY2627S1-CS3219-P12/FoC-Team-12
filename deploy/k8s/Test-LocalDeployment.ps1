@@ -90,6 +90,8 @@ switch ($Service) {
         Assert-Http 'http://gateway:8088/api/orders' 401 -Method POST
     }
     notification {
+        Assert-Http "$base/notifications" 200
+        Assert-Http 'http://gateway:8088/notifications' 200
         Assert-Http "$base/api/notifications/me" 401
         Assert-Http "$base/api/notifications/me" 401 -InvalidToken
         Assert-Http "$base/api/notifications/me/unread-count" 401
