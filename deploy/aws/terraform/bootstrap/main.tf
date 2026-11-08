@@ -1,7 +1,9 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  name_prefix = "foc-${var.environment}"
+  name_prefix                = "foc-${var.environment}"
+  github_repository_parts    = split("/", var.github_repository)
+  github_oidc_subject_prefix = "repo:${local.github_repository_parts[0]}@${var.github_repository_owner_id}/${local.github_repository_parts[1]}@${var.github_repository_id}"
   tags = {
     Project     = "friend-on-campus"
     Environment = var.environment
@@ -39,7 +41,7 @@ data "aws_iam_policy_document" "github_infra_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:aws-staging-infra"]
+      values   = ["${local.github_oidc_subject_prefix}:environment:aws-staging-infra"]
     }
   }
 }
@@ -63,7 +65,7 @@ data "aws_iam_policy_document" "github_deploy_trust" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:environment:aws-staging-deploy"]
+      values   = ["${local.github_oidc_subject_prefix}:environment:aws-staging-deploy"]
     }
   }
 }
