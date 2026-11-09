@@ -82,18 +82,22 @@ export function AdminShell({
               <House aria-hidden="true" />
               Home
             </a>
-            <a href="/errands/browse">
-              <ClipboardList aria-hidden="true" />
-              Errands
-            </a>
+            {session?.role !== 'ADMIN' && (
+              <a href="/errands/browse">
+                <ClipboardList aria-hidden="true" />
+                Errands
+              </a>
+            )}
             <a href={suppliersPath}>
               <Store aria-hidden="true" />
               Suppliers
             </a>
-            <a href="/credits">
-              <Coins aria-hidden="true" />
-              Credits
-            </a>
+            {session?.role !== 'ADMIN' && (
+              <a href="/credits">
+                <Coins aria-hidden="true" />
+                Credits
+              </a>
+            )}
             {session?.role === 'ADMIN' && (
               <a
                 aria-current={

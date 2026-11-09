@@ -68,11 +68,13 @@ export function NotificationShell({ children }: { children: ReactNode }) {
           </a>
           <nav aria-label="Main navigation" className="main-nav">
             <a href="/"><House aria-hidden="true" />Home</a>
-            <a href="/errands/browse">
-              <ClipboardList aria-hidden="true" />Errands
-            </a>
+            {session?.role !== 'ADMIN' && (
+              <a href="/errands/browse">
+                <ClipboardList aria-hidden="true" />Errands
+              </a>
+            )}
             <a href={suppliersPath}><Store aria-hidden="true" />Suppliers</a>
-            <a href="/credits"><Coins aria-hidden="true" />Credits</a>
+            {session?.role !== 'ADMIN' && <a href="/credits"><Coins aria-hidden="true" />Credits</a>}
             {session?.role === 'ADMIN' && <a href="/admin"><ShieldCheck aria-hidden="true" />Admin</a>}
           </nav>
           <nav aria-label="Account and workspace" className="header-actions">

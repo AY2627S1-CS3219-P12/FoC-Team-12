@@ -1,22 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+
 :root {
   color-scheme: light;
-  color: #20332d;
-  background: #f3f6f4;
-  font-family: 'Public Sans', system-ui, sans-serif;
+  color: #12151b;
+  background: #f7f6f3;
+  font-family: 'DM Sans', 'Public Sans', system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --ink: #20332d;
-  --muted: #57655f;
-  --action: #23654e;
-  --action-soft: #e7f1ed;
-  --canvas: #f3f6f4;
+  --ink: #12151b;
+  --muted: #686a70;
+  --action: #172641;
+  --action-soft: #f0f2fb;
+  --canvas: #f7f6f3;
   --surface: #ffffff;
-  --line: #d4ddd7;
-  --reserved: #72639f;
+  --line: #e8e6e1;
+  --reserved: #a36f76;
   --danger: #a2372b;
   --warning-soft: #fff3dc;
-  --shadow: 0 16px 40px rgb(25 54 44 / 9%);
-  --shadow-soft: 0 1px 2px rgb(25 54 44 / 6%), 0 8px 24px rgb(25 54 44 / 5%);
+  --blue: #5068b3;
+  --mauve: #a36f76;
+  --coral: #df9b93;
+  --gold: #f1c675;
+  --shadow: 0 18px 50px rgb(23 38 65 / 11%);
+  --shadow-soft: 0 1px 2px rgb(23 38 65 / 6%), 0 8px 24px rgb(23 38 65 / 7%);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -156,6 +162,39 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
 }
+
+/* Sophisticated App Design Upgrade. */
+body, button, input, select, textarea { font-family: 'DM Sans', 'Public Sans', system-ui, sans-serif; }
+h1, h2, h3, .brand { font-family: 'Manrope', 'DM Sans', sans-serif; }
+.site-header { border-bottom-color: rgb(23 38 65 / 8%); background: rgb(255 255 255 / 90%); backdrop-filter: blur(16px); }
+.header-inner { width: min(100%, 90rem); min-height: 4.875rem; }
+.brand { font-weight: 800; }
+.brand img { width: 3rem; height: 3rem; }
+.main-nav a:hover, .main-nav a:focus-visible, .main-nav a[aria-current='page'] { color: var(--blue); }
+.main-nav a[aria-current='page']::after { background: var(--blue); }
+button, .sign-in-link { border-color: #172641; background: #172641; border-radius: 0.75rem; }
+button:hover:not(:disabled), .sign-in-link:hover { border-color: #5068b3; background: #5068b3; box-shadow: 0 5px 16px rgb(23 38 65 / 18%); }
+.workspace-selector-options button:hover:not(:disabled) { background: #f0f2fb; color: var(--blue); }
+.workspace-selector-options button[aria-pressed='true'], .workspace-selector-options button[aria-pressed='true']:hover:not(:disabled) { background: #172641; }
+.avatar { background: var(--gold); color: #172641; }
+.notification-bell:hover, .notification-bell:focus-visible, .notification-bell[aria-current='page'] { background: #f0f2fb; color: var(--blue); }
+.notification-badge { background: var(--coral); color: #172641; }
+.page-shell { width: min(calc(100% - 4rem), 82rem); padding-top: 3rem; }
+.page-intro h1 { font-family: 'Manrope', 'DM Sans', sans-serif; font-weight: 700; letter-spacing: -0.045em; }
+.eyebrow { color: var(--blue); }
+.balance-panel, .history-panel, .message-card { border-color: var(--line); border-radius: 1.5rem; box-shadow: var(--shadow-soft); }
+.balance-panel::before { background: #eef1f9; }
+.balance-copy h2 strong { font-family: 'Manrope', 'DM Sans', sans-serif; }
+.balance-ring { background: conic-gradient(var(--blue) var(--available), #dfe3ef 0); }
+.transaction-icon.positive { background: #f0f2fb; color: var(--blue); }
+.transaction-icon.neutral { background: #f4ecf0; color: var(--mauve); }
+.transaction-change strong.positive { color: var(--blue); }
+.record-count { background: #fff5dc; color: #76510f; }
+.pagination { background: #f7f6f3; }
+.pagination button { border-color: var(--line); background: white; color: #172641; }
+.state-icon, .message-illustration { border-color: #dce2f5; background: #f0f2fb; color: var(--blue); }
+
+@media (max-width: 50rem) { .brand img { width: 2.6rem; height: 2.6rem; } .page-shell { width: min(calc(100% - 2rem), 82rem); } }
 
 /* Notification bell: shared across every frontend's header; keep in step with notification-service. */
 .notification-bell { position: relative; display: inline-grid; flex: 0 0 auto; width: 2.75rem; height: 2.75rem; border-radius: 0.625rem; color: var(--muted); place-items: center; text-decoration: none; transition: background 150ms ease, color 150ms ease; }
