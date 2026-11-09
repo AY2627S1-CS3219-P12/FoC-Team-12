@@ -282,6 +282,10 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
 - **V4 (lifecycle events):** `orders.lifecycle_sequence` (default 0), the last `sourceSequence`
   taken. A native `UPDATE … RETURNING` takes the next one in the transition's transaction, so it
   never bumps the JPA version and a rollback returns the number.
+- **V6 (outbox stream claim, after V5 from `order-create-idempotency`):** partial index `(aggregate_id, topic, created_at, id) WHERE
+  published_at IS NULL`, for the relay's per-stream claim: it locks each order-and-topic stream's
+  oldest unpublished row with `SKIP LOCKED`, then the rows behind it, so replicas never interleave
+  one order's events.
 - **Reward editing** needs no migration: it maps the V1 `pending_credit_reward` column, and the
   new history actions (`EDIT`, `REWARD_CHANGE_APPLIED`, `REWARD_CHANGE_REJECTED`) fit the
   `order_transitions.action` VARCHAR.
@@ -344,6 +348,7 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | UI | `order-ui-role-scoped-errand`: an errand page that doesn't belong to the header role (on load or after a switch) goes to that role's own screen | PR #120 |
 | UI | `order-ui-design-alignment`: Order screens meet the shared `design.md` contract (button states, card radius, Lucide icons, loading placeholders, actionable empty/error panels, focus colour) | PR #123 |
 | UI | `order-ui-reorder`: Post again on a requester's ended errands opens Request help filled in except Pick up by (frontend only, existing `GET /api/orders/{id}`) | This change |
+| 12 | `order-messaging-hardening`: relay claims whole order-and-topic streams (V6), so replicas keep per-order order; batch 20 and a stuck-row `ERROR`; `OrderTransitionException`/unknown order go to `credit.events.DLT` without retries; `CreditReleased` must answer `OrderCancelled` or `OrderExpired`; `order.outbox.*` gauges on ADMIN-only `/actuator/metrics` | This change |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
 
 ## Decisions
