@@ -89,11 +89,11 @@ it('submits in participant mode and retries the same key and body after an uncer
   })
   fireEvent.click(screen.getByRole('button', { name: 'Submit report' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'required service is unavailable',
+    'not sure your report went through',
   )
   expect(screen.getByLabelText('What happened?')).toBeDisabled()
   fireEvent.click(screen.getByRole('button', { name: 'Retry submission' }))
-  expect(await screen.findByText('Your report was submitted')).toBeVisible()
+  expect(await screen.findByText('Report submitted')).toBeVisible()
   const first = fetcher.mock.calls[0]![1]
   const second = fetcher.mock.calls[1]![1]
   expect(first.headers['Idempotency-Key']).toBe(
@@ -161,7 +161,7 @@ it('preserves queue context in case detail without participant navigation links'
   render(<App />)
   await screen.findByText('Case details')
   expect(
-    screen.getByRole('link', { name: 'Back to report queue' }),
+    screen.getByRole('link', { name: 'Back to case queue' }),
   ).toHaveAttribute('href', '/admin' + context)
   expect(
     screen.queryByRole('link', { name: 'Participant reports' }),
@@ -222,10 +222,8 @@ it('keeps all-reports selection on a reload without sending the UI marker to the
     )
   mockServiceFetch(fetcher)
   render(<App />)
-  expect(
-    await screen.findByText('No reports match these filters'),
-  ).toBeVisible()
-  expect(screen.getByRole('button', { name: 'All reports' })).toHaveAttribute(
+  expect(await screen.findByText('No cases match these filters')).toBeVisible()
+  expect(screen.getByRole('button', { name: 'All cases' })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
@@ -274,6 +272,10 @@ it('shows only the reporters own statement and hides it on identity replacement'
   )
   render(<App />)
   expect(await screen.findByText('My private statement')).toBeVisible()
+  expect(screen.getByText('Waiting for review')).toBeVisible()
+  expect(screen.getByText('Awaiting assignment')).toBeVisible()
+  expect(screen.queryByText('Revision')).not.toBeInTheDocument()
+  expect(screen.queryByText('Reviewer')).not.toBeInTheDocument()
   expect(screen.queryByText('Participant statements')).not.toBeInTheDocument()
   session('ADMIN', 'replacement')
   await waitFor(() =>
@@ -311,7 +313,9 @@ it('does not offer reporting when context is unavailable', async () => {
     vi.fn().mockResolvedValue(response({ detail: 'Chat unavailable' }, 503)),
   )
   render(<App />)
-  expect(await screen.findByRole('alert')).toHaveTextContent('unavailable')
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'couldn’t load this',
+  )
   expect(
     screen.queryByRole('button', { name: 'Submit report' }),
   ).not.toBeInTheDocument()
@@ -345,7 +349,7 @@ it('loads queue filters and empty results from the live API', async () => {
     )
   mockServiceFetch(fetcher)
   render(<App />)
-  expect(await screen.findByText('No open reports')).toBeVisible()
+  expect(await screen.findByText('No open cases')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Open' }))
   fireEvent.change(screen.getByLabelText('Find a case or errand'), {
     target: { value: order },
@@ -372,10 +376,10 @@ it('claims using the displayed revision and explains conflicts without claiming 
     )
   mockServiceFetch(fetcher)
   render(<App />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Claim case' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Assign to me' }))
   expect(
     await screen.findByText(
-      'This case has changed. Refresh it before claiming.',
+      'This case just changed. Refresh, then assign it to yourself.',
     ),
   ).toBeVisible()
   const call = fetcher.mock.calls.find((call) => call[1]?.method === 'POST')!
@@ -404,14 +408,18 @@ it.each([
       .mockResolvedValue(response({ detail }, status as number))
     mockServiceFetch(fetcher)
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Claim case' }))
-    expect(await screen.findByText(detail)).toBeVisible()
+    fireEvent.click(await screen.findByRole('button', { name: 'Assign to me' }))
     expect(
-      screen.getByText(
-        /Only an independent administrator can review this case/,
+      await screen.findByText(
+        status === 503
+          ? 'We couldn’t confirm you weren’t part of this errand. Refresh the evidence and try again.'
+          : detail,
       ),
+    ).toBeVisible()
+    expect(
+      screen.getByText(/You cannot review a case if you requested the errand/),
     ).toHaveTextContent('did not submit a report')
-    expect(screen.getByText('OPEN')).toBeVisible()
+    expect(screen.getByText('Open')).toBeVisible()
     expect(screen.queryByText('Case assigned to you.')).not.toBeInTheDocument()
   },
 )

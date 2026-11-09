@@ -135,7 +135,7 @@ function activityTitle(record: EvidenceRecord) {
   }
   const caseActions: Record<string, string> = {
     CaseOpened: 'Case opened',
-    CaseClaimed: 'Case claimed',
+    CaseClaimed: 'Reviewer assigned',
     CaseActionCompleted: 'Case action completed',
     CaseResolved: 'Case resolved',
   }
@@ -167,7 +167,10 @@ function participantLabels(participants: Participant[]) {
       roles.push('Requester')
     const courier = couriers.indexOf(id)
     if (courier >= 0) roles.push(`Courier ${courier + 1}`)
-    return roles.join(' · ') || 'Account outside supplied participant history'
+    return (
+      roles.join(' · ') ||
+      'Account not identified in available participant history'
+    )
   }
 }
 function EvidenceTime({ value }: { value: string }) {
@@ -193,13 +196,13 @@ function complete(timeline: Timeline) {
 function failure(error: unknown) {
   if (error instanceof CaseError) {
     if (error.status === 401)
-      return 'Your session expired. Sign in again to view evidence.'
+      return 'You’ve been signed out. Sign in again to see the evidence.'
     if (error.status === 403 || error.status === 404)
-      return 'You no longer have access to this case evidence.'
+      return 'You no longer have access to this evidence.'
     if (error.status === 409)
-      return 'The evidence snapshot changed or expired. Restart the timeline to load a consistent snapshot.'
+      return 'This evidence changed. Reload the timeline to see the latest.'
   }
-  return 'The evidence service is unavailable. We cannot verify whether the evidence is complete. Please retry.'
+  return 'We couldn’t load all the evidence. Try again — this view may be incomplete.'
 }
 function EvidenceData({
   record,
@@ -223,7 +226,7 @@ function EvidenceData({
             ` · Previous courier: ${participant(data.previousCourierId)}`}
         </p>
         <details>
-          <summary>Errand snapshot at this event</summary>
+          <summary>Errand details at this event</summary>
           <p>{data.snapshot.title}</p>
           <p className="statement-text">{data.snapshot.description}</p>
           <p>
@@ -553,8 +556,8 @@ export function EvidencePanel({
         </button>
       </div>
       <p>
-        Review errand, credit and case activity. Loading all pages does not by
-        itself establish a complete history.
+        Review errand, credit, and case history. Check the evidence status below
+        before making a decision.
       </p>
       {loading && (
         <p role="status">
@@ -563,14 +566,12 @@ export function EvidencePanel({
       )}
       {error && (
         <div role="alert" className="evidence-notice evidence-warning">
-          <h3>
-            Evidence {restartRequired ? 'snapshot changed' : 'unavailable'}
-          </h3>
+          <h3>Evidence {restartRequired ? 'has changed' : 'unavailable'}</h3>
           <p>{error}</p>
           {snapshot && (
             <p>
-              Previously loaded records are shown below for reference. They are
-              not a verified current view.
+              Earlier records are shown for reference. They may not reflect the
+              current history.
             </p>
           )}
           <button
@@ -579,8 +580,8 @@ export function EvidencePanel({
             onClick={snapshot && !restartRequired ? () => void more() : restart}
           >
             {snapshot && !restartRequired
-              ? 'Retry evidence page'
-              : 'Restart timeline'}
+              ? 'Try loading evidence again'
+              : 'Reload timeline'}
           </button>
         </div>
       )}
@@ -595,24 +596,25 @@ export function EvidencePanel({
           >
             <h3 id="coverage-title">
               {trustworthy
-                ? 'Complete through verified coverage limits'
+                ? 'History verified up to recorded checkpoints'
                 : error || restartRequired
-                  ? 'Coverage cannot currently be verified'
+                  ? 'History completeness unverified'
                   : snapshot.coverage.status === 'UNKNOWN'
-                    ? 'Coverage unknown'
+                    ? 'History completeness unverified'
                     : 'Evidence is incomplete'}
             </h3>
             <p>
               {trustworthy
-                ? 'All history is accounted for through the coverage limits supplied by each service. Newer activity may not be included. See coverage technical details for the exact limits.'
-                : 'Missing or unverified evidence must not be treated as a complete case history.'}
+                ? 'History is complete up to the last check. Very recent activity may not show yet.'
+                : 'Some activity may be missing. This history may be incomplete.'}
             </p>
             <p>
-              Coverage checked <EvidenceTime value={snapshot.coverage.asOf} />
+              Completeness checked{' '}
+              <EvidenceTime value={snapshot.coverage.asOf} />
             </p>
           </section>
           <section className="evidence-section">
-            <h3>Errand snapshot</h3>
+            <h3>Recorded errand details</h3>
             <h4>{snapshot.order.title}</h4>
             <p className="statement-text">{snapshot.order.description}</p>
             <dl className="case-facts">
@@ -645,14 +647,16 @@ export function EvidencePanel({
             </dl>
           </section>
           <section className="evidence-section">
-            <h3>Historical participants</h3>
+            <h3>Errand participants and assignment history</h3>
             {snapshot.participants.length ? (
               <ul className="evidence-participants">
                 {snapshot.participants.map((p, index) => (
                   <li key={`${p.userId}:${p.assignedAt}:${index}`}>
                     <strong>{participant(p.userId)}</strong>
                     {p.relationship === 'HISTORICAL_COURIER' && (
-                      <span className="role-chip">Historical courier</span>
+                      <span className="role-chip">
+                        Courier assigned during this errand
+                      </span>
                     )}
                     {p.relationship === 'HISTORICAL_COURIER' && (
                       <span>
@@ -669,7 +673,7 @@ export function EvidencePanel({
                             Unassigned <EvidenceTime value={p.unassignedAt} />
                           </>
                         ) : (
-                          'No end recorded in this snapshot'
+                          'Assignment end not recorded in this view'
                         )}
                       </span>
                     )}
@@ -682,8 +686,8 @@ export function EvidencePanel({
               </ul>
             ) : (
               <p>
-                No participants supplied in this snapshot. This does not prove
-                that no historical participants exist.
+                Participant history is unavailable in this view. Do not assume
+                there were no participants.
               </p>
             )}
             <p className="evidence-meta">
@@ -761,13 +765,16 @@ export function EvidencePanel({
               </div>
             ) : (
               <p>
-                No producer checkpoints available. Completeness cannot be
-                established.
+                No source checkpoints are available. History completeness cannot
+                be verified.
               </p>
             )}
           </details>
           <section className="evidence-section">
-            <h3>Known gaps ({snapshot.coverage.blockingGaps.length})</h3>
+            <h3>
+              Missing activity ({snapshot.coverage.blockingGaps.length} known
+              gaps)
+            </h3>
             {snapshot.coverage.blockingGaps.length ? (
               <ul className="evidence-gaps">
                 {snapshot.coverage.blockingGaps.map((gap, index) => (
@@ -792,15 +799,15 @@ export function EvidencePanel({
               </ul>
             ) : (
               <p>
-                No blocking gaps reported in this snapshot. This alone does not
-                establish complete coverage.
+                No missing activity was reported. Check the evidence status
+                above to verify completeness.
               </p>
             )}
             {snapshot.coverage.checkpoints.some(
               (cp) => cp.projectedSequence < cp.committedSequence,
             ) && (
               <p className="evidence-lag">
-                Some history is still catching up:{' '}
+                Some activity has not reached the timeline yet:{' '}
                 {[
                   ...new Set(
                     snapshot.coverage.checkpoints
@@ -810,7 +817,7 @@ export function EvidencePanel({
                       .map((cp) => historyName(cp.source)),
                   ),
                 ].join(', ')}
-                . Review the coverage technical details for progress.
+                . Refresh evidence to check progress.
               </p>
             )}
           </section>
@@ -846,8 +853,8 @@ export function EvidencePanel({
               </ol>
             ) : (
               <p>
-                No evidence records on this page. An empty result is not proof
-                of complete history.
+                No activity appears on this page. Check the evidence status
+                above; an empty page does not prove completeness.
               </p>
             )}
             {snapshot.nextCursor ? (
@@ -860,8 +867,8 @@ export function EvidencePanel({
               </button>
             ) : (
               <p>
-                End of this snapshot. The coverage warnings and limits above
-                still apply.
+                All activity in this view is loaded. Check the evidence status
+                and limits above before making a decision.
               </p>
             )}
           </section>

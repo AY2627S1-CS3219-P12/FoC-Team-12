@@ -166,7 +166,7 @@ export function CreateSupplierPage() {
         setErrors(serverFieldErrors(error))
         setSubmissionError(error.message)
       } else {
-        setSubmissionError('The supplier could not be created. Try again.')
+        setSubmissionError('We couldn’t add this location. Please try again.')
       }
     }
   }
@@ -195,8 +195,8 @@ export function EditSupplierPage() {
   if (!validId) {
     return (
       <StatePanel
-        message="The supplier ID in this address is not a valid UUID."
-        title="Invalid supplier address"
+        message="This link doesn’t look right."
+        title="Location not found"
         tone="error"
       />
     )
@@ -212,14 +212,14 @@ export function EditSupplierPage() {
           supplierQuery.error instanceof SupplierApiError &&
           supplierQuery.error.status === 404
             ? 'This supplier may have been deleted.'
-            : 'Check the connection and retry the request.'
+            : 'Please try again.'
         }
         onAction={() => void supplierQuery.refetch()}
         title={
           supplierQuery.error instanceof SupplierApiError &&
           supplierQuery.error.status === 404
             ? 'Supplier not found'
-            : 'Supplier could not be loaded'
+            : 'We couldn’t load this location'
         }
         tone="error"
       />
@@ -273,11 +273,11 @@ function LoadedEditSupplierPage({
         setErrors(serverFieldErrors(error))
         setSubmissionError(
           error.status === 409
-            ? 'This supplier changed after you opened the form. Reload the latest version before editing again.'
+            ? 'Someone else just changed this location. Reload to see the latest.'
             : error.message,
         )
       } else {
-        setSubmissionError('The supplier could not be updated. Try again.')
+        setSubmissionError('We couldn’t save your changes. Please try again.')
       }
     }
   }
@@ -346,14 +346,14 @@ function SupplierFormLayout({
         </h1>
         <p>
           {create
-            ? 'Create a supplier record using the fields shown in the public directory.'
-            : 'This replaces all editable details. Status is managed separately from the list.'}
+            ? 'Add a place students can pick up from or deliver to.'
+            : 'Change its status from the location list.'}
         </p>
       </header>
 
       {submissionError && (
         <div className={styles.formError} role="alert">
-          <strong>The supplier was not saved.</strong>
+          <strong>Your changes weren’t saved.</strong>
           <p>{submissionError}</p>
           {onReload && (
             <Button onClick={onReload} variant="secondary">

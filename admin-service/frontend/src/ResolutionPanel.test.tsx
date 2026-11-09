@@ -40,18 +40,16 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 function enterReason() {
-  fireEvent.change(screen.getByLabelText('Resolution reason'), {
+  fireEvent.change(screen.getByLabelText('Internal resolution reason'), {
     target: { value: 'All available evidence reviewed' },
   })
 }
 it('recovers a prepared resolution from the server after browser retry storage is lost', async () => {
   const operationId = '50000000-0000-4000-8000-000000000001'
-  const fetcher = vi
-    .fn()
-    .mockResolvedValue({
-      ok: true,
-      json: async () => ({ case: { ...summary, state: 'RESOLVED' } }),
-    })
+  const fetcher = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ case: { ...summary, state: 'RESOLVED' } }),
+  })
   vi.stubGlobal('fetch', fetcher)
   render(
     <ResolutionPanel
@@ -67,13 +65,11 @@ it('recovers a prepared resolution from the server after browser retry storage i
       refresh={() => {}}
     />,
   )
-  expect(screen.getByLabelText('Resolution reason')).toBeDisabled()
+  expect(screen.getByLabelText('Internal resolution reason')).toBeDisabled()
   expect(screen.getByRole('status')).toHaveTextContent(
-    'Resolution preparation is pending',
+    'This case is still closing',
   )
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Retry same resolution request' }),
-  )
+  fireEvent.click(screen.getByRole('button', { name: 'Resume case closure' }))
   await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
   expect(fetcher.mock.calls[0]![1].headers['Idempotency-Key']).toBe(operationId)
   expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toEqual({
@@ -98,16 +94,18 @@ it('requires confirmation and closes a no-action case with the original revision
     />,
   )
   expect(
-    screen.getByRole('button', { name: 'Review resolution' }),
+    screen.getByRole('button', { name: 'Review case closure' }),
   ).toBeDisabled()
   enterReason()
-  fireEvent.click(screen.getByRole('button', { name: 'Review resolution' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Review case closure' }))
   expect(fetcher).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Back to editing' }))
   expect(fetcher).not.toHaveBeenCalled()
-  fireEvent.click(screen.getByRole('button', { name: 'Review resolution' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm resolution' }))
-  expect(await screen.findByRole('status')).toHaveTextContent('Case resolved')
+  fireEvent.click(screen.getByRole('button', { name: 'Review case closure' }))
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Close case permanently' }),
+  )
+  expect(await screen.findByRole('status')).toHaveTextContent('Case closed')
   expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toEqual({
     resolution: 'All available evidence reviewed',
     expectedRevision: 3,
@@ -127,13 +125,16 @@ it('requires an explanation for every rejected action', () => {
   )
   enterReason()
   expect(
-    screen.getByRole('button', { name: 'Review resolution' }),
+    screen.getByRole('button', { name: 'Review case closure' }),
   ).toBeDisabled()
-  fireEvent.change(screen.getByLabelText('Explanation for rejected action 1'), {
-    target: { value: 'Self-access protected; no replacement ban needed' },
-  })
+  fireEvent.change(
+    screen.getByLabelText('Why can the case close despite rejected action 1?'),
+    {
+      target: { value: 'Self-access protected; no replacement ban needed' },
+    },
+  )
   expect(
-    screen.getByRole('button', { name: 'Review resolution' }),
+    screen.getByRole('button', { name: 'Review case closure' }),
   ).toBeEnabled()
 })
 it.each(['PENDING', 'UNKNOWN'] as const)(
@@ -149,10 +150,10 @@ it.each(['PENDING', 'UNKNOWN'] as const)(
     )
     enterReason()
     expect(
-      screen.getByRole('button', { name: 'Review resolution' }),
+      screen.getByRole('button', { name: 'Review case closure' }),
     ).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Wait for all pending or unknown actions',
+      'Wait until every action is confirmed',
     )
   },
 )
@@ -178,14 +179,16 @@ it('retains exact request identity across unavailable Chat or a lost response', 
     />,
   )
   enterReason()
-  fireEvent.click(screen.getByRole('button', { name: 'Review resolution' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm resolution' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Review case closure' }))
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Close case permanently' }),
+  )
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Case remains open',
   )
   fireEvent.click(
     await screen.findByRole('button', {
-      name: 'Retry same resolution request',
+      name: 'Resume case closure',
     }),
   )
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
@@ -203,7 +206,9 @@ it('keeps other reviewers read-only and displays the immutable final reason', ()
       refresh={() => {}}
     />,
   )
-  expect(screen.queryByLabelText('Resolution reason')).not.toBeInTheDocument()
+  expect(
+    screen.queryByLabelText('Internal resolution reason'),
+  ).not.toBeInTheDocument()
   view.rerender(
     <ResolutionPanel
       summary={{ ...summary, state: 'RESOLVED' }}
@@ -215,6 +220,6 @@ it('keeps other reviewers read-only and displays the immutable final reason', ()
   )
   expect(screen.getByText('Final immutable decision')).toBeVisible()
   expect(
-    screen.queryByRole('button', { name: 'Review resolution' }),
+    screen.queryByRole('button', { name: 'Review case closure' }),
   ).not.toBeInTheDocument()
 })

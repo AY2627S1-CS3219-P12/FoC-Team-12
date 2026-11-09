@@ -231,10 +231,6 @@ export function BrowsePage() {
             )}
             <button type="submit">Apply filters</button>
           </form>
-          <p>
-            Only OPEN errands can be accepted. Your filter and sort choices stay
-            when you return from an errand.
-          </p>
         </aside>
       </div>
     </>

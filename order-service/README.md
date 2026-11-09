@@ -18,10 +18,11 @@ No lifecycle or credit-request wire format changes. See
 
 ## Admin reporting entry
 
-The errand detail screen includes a participant reporting panel using Admin-owned
+The errand detail screen shows the reporting panel to its requester or assigned courier,
+not couriers browsing an open errand. Acceptance enables the courier's panel. It uses Admin-owned
 `GET /api/admin/orders/{orderId}/report-context` through the gateway. The panel offers Report an
 issue only after authoritative ELIGIBLE, or View your report for OWN_REPORT (including resolved
-cases). INELIGIBLE has no link or case metadata; failures show unavailable/retry instead of
+cases). INELIGIBLE hides the entire panel; failures show unavailable/retry instead of
 pretending no report exists. Query keys include actor, mode and order; auth/eligibility remain
 Admin/Chat responsibilities. Order lifecycle endpoints and database are unchanged.
 
@@ -452,6 +453,7 @@ courier (session role `COURIER`), **Sys** = the expiry scheduler or a Credit rep
 | ACCEPTED | OPEN | C | Withdraws before the deadline; courier cleared, back in the pool | — | (history only) |
 | ACCEPTED | EXPIRED | C | Withdraws at or after the deadline; courier cleared | Release in full | `OrderExpired` |
 | ACCEPTED | CANCELLED | R | Before pickup; courier cleared | Courier gets `ceil(reward × 20 / 100)`, the rest returns to R | `OrderCancelled` |
+| ACCEPTED | CANCELLED | R | At or after the pickup deadline (the courier is late); courier cleared; `terminalReason` `REQUESTER_CANCELLED_COURIER_LATE` | Release in full, no compensation | `OrderCancelled` (`compensationRequired=false`) |
 | ACCEPTED | PICKED_UP | C | Late pickup allowed | — | (history only) |
 | PICKED_UP | DELIVERED | C | — | — | (history only) |
 | DELIVERED | COMPLETED | R | Confirms receipt | Full reward to C | `OrderCompleted` |

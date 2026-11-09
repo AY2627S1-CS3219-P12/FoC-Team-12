@@ -136,6 +136,9 @@ Consumer rules (`messaging/CreditOutcomeHandler`), in one transaction:
 3. **Only `OPEN` orders expire automatically** (F8.2/F8.3).
    - Accepted orders never expire automatically.
    - **Late pickup is allowed**: the courier may still pick up an `ACCEPTED` order after the deadline.
+   - **A late courier earns no compensation**: from the deadline on, a requester's cancel of an
+     `ACCEPTED` order releases the reservation in full (T11b), like a ride app's free cancellation when
+     the driver is late. There is no automatic no-show expiry. *(Confirmed by XueTing, 2026-11-09.)*
    - The deadline only affects acceptance, expiry and withdrawal. *(Confirmed by XueTing, 2026-10-18.)*
 4. **Concurrency.**
    - Every transition runs in one transaction, loading the row with `PESSIMISTIC_WRITE`
@@ -182,7 +185,7 @@ Consumer rules (`messaging/CreditOutcomeHandler`), in one transaction:
 - **Active states:** `ACCEPTED`, `PICKED_UP`, `DELIVERED`.
 - **Terminal states:** `COMPLETED`, `CANCELLED`, `EXPIRED`, `RESERVATION_FAILED`.
   - `terminal_reason` records why.
-  - Values: `REQUESTER_CANCELLED_OPEN`, `REQUESTER_CANCELLED_ACCEPTED`, `PICKUP_DEADLINE_PASSED`,
+  - Values: `REQUESTER_CANCELLED_OPEN`, `REQUESTER_CANCELLED_ACCEPTED`, `REQUESTER_CANCELLED_COURIER_LATE`, `PICKUP_DEADLINE_PASSED`,
     `COURIER_WITHDREW_AFTER_DEADLINE`, and for `RESERVATION_FAILED` one of `INSUFFICIENT_CREDITS`,
     `CREDIT_ACCOUNT_NOT_FOUND` (Credit's `reasonCode` of the same name) or
     `CREDIT_RESERVATION_REJECTED` (any other or missing `reasonCode`).
@@ -210,6 +213,7 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
 | T9 | ACCEPTED → OPEN | `POST /api/orders/{id}/withdraw` | C | ACCEPTED and now < deadline (F3.2); clear the courier | none; the reservation stays held | history only; back in the pool (F3.2.2) | 403 `NOT_ASSIGNED_COURIER`, 409 |
 | T10 | ACCEPTED → EXPIRED | Same `withdraw` endpoint | C | ACCEPTED and now ≥ deadline (F3.2.3); clear the courier | **Release** the full reservation to R | `OrderExpired` (`COURIER_WITHDREW_AFTER_DEADLINE`) | As T9 |
 | T11 | ACCEPTED → CANCELLED | `POST /api/orders/{id}/cancel` | R | ACCEPTED, not yet picked up (F3.3); clear the courier | **Compensate**: courier gets `ceil(reserved × 20 / 100)`, the rest goes back to R (F3.3.2) | `OrderCancelled` (`compensationRequired=true`, `courierId`) | 403, 409 |
+| T11b | ACCEPTED → CANCELLED (courier late) | `POST /api/orders/{id}/cancel` | R | ACCEPTED, not yet picked up, **now ≥ deadline**; clear the courier | **Release** the full reservation to R; no compensation | `OrderCancelled` (`compensationRequired=false`, `courierId=null`, reason `REQUESTER_CANCELLED_COURIER_LATE`) | As T11; a late pickup that locks first wins (409 `CANCELLATION_NOT_ALLOWED`) |
 | T12 | ACCEPTED → PICKED_UP | `POST /api/orders/{id}/pickup` | C | ACCEPTED (F6.1); late pickup allowed | none | history only | 403 `NOT_ASSIGNED_COURIER`, 409 |
 | T13 | PICKED_UP → DELIVERED | `POST /api/orders/{id}/deliver` | C | PICKED_UP (F6.2) | none | history only | 403, 409 |
 | T14 | DELIVERED → COMPLETED | `POST /api/orders/{id}/complete` | R | DELIVERED (F6.3) | **Settle**: the full reservation goes to C | `OrderCompleted` | 403, 409 |
@@ -359,12 +363,14 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | UI | `order-ui-role-scoped-errand`: an errand page that doesn't belong to the header role (on load or after a switch) goes to that role's own screen | PR #120 |
 | UI | `order-ui-design-alignment`: Order screens meet the shared `design.md` contract (button states, card radius, Lucide icons, loading placeholders, actionable empty/error panels, focus colour) | PR #123 |
 | UI | `order-ui-reorder`: Post again on a requester's ended errands opens Request help filled in except Pick up by (frontend only, existing `GET /api/orders/{id}`) | This change |
-| 11 | `order-create-idempotency`: optional `Idempotency-Key` on `POST /api/orders` (V5); a retry with the same key and body returns the first order (`200`) with no second `OrderSubmitted` or reservation, a changed body is `409 IDEMPOTENCY_KEY_REUSED`; the create page sends one key per errand content | This change |
-| 14 | `order-pending-credit-timeout`: a PENDING_CREDIT order Credit does not answer by `min(pickupDeadline, createdAt + PT2M)` expires with `CREDIT_RESERVATION_TIMEOUT` and the normal `OrderExpired` (V7); late `CreditReserved`/`CreditReservationRejected` are `IGNORED`; the UI and Notification say the errand was not posted. Contract: blueprint "pending-credit timeout" (Credit owns the absent-reservation no-op) | This change |
-| 13 | `order-credit-reconciliation`: every 5 min, report `order.events` commands with no Credit outcome for their `operationId` 10 min (`PT10M`) after publishing (V8 index); WARN once per command with every ID, a credit-timeout expiry counted apart at INFO, `order.credit.*` gauges on ADMIN-only metrics, README recovery runbook. Detection only, never re-sends | This change |
-| 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
+| 11 | `order-create-idempotency`: optional `Idempotency-Key` on `POST /api/orders` (V5); a retry with the same key and body returns the first order (`200`) with no second `OrderSubmitted` or reservation, a changed body is `409 IDEMPOTENCY_KEY_REUSED`; the create page sends one key per errand content | Done (PR #152) |
 | 12 | `order-messaging-hardening`: relay claims whole order-and-topic streams (V6), so replicas keep per-order order; batch 20 and a stuck-row `ERROR`; `OrderTransitionException`/unknown order go to `credit.events.DLT` without retries; `CreditReleased` must answer `OrderCancelled` or `OrderExpired`; `order.outbox.*` gauges on ADMIN-only `/actuator/metrics` | Done (PR #153) |
-| 14 | `order-pending-credit-timeout`: a PENDING_CREDIT order Credit does not answer by `min(pickupDeadline, createdAt + PT2M)` expires with `CREDIT_RESERVATION_TIMEOUT` and the normal `OrderExpired` (V7); late `CreditReserved`/`CreditReservationRejected` are `IGNORED`; the UI and Notification say the errand was not posted. Contract: blueprint "pending-credit timeout" (Credit owns the absent-reservation no-op) | This change |
+| 13 | `order-credit-reconciliation`: every 5 min, report `order.events` commands with no Credit outcome for their `operationId` 10 min (`PT10M`) after publishing (V8 index); WARN once per command with every ID, a credit-timeout expiry counted apart at INFO, `order.credit.*` gauges on ADMIN-only metrics, README recovery runbook. Detection only, never re-sends | Done (PR #158) |
+| 14 | `order-pending-credit-timeout`: a PENDING_CREDIT order Credit does not answer by `min(pickupDeadline, createdAt + PT2M)` expires with `CREDIT_RESERVATION_TIMEOUT` and the normal `OrderExpired` (V7); late `CreditReserved`/`CreditReservationRejected` are `IGNORED`; the UI and Notification say the errand was not posted. Contract: blueprint "pending-credit timeout" (Credit owns the absent-reservation no-op) | Done (PR #156) |
+| 15 | `order-late-courier-free-cancel`: cancelling an ACCEPTED errand at or after its pickup deadline releases in full (`REQUESTER_CANCELLED_COURIER_LATE`, `compensationRequired=false`) instead of paying the late courier 20%; late pickup stays allowed and nothing expires automatically; the cancel dialog and errand page say so | Done (PR #160) |
+| UI | `order-ui-friendly-copy-location-search`: searchable pickup/drop-off picker (ARIA combobox, filter by name/building/level, "Choose a location") on Request a hand and Edit errand; plain, short wording across the errand, create, edit and browse screens (no backend rules or "assigned courier"/"header" wording). Chat and Report text unchanged | This change |
+| 16 | `order-auto-complete-delivered`: settle to the courier when a requester never confirms receipt | Not planned for D3 (XueTing, 2026-11-09): needs a confirmation window and Credit's agreement to a system-triggered settlement |
+| 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
 
 ## Decisions
 

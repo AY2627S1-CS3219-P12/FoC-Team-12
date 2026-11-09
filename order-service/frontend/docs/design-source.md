@@ -37,9 +37,11 @@ The backend contract wins over example data in Figma:
 - **"Requested by Mei Lin" / "Alex marked…"** need usernames, which Order Service does not store
   (it only has user IDs), so the UI says "the requester" / "your courier".
 - **Chat, Notifications and "Report an issue"** have no backend yet and are not shown.
-- **Locations are picked from a list, not typed.** The form loads active locations from Supplier's
-  public `GET /api/suppliers` in the browser and sends both the ID and name; Order Service still
-  never calls Supplier.
+- **Locations are picked from a searchable list, not typed freely.** The form loads active
+  locations from Supplier's public `GET /api/suppliers` in the browser and sends both the ID and
+  name; Order Service still never calls Supplier. The picker (`LocationCombobox`) filters as you
+  type by name, building or level and starts with "Choose a location"; only a listed location can be
+  chosen.
 - **No "Deliver by" field.** Orders have only a pickup deadline. A **reward** field is added: the
   design shows "Reserve for this errand: 3 credits" but has no input for it.
 - **"Your credits"** reads the caller's own balance from Credit's `GET /api/credits/me` in the

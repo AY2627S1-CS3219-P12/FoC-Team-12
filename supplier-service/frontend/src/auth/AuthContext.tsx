@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(replacement)
           return true
         } catch (error) {
-          setWorkspaceError(error instanceof Error ? error.message : 'Unable to change workspace right now. Please try again.')
+          setWorkspaceError(error instanceof Error ? error.message : "We couldn't switch your role. Please try again.")
           return false
         } finally {
           setWorkspaceBusy(false)

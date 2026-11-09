@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   CaseError,
+  caseErrorMessage,
   isUuid,
   request,
   type AdminAction,
@@ -101,7 +102,7 @@ export function ResolutionPanel({
       sessionStorage.setItem(storage, JSON.stringify(operation))
     } catch {
       setError(
-        'Safe retry storage is unavailable. Enable session storage before resolving.',
+        'Nothing was sent. Allow this site to use browser storage, then try again.',
       )
       return
     }
@@ -138,14 +139,14 @@ export function ResolutionPanel({
         setPending(null)
         setConfirm(false)
         setError(
-          e.message +
+          caseErrorMessage(e) +
             (e.status === 409 ? ' Refresh the case before trying again.' : ''),
         )
       } else
         setError(
           e instanceof CaseError
-            ? e.message
-            : 'Resolution could not be confirmed. Retry the same request to recover its outcome; do not assume the case is resolved.',
+            ? caseErrorMessage(e)
+            : 'We’re not sure the case closed. Tap “Resume case closure” to check.',
         )
     } finally {
       clearTimeout(timeout)
@@ -165,37 +166,39 @@ export function ResolutionPanel({
       )}
       {closure && summary.state !== 'RESOLVED' && (
         <p role="status">
-          Resolution preparation is pending. Conversations and new actions are
-          read only. Resume the original resolution below.
+          This case is still closing, so nothing new can be added. Resume your
+          earlier request below.
         </p>
       )}
       {done && (
         <p role="status">
-          Case resolved. The decision is final and case conversations are read
-          only.
+          Case closed. The decision is final and conversations are read-only.
         </p>
       )}
       {summary.state === 'RESOLVED' ? (
         <>
-          <p>This case is resolved. Further reports and actions are closed.</p>
+          <p>
+            This case is closed. No further reports or review actions can be
+            added. Conversations are read-only.
+          </p>
           {resolution && <p className="statement-text">{resolution}</p>}
         </>
       ) : (
         !done &&
         (summary.reviewerId !== actor || summary.state !== 'UNDER_REVIEW' ? (
-          <p>Only the assigned reviewer can resolve a case under review.</p>
+          <p>Only the assigned reviewer can close this case.</p>
         ) : (
           <>
             <p>
-              Resolution is final. We check fresh Chat evidence before closing
-              the case. Unavailable or incomplete evidence keeps it open. No
-              account or credit action is required.
+              Closing a case is permanent. Complete, current evidence and
+              confirmed action outcomes are required. Bans and credit
+              corrections are optional.
             </p>
             {blocked && (
               <p role="status">
                 {!actions
                   ? 'Refresh the case to verify action history.'
-                  : 'Wait for all pending or unknown actions to receive an owner-confirmed outcome.'}
+                  : 'Wait until every action is confirmed. Refresh to check.'}
               </p>
             )}
             <form
@@ -205,7 +208,12 @@ export function ResolutionPanel({
                 setConfirm(true)
               }}
             >
-              <label htmlFor="resolution-reason">Resolution reason</label>
+              <label htmlFor="resolution-reason">
+                Internal resolution reason
+              </label>
+              <small>
+                Explain your decision. Visible only to authorized admins.
+              </small>
               <textarea
                 id="resolution-reason"
                 rows={4}
@@ -223,7 +231,7 @@ export function ResolutionPanel({
                     {a.reason}
                   </p>
                   <label htmlFor={`explain-${a.operationId}`}>
-                    Explanation for rejected action {i + 1}
+                    Why can the case close despite rejected action {i + 1}?
                   </label>
                   <textarea
                     id={`explain-${a.operationId}`}
@@ -247,16 +255,14 @@ export function ResolutionPanel({
                   disabled={busy}
                   onClick={() => void submit()}
                 >
-                  {busy
-                    ? 'Checking resolution…'
-                    : 'Retry same resolution request'}
+                  {busy ? 'Checking resolution…' : 'Resume case closure'}
                 </button>
               ) : confirm ? (
                 <div role="region" aria-label="Confirm final resolution">
                   <p>
-                    Close this case permanently? Participants will see the final
-                    status. Your internal reason stays private to
-                    administrators.
+                    Close permanently? No further reports, review actions, or
+                    messages can be added; participants see only the closed
+                    status, while your reason stays private to admins.
                   </p>
                   <p className="statement-text">{reason.trim()}</p>
                   <button
@@ -264,19 +270,19 @@ export function ResolutionPanel({
                     disabled={busy || blocked || !valid}
                     onClick={() => void submit()}
                   >
-                    Confirm resolution
+                    Close case permanently
                   </button>
                   <button
                     type="button"
                     className="button-secondary"
                     onClick={() => setConfirm(false)}
                   >
-                    Cancel
+                    Back to editing
                   </button>
                 </div>
               ) : (
                 <button disabled={busy || blocked || !valid}>
-                  Review resolution
+                  Review case closure
                 </button>
               )}
             </form>

@@ -12,6 +12,7 @@ import {
 } from './CaseConversations'
 import {
   CaseError,
+  caseErrorMessage,
   isUuid,
   request,
   uuidPattern,
@@ -27,15 +28,22 @@ function message(error: unknown) {
     if (
       error.message.startsWith('Reviewer independence could not be verified.')
     )
-      return error.message
+      return error instanceof CaseError
+        ? caseErrorMessage(error)
+        : 'Switch to the right role in your account menu to see this.'
     if (error.status === 401)
-      return 'Your session has expired. Sign in to continue.'
-    if (error.status === 403) return error.message
-    if (error.status === 404)
-      return 'This case is unavailable or you do not have access.'
-    if (error.status < 500) return error.message
+      return 'You’ve been signed out. Please sign in again.'
+    if (error.status === 403)
+      return error instanceof CaseError
+        ? caseErrorMessage(error)
+        : 'Switch to the right role in your account menu to see this.'
+    if (error.status === 404) return 'This case isn’t available to you.'
+    if (error.status < 500)
+      return error instanceof CaseError
+        ? caseErrorMessage(error)
+        : 'Switch to the right role in your account menu to see this.'
   }
-  return 'A required service is unavailable. Please try again shortly.'
+  return 'We couldn’t load this. Please try again.'
 }
 
 export function CaseWorkspace() {
@@ -102,7 +110,7 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
       <div className="page-intro">
         <div>
           <p className="eyebrow">
-            {participant ? 'Participant reports' : 'Administration'}
+            {participant ? 'Report an issue' : 'Administration'}
           </p>
           <h1>
             {participant
@@ -113,15 +121,17 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
           </h1>
           <p>
             {participant
-              ? 'Submit your own statement and privately check your report.'
-              : 'Review statements and take responsibility for an open case.'}
+              ? id && id !== 'new'
+                ? 'Check your case status and messages from your admin.'
+                : 'Tell us what happened and an admin will look into it.'
+              : 'Review reports and assign yourself an open case to begin.'}
           </p>
         </div>
       </div>
       {!participant && (
         <a className="back-link" href={'/admin' + window.location.search}>
           <Arrow direction="back" />
-          Back to report queue
+          Back to case queue
         </a>
       )}
       {participant && id === 'new' && isUuid(suppliedOrder) && (
@@ -150,7 +160,7 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
           <h2>
             {error ||
               (participant
-                ? 'Select Requester or Courier mode to report an issue.'
+                ? 'Switch to Requester or Courier in your account menu to report an issue.'
                 : 'Checking your access')}
           </h2>
           {error && (
@@ -235,23 +245,44 @@ function useRemote<T>(path: string) {
   }
 }
 
-function Feedback({ error, retry }: { error: string; retry: () => void }) {
+function Feedback({
+  error,
+  retry,
+  loading = 'Loading case…',
+}: {
+  error: string
+  retry: () => void
+  loading?: string
+}) {
   return error ? (
     <section className="message-card" role="alert">
       <h2>{error}</h2>
       <button onClick={retry}>Try again</button>
     </section>
   ) : (
-    <p role="status">Loading cases…</p>
+    <p role="status">{loading}</p>
   )
 }
-function SummaryCard({ value }: { value: Summary }) {
+function SummaryCard({
+  value,
+  participant = false,
+}: {
+  value: Summary
+  participant?: boolean
+}) {
+  const status = participant
+    ? {
+        OPEN: 'Waiting for review',
+        UNDER_REVIEW: 'Under review',
+        RESOLVED: 'Closed',
+      }
+    : { OPEN: 'Open', UNDER_REVIEW: 'Under review', RESOLVED: 'Resolved' }
   return (
     <dl className="case-facts">
       <div>
         <dt>Status</dt>
         <dd>
-          <span className="role-chip">{value.state.replaceAll('_', ' ')}</span>
+          <span className="role-chip">{status[value.state]}</span>
         </dd>
       </div>
       <div>
@@ -263,15 +294,23 @@ function SummaryCard({ value }: { value: Summary }) {
         <dd>{value.orderId}</dd>
       </div>
       <div>
-        <dt>Reviewer</dt>
-        <dd>{value.reviewerId || 'Unassigned'}</dd>
+        <dt>{participant ? 'Case admin' : 'Reviewer'}</dt>
+        <dd>
+          {participant
+            ? value.reviewerId
+              ? 'Assigned'
+              : 'Awaiting assignment'
+            : value.reviewerId || 'Unassigned'}
+        </dd>
       </div>
+      {!participant && (
+        <div>
+          <dt>Revision</dt>
+          <dd>{value.revision}</dd>
+        </div>
+      )}
       <div>
-        <dt>Revision</dt>
-        <dd>{value.revision}</dd>
-      </div>
-      <div>
-        <dt>Opened</dt>
+        <dt>Case opened</dt>
         <dd>{formatSingaporeTime(value.createdAt)}</dd>
       </div>
     </dl>
@@ -313,7 +352,15 @@ function useMutation<T>(storageKey: string) {
       sessionStorage.removeItem(storageKey)
       setPending(null)
     } catch (e) {
-      setError(message(e))
+      setError(
+        e instanceof CaseError &&
+          (e.status < 500 ||
+            e.message.startsWith(
+              'Reviewer independence could not be verified.',
+            ))
+          ? message(e)
+          : 'We’re not sure your report went through. Tap retry to check.',
+      )
       if (e instanceof CaseError && e.status < 500) {
         sessionStorage.removeItem(storageKey)
         setPending(null)
@@ -331,7 +378,7 @@ function ReportEntry({ actor, orderId }: { actor: string; orderId: string }) {
     return (
       <section className="message-card">
         <h2>Choose an errand to report</h2>
-        <p>A report must be linked to a specific errand you participated in.</p>
+        <p>Pick the errand this is about.</p>
         <a className="button" href="/errands/mine">
           Go to my errands
         </a>
@@ -347,10 +394,13 @@ function ReportEntryContext({
   orderId: string
 }) {
   const context = useRemote<ReportContext>(`orders/${orderId}/report-context`)
-  if (!context.data) return <Feedback {...context} />
+  if (!context.data)
+    return <Feedback {...context} loading="Checking reporting access…" />
   if (context.data.orderId !== orderId)
     return (
-      <p role="alert">Report access could not be verified. Please refresh.</p>
+      <p role="alert">
+        We couldn’t check reporting access. Refresh the page and try again.
+      </p>
     )
   if (
     context.data.status === 'OWN_REPORT' &&
@@ -360,7 +410,7 @@ function ReportEntryContext({
     return (
       <section className="case-panel">
         <h2>You already reported this errand</h2>
-        <p>Continue to your private statement and status.</p>
+        <p>View your report, case status, and messages.</p>
         <a className="button" href={'/admin/reports/' + context.data.caseId}>
           View your report
         </a>
@@ -371,8 +421,7 @@ function ReportEntryContext({
       <section className="case-panel">
         <h2>Reporting is not available</h2>
         <p>
-          Your account cannot submit a report for this errand, or reporting has
-          closed.
+          Reporting is closed for this errand, or your account is not eligible.
         </p>
         <a className="button-secondary" href={'/errands/' + orderId}>
           Back to errand
@@ -409,23 +458,26 @@ function ReportForm({ actor, orderId }: { actor: string; orderId: string }) {
   if (mutation.result)
     return (
       <section className="case-panel" role="status">
-        <h2>Your report was submitted</h2>
-        <p>Save this case ID to return to your private status page.</p>
-        <SummaryCard value={mutation.result.case} />
+        <h2>Report submitted</h2>
+        <p>
+          An admin will review your case. Keep your case ID and check your
+          report for updates.
+        </p>
+        <SummaryCard value={mutation.result.case} participant />
         <a
           className="button"
           href={'/admin/reports/' + mutation.result.case.caseId}
         >
-          View my report
+          View your report
         </a>
       </section>
     )
   return (
     <section className="case-panel report-form-panel">
-      <h2>Submit a statement</h2>
+      <h2>Describe the issue</h2>
       <p>
-        Tell us what happened with this errand. You can submit one statement;
-        only you and authorized administrators can read it.
+        Describe what happened and when. You can submit one report for this
+        errand, visible only to you and authorized admins.
       </p>
       <form
         className="case-form"
@@ -438,7 +490,7 @@ function ReportForm({ actor, orderId }: { actor: string; orderId: string }) {
         }}
       >
         <div className="report-context">
-          <span>Reporting this errand</span>
+          <span>Errand being reported</span>
           <strong>{order}</strong>
         </div>
         <label htmlFor="description">What happened?</label>
@@ -452,8 +504,8 @@ function ReportForm({ actor, orderId }: { actor: string; orderId: string }) {
           onChange={(e) => setDescription(e.target.value)}
         />
         <small>
-          {description.length}/2000 characters. Your statement cannot be edited
-          after submission.
+          {description.length}/2,000 characters. Check before submitting; you
+          cannot edit your report afterward.
         </small>
         {mutation.error && (
           <p role="alert" className="workspace-error">
@@ -462,8 +514,8 @@ function ReportForm({ actor, orderId }: { actor: string; orderId: string }) {
         )}
         {mutation.pending && (
           <p role="status">
-            A request is pending. Retry to confirm its outcome using the same
-            statement.
+            Submission is unconfirmed. Select “Retry submission” to check the
+            same report.
           </p>
         )}
         <button disabled={mutation.busy || !description.trim()}>
@@ -478,12 +530,17 @@ function ReportForm({ actor, orderId }: { actor: string; orderId: string }) {
   )
 }
 function ReportStatus({ id }: { id: string }) {
-  if (!isUuid(id)) return <p role="alert">A valid case UUID is required.</p>
+  if (!isUuid(id))
+    return (
+      <p role="alert">
+        This report link is invalid. Open the errand and use its report link.
+      </p>
+    )
   return <ReportStatusData id={id} />
 }
 function ReportStatusData({ id }: { id: string }) {
   const state = useRemote<Report>('reports/' + id)
-  if (!state.data) return <Feedback {...state} />
+  if (!state.data) return <Feedback {...state} loading="Loading your report…" />
   return (
     <section className="case-panel">
       <a className="back-link" href={'/errands/' + state.data.case.orderId}>
@@ -493,11 +550,11 @@ function ReportStatusData({ id }: { id: string }) {
       <h2>Report status</h2>
       {state.data.case.state === 'RESOLVED' && (
         <p role="status">
-          Review is complete. This case is closed and your case conversation is
-          read only.
+          Your case is closed. You can read existing messages but can no longer
+          reply.
         </p>
       )}
-      <SummaryCard value={state.data.case} />
+      <SummaryCard value={state.data.case} participant />
       <h3>Your statement</h3>
       <p className="statement-text">{state.data.ownStatement.description}</p>
       <p className="muted">
@@ -516,7 +573,7 @@ const statuses = [
   { value: 'OPEN', label: 'Open' },
   { value: 'UNDER_REVIEW', label: 'Under review' },
   { value: 'RESOLVED', label: 'Resolved' },
-  { value: '', label: 'All reports' },
+  { value: '', label: 'All cases' },
 ]
 function initialFilters(): QueueFilter {
   const params = new URLSearchParams(window.location.search)
@@ -568,12 +625,12 @@ export function CaseQueue({ actor }: { actor: string }) {
       <div className="section-heading queue-heading">
         <div>
           <h2 id="report-queue-title">
-            Report queue{' '}
+            Case queue{' '}
             {state.data && (
               <span className="queue-count">{state.data.totalElements}</span>
             )}
           </h2>
-          <p>Review participant reports and claim an open case to begin.</p>
+          <p>Assign yourself an open case to begin reviewing reports.</p>
         </div>
         <button
           className="button-secondary"
@@ -596,7 +653,7 @@ export function CaseQueue({ actor }: { actor: string }) {
       <div
         className="queue-statuses"
         role="group"
-        aria-label="Filter reports by status"
+        aria-label="Filter cases by status"
       >
         {statuses.map((status) => (
           <button
@@ -657,7 +714,7 @@ export function CaseQueue({ actor }: { actor: string }) {
         {!state.data ? (
           state.error ? (
             <div className="queue-state" role="alert">
-              <h3>Reports could not be loaded</h3>
+              <h3>Cases could not be loaded</h3>
               <p>{state.error}</p>
               <button onClick={state.retry} type="button">
                 Try again
@@ -665,7 +722,7 @@ export function CaseQueue({ actor }: { actor: string }) {
             </div>
           ) : (
             <div className="queue-state" role="status">
-              <p>Loading report queue…</p>
+              <p>Loading case queue…</p>
             </div>
           )
         ) : (
@@ -684,14 +741,12 @@ export function CaseQueue({ actor }: { actor: string }) {
                   </svg>
                 </span>
                 <h3>
-                  {emptyOpen
-                    ? 'No open reports'
-                    : 'No reports match these filters'}
+                  {emptyOpen ? 'No open cases' : 'No cases match these filters'}
                 </h3>
                 <p>
                   {emptyOpen
-                    ? 'New participant reports will appear here when they are ready for review.'
-                    : 'Try another status or clear the search to see more reports.'}
+                    ? 'New cases appear when participants submit reports. Refresh to check for updates.'
+                    : 'Try another status or clear the search.'}
                 </p>
                 {!emptyOpen && (
                   <button
@@ -740,7 +795,7 @@ export function CaseQueue({ actor }: { actor: string }) {
                             ? value.reviewerId === actor
                               ? 'Assigned to you'
                               : 'Assigned to another reviewer'
-                            : 'Ready to claim'}
+                            : 'Unassigned'}
                         </span>
                         <time dateTime={value.createdAt}>
                           {formatSingaporeTime(value.createdAt)}
@@ -759,7 +814,7 @@ export function CaseQueue({ actor }: { actor: string }) {
               <span className="queue-range">
                 {state.data.totalElements
                   ? `Showing ${state.data.page * state.data.size + 1}–${Math.min((state.data.page + 1) * state.data.size, state.data.totalElements)} of ${state.data.totalElements}`
-                  : '0 reports'}
+                  : '0 cases'}
               </span>
               <div className="queue-page-controls">
                 <button
@@ -797,7 +852,12 @@ export function CaseQueue({ actor }: { actor: string }) {
   )
 }
 function CaseDetail({ id, actor }: { id: string; actor: string }) {
-  if (!isUuid(id)) return <p role="alert">A valid case UUID is required.</p>
+  if (!isUuid(id))
+    return (
+      <p role="alert">
+        This case link is invalid. Return to the case queue and try again.
+      </p>
+    )
   return <DetailData id={id} actor={actor} />
 }
 function DetailData({ id, actor }: { id: string; actor: string }) {
@@ -817,14 +877,9 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         </div>
         <SummaryCard value={value} />
         <p>
-          Only an independent administrator can review this case. If you
-          requested the errand or were ever assigned as its courier, you cannot
-          claim it, take administrative actions, start a review conversation or
-          resolve it, even if you are already assigned as reviewer or did not
-          submit a report. Complete, fresh errand evidence is required to verify
-          independence. Refresh the evidence if review access cannot be
-          verified. The case stays open until an independent administrator can
-          review it.
+          You cannot review a case if you requested the errand or were ever its
+          courier. Another admin must review it, even if you did not submit a
+          report.
         </p>
         {mutation.error && (
           <p role="alert" className="workspace-error">
@@ -835,8 +890,8 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         {value.state === 'OPEN' || mutation.pending ? (
           <>
             <p>
-              Claiming assigns you as the reviewer. Another administrator may
-              claim this case first.
+              Assign this case to yourself to review it. Another admin may take
+              it first.
             </p>
             <button
               disabled={mutation.busy}
@@ -847,14 +902,14 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
               }
             >
               {mutation.busy
-                ? 'Claiming…'
+                ? 'Assigning…'
                 : mutation.pending
-                  ? 'Retry claim'
-                  : 'Claim case'}
+                  ? 'Retry assignment'
+                  : 'Assign to me'}
             </button>
             {mutation.pending && (
               <p role="status">
-                Retry the pending claim to confirm its outcome.
+                Assignment is unconfirmed. Select “Retry assignment” to check.
               </p>
             )}
           </>
@@ -862,15 +917,19 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           <p>
             {value.reviewerId === actor
               ? 'You are the assigned reviewer.'
-              : 'This case is read only for you.'}
+              : 'Only the assigned reviewer can act on this case.'}
           </p>
         )}
       </section>
       <section className="case-panel">
         <h2>Participant statements</h2>
-        {state.data.statements.map((statement) => (
+        {state.data.statements.map((statement, index) => (
           <article className="case-statement" key={statement.reporterId}>
-            <h3>Participant {statement.reporterId}</h3>
+            <h3>Participant {index + 1}</h3>
+            <details className="evidence-technical">
+              <summary>Account details</summary>
+              <p>Account ID: {statement.reporterId}</p>
+            </details>
             <p className="muted">
               {formatSingaporeTime(statement.submittedAt)}
             </p>

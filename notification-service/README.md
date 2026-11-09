@@ -263,6 +263,50 @@ snapshot. Credit outcomes are separate: a courier gets both `ORDER_COMPLETED` an
 other failure is retried three times with backoff first. Dead letters keep the original key and
 name the `notification-service` group.
 
+## Pickup reminders
+
+Notification also reminds people before an errand's pickup deadline, using only the
+`OrderTransitioned` events above: `snapshot.pickupDeadline`, `toState`, `requesterId` and
+`courierId`. Order is not called and has no reminder logic.
+
+| `type` | Recipient | When | While the errand is |
+| --- | --- | --- | --- |
+| `ORDER_STILL_OPEN` | requester | 30 minutes before pickup | `OPEN` with no courier |
+| `PICKUP_DUE_SOON` | assigned courier | 15 minutes before pickup | `ACCEPTED` |
+| `PICKUP_OVERDUE` | assigned courier | at the pickup deadline | `ACCEPTED` |
+
+Texts give the deadline in campus time (Asia/Singapore), adding the date when it is not the day of the
+reminder: *Nobody has accepted "Buy coffee" yet, and pickup closes at 3:00 pm. Raising the reward or
+moving the pickup time later can help a courier take it.* / *Pick up "Buy coffee" by 3:00 pm, about 15
+minutes from now.* / *You're past the pickup time for "Buy coffee". Pick it up now, or withdraw so it
+can reopen.* Each one links to the errand and counts towards the bell like any other notification.
+
+**Arming, moving and cancelling** happens in the same transaction as each lifecycle event. After every
+event the errand's reminders are brought in line with its new state: anything the state no longer
+wants is cancelled (pickup, withdrawal, cancellation, expiry, a different courier), and anything it
+wants is armed. Moving the deadline with an `EDIT` cancels the old reminder and arms one for the new
+deadline, so an extended errand is reminded again. A reminder whose time has already passed when it
+would be armed is skipped, not sent at once (an errand posted 20 minutes before pickup gets no
+`ORDER_STILL_OPEN`). Each recipient is reminded at most once per type and deadline.
+
+**Ordering:** `notification_reminder_progress` keeps the highest `sourceSequence` applied per errand. An
+event no newer than that (a redelivery, a replay under a new `eventId`, a late duplicate) changes no
+reminder, so a cancelled reminder is never re-armed.
+
+**Sending:** a job every minute claims due reminders with `FOR UPDATE SKIP LOCKED` and, per batch in one
+transaction, stores each as a notification (source and business key `reminder:{id}`) and marks it
+`SENT`; several instances never send one twice. A reminder reached more than 30 minutes after its time
+(the service was down) is marked `MISSED` and not sent. Settled reminders and idle progress rows are
+deleted after 30 days.
+
+| Setting | Variable | Default |
+| --- | --- | --- |
+| Turn sending off (reminders are still kept up to date) | `NOTIFICATION_REMINDERS_ENABLED` | `true` |
+| Drop a reminder this late | `NOTIFICATION_REMINDERS_MAX_LATENESS` | `30m` |
+| Keep settled reminders | `NOTIFICATION_REMINDERS_RETENTION` | `30d` |
+| Batch size (1–1000) | `NOTIFICATION_REMINDERS_BATCH_SIZE` | `100` |
+| Interval | `NOTIFICATION_REMINDERS_INTERVAL_MS` | `60000` |
+
 ## Data model and delivery guarantees
 
 Flyway `V1__create_notifications.sql` (tables), `V2__retention_indexes.sql` (indexes for the

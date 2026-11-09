@@ -55,7 +55,7 @@ it('requires a reason and confirmation, omits amount and preserves the exact req
       participantIds={[target]}
     />,
   )
-  expect(screen.queryByLabelText('Whole credits')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Number of credits')).not.toBeInTheDocument()
   expect(
     screen.getByRole('button', { name: 'Review ban request' }),
   ).toBeDisabled()
@@ -69,10 +69,14 @@ it('requires a reason and confirmation, omits amount and preserves the exact req
   expect(fetcher).not.toHaveBeenCalled()
   expect(
     screen.getByRole('region', { name: 'Confirm account ban' }),
-  ).toHaveTextContent('reversible ban for Participant 1')
+  ).toHaveTextContent('ban for Participant 1')
+  expect(
+    screen.getByRole('region', { name: 'Confirm account ban' }),
+  ).toHaveTextContent('won’t be able to sign in or do anything new')
+  expect(screen.queryByText(/sessions.*until expiry/)).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Confirm ban request' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'No new account outcome is confirmed',
+    'couldn’t confirm the ban request’s outcome',
   )
   fireEvent.click(
     screen.getByRole('button', { name: 'Retry same ban request' }),
@@ -89,7 +93,7 @@ it('requires a reason and confirmation, omits amount and preserves the exact req
   expect(first.headers['Idempotency-Key']).toEqual(
     second.headers['Idempotency-Key'],
   )
-  expect(await screen.findByText('PENDING')).toBeInTheDocument()
+  expect(await screen.findByText('Awaiting confirmation')).toBeInTheDocument()
   expect(
     screen.getByRole('link', { name: 'Manage accounts and reactivation' }),
   ).toHaveAttribute('href', '/?view=users')
@@ -112,8 +116,8 @@ it('shows authoritative protected-account rejection with readable Singapore time
     />,
   )
   expect(screen.getByText(/Your own account is protected/)).toBeInTheDocument()
-  expect(screen.getByText('REJECTED')).toBeInTheDocument()
-  expect(screen.getByText(/User Service rejected/)).toBeInTheDocument()
+  expect(screen.getByText('Rejected')).toBeInTheDocument()
+  expect(screen.getByText(/Ban rejected/)).toBeInTheDocument()
 })
 it('keeps other reviewers read-only and labels UNKNOWN without declaring failure or success', () => {
   render(
@@ -128,6 +132,6 @@ it('keeps other reviewers read-only and labels UNKNOWN without declaring failure
   expect(
     screen.queryByRole('button', { name: 'Review ban request' }),
   ).not.toBeInTheDocument()
-  expect(screen.getByText('UNKNOWN')).toBeInTheDocument()
-  expect(screen.getByText(/may already have taken effect/)).toBeInTheDocument()
+  expect(screen.getByText('Outcome unconfirmed')).toBeInTheDocument()
+  expect(screen.getByText(/may already be done/)).toBeInTheDocument()
 })

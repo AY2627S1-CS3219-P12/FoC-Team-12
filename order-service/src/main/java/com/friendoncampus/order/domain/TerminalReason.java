@@ -4,6 +4,8 @@ package com.friendoncampus.order.domain;
 public enum TerminalReason {
     REQUESTER_CANCELLED_OPEN,
     REQUESTER_CANCELLED_ACCEPTED,
+    /** CANCELLED from ACCEPTED at or after the pickup deadline: the courier was late, so no compensation. */
+    REQUESTER_CANCELLED_COURIER_LATE,
     PICKUP_DEADLINE_PASSED,
     COURIER_WITHDREW_AFTER_DEADLINE,
     /** RESERVATION_FAILED: Credit's {@code INSUFFICIENT_CREDITS}. */

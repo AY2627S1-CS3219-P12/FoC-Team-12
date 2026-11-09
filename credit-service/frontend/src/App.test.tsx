@@ -232,7 +232,7 @@ describe('Credit dashboard', () => {
     await user.click(await screen.findByRole('button', { name: 'Courier' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Unable to change workspace right now. Please try again.',
+      "We couldn't switch your role. Please try again.",
     )
     expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute(
       'aria-pressed',
@@ -308,7 +308,7 @@ describe('Credit dashboard', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: 'We could not load your credits',
+        name: 'We couldn’t load your credits',
       }),
     ).toBeInTheDocument()
     expect(

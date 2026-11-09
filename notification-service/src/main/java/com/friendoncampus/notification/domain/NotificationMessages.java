@@ -1,5 +1,11 @@
 package com.friendoncampus.notification.domain;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -10,6 +16,10 @@ import tools.jackson.databind.json.JsonMapper;
 public final class NotificationMessages {
 
     private static final JsonMapper JSON = JsonMapper.builder().build();
+    /** Deadlines are shown in campus time; the API stores and returns UTC. */
+    private static final ZoneId CAMPUS_TIME = ZoneId.of("Asia/Singapore");
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH);
+    private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH);
 
     private NotificationMessages() {
     }
@@ -32,6 +42,13 @@ public final class NotificationMessages {
             case ORDER_PICKED_UP -> "Your courier picked up " + title(params) + ".";
             case ORDER_DELIVERED -> "Your courier delivered " + title(params) + ". Please confirm you received it.";
             case ORDER_COMPLETED -> "The requester confirmed they received " + title(params) + ".";
+            case ORDER_STILL_OPEN -> "Nobody has accepted " + title(params) + " yet, and pickup closes at "
+                    + deadline(params) + ". Raising the reward or moving the pickup time later can help a courier"
+                    + " take it.";
+            case PICKUP_DUE_SOON -> "Pick up " + title(params) + " by " + deadline(params)
+                    + ", about 15 minutes from now.";
+            case PICKUP_OVERDUE -> "You're past the pickup time for " + title(params)
+                    + ". Pick it up now, or withdraw so it can reopen.";
         };
     }
 
@@ -47,6 +64,16 @@ public final class NotificationMessages {
             case "CREDIT_RESERVATION_TIMEOUT" -> "Credit didn't confirm your credits in time";
             default -> "the credits couldn't be reserved";
         };
+    }
+
+    /** The pickup deadline in campus time, for example "3:00 pm" or "3:00 pm on 12 Nov". */
+    private static String deadline(JsonNode params) {
+        ZonedDateTime deadline = OffsetDateTime.parse(params.path("pickupDeadline").asString())
+                .atZoneSameInstant(CAMPUS_TIME);
+        ZonedDateTime remindedAt = OffsetDateTime.parse(params.path("remindedAt").asString())
+                .atZoneSameInstant(CAMPUS_TIME);
+        String time = deadline.format(TIME).toLowerCase(Locale.ROOT);
+        return deadline.toLocalDate().equals(remindedAt.toLocalDate()) ? time : time + " on " + deadline.format(DAY);
     }
 
     private static String credits(JsonNode params) {

@@ -107,10 +107,12 @@ it('leads with readable activity and participants, keeping diagnostics collapsed
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(timeline())))
   render(<EvidencePanel caseId={caseId} orderId={orderId} />)
   expect(
-    await screen.findByText('Complete through verified coverage limits'),
+    await screen.findByText('History verified up to recorded checkpoints'),
   ).toBeVisible()
-  expect(screen.getByText(/Newer activity may not be included/)).toBeVisible()
-  expect(screen.getByText('Historical courier')).toBeVisible()
+  expect(
+    screen.getByText(/Very recent activity may not show yet/),
+  ).toBeVisible()
+  expect(screen.getByText('Courier assigned during this errand')).toBeVisible()
   expect(screen.getByText(/Assigned .*Unassigned/)).toBeVisible()
   expect(screen.getByRole('heading', { name: 'Case opened' })).toBeVisible()
   expect(screen.getByText('Recorded actor: Courier 1')).toBeVisible()
@@ -145,11 +147,13 @@ it('does not equate an empty page and absent gaps with complete coverage', async
   data.records = []
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(data)))
   render(<EvidencePanel caseId={caseId} orderId={orderId} />)
-  expect(await screen.findByText('Coverage unknown')).toBeVisible()
-  expect(screen.getByText(/empty result is not proof/)).toBeVisible()
-  expect(screen.getByText(/No producer checkpoints/)).not.toBeVisible()
   expect(
-    screen.queryByText('Complete through verified coverage limits'),
+    await screen.findByText('History completeness unverified'),
+  ).toBeVisible()
+  expect(screen.getByText(/empty page does not prove/)).toBeVisible()
+  expect(screen.getByText(/No source checkpoints/)).not.toBeVisible()
+  expect(
+    screen.queryByText('History verified up to recorded checkpoints'),
   ).not.toBeInTheDocument()
 })
 it('uses consistent account labels across assignment periods and typed activity without inventing names', async () => {
@@ -244,10 +248,12 @@ it('keeps absent actors and accounts outside supplied history explicit', async (
   expect(await screen.findByText('Actor not recorded')).toBeVisible()
   expect(
     screen.getByText(
-      'Recorded actor: Account outside supplied participant history',
+      'Recorded actor: Account not identified in available participant history',
     ),
   ).toBeVisible()
-  expect(screen.getByRole('heading', { name: 'Case claimed' })).toBeVisible()
+  expect(
+    screen.getByRole('heading', { name: 'Reviewer assigned' }),
+  ).toBeVisible()
 })
 it('shows test-only markers from supplied fixtures and never substitutes them on failure', async () => {
   const data = timeline()
@@ -265,7 +271,7 @@ it('shows test-only markers from supplied fixtures and never substitutes them on
   ).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Refresh evidence' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'evidence service is unavailable',
+    'couldn’t load all the evidence',
   )
   expect(
     screen.queryByText('TEST ONLY — synthetic errand timeline'),
@@ -295,7 +301,9 @@ it('shows known gaps and projection lag', async () => {
     screen.getByText('Errand history: Some activity is missing'),
   ).toBeVisible()
   expect(screen.getByText(/Sequences 1–4/)).not.toBeVisible()
-  expect(screen.getByText(/Some history is still catching up/)).toBeVisible()
+  expect(
+    screen.getByText(/Some activity has not reached the timeline yet/),
+  ).toBeVisible()
   expect(screen.getByText(/Behind/)).not.toBeVisible()
 })
 it('retries an unavailable page with the same cursor, preserving records and deduplicating overlap', async () => {
@@ -314,12 +322,12 @@ it('retries an unavailable page with the same cursor, preserving records and ded
     await screen.findByRole('button', { name: 'Load more evidence' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'cannot verify whether the evidence is complete',
+    'this view may be incomplete',
   )
-  expect(
-    screen.getByText('Coverage cannot currently be verified'),
-  ).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: 'Retry evidence page' }))
+  expect(screen.getByText('History completeness unverified')).toBeVisible()
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Try loading evidence again' }),
+  )
   expect(await screen.findByText('2 loaded')).toBeVisible()
   expect(fetcher.mock.calls[1]![0]).toBe(fetcher.mock.calls[2]![0])
   expect(fetcher.mock.calls[1]![0]).toContain('cursor=opaque%2B%2Fcursor')
@@ -344,10 +352,10 @@ it('never merges a changed revision and restarts from the first page', async () 
     await screen.findByRole('button', { name: 'Load more evidence' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Restart the timeline',
+    'Reload the timeline',
   )
   expect(screen.getByText('1 loaded')).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: 'Restart timeline' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Reload timeline' }))
   await waitFor(() =>
     expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
   )
@@ -406,10 +414,10 @@ it.each([
     await screen.findByRole('button', { name: 'Load more evidence' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Restart the timeline',
+    'Reload the timeline',
   )
   expect(screen.getByText('1 loaded')).toBeVisible()
   expect(
-    screen.queryByText('Complete through verified coverage limits'),
+    screen.queryByText('History verified up to recorded checkpoints'),
   ).not.toBeInTheDocument()
 })

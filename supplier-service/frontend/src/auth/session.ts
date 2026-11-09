@@ -78,9 +78,9 @@ export async function replaceSessionRole(role: WorkspaceRole): Promise<AuthSessi
     },
     body: JSON.stringify({ role }),
   })
-  if (!response.ok) throw new Error('Unable to change workspace right now. Please try again.')
+  if (!response.ok) throw new Error("We couldn't switch your role. Please try again.")
   const replacement = normalizeSession(await response.json())
-  if (!replacement) throw new Error('Unable to change workspace right now. Please try again.')
+  if (!replacement) throw new Error("We couldn't switch your role. Please try again.")
   return saveSession(replacement)
 }
 

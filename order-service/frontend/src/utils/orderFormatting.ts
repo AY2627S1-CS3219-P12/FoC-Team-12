@@ -27,20 +27,20 @@ export function reservationFailure(terminalReason: string | null): {
     return {
       label: 'Not enough credits',
       title: 'Not enough credits',
-      detail: "You didn't have enough available credits to reserve the reward, so the errand wasn't posted.",
+      detail: "You didn't have enough credits for this reward.",
       setUpCredits: false,
     }
   if (terminalReason === 'CREDIT_ACCOUNT_NOT_FOUND')
     return {
       label: 'No credit account',
       title: 'Credit account not set up',
-      detail: "Your credit account wasn't set up yet, so the errand wasn't posted.",
+      detail: 'Set up your credits, then post it again.',
       setUpCredits: true,
     }
   return {
     label: 'Not posted',
-    title: "Credits couldn't be reserved",
-    detail: "Credit couldn't reserve the reward, so the errand wasn't posted. Please post it again.",
+    title: 'Errand not posted',
+    detail: 'Something went wrong. Please post it again.',
     setUpCredits: false,
   }
 }

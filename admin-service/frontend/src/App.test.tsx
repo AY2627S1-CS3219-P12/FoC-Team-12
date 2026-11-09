@@ -3,7 +3,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { App } from './App'
 
 // The header bell polls on its own and has its own tests; keep it out of these fetch sequences.
-vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
+vi.mock('./components/NotificationBell', () => ({
+  NotificationBell: () => null,
+}))
 function mockFetch(fetcher: (url: string, options?: RequestInit) => unknown) {
   vi.stubGlobal('fetch', (url: string, options?: RequestInit) =>
     url.startsWith('/api/admin/cases?')
@@ -53,9 +55,9 @@ it('opens tools only after live authorization', async () => {
     }),
   )
   render(<App />)
-  expect(await screen.findByText('Access verified')).toBeVisible()
+  expect(await screen.findByText('Administration tools')).toBeVisible()
   expect(screen.getByRole('heading', { name: /Manage users/ })).toBeVisible()
-  const queue = screen.getByRole('heading', { name: /Report queue/ })
+  const queue = screen.getByRole('heading', { name: /Case queue/ })
   const tools = screen.getByRole('heading', { name: 'Administration tools' })
   expect(queue).toBeVisible()
   expect(
@@ -105,7 +107,7 @@ it('removes successful access when the identity changes', async () => {
       .mockResolvedValue({ ok: false, status: 403 }),
   )
   render(<App />)
-  await screen.findByText('Access verified')
+  await screen.findByText('Administration tools')
   const s = JSON.parse(sessionStorage.getItem('foc.user-session')!)
   s.accessToken = 'participant-token'
   s.userId = 'participant'
@@ -113,7 +115,7 @@ it('removes successful access when the identity changes', async () => {
   sessionStorage.setItem('foc.user-session', JSON.stringify(s))
   fireEvent(window, new Event('foc:session-changed'))
   await waitFor(() =>
-    expect(screen.queryByText('Access verified')).not.toBeInTheDocument(),
+    expect(screen.queryByText('Administration tools')).not.toBeInTheDocument(),
   )
   expect(
     await screen.findByText('This workspace is for administrators'),
@@ -139,7 +141,7 @@ it('switches workspace through User and rechecks Admin access with the replaceme
   await screen.findByText('This workspace is for administrators')
   fireEvent.click(screen.getByLabelText('Open account menu for Darryl'))
   fireEvent.click(screen.getByRole('button', { name: 'Switch to Admin' }))
-  expect(await screen.findByText('Access verified')).toBeVisible()
+  expect(await screen.findByText('Administration tools')).toBeVisible()
   expect(fetcher).toHaveBeenCalledWith(
     '/api/users/me/session-role',
     expect.objectContaining({
@@ -170,9 +172,9 @@ it('keeps access denied when User cannot change the workspace', async () => {
   fireEvent.click(screen.getByLabelText('Open account menu for Darryl'))
   fireEvent.click(screen.getByRole('button', { name: 'Switch to Admin' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Unable to change workspace',
+    "We couldn't switch your role",
   )
-  expect(screen.queryByText('Access verified')).not.toBeInTheDocument()
+  expect(screen.queryByText('Administration tools')).not.toBeInTheDocument()
   expect(
     screen.queryByText('Open account management →'),
   ).not.toBeInTheDocument()

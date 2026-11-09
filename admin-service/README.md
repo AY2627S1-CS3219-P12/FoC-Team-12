@@ -183,7 +183,10 @@ a compatible queue entry. `/admin/cases/{caseId}` has one styled return link to 
 Background eligibility rechecks preserve the current filters and page while successful;
 denial/unavailability removes protected content. Every API request still authorizes locally.
 
-Participant reporting is an errand workflow, not an administration tool. There is no Reports
+Participant reporting is an errand workflow, not an administration tool. There is no
+navigation link to the Admin dashboard for signed-out or Requester/Courier sessions; the
+shared header shows Admin only in active Admin mode, including after session changes.
+There is no Reports
 item in Admin navigation, no mixed participant/admin subnavigation and no standalone UUID
 entry or report lookup form. `/admin/reports/new?orderId={uuid}` accepts the selected errand
 context and displays it without an editable ID field. Missing/invalid context shows a return
@@ -732,3 +735,5 @@ Configure ADMIN_USER_URL, ADMIN_SERVICE_KEY_ID and
 ADMIN_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
 and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
 configuration fails closed even when administrative Kafka consumers are disabled.
+
+Participant report pages use waiting-for-review, under-review and closed labels, with brief next-step guidance. Reviewer IDs and case revisions stay in the admin view. Displayed API diagnostics use concise recovery guidance while preserving the original errors for authorization and safe retries. Case assignment remains manual; no response-time or case-notification promise is implied.

@@ -76,8 +76,8 @@ export function SupplierDetailPage() {
       <div className={styles.page}>
         <BackLink to={backTo} />
         <StatePanel
-          message="The location link does not contain a valid supplier ID."
-          title="Invalid location link"
+          message="This link doesn’t look right."
+          title="Location not found"
           tone="error"
         />
       </div>
@@ -111,8 +111,8 @@ export function SupplierDetailPage() {
           actionLabel={notFound ? undefined : 'Try again'}
           message={
             notFound
-              ? 'This campus location does not exist or has been permanently removed.'
-              : 'Check the connection and try loading this location again.'
+              ? 'This location doesn’t exist or was removed.'
+              : 'Please try again.'
           }
           onAction={notFound ? undefined : () => void supplierQuery.refetch()}
           title={
@@ -132,7 +132,7 @@ export function SupplierDetailPage() {
       <BackLink to={backTo} />
       {supplier.status === 'INACTIVE' && (
         <StatePanel
-          message="This historical location is no longer included in the public directory."
+          message="This location is no longer listed."
           title="Location currently unavailable"
           tone="info"
         />

@@ -142,7 +142,10 @@ export async function fetchReportContext(
         !['OPEN', 'UNDER_REVIEW', 'RESOLVED'].includes(value.state || '')
       : value.caseId !== null || value.state !== null)
   ) {
-    throw new OrderApiError(503, 'Reporting access could not be verified.')
+    throw new OrderApiError(
+      503,
+      'We can’t load reports right now. Please try again.',
+    )
   }
   return value
 }

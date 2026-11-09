@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -42,7 +42,11 @@ it('clears the prior report link when identity changes and offers sign-in after 
     signIn(STRANGER_ID, 'COURIER')
     window.dispatchEvent(new Event(sessionChangedEvent))
   })
-  expect(await screen.findByText(/Reporting is not available/)).toBeVisible()
+  await waitFor(() => {
+    expect(
+      screen.queryByText('Need help with this errand?'),
+    ).not.toBeInTheDocument()
+  })
   expect(
     screen.queryByRole('link', { name: 'View your report' }),
   ).not.toBeInTheDocument()
@@ -120,7 +124,7 @@ it('distinguishes an unavailable dependency from ineligibility and retries', asy
   )
   show()
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'temporarily unavailable',
+    'We can’t load reports right now',
   )
   expect(
     screen.queryByRole('link', { name: 'Report an issue' }),
@@ -129,7 +133,11 @@ it('distinguishes an unavailable dependency from ineligibility and retries', asy
   await userEvent
     .setup()
     .click(screen.getByRole('button', { name: 'Retry report access' }))
-  expect(await screen.findByText(/Reporting is not available/)).toBeVisible()
+  await waitFor(() => {
+    expect(
+      screen.queryByText('Need help with this errand?'),
+    ).not.toBeInTheDocument()
+  })
 })
 it('fails closed on malformed context rather than offering reporting', async () => {
   signIn(REQUESTER_ID, 'REQUESTER')
@@ -141,6 +149,6 @@ it('fails closed on malformed context rather than offering reporting', async () 
   )
   show()
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'temporarily unavailable',
+    'We can’t load reports right now',
   )
 })

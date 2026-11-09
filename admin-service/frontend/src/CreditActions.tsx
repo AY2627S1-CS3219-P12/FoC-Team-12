@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CaseError,
+  caseErrorMessage,
   isUuid,
   request,
   type AdminAction,
@@ -48,20 +49,21 @@ const actionFailure = (e: unknown, ban: boolean) =>
   e instanceof CaseError &&
   (e.message.startsWith('You cannot review this case because') ||
     e.message.startsWith('Reviewer independence could not be verified.'))
-    ? e.message
+    ? caseErrorMessage(e)
     : e instanceof CaseError && [401, 403, 404].includes(e.status)
-      ? 'You no longer have access to these case actions. Refresh case access.'
+      ? e.status === 401
+        ? 'You’ve been signed out. Please sign in again.'
+        : 'These actions aren’t available to you. Refresh the case to check.'
       : e instanceof CaseError && e.status === 409
-        ? 'This request conflicts with the current case or an earlier operation. Refresh case access; do not create a replacement while its outcome is uncertain.'
-        : `The action service is unavailable. No new ${ban ? 'account' : 'financial'} outcome is confirmed. Retry an unconfirmed submission with the same request.`
+        ? 'This case just changed. Refresh and check its actions first — don’t send it again yet.'
+        : `We couldn’t confirm the ${ban ? 'ban' : 'correction'} request’s outcome. Check its status or retry the same submission. Do not submit a replacement.`
 const explanations = {
-  PENDING:
-    'Accepted by Admin. Waiting for Credit to confirm the financial outcome.',
+  PENDING: 'Correction sent. Waiting for confirmation.',
   UNKNOWN:
-    'Confirmation is overdue. This may already have taken effect. Recovery retains the original operation; do not submit a replacement.',
-  SUCCEEDED: 'Credit confirmed that this correction was applied.',
+    'This is taking longer than usual and may already be done. Refresh its status — don’t send it again.',
+  SUCCEEDED: 'Credit correction applied.',
   REJECTED:
-    'Credit rejected this correction. This operation will not be retried as a new correction.',
+    'Correction rejected. No credits were changed. See the reason below.',
 }
 export function CreditActions({
   summary,
@@ -84,13 +86,10 @@ export function CreditActions({
   const storageKey = `foc.${ban ? 'ban' : 'credit'}-action-pending.${actorId}.${summary.caseId}`
   const labels = ban
     ? {
-        PENDING:
-          'Accepted by Admin. Waiting for User Service to confirm the account outcome.',
+        PENDING: 'Ban sent. Waiting for confirmation.',
         UNKNOWN: explanations.UNKNOWN,
-        SUCCEEDED:
-          'User Service confirmed this ban request. The account can later be reactivated through User management.',
-        REJECTED:
-          'User Service rejected this request. Account access was not changed by this operation.',
+        SUCCEEDED: 'Account banned. You can reactivate it from Manage users.',
+        REJECTED: 'Ban rejected. The account wasn’t changed.',
       }
     : explanations
   const [pending, setPending] = useState<Pending | null>(() => {
@@ -253,7 +252,7 @@ export function CreditActions({
       sessionStorage.setItem(storageKey, JSON.stringify(operation))
     } catch {
       setError(
-        'Your browser could not preserve this request for safe retry. Nothing was submitted.',
+        'Nothing was sent. Allow this site to use browser storage, then try again.',
       )
       return
     }
@@ -320,7 +319,7 @@ export function CreditActions({
             {ban ? 'Account safety' : 'Administrative correction'}
           </p>
           <h2 id={headingId}>
-            {ban ? 'Account ban requests' : 'Credit additions and subtractions'}
+            {ban ? 'Account ban requests' : 'Credit corrections'}
           </h2>
         </div>
         <button
@@ -328,13 +327,13 @@ export function CreditActions({
           disabled={busy || denied}
           onClick={() => setRefresh((n) => n + 1)}
         >
-          {ban ? 'Refresh ban status' : 'Refresh action status'}
+          {ban ? 'Refresh ban status' : 'Refresh correction status'}
         </button>
       </div>
       <p>
         {ban
-          ? 'Request a reversible ban for a reporting participant. User Service checks current administrator access and protects self-access and the final active administrator.'
-          : 'These corrections add or remove available credits independently of an errand’s reward. Credit Service decides and confirms the financial outcome.'}
+          ? 'Ban a participant who reported this errand. You can’t ban yourself or the last admin.'
+          : 'Add or remove a participant’s available credits. It’s only done once it’s confirmed.'}
       </p>
       {error && (
         <p role="alert" className="workspace-error">
@@ -349,8 +348,8 @@ export function CreditActions({
       )}
       {historyUnavailable && (
         <p role="alert" className="workspace-error">
-          Action history could not be verified. Refresh the case before
-          requesting a new action.
+          We couldn’t load this case’s actions. Refresh before starting a new
+          one.
         </p>
       )}
       {ban && (
@@ -375,12 +374,19 @@ export function CreditActions({
                     <span
                       className={`action-state action-${a.status.toLowerCase()}`}
                     >
-                      {a.status}
+                      {
+                        {
+                          PENDING: 'Awaiting confirmation',
+                          UNKNOWN: 'Outcome unconfirmed',
+                          SUCCEEDED: 'Completed',
+                          REJECTED: 'Rejected',
+                        }[a.status]
+                      }
                     </span>
                   </div>
                   <p>{labels[a.status]}</p>
                   <p>
-                    Target:{' '}
+                    Participant:{' '}
                     {eligible.includes(a.targetUserId)
                       ? `Participant ${eligible.indexOf(a.targetUserId) + 1}`
                       : 'Case participant'}
@@ -396,12 +402,16 @@ export function CreditActions({
                           LAST_ADMIN_PROTECTED:
                             'The final active administrator is protected.',
                           ACTOR_NOT_AUTHORIZED:
-                            'The requesting administrator no longer has active Admin access.',
+                            'You no longer have admin access.',
                           INVALID_ACCOUNT_STATE:
                             'This account cannot be banned in its current state.',
+                          INSUFFICIENT_AVAILABLE_CREDITS:
+                            'This account doesn’t have enough credits for that.',
+                          BALANCE_OVERFLOW:
+                            'That would go over the balance limit.',
                         } as Record<string, string>
                       )[a.reasonCode] ||
-                        a.reasonCode.toLowerCase().replaceAll('_', ' ')}
+                        'This was rejected. See the details for why.'}
                     </p>
                   )}
                   <p className="evidence-meta">
@@ -422,6 +432,7 @@ export function CreditActions({
                   <details className="evidence-technical">
                     <summary>Operation details</summary>
                     <p>Operation ID: {a.operationId}</p>
+                    {a.reasonCode && <p>Reason code: {a.reasonCode}</p>}
                     <p>Target account ID: {a.targetUserId}</p>
                   </details>
                 </li>
@@ -486,7 +497,7 @@ export function CreditActions({
                       Subtract credits
                     </label>
                   </fieldset>
-                  <label htmlFor={`${kind}-amount`}>Whole credits</label>
+                  <label htmlFor={`${kind}-amount`}>Number of credits</label>
                   <input
                     id={`${kind}-amount`}
                     type="number"
@@ -514,8 +525,8 @@ export function CreditActions({
               />
               {pending && (
                 <p role="status">
-                  Submission is unconfirmed. Retry this exact request to recover
-                  its original operation. Do not create a replacement.
+                  Submission is unconfirmed. Retry the same request below; do
+                  not submit a replacement.
                 </p>
               )}
               {confirm && !pending ? (
@@ -536,8 +547,8 @@ export function CreditActions({
                   </h3>
                   <p>
                     {ban
-                      ? `Request a reversible ban for Participant ${eligible.indexOf(target) + 1}. User blocks future sign-ins; existing sessions in other services may remain valid until expiry.`
-                      : `${direction === 'add' ? 'Add' : 'Subtract'} ${numeric} credits ${direction === 'add' ? 'to' : 'from'} Participant ${eligible.indexOf(target) + 1}. This requests a financial correction; it is not a reward adjustment.`}
+                      ? `Request a ban for Participant ${eligible.indexOf(target) + 1}? They won’t be able to sign in or do anything new.`
+                      : `${direction === 'add' ? 'Add' : 'Subtract'} ${numeric} credits ${direction === 'add' ? 'to' : 'from'} Participant ${eligible.indexOf(target) + 1}. This changes available credits independently of the errand reward.`}
                   </p>
                   <p className="statement-text">{reason.trim()}</p>
                   <div className="conversation-picker">
@@ -578,15 +589,10 @@ export function CreditActions({
           ) : (
             <p>
               {ban
-                ? 'Only the assigned reviewer can request bans while this case is under review.'
-                : 'Only the assigned reviewer can request corrections while the case is under review.'}
+                ? 'Only the assigned reviewer can ban participants on this case.'
+                : 'Only the assigned reviewer can adjust credits on this case.'}
             </p>
           )}
-          <p className="case-scope-note">
-            Targets are limited to verified reporting participants. Historical
-            non-reporters await integration. Pending or unknown outcomes are not
-            proof of success or rejection.
-          </p>
         </>
       )}
     </section>

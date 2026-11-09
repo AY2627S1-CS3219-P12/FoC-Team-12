@@ -26,6 +26,12 @@ public enum NotificationType {
     ORDER_DELIVERED,
     /** To COMPLETED: the requester confirmed receipt; told to the courier. */
     ORDER_COMPLETED,
+    /** Reminder: nobody has accepted the requester's open errand, 30 minutes before pickup. */
+    ORDER_STILL_OPEN,
+    /** Reminder: the assigned courier has 15 minutes left to pick up. */
+    PICKUP_DUE_SOON,
+    /** Reminder: the assigned courier has reached the pickup deadline without picking up. */
+    PICKUP_OVERDUE,
     /** {@code CreditAccountAllocated}: the new account received its starting credits. */
     CREDITS_WELCOME,
     /** {@code CreditSettled}: the courier was paid the reward for a completed errand. */

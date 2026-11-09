@@ -33,10 +33,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   ORDER_EXPIRED: 'This errand expired before it could be accepted.',
   SELF_ACCEPTANCE_FORBIDDEN: "You can't accept your own errand.",
   REWARD_ADJUSTMENT_PENDING:
-    'The reward is being updated. Try again in a moment.',
+    'The reward is still being saved. Try again in a moment.',
   CANCELLATION_NOT_ALLOWED: "This errand can't be cancelled after pickup.",
-  NOT_ASSIGNED_COURIER: 'Only the assigned courier can do this.',
-  NOT_ORDER_REQUESTER: 'Only the requester can do this.',
+  NOT_ASSIGNED_COURIER: "This errand isn't yours to update.",
+  NOT_ORDER_REQUESTER: "This errand isn't yours to update.",
   INVALID_STATE_TRANSITION:
     'This errand has changed. The latest status is shown.',
 }
@@ -45,7 +45,7 @@ function errorText(error: unknown): string {
   if (error instanceof OrderApiError) {
     // A 403 without a code comes from the session-role check, not the order itself.
     if (error.status === 403 && !error.code)
-      return 'Switch to the right role in the header to do this.'
+      return 'Switch your role at the top of the page to do this.'
     return (error.code && ERROR_MESSAGES[error.code]) || error.message
   }
   return 'Something went wrong. Please try again.'
@@ -216,7 +216,7 @@ export function ErrandPage() {
                     ask({
                       action: 'withdraw',
                       title: 'Withdraw from this errand?',
-                      body: 'Before the pickup deadline it goes back to other couriers. After the deadline it expires.',
+                      body: 'Another courier can pick it up instead.',
                       label: 'Withdraw',
                     })
                   }
@@ -242,13 +242,13 @@ export function ErrandPage() {
                   ask({
                     action: 'complete',
                     title: 'Confirm you received it?',
-                    body: `This completes the errand and transfers ${credits(order.creditReward)} to your courier.`,
-                    label: `Confirm receipt · Transfer ${credits(order.creditReward)}`,
+                    body: `Your courier gets ${credits(order.creditReward)}.`,
+                    label: `Yes, pay ${credits(order.creditReward)}`,
                   })
                 }
                 type="button"
               >
-                Confirm receipt · Transfer {credits(order.creditReward)}
+                I got it · Pay {credits(order.creditReward)}
               </button>
             )}
             {view === 'requester' &&
@@ -278,10 +278,14 @@ export function ErrandPage() {
                     ask({
                       action: 'cancel',
                       title: 'Cancel this errand?',
+                      // Before the pickup deadline the courier is compensated; after it they're late.
                       body:
-                        order.state === 'ACCEPTED'
-                          ? 'A courier has accepted it, so they receive 20% of the reward as compensation.'
-                          : 'Your reserved credits are returned in full.',
+                        order.state === 'ACCEPTED' &&
+                        Date.now() < Date.parse(order.pickupDeadline)
+                          ? 'Your courier gets 20% of the reward for their time.'
+                          : order.state === 'ACCEPTED'
+                            ? "Your courier is late, so you'll get all your credits back."
+                            : "You'll get all your credits back.",
                       label: 'Cancel errand',
                     })
                   }
@@ -294,10 +298,12 @@ export function ErrandPage() {
         </section>
         <SidePanel order={order} view={view} />
       </div>
-      <ErrandReportPanel
-        key={`${session?.userId}.${session?.role}.${orderId}`}
-        orderId={orderId}
-      />
+      {view !== 'browser' && (
+        <ErrandReportPanel
+          key={`${session?.userId}.${session?.role}.${orderId}`}
+          orderId={orderId}
+        />
+      )}
       <ConfirmDialog
         body={confirming?.body ?? ''}
         busy={action.isPending}
@@ -323,11 +329,11 @@ function BrowserHeading({ order }: { order: Order }) {
 function CourierHeading({ order }: { order: Order }) {
   const next: Partial<Record<Order['state'], string>> = {
     ACCEPTED:
-      'Next: collect the item. Only you, the assigned courier, can mark pickup.',
+      'Next: pick up the item.',
     PICKED_UP:
-      'Next: deliver it to the drop-off point, then mark it as delivered.',
+      'Next: bring it to the drop-off point.',
     DELIVERED:
-      'Waiting for the requester to confirm receipt. Your reward is released then.',
+      "Delivered. You'll get your reward once they confirm.",
   }
   return (
     <header className="errand-heading">
@@ -348,11 +354,8 @@ function CourierHeading({ order }: { order: Order }) {
 
 function RequesterHeading({ order }: { order: Order }) {
   const headings: Record<Order['state'], [string, string]> = {
-    PENDING_CREDIT: [
-      'Reserving your credits',
-      'Your errand opens once the credits are reserved.',
-    ],
-    OPEN: ['Waiting for a courier', 'Your errand is visible to couriers.'],
+    PENDING_CREDIT: ['Posting your errand', 'This only takes a moment.'],
+    OPEN: ['Waiting for a courier', 'Couriers can see your errand now.'],
     ACCEPTED: ['A courier is on the way', 'Your courier accepted the errand.'],
     PICKED_UP: [
       'Your item has been picked up',
@@ -362,12 +365,9 @@ function RequesterHeading({ order }: { order: Order }) {
       'Have you received your item?',
       'Your courier marked this errand as delivered.',
     ],
-    COMPLETED: [
-      'Errand completed',
-      'You confirmed receipt and the reward was transferred.',
-    ],
+    COMPLETED: ['Errand completed', 'Thanks! Your courier has been paid.'],
     CANCELLED: ['Errand cancelled', 'This errand was cancelled.'],
-    EXPIRED: ['Errand expired', 'Nobody picked it up before the deadline.'],
+    EXPIRED: ['Errand expired', 'Nobody picked it up in time.'],
     RESERVATION_FAILED: ['', ''],
   }
   const failure =
@@ -378,12 +378,20 @@ function RequesterHeading({ order }: { order: Order }) {
   const creditTimedOut =
     order.state === 'EXPIRED' &&
     order.terminalReason === 'CREDIT_RESERVATION_TIMEOUT'
+  const courierLate =
+    order.state === 'CANCELLED' &&
+    order.terminalReason === 'REQUESTER_CANCELLED_COURIER_LATE'
   const [title, subtitle] = failure
     ? [failure.title, failure.detail]
-    : creditTimedOut
+    : courierLate
+      ? [
+          'Errand cancelled',
+          'Your courier was late, so you got all your credits back.',
+        ]
+      : creditTimedOut
       ? [
           'Errand not posted',
-          "Credit didn't confirm your reservation in time; any credits held are being returned.",
+          "We couldn't post it this time. Your credits are safe.",
         ]
       : headings[order.state]
   return (
@@ -402,15 +410,13 @@ function RequesterHeading({ order }: { order: Order }) {
       )}
       {order.state === 'DELIVERED' && (
         <div className="notice notice-warn">
-          <strong>Confirm only after you receive the items</strong>
-          Confirming receipt completes this errand and transfers the reserved{' '}
-          {credits(order.creditReward)} to your courier.
+          <strong>Only confirm once you have your item</strong>
+          Your courier then gets {credits(order.creditReward)}.
         </div>
       )}
       {order.pendingCreditReward !== null && (
         <div className="notice notice-next">
-          Reward change to {credits(order.pendingCreditReward)} is waiting for
-          Credit to confirm.
+          Saving your new reward of {credits(order.pendingCreditReward)}…
         </div>
       )}
     </header>
@@ -422,7 +428,7 @@ function SidePanel({ order, view }: { order: Order; view: View }) {
     return (
       <aside aria-labelledby="earn-heading" className="card">
         <h2 id="earn-heading">Earn {credits(order.creditReward)}</h2>
-        <p>The reward transfers after the requester confirms receipt.</p>
+        <p>You get paid once the requester has their item.</p>
         <dl className="facts">
           <dt>Reward</dt>
           <dd>{credits(order.creditReward)}</dd>
@@ -434,10 +440,7 @@ function SidePanel({ order, view }: { order: Order; view: View }) {
             />
           </dd>
         </dl>
-        <p>
-          Item payments are handled outside this platform. Credits reward the
-          errand itself.
-        </p>
+        <p>If the item costs money, settle that with the requester directly.</p>
       </aside>
     )
   }
@@ -447,7 +450,7 @@ function SidePanel({ order, view }: { order: Order; view: View }) {
       rewardLabel={view === 'courier' ? 'Your reward' : 'Reserved reward'}
     >
       {view === 'courier' && (
-        <p>Credits remain reserved until the requester confirms receipt.</p>
+        <p>You get paid once the requester has their item.</p>
       )}
     </ProgressCard>
   )

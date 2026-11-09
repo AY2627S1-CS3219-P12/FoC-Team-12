@@ -200,8 +200,9 @@ public class Order {
     }
 
     /**
-     * The requester cancels. OPEN orders release the full reservation; ACCEPTED orders clear the
-     * courier and require compensation. Cancellation is never allowed after pickup.
+     * The requester cancels. OPEN orders release the full reservation. ACCEPTED orders clear the
+     * courier: before the pickup deadline the courier is compensated; at or after it the courier is
+     * late, so the reservation is released in full instead. Cancellation is never allowed after pickup.
      */
     public OrderTransition cancel(UUID callerId, OffsetDateTime now) {
         if (!requesterId.equals(callerId)) {
@@ -224,6 +225,12 @@ public class Order {
         }
         UUID formerCourier = courierId;
         courierId = null;
+        if (isPastDeadline(now)) {
+            // Like a ride app's free cancellation when the driver is late: the courier missed the
+            // pickup deadline, so the requester gets everything back.
+            return moveTo(OrderAction.CANCEL, OrderState.CANCELLED, callerId, ActorRole.REQUESTER, formerCourier,
+                    TerminalReason.REQUESTER_CANCELLED_COURIER_LATE, CreditEffect.RELEASE, "OrderCancelled", now);
+        }
         return moveTo(OrderAction.CANCEL, OrderState.CANCELLED, callerId, ActorRole.REQUESTER, formerCourier,
                 TerminalReason.REQUESTER_CANCELLED_ACCEPTED, CreditEffect.COMPENSATE, "OrderCancelled", now);
     }

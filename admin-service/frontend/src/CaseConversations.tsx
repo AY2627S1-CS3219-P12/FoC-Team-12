@@ -21,11 +21,8 @@ export function ParticipantConversationStatus({
       className="conversation-status"
       aria-label="Your private case conversation"
     >
-      <h3>Your private conversation</h3>
-      {summary.state === 'RESOLVED' && (
-        <p>This case is resolved. Any existing conversation is read-only.</p>
-      )}
-      <SavedStatus saved={saved} />
+      {!saved.references?.[0] && <h3>Messages with your admin</h3>}
+      <SavedStatus saved={saved} participantView />
       {saved.references?.[0] ? (
         <ConversationThread
           reference={saved.references[0]}
@@ -37,15 +34,15 @@ export function ParticipantConversationStatus({
       ) : (
         saved.references && (
           <p>
-            No confirmed conversation is available. The assigned reviewer can
-            start a private conversation.
+            {summary.state === 'OPEN'
+              ? 'Your case is waiting for an admin. They’ll message you here.'
+              : summary.state === 'RESOLVED'
+                ? 'This case is closed. No messages were exchanged.'
+                : 'An admin is reviewing your case. Check here for messages and updates.'}
           </p>
         )
       )}
-      <p>
-        Only the assigned reviewer can start the conversation. Other
-        participants’ conversations are never shown here.
-      </p>
+      {!saved.references?.[0] && <p>Only you and the admins can see this.</p>}
     </section>
   )
 }
@@ -91,16 +88,23 @@ function useConfirmed(
     retry: () => setAttempt((n) => n + 1),
   }
 }
-function SavedStatus({ saved }: { saved: ReturnType<typeof useConfirmed> }) {
+function SavedStatus({
+  saved,
+  participantView = false,
+}: {
+  saved: ReturnType<typeof useConfirmed>
+  participantView?: boolean
+}) {
+  if (participantView && saved.references?.[0]) return null
   return (
     <>
       {saved.error ? (
         <p role="alert">{saved.error}</p>
       ) : (
-        !saved.references && <p role="status">Checking saved conversations…</p>
+        !saved.references && <p role="status">Checking for messages…</p>
       )}
       <button className="button-secondary" onClick={saved.retry}>
-        Refresh saved conversations
+        {participantView ? 'Check for messages' : 'Refresh conversations'}
       </button>
     </>
   )
@@ -130,16 +134,16 @@ export function CaseConversations({
       <p className="eyebrow">Private follow-up</p>
       <h2 id="case-conversations-title">Participant conversations</h2>
       <p>
-        Each participant has a separate conversation. Select one reporting
-        participant to follow up privately.
+        Select a participant who submitted a report to view or start a private
+        conversation.
       </p>
       {!assigned && (
         <p className="conversation-status">
           {summary.state === 'OPEN'
-            ? 'Claim this case before starting a conversation.'
+            ? 'Assign this case to yourself before starting a conversation.'
             : summary.state === 'RESOLVED'
-              ? 'This case is resolved. Existing conversations are read-only.'
-              : 'Only the assigned reviewer can initiate conversations.'}{' '}
+              ? 'This case is closed. Existing conversations are read-only.'
+              : 'Only the assigned reviewer can start a conversation.'}{' '}
           Select a participant to view an existing conversation.
         </p>
       )}
@@ -163,8 +167,8 @@ export function CaseConversations({
           </div>
           {!participantIds.length && (
             <p>
-              No reporting participants are available for conversation
-              initiation.
+              No participants are available to contact. Only participants who
+              submitted a report can be contacted.
             </p>
           )}
         </>
@@ -195,12 +199,8 @@ export function CaseConversations({
             participantId={selected}
           />
         ) : (
-          <p>No confirmed conversation is available for this participant.</p>
+          <p>No conversation has been started with this participant.</p>
         ))}
-      <p className="case-scope-note">
-        Conversations are available for participants who submitted a report,
-        including historical couriers.
-      </p>
     </section>
   )
 }
@@ -254,7 +254,7 @@ function ReviewerConversation({
       sessionStorage.setItem(storageKey, key)
     } catch {
       setError(
-        'Your browser could not preserve the request for safe retry. No request was sent.',
+        'Nothing was sent. Allow this site to use browser storage, then try again.',
       )
       return
     }
@@ -328,13 +328,13 @@ function ReviewerConversation({
         <>
           <p>
             {initialReference
-              ? 'Refresh access to this active case conversation. Its existing history is preserved.'
+              ? 'Refresh to check if you can reply. Your messages are kept.'
               : 'Open a private conversation with this reporting participant.'}
           </p>
           {pending && (
             <p role="status">
-              Initiation is unconfirmed. Retry the same request to confirm its
-              outcome.
+              We couldn’t confirm whether the conversation was started. Retry
+              the same request to check.
             </p>
           )}
           <button
@@ -351,7 +351,7 @@ function ReviewerConversation({
                 ? 'Retry opening conversation'
                 : initialReference
                   ? 'Refresh conversation access'
-                  : 'Open private conversation'}
+                  : 'Start private conversation'}
           </button>
         </>
       )}
