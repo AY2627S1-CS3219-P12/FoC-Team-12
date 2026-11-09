@@ -9,6 +9,7 @@ import subprocess
 
 SERVICES = ("gateway-service", "user-service", "supplier-service", "credit-service", "order-service", "admin-service",
             "notification-service", "chat-service")
+NO_IMAGE_SENTINEL = "no-image"
 
 
 def is_image_input(path, service):
@@ -24,6 +25,11 @@ def select_services(paths):
     if any(path.startswith((".github/workflows/", ".github/scripts/", "deploy/aws/")) for path in paths):
         return list(SERVICES)
     return [service for service in SERVICES if any(is_image_input(path, service) for path in paths)]
+
+
+def service_matrix(services):
+    """Keep GitHub's matrix non-empty even when the guarded publisher will be skipped."""
+    return {"service": services or [NO_IMAGE_SENTINEL]}
 
 
 def release_tag(sha, run_id, attempt):
@@ -55,7 +61,7 @@ def main():
     paths = changed_paths(os.environ.get("BEFORE_SHA", ""), sha)
     services = list(SERVICES) if paths is None else select_services(paths)
     outputs = {
-        "matrix": json.dumps({"service": services}, separators=(",", ":")),
+        "matrix": json.dumps(service_matrix(services), separators=(",", ":")),
         "has-images": str(bool(services)).lower(),
     }
     with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:

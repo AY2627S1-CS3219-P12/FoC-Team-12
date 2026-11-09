@@ -32,6 +32,11 @@ class ImagePlanTests(unittest.TestCase):
         self.assertEqual([], image_plan.select_services(["README.md", "deploy/k8s/README.md"]))
         self.assertEqual([], image_plan.select_services([]))
 
+    def test_empty_plan_still_has_a_safe_matrix_value(self):
+        self.assertEqual({"service": [image_plan.NO_IMAGE_SENTINEL]}, image_plan.service_matrix([]))
+        self.assertEqual({"service": ["order-service"]},
+                         image_plan.service_matrix(["order-service"]))
+
     def test_deployment_tag_and_service_documentation_changes_do_not_republish(self):
         self.assertEqual([], image_plan.select_services([
             "order-service/k8s/deployment.yaml", "user-service/README.md", "credit-service/AGENTS.md"]))
@@ -84,7 +89,7 @@ class ImagePlanTests(unittest.TestCase):
             self.assertIn("has-images=true", output.read_text())
             self.assertIn("order-service", summary.read_text())
 
-    def test_no_changes_writes_false_and_empty_matrix(self):
+    def test_no_changes_writes_false_and_safe_matrix(self):
         with tempfile.TemporaryDirectory() as directory:
             env = {"GITHUB_EVENT_NAME": "push", "GITHUB_REF": "refs/heads/main",
                    "GITHUB_SHA": "a" * 40, "GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1",
@@ -92,7 +97,8 @@ class ImagePlanTests(unittest.TestCase):
                    "GITHUB_STEP_SUMMARY": str(Path(directory) / "summary")}
             with patch.dict(os.environ, env, clear=True), patch("image_plan.changed_paths", return_value=[]):
                 image_plan.main()
-            self.assertIn('matrix={"service":[]}', Path(env["GITHUB_OUTPUT"]).read_text())
+            self.assertIn('matrix={"service":["no-image"]}',
+                          Path(env["GITHUB_OUTPUT"]).read_text())
             self.assertIn("has-images=false", Path(env["GITHUB_OUTPUT"]).read_text())
 
     def test_pr_and_non_main_events_are_rejected_before_git_or_outputs(self):
@@ -110,14 +116,19 @@ class WorkflowPolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.workflow = (Path(__file__).resolve().parents[1] / "workflows/ci.yml").read_text()
+        cls.gate = cls.workflow.split("\n  ci-gate:\n", 1)[1].split("\n  publish-images:\n", 1)[0]
         cls.publisher = cls.workflow.split("\n  publish-images:\n", 1)[1]
 
-    def test_publisher_waits_for_every_check(self):
+    def test_gate_waits_for_every_check_and_publisher_waits_for_gate(self):
         jobs = set(re.findall(r"^  ([a-z][a-z0-9-]*):$", self.workflow.split("\njobs:\n", 1)[1],
                               flags=re.MULTILINE))
-        dependencies = set(re.findall(r"^      - ([a-z][a-z0-9-]*)$",
-                                      self.publisher.split("    steps:", 1)[0], flags=re.MULTILINE))
-        self.assertEqual(jobs - {"publish-images"}, dependencies)
+        gate_dependencies = set(re.findall(r"^      - ([a-z][a-z0-9-]*)$", self.gate,
+                                           flags=re.MULTILINE))
+        publisher_dependencies = set(re.findall(r"^      - ([a-z][a-z0-9-]*)$",
+                                                self.publisher.split("    if:", 1)[0],
+                                                flags=re.MULTILINE))
+        self.assertEqual(jobs - {"image-plan", "ci-gate", "publish-images"}, gate_dependencies)
+        self.assertEqual({"ci-gate", "image-plan"}, publisher_dependencies)
 
     def test_publish_guard_is_main_push_and_nonempty_plan_without_bypass(self):
         guard = self.publisher.split("    runs-on:", 1)[0]

@@ -55,7 +55,7 @@ jobs:
           tag = f"sha-{os.environ['SOURCE_SHA']}-r{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
           output = pathlib.Path(os.environ['GITHUB_OUTPUT'])
           with output.open('a') as stream:
-              stream.write('matrix=' + json.dumps({'service': services}, separators=(',',':')) + '\n')
+              stream.write('matrix=' + json.dumps(image_plan.service_matrix(services), separators=(',',':')) + '\n')
               stream.write('services=' + json.dumps(services, separators=(',',':')) + '\n')
               stream.write('tag=' + tag + '\n')
           PY
