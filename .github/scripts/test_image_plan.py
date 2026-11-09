@@ -75,6 +75,19 @@ class ImagePlanTests(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):
                 image_plan.changed_paths("b" * 40, "a" * 40)
 
+    def test_deployment_diff_includes_changes_from_every_merge_parent(self):
+        responses = [
+            subprocess.CompletedProcess([], 0, stdout=b"parent-one parent-two\n"),
+            subprocess.CompletedProcess([], 0, stdout=b"order-service/src/App.java\0"),
+            subprocess.CompletedProcess([], 0, stdout=b"deploy/aws/k8s/staging/ingress.yaml\0"),
+        ]
+        with patch("image_plan.subprocess.run", side_effect=responses) as run:
+            paths = image_plan.changed_paths_from_parents()
+        self.assertEqual(["deploy/aws/k8s/staging/ingress.yaml", "order-service/src/App.java"], paths)
+        self.assertEqual(3, run.call_count)
+        self.assertEqual("parent-one", run.call_args_list[1].args[0][-2])
+        self.assertEqual("parent-two", run.call_args_list[2].args[0][-2])
+
     def test_main_writes_machine_outputs_and_human_summary(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "output"

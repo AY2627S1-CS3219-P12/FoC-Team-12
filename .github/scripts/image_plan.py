@@ -53,6 +53,20 @@ def changed_paths(before, sha):
     return result.stdout.decode("utf-8").rstrip("\0").split("\0") if result.stdout else []
 
 
+def changed_paths_from_parents(ref="HEAD"):
+    """Return the union of paths changed against every parent of a deployment commit."""
+    parent_result = subprocess.run(["git", "show", "-s", "--format=%P", ref],
+                                   check=True, capture_output=True)
+    parents = parent_result.stdout.decode("utf-8").strip().split()
+    paths = set()
+    for parent in parents:
+        result = subprocess.run(["git", "diff", "--no-renames", "--name-only", "-z", parent, ref],
+                                check=True, capture_output=True)
+        if result.stdout:
+            paths.update(result.stdout.decode("utf-8").rstrip("\0").split("\0"))
+    return sorted(paths)
+
+
 def main():
     if os.environ.get("GITHUB_EVENT_NAME") != "push" or os.environ.get("GITHUB_REF") != "refs/heads/main":
         raise ValueError("Image planning is permitted only for pushes to main")
