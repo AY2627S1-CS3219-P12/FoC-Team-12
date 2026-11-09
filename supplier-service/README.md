@@ -571,16 +571,31 @@ docker compose exec supplier-db psql -U supplier_user -d supplier_db \
 ```
 
 Flyway applies the versioned SQL files in `src/main/resources/db/migration` when the
-application starts. The current migrations create the `suppliers` table and load the 21
-baseline supplier records. The seed migration is derived from
-`data/csv/supplier-seed-data-cleaned.csv`; the original template CSV remains unchanged for
-reference. All baseline records start with `ACTIVE` status and version `0`.
+application starts. The current migrations create the `suppliers` table and load 541 active
+campus locations:
+
+- 21 food, coffee, printing and shopping locations from the original project snapshot; and
+- 520 AY 2026/27 Semester 1 teaching venues whose NUSMods venue codes have exact coordinate
+  entries.
+
+Supplier records therefore represent serviceable pickup and drop-off locations rather than only
+commercial vendors. Teaching venue hours and images remain null because the source does not
+provide them. The [seed-data documentation](../data/csv/README.md) records source provenance,
+selection rules, exclusions and the reproducible generator. All baseline records start with
+`ACTIVE` status and version `0`.
 
 Inspect the seeded records with:
 
 ```sh
 docker compose exec supplier-db psql -U supplier_user -d supplier_db \
   -c 'SELECT id, name, type, building, status FROM suppliers ORDER BY name;'
+```
+
+Inspect the source split with:
+
+```sh
+docker compose exec supplier-db psql -U supplier_user -d supplier_db \
+  -c 'SELECT type, count(*) FROM suppliers GROUP BY type ORDER BY type;'
 ```
 
 Once a migration has been applied to a shared database, do not edit it. Add a new migration
