@@ -201,6 +201,35 @@ describe('ErrandPage', () => {
       expect(screen.getByRole('dialog')).toHaveTextContent('receive 20% of the reward as compensation')
     })
 
+    it('offers a full refund when cancelling once the courier is late', async () => {
+      signIn(REQUESTER_ID, 'REQUESTER')
+      const late = order({
+        state: 'ACCEPTED',
+        courierId: COURIER_ID,
+        pickupDeadline: new Date(Date.now() - 60_000).toISOString(),
+      })
+      vi.stubGlobal('fetch', serve(late).fetchMock)
+      const user = userEvent.setup()
+      renderErrand()
+
+      await user.click(await screen.findByRole('button', { name: 'Cancel errand' }))
+
+      expect(screen.getByRole('dialog')).toHaveTextContent('returned in full')
+      expect(screen.getByRole('dialog')).not.toHaveTextContent('compensation')
+    })
+
+    it('explains a cancellation after the courier was late', async () => {
+      signIn(REQUESTER_ID, 'REQUESTER')
+      vi.stubGlobal(
+        'fetch',
+        serve(order({ state: 'CANCELLED', terminalReason: 'REQUESTER_CANCELLED_COURIER_LATE' })).fetchMock,
+      )
+      renderErrand()
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Errand cancelled' })).toBeInTheDocument()
+      expect(screen.getByText(/didn't pick it up by the deadline/)).toBeInTheDocument()
+    })
+
     it('offers Edit errand while the errand is open', async () => {
       signIn(REQUESTER_ID, 'REQUESTER')
       vi.stubGlobal('fetch', serve(order({ state: 'OPEN' })).fetchMock)

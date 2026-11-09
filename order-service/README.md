@@ -452,6 +452,7 @@ courier (session role `COURIER`), **Sys** = the expiry scheduler or a Credit rep
 | ACCEPTED | OPEN | C | Withdraws before the deadline; courier cleared, back in the pool | — | (history only) |
 | ACCEPTED | EXPIRED | C | Withdraws at or after the deadline; courier cleared | Release in full | `OrderExpired` |
 | ACCEPTED | CANCELLED | R | Before pickup; courier cleared | Courier gets `ceil(reward × 20 / 100)`, the rest returns to R | `OrderCancelled` |
+| ACCEPTED | CANCELLED | R | At or after the pickup deadline (the courier is late); courier cleared; `terminalReason` `REQUESTER_CANCELLED_COURIER_LATE` | Release in full, no compensation | `OrderCancelled` (`compensationRequired=false`) |
 | ACCEPTED | PICKED_UP | C | Late pickup allowed | — | (history only) |
 | PICKED_UP | DELIVERED | C | — | — | (history only) |
 | DELIVERED | COMPLETED | R | Confirms receipt | Full reward to C | `OrderCompleted` |
