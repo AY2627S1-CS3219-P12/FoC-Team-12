@@ -66,6 +66,16 @@ describe('reservationOutcome', () => {
     ).toMatchObject({ kind: 'failed', message: expect.stringContaining('Please try again') })
   })
 
+  it('reports that Credit did not answer in time', () => {
+    expect(
+      reservationOutcome('EXPIRED', 'CREDIT_RESERVATION_TIMEOUT', 3),
+    ).toMatchObject({
+      kind: 'failed',
+      message: expect.stringContaining("Credit didn't confirm"),
+      setUpCredits: false,
+    })
+  })
+
   it('reports a deadline that passed while waiting', () => {
     expect(reservationOutcome('EXPIRED', 'PICKUP_DEADLINE_PASSED', 3)).toMatchObject({
       kind: 'failed',

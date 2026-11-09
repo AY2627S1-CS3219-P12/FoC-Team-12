@@ -114,10 +114,16 @@ public class CreditOutcomeHandler {
         switch (eventType) {
             case "CreditReserved" -> {
                 requireCommand(command, "OrderSubmitted", eventType);
+                if (timedOutWaitingForCredit(orderId)) {
+                    return lateReservationOutcome(eventType, orderId, eventId);
+                }
                 orderService.confirmReservation(orderId, requiredUuid(data, "reservationId"), eventId);
             }
             case "CreditReservationRejected" -> {
                 requireCommand(command, "OrderSubmitted", eventType);
+                if (timedOutWaitingForCredit(orderId)) {
+                    return lateReservationOutcome(eventType, orderId, eventId);
+                }
                 orderService.rejectReservation(orderId,
                         TerminalReason.forReservationRejection(text(data, "reasonCode")), eventId);
             }
@@ -164,6 +170,28 @@ public class CreditOutcomeHandler {
                 .reduce((first, second) -> second)
                 .map(latest -> latest.getId().equals(command.getId()))
                 .orElse(false);
+    }
+
+    /**
+     * Blueprint "pending-credit timeout": the order stopped waiting before Credit answered. The row
+     * lock taken here is held until this handler's transaction commits, so a timeout committing
+     * concurrently is either seen here or waits until the normal transition below has run.
+     */
+    private boolean timedOutWaitingForCredit(UUID orderId) {
+        return orderRepository.findByIdForUpdate(orderId)
+                .map(Order::timedOutWaitingForCredit)
+                .orElse(false);
+    }
+
+    /**
+     * A valid reservation answer that arrived after the credit timeout: recorded as IGNORED, never
+     * reopening the order or entering the DLT. Credit releases a hold it made because the timeout's
+     * {@code OrderExpired} follows {@code OrderSubmitted} on the same partition.
+     */
+    private Outcome lateReservationOutcome(String eventType, UUID orderId, UUID eventId) {
+        log.info("outcome=LATE_OUTCOME_IGNORED eventId={} eventType={} orderId={} reason=CREDIT_RESERVATION_TIMEOUT",
+                eventId, eventType, orderId);
+        return Outcome.IGNORED;
     }
 
     /** Credit status only; the blueprint says these outcomes never change the lifecycle state. */

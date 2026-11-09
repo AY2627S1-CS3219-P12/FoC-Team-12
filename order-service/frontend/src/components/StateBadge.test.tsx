@@ -13,6 +13,16 @@ describe('StateBadge', () => {
     expect(screen.getByText('Not posted')).toBeInTheDocument()
   })
 
+  it('labels an errand Credit never confirmed as not posted, not expired', () => {
+    render(<StateBadge state="EXPIRED" terminalReason="CREDIT_RESERVATION_TIMEOUT" />)
+    expect(screen.getByText('Not posted')).toBeInTheDocument()
+  })
+
+  it('keeps "Expired" for an errand whose pickup deadline passed', () => {
+    render(<StateBadge state="EXPIRED" terminalReason="PICKUP_DEADLINE_PASSED" />)
+    expect(screen.getByText('Expired')).toBeInTheDocument()
+  })
+
   it('labels other states as before', () => {
     render(<StateBadge state="PICKED_UP" terminalReason={null} />)
     expect(screen.getByText('Picked up')).toBeInTheDocument()

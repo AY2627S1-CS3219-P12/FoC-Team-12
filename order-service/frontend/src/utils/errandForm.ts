@@ -133,6 +133,13 @@ export function reservationOutcome(
       setUpCredits: false,
     }
   }
+  if (state === 'EXPIRED' && terminalReason === 'CREDIT_RESERVATION_TIMEOUT')
+    return {
+      kind: 'failed',
+      message:
+        "Credit didn't confirm your reservation in time, so the errand wasn't posted. Any credits held are being returned. Please post again.",
+      setUpCredits: false,
+    }
   if (state === 'EXPIRED')
     return {
       kind: 'failed',
