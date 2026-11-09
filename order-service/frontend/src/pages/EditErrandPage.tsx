@@ -27,14 +27,14 @@ import { credits } from '../utils/orderFormatting'
 const EDIT_ERRORS: Record<string, string> = {
   INVALID_STATE_TRANSITION: 'This errand is no longer open, so it can’t be edited.',
   ORDER_EXPIRED: 'This errand expired, so it can’t be edited.',
-  REWARD_ADJUSTMENT_PENDING: 'A reward change is still waiting for Credit. Try again once it finishes.',
-  VERSION_CONFLICT: 'This errand changed since you opened it. Reload to see the latest before editing.',
-  NOT_ORDER_REQUESTER: 'Only the requester can edit this errand.',
+  REWARD_ADJUSTMENT_PENDING: 'Your new reward is still being saved. Try again in a moment.',
+  VERSION_CONFLICT: 'This errand was just updated. Reload to see the latest.',
+  NOT_ORDER_REQUESTER: "This errand isn't yours to edit.",
 }
 
 function serverErrors(error: unknown): { errors: Errors; stale: boolean } {
   if (!(error instanceof OrderApiError)) return { errors: { form: 'Something went wrong. Please try again.' }, stale: false }
-  if (error.status === 403 && !error.code) return { errors: { form: 'Switch to Requester in the header to edit.' }, stale: false }
+  if (error.status === 403 && !error.code) return { errors: { form: 'Switch to Requester at the top of the page to edit.' }, stale: false }
   if (error.code && EDIT_ERRORS[error.code]) return { errors: { form: EDIT_ERRORS[error.code] }, stale: true }
   const mapped: Errors = {}
   for (const [field, messages] of Object.entries(error.fieldErrors)) {
@@ -83,8 +83,8 @@ export function EditErrandPage() {
         title="This errand can’t be edited"
       >
         {order.pendingCreditReward !== null
-          ? 'A reward change is still waiting for Credit.'
-          : 'Only open errands can be edited, by the person who posted them.'}
+          ? 'Your new reward is still being saved.'
+          : 'It has already been accepted or has ended.'}
       </StatePanel>
     )
   return <EditForm key={order.version} order={order} />
@@ -225,7 +225,7 @@ function EditForm({ order }: { order: Order }) {
       <div className="page-intro">
         <div>
           <h1>Edit errand</h1>
-          <p>Couriers see your changes straight away. A new reward applies once Credit confirms it.</p>
+          <p>Your changes show up for couriers right away.</p>
         </div>
       </div>
       <div className="two-column">
@@ -241,7 +241,7 @@ function EditForm({ order }: { order: Order }) {
               locationsFailed={locations.isError}
               maxReward={balance.data ? base.creditReward + balance.data.availableBalance : undefined}
               onChange={update}
-              rewardHint={`Currently ${credits(base.creditReward)} reserved. Raising it reserves the difference.`}
+              rewardHint={`You've set aside ${credits(base.creditReward)} for this errand.`}
             />
           </fieldset>
           {errors.form && (
