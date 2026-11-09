@@ -100,7 +100,8 @@ S['Translation'] = obj({'messageId': UUID,'sourceLanguage': LANGUAGE,'targetLang
     'status': enum('PENDING','READY','FAILED'),'text': nullable({'type':'string','minLength':1})})
 S['Notification'] = obj({'id': UUID,'type': enum('ORDER_OPENED','ORDER_RESERVATION_FAILED','ORDER_ACCEPTED',
     'ORDER_COURIER_WITHDREW','ORDER_EXPIRED','ORDER_CANCELLED','ORDER_PICKED_UP','ORDER_DELIVERED',
-    'ORDER_COMPLETED','CREDITS_WELCOME','CREDITS_RECEIVED','CREDITS_COMPENSATED'),
+    'ORDER_COMPLETED','ORDER_STILL_OPEN','PICKUP_DUE_SOON','PICKUP_OVERDUE',
+    'CREDITS_WELCOME','CREDITS_RECEIVED','CREDITS_COMPENSATED'),
     'orderId': nullable(UUID),'message': TEXT,'occurredAt': TIME,'readAt': nullable(TIME)})
 S['NotificationPage'] = obj({'content': array(ref('Notification')), 'page': INT,
     'size': {'type':'integer','minimum':1,'maximum':100},'totalElements': INT,'totalPages': INT})
