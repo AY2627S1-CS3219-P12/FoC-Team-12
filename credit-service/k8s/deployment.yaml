@@ -16,7 +16,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: credit-service
-          image: arkanian4/foc-credit-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1
+          image: foc-credit-service:local-61c7062-completion-20261109-v2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8083

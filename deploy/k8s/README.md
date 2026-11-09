@@ -1,5 +1,14 @@
 # Local Kubernetes (Minikube)
 
+For the current Admin integration completion, five selected Deployment files instead use local
+`foc-{user,chat,credit,order}-service:local-61c7062-completion-20261109-v2` and
+`foc-admin-service:local-61c7062-completion-20261109-v3` builds from this worktree.
+Build each with its existing Dockerfile and run `minikube -p foc-local image load <tag>`
+before applying it. No image is published by that operation. The Docker Hub table below records
+the retained published baseline; consult [Admin readiness](../../admin-service/INTEGRATION_READINESS.md)
+for current build, owner review, deployment and business acceptance results. Gateway/Supplier and
+unrelated services retain their existing images. Credentials and PVCs are preserved.
+
 This setup follows the [course guide](https://sds-edu.github.io/SDS-Kubernetes-Guide/): Minikube
 with the Docker driver, YAML Deployments/Services, NodePort access and explicit scaling/rollouts.
 Docker Desktop's own Kubernetes feature is not needed. Cloud remains separate work. For the

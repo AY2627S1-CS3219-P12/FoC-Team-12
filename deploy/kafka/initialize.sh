@@ -150,7 +150,7 @@ add_idempotent_write_acl notification_service
 pids+=("$!")
 limit_jobs
 
-# Administrative corrections: permissions prepare the handoff; Credit's consumer is still pending.
+# Administrative corrections use a separate owner consumer and outcome stream.
 {
 add_acl admin_service --operation Write --operation Describe --topic admin.credit.commands --topic credit.admin.events.DLT
 add_acl admin_service --operation Read --operation Describe --topic credit.admin.events
@@ -179,6 +179,10 @@ limit_jobs
 add_acl admin_service --operation Write --operation Describe --topic admin.events
 add_acl admin_service --operation Write --operation Describe --transactional-id admin-case-events- --resource-pattern-type prefixed
 
+# Chat retains original case facts and owner outcomes in an independent read-committed inbox.
+add_acl chat_service --operation Read --operation Describe --topic admin.events --topic credit.admin.events --topic user.admin.events
+add_acl chat_service --operation Read --group chat-service-timeline
+
 # Kafka UI can inspect this local cluster but cannot mutate topics, data or business offsets.
 {
 add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfigs \
@@ -189,7 +193,7 @@ add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfi
   --topic admin.credit.commands.DLT --topic credit.admin.events.DLT \
   --topic admin.user.commands --topic user.admin.events --topic admin.user.commands.DLT --topic user.admin.events.DLT --topic admin.events
 add_acl kafka_ui --operation Describe --operation DescribeConfigs --cluster
-add_acl kafka_ui --operation Describe --group order-service --group chat-service-lifecycle --group credit-service --group notification-service --group admin-service-credit --group credit-service-admin --group admin-service-user --group user-service-admin
+add_acl kafka_ui --operation Describe --group order-service --group chat-service-lifecycle --group chat-service-timeline --group credit-service --group notification-service --group admin-service-credit --group credit-service-admin --group admin-service-user --group user-service-admin
 add_acl kafka_ui --operation Read --operation Describe --group kafka-ui-browser --resource-pattern-type prefixed
 } &
 pids+=("$!")
