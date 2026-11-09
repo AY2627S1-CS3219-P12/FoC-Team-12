@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { saveSession } from './auth/session'
@@ -410,7 +416,11 @@ it.each([
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Assign to me' }))
     expect(
-      await screen.findByText(
+      await within(
+        screen
+          .getByRole('heading', { name: 'Case details' })
+          .closest('section')!,
+      ).findByText(
         status === 503
           ? 'We couldn’t verify whether you were involved in this errand. Refresh the evidence and try again. Review actions remain unavailable.'
           : detail,

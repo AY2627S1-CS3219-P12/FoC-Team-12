@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { CaseError, request } from './cases'
+import { participantLabels } from './casePeople'
 import { formatSingaporeTime as date } from './time'
+import {
+  Bike,
+  CheckCheck,
+  CircleAlert,
+  Clock3,
+  Coins,
+  FileText,
+  MapPin,
+  Route,
+  ShieldCheck,
+} from 'lucide-react'
 
 type Checkpoint = {
   source: string
@@ -149,30 +161,6 @@ function activityTitle(record: EvidenceRecord) {
     ? actions[record.action]
     : readable(record.action)
 }
-function participantLabels(participants: Participant[]) {
-  const couriers = [
-    ...new Set(
-      participants
-        .filter((p) => p.relationship === 'HISTORICAL_COURIER')
-        .map((p) => p.userId),
-    ),
-  ].sort()
-  return (id: string) => {
-    const roles: string[] = []
-    if (
-      participants.some(
-        (p) => p.userId === id && p.relationship === 'REQUESTER',
-      )
-    )
-      roles.push('Requester')
-    const courier = couriers.indexOf(id)
-    if (courier >= 0) roles.push(`Courier ${courier + 1}`)
-    return (
-      roles.join(' · ') ||
-      'Account not identified in available participant history'
-    )
-  }
-}
 function EvidenceTime({ value }: { value: string }) {
   return <time dateTime={value}>{date(value)}</time>
 }
@@ -207,11 +195,20 @@ function failure(error: unknown) {
 function EvidenceData({
   record,
   participant,
+  linkParticipants = false,
 }: {
   record: EvidenceRecord
   participant: (id: string) => string
+  linkParticipants?: boolean
 }) {
   const data = record.data
+  const person = (id: string) =>
+    linkParticipants &&
+    !participant(id).startsWith('Account not identified') ? (
+      <a href={`#person-${id}`}>{participant(id)}</a>
+    ) : (
+      participant(id)
+    )
   if (data.kind === 'ORDER')
     return (
       <div className="evidence-data">
@@ -219,9 +216,9 @@ function EvidenceData({
           {data.fromState ? readable(data.fromState) : 'Initial state'} →{' '}
           {readable(data.toState)}
         </p>
-        <p>Requester: {participant(data.requesterId)}</p>
+        <p>Requester: {person(data.requesterId)}</p>
         <p>
-          Courier: {data.courierId ? participant(data.courierId) : 'Unassigned'}
+          Courier: {data.courierId ? person(data.courierId) : 'Unassigned'}
           {data.previousCourierId &&
             ` · Previous courier: ${participant(data.previousCourierId)}`}
         </p>
@@ -248,28 +245,44 @@ function EvidenceData({
           {data.reasonCode && ` · ${readable(data.reasonCode)}`}
         </p>
         {data.ledgerEntries.length ? (
-          <ul>
+          <ul className="timeline-credit-people">
             {data.ledgerEntries.map((entry) => (
               <li key={entry.ledgerEntryId}>
-                <p>{participant(entry.userId)}</p>
-                <p>
-                  Available: {entry.availableDelta > 0 ? '+' : ''}
-                  {entry.availableDelta} (balance {entry.availableBalance}) ·
-                  Reserved: {entry.reservedDelta > 0 ? '+' : ''}
-                  {entry.reservedDelta} (balance {entry.reservedBalance})
-                </p>
+                <strong>{person(entry.userId)}</strong>
+                <dl className="timeline-credit-facts">
+                  <div>
+                    <dt>Available credits</dt>
+                    <dd>
+                      <strong>
+                        {entry.availableDelta > 0 ? '+' : ''}
+                        {entry.availableDelta}
+                      </strong>
+                      <span>Balance after: {entry.availableBalance}</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Credits held for errands</dt>
+                    <dd>
+                      <strong>
+                        {entry.reservedDelta > 0 ? '+' : ''}
+                        {entry.reservedDelta}
+                      </strong>
+                      <span>Balance after: {entry.reservedBalance}</span>
+                    </dd>
+                  </div>
+                </dl>
               </li>
             ))}
           </ul>
         ) : (
-          <p>No ledger entries for this outcome.</p>
+          <p>No credit balance changes were recorded for this outcome.</p>
         )}
       </div>
     )
   return (
     <div className="evidence-data">
       {data.targetUserId && (
-        <p>Affected account: {participant(data.targetUserId)}</p>
+        <p>Affected account: {person(data.targetUserId)}</p>
       )}
       {data.result && <p>Outcome: {readable(data.result)}</p>}
     </div>
@@ -382,9 +395,11 @@ function RecordDetails({ record }: { record: EvidenceRecord }) {
 export function EvidencePanel({
   caseId,
   orderId,
+  onSnapshot,
 }: {
   caseId: string
   orderId: string
+  onSnapshot?: (value: Timeline | null) => void
 }) {
   const [snapshot, setSnapshot] = useState<Timeline>()
   const [records, setRecords] = useState<EvidenceRecord[]>([])
@@ -430,9 +445,13 @@ export function EvidencePanel({
         loaded.current = data
         knownRecords.current = data.records
         setSnapshot(data)
+        onSnapshot?.(data)
         setRecords(data.records)
       } catch (e) {
-        if (active) setError(failure(e))
+        if (active) {
+          setError(failure(e))
+          onSnapshot?.(null)
+        }
       } finally {
         clearTimeout(timeout)
         if (active) {
@@ -448,7 +467,7 @@ export function EvidencePanel({
       controller.current?.abort()
       busy.current = false
     }
-  }, [caseId, orderId, attempt])
+  }, [caseId, orderId, attempt, onSnapshot])
 
   async function more() {
     const previous = loaded.current
@@ -504,12 +523,14 @@ export function EvidencePanel({
       knownRecords.current = [...knownRecords.current, ...additions]
       setRecords(knownRecords.current)
       setSnapshot(data)
+      onSnapshot?.(data)
     } catch (e) {
       if (generation.current !== requestGeneration) return
       setError(failure(e))
       if (e instanceof CaseError && e.status === 409) setRestartRequired(true)
       if (e instanceof CaseError && [401, 403, 404].includes(e.status)) {
         setSnapshot(undefined)
+        onSnapshot?.(null)
         setRecords([])
         loaded.current = undefined
       }
@@ -525,6 +546,7 @@ export function EvidencePanel({
     controller.current?.abort()
     generation.current = Symbol()
     setSnapshot(undefined)
+    onSnapshot?.(null)
     setRecords([])
     setError('')
     setRestartRequired(false)
@@ -542,8 +564,13 @@ export function EvidencePanel({
       <div className="section-heading">
         <div>
           <p className="eyebrow">Case evidence</p>
-          <h2 id="evidence-title" ref={focused} tabIndex={-1}>
-            Timeline and participants
+          <h2
+            id="evidence-title"
+            className="icon-heading"
+            ref={focused}
+            tabIndex={-1}
+          >
+            <Clock3 aria-hidden="true" /> Errand details and activity
           </h2>
         </div>
         <button
@@ -594,9 +621,14 @@ export function EvidencePanel({
             }
             aria-labelledby="coverage-title"
           >
-            <h3 id="coverage-title">
+            <h3 id="coverage-title" className="icon-heading">
+              {trustworthy ? (
+                <CheckCheck aria-hidden="true" />
+              ) : (
+                <CircleAlert aria-hidden="true" />
+              )}
               {trustworthy
-                ? 'History verified up to recorded checkpoints'
+                ? 'History checked through the latest update'
                 : error || restartRequired
                   ? 'History completeness unverified'
                   : snapshot.coverage.status === 'UNKNOWN'
@@ -605,7 +637,7 @@ export function EvidencePanel({
             </h3>
             <p>
               {trustworthy
-                ? 'History is complete up to each source’s recorded checkpoint. Newer activity may be missing. See coverage technical details for the limits.'
+                ? 'The recorded history is complete through the last check. Very recent activity may not appear yet.'
                 : 'Some activity may be missing or unverified. Do not treat this history as complete.'}
             </p>
             <p>
@@ -614,40 +646,56 @@ export function EvidencePanel({
             </p>
           </section>
           <section className="evidence-section">
-            <h3>Recorded errand details</h3>
+            <h3 className="icon-heading">
+              <FileText aria-hidden="true" /> Recorded errand details
+            </h3>
             <h4>{snapshot.order.title}</h4>
             <p className="statement-text">{snapshot.order.description}</p>
             <dl className="case-facts">
               <div>
-                <dt>State</dt>
+                <dt>Status</dt>
                 <dd>{readable(snapshot.order.status)}</dd>
               </div>
               <div>
-                <dt>Reward</dt>
+                <dt>
+                  <Coins aria-hidden="true" /> Reward
+                </dt>
                 <dd>{snapshot.order.creditReward} credits</dd>
               </div>
               <div>
-                <dt>Pickup</dt>
+                <dt>
+                  <MapPin aria-hidden="true" /> Pickup
+                </dt>
                 <dd>
                   {snapshot.order.pickupLocationName ||
                     'Historical location name unavailable'}
                 </dd>
               </div>
               <div>
-                <dt>Drop-off</dt>
+                <dt>
+                  <Route aria-hidden="true" /> Drop-off
+                </dt>
                 <dd>
                   {snapshot.order.dropoffLocationName ||
                     'Historical location name unavailable'}
                 </dd>
               </div>
               <div>
-                <dt>Pickup deadline</dt>
+                <dt>
+                  <Clock3 aria-hidden="true" /> Pickup deadline
+                </dt>
                 <dd>{date(snapshot.order.pickupDeadline)}</dd>
               </div>
             </dl>
           </section>
-          <section className="evidence-section">
-            <h3>Errand participants and assignment history</h3>
+          <details
+            className="evidence-section"
+            open={onSnapshot ? undefined : true}
+          >
+            <summary>
+              <Bike aria-hidden="true" /> Errand participants and assignment
+              history
+            </summary>
             {snapshot.participants.length ? (
               <ul className="evidence-participants">
                 {snapshot.participants.map((p, index) => (
@@ -678,7 +726,7 @@ export function EvidencePanel({
                       </span>
                     )}
                     <details className="evidence-technical">
-                      <summary>Participant technical details</summary>
+                      <summary>Account reference</summary>
                       <p>Account ID: {p.userId}</p>
                     </details>
                   </li>
@@ -691,13 +739,13 @@ export function EvidencePanel({
               </p>
             )}
             <p className="evidence-meta">
-              Labels identify accounts within this timeline; names are not
-              supplied. A numbered courier can have more than one assignment
-              period.
+              Requester and courier labels refer to account references, not
+              names. Repeated entries show separate assignment periods for the
+              same courier.
             </p>
-          </section>
+          </details>
           <details className="evidence-section evidence-technical">
-            <summary>Coverage technical details</summary>
+            <summary>How the history was checked</summary>
             <dl className="evidence-identifiers">
               <div>
                 <dt>Snapshot revision</dt>
@@ -786,7 +834,7 @@ export function EvidencePanel({
                         : readable(gap.reason)}
                     </strong>
                     <details className="evidence-technical">
-                      <summary>Gap technical details</summary>
+                      <summary>Missing activity references</summary>
                       <p>Reason: {gap.reason}</p>
                       <p>
                         {gap.source} / {gap.stream} · Sequences{' '}
@@ -823,8 +871,10 @@ export function EvidencePanel({
           </section>
           <section className="evidence-section">
             <div className="section-heading">
-              <h3>Activity timeline</h3>
-              <span>{records.length} loaded</span>
+              <h3 className="icon-heading">
+                <Clock3 aria-hidden="true" /> Activity timeline
+              </h3>
+              <span className="role-chip">{records.length} events loaded</span>
             </div>
             {records.length ? (
               <ol className="evidence-records">
@@ -832,7 +882,16 @@ export function EvidencePanel({
                   <li key={record.eventId}>
                     <article>
                       <div className="section-heading">
-                        <h4>{activityTitle(record)}</h4>
+                        <h4 className="icon-heading">
+                          {record.data.kind === 'ORDER' ? (
+                            <Route aria-hidden="true" />
+                          ) : record.data.kind === 'CREDIT' ? (
+                            <Coins aria-hidden="true" />
+                          ) : (
+                            <ShieldCheck aria-hidden="true" />
+                          )}
+                          {activityTitle(record)}
+                        </h4>
                         <span className="role-chip">
                           {categoryName[record.data.kind]}
                         </span>
@@ -841,11 +900,29 @@ export function EvidencePanel({
                         Occurred <EvidenceTime value={record.occurredAt} />
                       </p>
                       <p className="evidence-meta">
-                        {record.actorUserId
-                          ? `Recorded actor: ${participant(record.actorUserId)}`
-                          : 'Actor not recorded'}
+                        {record.actorUserId ? (
+                          <>
+                            By{' '}
+                            {onSnapshot &&
+                            !participant(record.actorUserId).startsWith(
+                              'Account not identified',
+                            ) ? (
+                              <a href={`#person-${record.actorUserId}`}>
+                                {participant(record.actorUserId)}
+                              </a>
+                            ) : (
+                              participant(record.actorUserId)
+                            )}
+                          </>
+                        ) : (
+                          'Person not recorded'
+                        )}
                       </p>
-                      <EvidenceData record={record} participant={participant} />
+                      <EvidenceData
+                        record={record}
+                        participant={participant}
+                        linkParticipants={!!onSnapshot}
+                      />
                       <RecordDetails record={record} />
                     </article>
                   </li>

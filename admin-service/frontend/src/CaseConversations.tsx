@@ -7,6 +7,8 @@ import {
   type Conversation,
 } from './conversations'
 import { ConversationThread } from './ConversationThread'
+import { MessageSquare } from 'lucide-react'
+import type { ParticipantSelection } from './casePeople'
 
 export function ParticipantConversationStatus({
   summary,
@@ -116,13 +118,28 @@ export function CaseConversations({
   actorId,
   participantIds,
   closing = false,
+  selection,
+  participantLabels = {},
+  onParticipantChange,
 }: {
   summary: Summary
   actorId: string
   participantIds: string[]
   closing?: boolean
+  selection?: ParticipantSelection
+  participantLabels?: Record<string, string>
+  onParticipantChange?: (target: string) => void
 }) {
   const [selected, setSelected] = useState('')
+  useEffect(() => {
+    onParticipantChange?.(selected)
+  }, [selected, onParticipantChange])
+  const [handledSelection, setHandledSelection] = useState<number>()
+  if (selection && handledSelection !== selection.request) {
+    setHandledSelection(selection.request)
+    if (selection && participantIds.includes(selection.userId))
+      setSelected(selection.userId)
+  }
   const saved = useConfirmed(summary, actorId, false)
   const reference = saved.references?.find(
     (r) => r.participantUserId === selected,
@@ -134,7 +151,16 @@ export function CaseConversations({
   return (
     <section className="case-panel" aria-labelledby="case-conversations-title">
       <p className="eyebrow">Private follow-up</p>
-      <h2 id="case-conversations-title">Participant conversations</h2>
+      <h2 id="case-conversations-title" className="icon-heading">
+        <MessageSquare aria-hidden="true" />
+        Participant conversations
+      </h2>
+      {selected && participantLabels[selected] && (
+        <p className="action-person">
+          Private conversation with{' '}
+          <a href={`#person-${selected}`}>{participantLabels[selected]}</a>
+        </p>
+      )}
       <p>
         Select a participant who submitted a report to view or start a private
         conversation.
@@ -163,7 +189,7 @@ export function CaseConversations({
                 aria-pressed={id === selected}
                 onClick={() => setSelected(id)}
               >
-                Participant {index + 1}
+                {participantLabels[id] || `Participant ${index + 1}`}
               </button>
             ))}
           </div>

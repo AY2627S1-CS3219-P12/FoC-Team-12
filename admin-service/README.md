@@ -17,6 +17,30 @@ and durable credit-action tracking/Kafka adapters. See
 [integration drafts](../docs/contracts/README.md). Approval of this iteration does not
 record Chat/transport owner sign-off or deploy the shared drafts.
 
+## Case review layout
+
+The case workspace groups each statement and its private chat, credit correction and ban controls
+under the reporting account's card. Requester/courier labels come from the existing errand evidence;
+when evidence is unavailable, reporting-account labels and account references remain explicit.
+Historical courier assignments are retained. Accounts without a report are visible in the evidence
+but do not gain case-action eligibility.
+
+Cards sit side by side on desktop and stack on narrow screens. Selecting an action opens one
+account-specific panel. Credit and ban histories show the selected account, with links back to its
+card; timeline credit changes also link to the affected people. An unconfirmed submission keeps its
+original account, request key and body, and a visible resume prompt remains above the cards even
+when its panel is closed. Confirmation cannot silently switch to another card's account.
+
+Errand facts, credit changes and chronological activity use labelled regions and Lucide SVG icons.
+Case identifiers, assignment periods and evidence diagnostics remain available in disclosures.
+Evidence completeness warnings and reviewer/closure guards are unchanged. No new identity lookup,
+financial transfer, API, event or authorization contract is introduced.
+
+Verify with the frontend test suite, lint, TypeScript/production build and the root UI design checks.
+Manual checks: compare two statements at desktop and 375px; use each card's controls and Tab/Enter;
+verify the selected account in confirmation, change the account selector, close/reopen a panel,
+resume an uncertain request, and check non-reporter, other-reviewer and evidence-outage states.
+
 ## Behavior and boundaries
 
 - Reviewer independence: an administrator who requested an errand or was ever assigned as its

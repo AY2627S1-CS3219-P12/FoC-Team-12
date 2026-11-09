@@ -8,6 +8,8 @@ import {
   type Summary,
 } from './cases'
 import { formatSingaporeTime } from './time'
+import { Coins, ShieldBan } from 'lucide-react'
+import type { ParticipantSelection } from './casePeople'
 
 type Input = {
   type: 'CREDIT_ADJUSTMENT' | 'BAN'
@@ -72,6 +74,10 @@ export function CreditActions({
   initialActions = [],
   kind = 'CREDIT_ADJUSTMENT',
   closing = false,
+  selection,
+  participantLabels = {},
+  onPendingTargetChange,
+  onParticipantChange,
 }: {
   summary: Summary
   actorId: string
@@ -79,6 +85,10 @@ export function CreditActions({
   initialActions?: AdminAction[]
   kind?: 'CREDIT_ADJUSTMENT' | 'BAN'
   closing?: boolean
+  selection?: ParticipantSelection
+  participantLabels?: Record<string, string>
+  onPendingTargetChange?: (target: string | null) => void
+  onParticipantChange?: (target: string) => void
 }) {
   const ban = kind === 'BAN'
   const failure = useCallback((e: unknown) => actionFailure(e, ban), [ban])
@@ -142,6 +152,29 @@ export function CreditActions({
   const [pollError, setPollError] = useState('')
   const [denied, setDenied] = useState(false)
   const [refresh, setRefresh] = useState(0)
+  const [handledSelection, setHandledSelection] = useState<number>()
+  useEffect(() => {
+    onParticipantChange?.(target)
+  }, [target, onParticipantChange])
+  useEffect(() => {
+    onPendingTargetChange?.(pending?.body.targetUserId || null)
+  }, [pending, onPendingTargetChange])
+  if (selection && handledSelection !== selection.request) {
+    setHandledSelection(selection.request)
+    if (
+      !pending &&
+      !busy &&
+      !confirm &&
+      participantIds.includes(selection.userId)
+    ) {
+      setTarget(selection.userId)
+    }
+  }
+  const participantName = (id: string) =>
+    participantLabels[id] ||
+    (participantIds.includes(id)
+      ? `Participant ${participantIds.indexOf(id) + 1}`
+      : 'Case participant')
   const guard = useRef(false)
   const active = useRef(true)
   const abort = useRef<AbortController | null>(null)
@@ -156,6 +189,10 @@ export function CreditActions({
     !denied &&
     !historyUnavailable
   const eligible = [...new Set(participantIds)]
+  const visibleActions =
+    selection && target
+      ? actions.filter((a) => a.targetUserId === target)
+      : actions
   const numeric = Number(amount)
   const valid =
     eligible.includes(target) &&
@@ -320,7 +357,12 @@ export function CreditActions({
           <p className="eyebrow">
             {ban ? 'Account safety' : 'Administrative correction'}
           </p>
-          <h2 id={headingId}>
+          <h2 id={headingId} className="icon-heading">
+            {ban ? (
+              <ShieldBan aria-hidden="true" />
+            ) : (
+              <Coins aria-hidden="true" />
+            )}
             {ban ? 'Account ban requests' : 'Credit corrections'}
           </h2>
         </div>
@@ -332,6 +374,21 @@ export function CreditActions({
           {ban ? 'Refresh ban status' : 'Refresh correction status'}
         </button>
       </div>
+      {target && participantLabels[target] && (
+        <p className="action-person">
+          Selected account:{' '}
+          <a href={`#person-${target}`}>{participantName(target)}</a>
+        </p>
+      )}
+      {selection &&
+        target &&
+        selection.userId !== target &&
+        (pending || busy || confirm) && (
+          <p role="status" className="evidence-lag">
+            Finish or cancel the current review before choosing another account.
+            An unconfirmed submission must be retried for its original account.
+          </p>
+        )}
       <p>
         {ban
           ? 'Request a ban for a participant who submitted a report. You cannot ban yourself or the last active admin.'
@@ -363,9 +420,9 @@ export function CreditActions({
       )}
       {!denied && (
         <>
-          {actions.length ? (
+          {visibleActions.length ? (
             <ul className="credit-action-list">
-              {actions.map((a) => (
+              {visibleActions.map((a) => (
                 <li key={a.operationId}>
                   <div className="section-heading">
                     <h3>
@@ -389,9 +446,13 @@ export function CreditActions({
                   <p>{labels[a.status]}</p>
                   <p>
                     Participant:{' '}
-                    {eligible.includes(a.targetUserId)
-                      ? `Participant ${eligible.indexOf(a.targetUserId) + 1}`
-                      : 'Case participant'}
+                    {participantLabels[a.targetUserId] ? (
+                      <a href={`#person-${a.targetUserId}`}>
+                        {participantName(a.targetUserId)}
+                      </a>
+                    ) : (
+                      participantName(a.targetUserId)
+                    )}
                   </p>
                   <p className="statement-text">{a.reason}</p>
                   {a.reasonCode && (
@@ -443,9 +504,11 @@ export function CreditActions({
           ) : (
             !historyUnavailable && (
               <p>
-                {ban
-                  ? 'No ban requests recorded for this case.'
-                  : 'No credit corrections recorded for this case.'}
+                {selection && target
+                  ? `No ${ban ? 'ban requests' : 'credit corrections'} recorded for ${participantName(target)}.`
+                  : ban
+                    ? 'No ban requests recorded for this case.'
+                    : 'No credit corrections recorded for this case.'}
               </p>
             )
           )}
@@ -467,9 +530,9 @@ export function CreditActions({
                 required
               >
                 <option value="">Choose a reporting participant</option>
-                {eligible.map((id, index) => (
+                {eligible.map((id) => (
                   <option key={id} value={id}>
-                    Participant {index + 1}
+                    {participantName(id)}
                   </option>
                 ))}
               </select>
@@ -549,8 +612,8 @@ export function CreditActions({
                   </h3>
                   <p>
                     {ban
-                      ? `Request a ban for Participant ${eligible.indexOf(target) + 1}? Once applied, sign-in and new protected requests are blocked. Already authorized requests may finish.`
-                      : `${direction === 'add' ? 'Add' : 'Subtract'} ${numeric} credits ${direction === 'add' ? 'to' : 'from'} Participant ${eligible.indexOf(target) + 1}. This changes available credits independently of the errand reward.`}
+                      ? `Request a ban for ${participantName(target)}? Once applied, sign-in and new protected requests are blocked. Already authorized requests may finish.`
+                      : `${direction === 'add' ? 'Add' : 'Subtract'} ${numeric} credits ${direction === 'add' ? 'to' : 'from'} ${participantName(target)}. This changes available credits independently of the errand reward.`}
                   </p>
                   <p className="statement-text">{reason.trim()}</p>
                   <div className="conversation-picker">
