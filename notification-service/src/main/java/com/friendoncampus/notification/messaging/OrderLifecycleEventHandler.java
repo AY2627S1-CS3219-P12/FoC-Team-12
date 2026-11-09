@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.friendoncampus.notification.domain.Notification;
 import com.friendoncampus.notification.domain.NotificationType;
+import com.friendoncampus.notification.reminder.ReminderScheduler;
 import com.friendoncampus.notification.repository.NotificationRepository;
 import com.friendoncampus.notification.repository.ProcessedEventRepository;
 
@@ -34,6 +35,9 @@ import tools.jackson.databind.json.JsonMapper;
  *
  * <p>A {@code sourceSequence} more than one above the last one seen for the order is logged as a
  * gap. The event is still handled; the missing transition is never guessed.
+ *
+ * <p>Every valid event also brings the errand's pickup reminders up to date
+ * ({@link ReminderScheduler}), in the same transaction.
  */
 @Component
 public class OrderLifecycleEventHandler {
@@ -51,13 +55,15 @@ public class OrderLifecycleEventHandler {
 
     private final ProcessedEventRepository processedEventRepository;
     private final NotificationRepository notificationRepository;
+    private final ReminderScheduler reminderScheduler;
     private final Clock clock;
     private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     public OrderLifecycleEventHandler(ProcessedEventRepository processedEventRepository,
-            NotificationRepository notificationRepository, Clock clock) {
+            NotificationRepository notificationRepository, ReminderScheduler reminderScheduler, Clock clock) {
         this.processedEventRepository = processedEventRepository;
         this.notificationRepository = notificationRepository;
+        this.reminderScheduler = reminderScheduler;
         this.clock = clock;
     }
 
@@ -92,6 +98,9 @@ public class OrderLifecycleEventHandler {
         Optional<Recipient> recipient = recipient(transition);
         CreditEventHandler.Outcome outcome = recipient.isEmpty()
                 ? CreditEventHandler.Outcome.IGNORED : notify(transition, eventId, recipient.get());
+        reminderScheduler.apply(new ReminderScheduler.ErrandState(transition.orderId(), transition.sourceSequence(),
+                transition.toState(), transition.requesterId(), transition.courierId(), transition.pickupDeadline(),
+                transition.title(), eventId), OffsetDateTime.now(clock));
         processedEventRepository.save(new ProcessedEvent(eventId, TOPIC, eventType, transition.orderId(),
                 transition.correlationId(), fingerprint, outcome.name(), OffsetDateTime.now(clock),
                 transition.sourceSequence()));
@@ -108,7 +117,7 @@ public class OrderLifecycleEventHandler {
     /** What one event says, after validation. */
     private record Transition(UUID orderId, UUID correlationId, UUID actorId, long sourceSequence, String action,
             String fromState, String toState, UUID requesterId, UUID courierId, UUID previousCourierId,
-            String reasonCode, String title, OffsetDateTime occurredAt) {
+            String reasonCode, String title, OffsetDateTime pickupDeadline, OffsetDateTime occurredAt) {
     }
 
     private Transition validate(JsonNode envelope, String eventType) {
@@ -148,7 +157,7 @@ public class OrderLifecycleEventHandler {
         return new Transition(orderId, correlationId, actorId, sequence.asLong(), requiredText(data, "action"),
                 text(data, "fromState"), requiredText(data, "toState"), requiredUuid(data, "requesterId"),
                 optionalUuid(data, "courierId"), optionalUuid(data, "previousCourierId"), text(data, "reasonCode"),
-                requiredText(snapshot, "title"), occurredAt);
+                requiredText(snapshot, "title"), requiredTimestamp(snapshot, "pickupDeadline"), occurredAt);
     }
 
     /**
