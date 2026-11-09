@@ -45,7 +45,7 @@ export function CreditShell({ children }: { children: ReactNode }) {
       setWorkspaceError(
         error instanceof Error
           ? error.message
-          : 'Unable to change workspace right now. Please try again.',
+          : "We couldn't switch your role. Please try again.",
       )
       return false
     } finally {

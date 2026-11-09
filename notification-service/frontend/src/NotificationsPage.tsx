@@ -61,7 +61,7 @@ export function NotificationsPage() {
             </a>
           }
           icon={LogIn}
-          title="Your session has ended"
+          title="You’ve been signed out"
         >
           Sign in to see your notifications.
         </StatePanel>
@@ -75,9 +75,9 @@ export function NotificationsPage() {
             </button>
           }
           icon={CircleAlert}
-          title="Couldn't load your notifications."
+          title="We couldn’t load your notifications"
         >
-          Check your connection and try again.
+          Please try again.
         </StatePanel>
       ) : list.data.pages[0]?.totalElements === 0 ? (
         <StatePanel

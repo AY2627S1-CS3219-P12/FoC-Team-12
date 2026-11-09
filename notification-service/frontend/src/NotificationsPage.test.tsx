@@ -108,7 +108,7 @@ describe('NotificationsPage', () => {
 
     // React Query waits about a second before its one retry.
     expect(
-      await screen.findByRole('heading', { name: "Couldn't load your notifications." }, { timeout: 4000 }),
+      await screen.findByRole('heading', { name: 'We couldn’t load your notifications' }, { timeout: 4000 }),
     ).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('list', { name: 'Your notifications' })).toBeInTheDocument()
@@ -119,7 +119,7 @@ describe('NotificationsPage', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({}, 401)))
     renderPage()
 
-    expect(await screen.findByRole('heading', { name: 'Your session has ended' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'You’ve been signed out' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Sign in again' })).toHaveAttribute(
       'href',
       '/?returnTo=%2Fnotifications',
@@ -132,7 +132,7 @@ describe('NotificationsPage', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
-    expect(screen.getByRole('heading', { name: 'Your session has ended' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'You’ve been signed out' })).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

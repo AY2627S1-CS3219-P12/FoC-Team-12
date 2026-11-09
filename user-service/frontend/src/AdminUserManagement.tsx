@@ -37,7 +37,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
     try {
       replaceAccount(await api.setAccountStatus(restore.userId, 'ACTIVE', restoreReason.trim()))
       setMessage(`${restore.username} has been reactivated.`); closeRestore()
-    } catch (e) { setError(e instanceof ApiError ? e.message : 'Unable to reactivate the account.') }
+    } catch (e) { setError(e instanceof ApiError ? e.message : 'We couldn’t reactivate this account.') }
     finally { setChangingUserId(null) }
   }
 
@@ -52,7 +52,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
     void api.listAdminAccounts(query, pageNumber)
       .then(result => { if (!cancelled) setAccounts(result) })
       .catch(requestError => {
-        if (!cancelled) setError(requestError instanceof ApiError ? requestError.message : 'Unable to load user accounts.')
+        if (!cancelled) setError(requestError instanceof ApiError ? requestError.message : 'We couldn’t load accounts.')
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
@@ -85,7 +85,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
       replaceAccount(await api.setAdministrator(account.userId, administrator))
       setMessage(administrator ? `${account.username} is now an administrator.` : `Admin access removed from ${account.username}.`)
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : 'Unable to update administrator access.')
+      setError(requestError instanceof ApiError ? requestError.message : 'We couldn’t change admin access.')
     } finally {
       setChangingUserId(null)
     }
@@ -101,7 +101,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
       replaceAccount(await api.setAccountStatus(account.userId, status))
       setMessage(status === 'BANNED' ? `${account.username} has been banned.` : `${account.username} has been reactivated.`)
     } catch (requestError) {
-      setError(requestError instanceof ApiError ? requestError.message : 'Unable to update account status.')
+      setError(requestError instanceof ApiError ? requestError.message : 'We couldn’t update this account.')
     } finally {
       setChangingUserId(null)
     }
@@ -110,7 +110,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
   return <section className="admin-users" aria-labelledby="admin-users-title">
     <p className="eyebrow">Administration</p>
     <h1 id="admin-users-title">Manage users</h1>
-    <p className="intro">Promote administrators and control account access without database changes.</p>
+    <p className="intro">Manage who can use FoC and who is an admin.</p>
 
     <form className="admin-user-search" role="search" onSubmit={search}>
       <label htmlFor="admin-user-query">Search by email or username</label>
@@ -173,7 +173,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
 
     {restore && <form className="admin-user-search account-reactivation" aria-label="Reactivate account" onSubmit={(event) => { void reactivate(event) }}>
       <h2>Reactivate {restore.username}</h2>
-      <p>This restores sign-in access. Previous case actions remain in the account audit.</p>
+      <p>They’ll be able to sign in again.</p>
       <label htmlFor="reactivation-reason">Reason for reactivation</label>
       <textarea id="reactivation-reason" ref={restoreField} required maxLength={2000} rows={3}
         disabled={!!changingUserId} value={restoreReason} onChange={event => setRestoreReason(event.target.value)} />

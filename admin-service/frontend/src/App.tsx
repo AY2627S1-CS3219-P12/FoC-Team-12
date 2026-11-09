@@ -104,7 +104,7 @@ function Dashboard() {
             <LoaderCircle className="spin" />
           </span>
           <h2>Checking your access</h2>
-          <p>Confirming your current administrator permissions.</p>
+          <p>This only takes a moment.</p>
         </section>
       )}
       {state === 'signin' && (
@@ -146,7 +146,7 @@ function Dashboard() {
           </span>
           <p className="eyebrow">Access check unavailable</p>
           <h2>We couldn’t verify your access</h2>
-          <p>We couldn’t check your admin permissions. Try again shortly.</p>
+          <p>We couldn’t check your admin access. Please try again.</p>
           <button onClick={retry} type="button">
             Try again
           </button>

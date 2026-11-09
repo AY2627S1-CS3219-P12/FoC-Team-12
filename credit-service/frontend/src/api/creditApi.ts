@@ -58,7 +58,7 @@ async function authenticatedRequest<T>(path: string, init: RequestInit = {}): Pr
   const response = await fetch(path, { ...init, headers })
   if (response.status === 401) expireSession()
   if (!response.ok) {
-    let detail = 'Unable to load credit information'
+    let detail = 'We couldn’t load your credits'
     try {
       const problem = (await response.json()) as { detail?: unknown }
       if (typeof problem.detail === 'string') detail = problem.detail

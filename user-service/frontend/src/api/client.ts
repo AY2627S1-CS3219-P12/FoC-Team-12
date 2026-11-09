@@ -101,7 +101,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const body = await response.json().catch(() => null)
     const retryAfter = response.headers?.get?.('Retry-After')
     const retryAfterSeconds = retryAfter && /^\d+$/.test(retryAfter) ? Number.parseInt(retryAfter, 10) : undefined
-    throw new ApiError(response.status, body?.detail ?? 'Request could not be completed.', retryAfterSeconds, body?.code)
+    throw new ApiError(response.status, body?.detail ?? 'Something went wrong. Please try again.', retryAfterSeconds, body?.code)
   }
   if (response.status === 202 || response.status === 204) {
     return undefined as T
@@ -117,7 +117,7 @@ async function requestPasswordResetWithCooldown(requestBody: PasswordResetReques
   })
   if (!response.ok) {
     const body = await response.json().catch(() => null)
-    throw new ApiError(response.status, body?.detail ?? 'Request could not be completed.')
+    throw new ApiError(response.status, body?.detail ?? 'Something went wrong. Please try again.')
   }
   const retryAfter = response.headers?.get?.('Retry-After')
   return retryAfter && /^\d+$/.test(retryAfter) ? Number.parseInt(retryAfter, 10) : 90

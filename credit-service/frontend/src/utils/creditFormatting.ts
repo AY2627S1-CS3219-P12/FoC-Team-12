@@ -8,9 +8,9 @@ const labels: Record<LedgerEntryType, string> = {
   RESERVATION_RELEASED: 'Reservation released',
   SETTLEMENT_DEBIT: 'Paid to courier',
   SETTLEMENT_CREDIT: 'Earned from errand',
-  COMPENSATION_DEBIT: 'Cancellation compensation',
-  COMPENSATION_CREDIT: 'Cancellation compensation earned',
-  ADMIN_CORRECTION: 'Administrative credit correction',
+  COMPENSATION_DEBIT: 'Paid to courier for a cancelled errand',
+  COMPENSATION_CREDIT: 'Earned from a cancelled errand',
+  ADMIN_CORRECTION: 'Adjusted by an admin',
 }
 
 export function transactionLabel(type: LedgerEntryType) {

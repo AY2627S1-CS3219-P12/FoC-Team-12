@@ -124,7 +124,7 @@ it('distinguishes an unavailable dependency from ineligibility and retries', asy
   )
   show()
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'temporarily unavailable',
+    'We can’t load reports right now',
   )
   expect(
     screen.queryByRole('link', { name: 'Report an issue' }),
@@ -149,6 +149,6 @@ it('fails closed on malformed context rather than offering reporting', async () 
   )
   show()
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'temporarily unavailable',
+    'We can’t load reports right now',
   )
 })

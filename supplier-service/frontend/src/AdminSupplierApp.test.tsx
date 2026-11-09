@@ -302,7 +302,7 @@ describe('Administrative supplier management', () => {
     await user.click(screen.getAllByRole('button', { name: 'Deactivate' })[0])
     const dialog = screen.getByRole('dialog')
     expect(
-      within(dialog).getByText(/hidden from public listings/i),
+      within(dialog).getByText(/won’t see this location any more/i),
     ).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Deactivate' }))
     await waitFor(() => expect(patch).toHaveBeenCalledOnce())
@@ -360,11 +360,9 @@ describe('Administrative supplier management', () => {
     )
 
     expect(
-      await screen.findByText(/changed after the page loaded/i),
+      await screen.findByText(/Someone else just changed this location/i),
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Reload latest records' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument()
     expect(patch).toHaveBeenCalledOnce()
   })
 
@@ -372,7 +370,7 @@ describe('Administrative supplier management', () => {
     mockReads({ listFailure: true })
     renderRoute('/admin/suppliers')
     expect(
-      await screen.findByText('Supplier records could not be loaded'),
+      await screen.findByText('We couldn’t load locations'),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Try again' }),
