@@ -67,6 +67,7 @@ import com.sun.net.httpserver.HttpServer;
                 "app.security.jwt.audience=" + OrderSecurityIntegrationTest.AUDIENCE
         })
 class OrderSecurityIntegrationTest {
+    @MockitoBean com.friendoncampus.order.authorization.CurrentAuthorization currentAuthorization;
 
     static final String ISSUER = "friend-on-campus-user-service";
     static final String AUDIENCE = "friend-on-campus-api";

@@ -159,9 +159,30 @@ admin_public=$(printf '%s' "$admin_key" | openssl base64 -d -A \
   | openssl pkey -inform DER -pubout -outform DER 2>/dev/null | base64 | tr -d '\n')
 chat_public=$(printf '%s' "$chat_key" | openssl base64 -d -A \
   | openssl pkey -inform DER -pubout -outform DER 2>/dev/null | base64 | tr -d '\n')
+supplier_secret="foc/$environment/supplier-service-secrets"
+supplier_key=$(secret_property "$supplier_secret" SUPPLIER_SERVICE_PRIVATE_KEY || private_key)
+supplier_kid=$(secret_property "$supplier_secret" SUPPLIER_SERVICE_KEY_ID || printf 'supplier-staging-1')
+supplier_public=$(printf '%s' "$supplier_key" | openssl base64 -d -A \
+  | openssl pkey -inform DER -pubout -outform DER 2>/dev/null | base64 | tr -d '\n')
+order_secret="foc/$environment/order-service-secrets"
+order_key=$(secret_property "$order_secret" ORDER_SERVICE_PRIVATE_KEY || private_key)
+order_kid=$(secret_property "$order_secret" ORDER_SERVICE_KEY_ID || printf 'order-staging-1')
+order_public=$(printf '%s' "$order_key" | openssl base64 -d -A \
+  | openssl pkey -inform DER -pubout -outform DER 2>/dev/null | base64 | tr -d '\n')
+credit_secret="foc/$environment/credit-service-secrets"
+credit_key=$(secret_property "$credit_secret" CREDIT_SERVICE_PRIVATE_KEY || private_key)
+credit_kid=$(secret_property "$credit_secret" CREDIT_SERVICE_KEY_ID || printf 'credit-staging-1')
+credit_public=$(printf '%s' "$credit_key" | openssl base64 -d -A \
+  | openssl pkey -inform DER -pubout -outform DER 2>/dev/null | base64 | tr -d '\n')
 user_trusted_keys=$(jq -cn --arg admin "$admin_public" --arg chat "$chat_public" \
+  --arg supplier "$supplier_public" --arg supplierKid "$supplier_kid" \
+  --arg order "$order_public" --arg orderKid "$order_kid" \
+  --arg credit "$credit_public" --arg creditKid "$credit_kid" \
   '{"admin-staging-1":{"subject":"admin-service","publicKey":$admin},
-    "chat-staging-1":{"subject":"chat-service","publicKey":$chat}}')
+    "chat-staging-1":{"subject":"chat-service","publicKey":$chat},
+    ($supplierKid):{"subject":"supplier-service","publicKey":$supplier},
+    ($orderKid):{"subject":"order-service","publicKey":$order},
+    ($creditKid):{"subject":"credit-service","publicKey":$credit}}')
 chat_trusted_keys=$(jq -cn --arg admin "$admin_public" \
   '{"admin-staging-1":{"subject":"admin-service","publicKey":$admin}}')
 chat_caller_trusted_keys=$(jq -cn --arg chat "$chat_public" \
@@ -179,11 +200,12 @@ else
   jq -n --arg key "$SENDGRID_API_KEY" --arg from "$SENDGRID_FROM_EMAIL" \
     '{SENDGRID_API_KEY:$key,SENDGRID_FROM_EMAIL:$from}' > "$tmp/mail.json"
 fi
-jq -n --arg value "$supplier_db" '{DB_PASSWORD:$value}' > "$tmp/supplier.json"
-jq -n --arg value "$order_db" --arg trust "$chat_caller_trusted_keys" \
-  '{DB_PASSWORD:$value,ORDER_SERVICE_TRUSTED_KEYS:$trust}' > "$tmp/order.json"
-jq -n --arg value "$credit_db" --arg trust "$chat_caller_trusted_keys" \
-  '{DB_PASSWORD:$value,CREDIT_SERVICE_TRUSTED_KEYS:$trust}' > "$tmp/credit.json"
+jq -n --arg value "$supplier_db" --arg key "$supplier_key" --arg kid "$supplier_kid" \
+  '{DB_PASSWORD:$value,SUPPLIER_SERVICE_PRIVATE_KEY:$key,SUPPLIER_SERVICE_KEY_ID:$kid}' > "$tmp/supplier.json"
+jq -n --arg value "$order_db" --arg trust "$chat_caller_trusted_keys" --arg key "$order_key" --arg kid "$order_kid" \
+  '{DB_PASSWORD:$value,ORDER_SERVICE_TRUSTED_KEYS:$trust,ORDER_SERVICE_PRIVATE_KEY:$key,ORDER_SERVICE_KEY_ID:$kid}' > "$tmp/order.json"
+jq -n --arg value "$credit_db" --arg trust "$chat_caller_trusted_keys" --arg key "$credit_key" --arg kid "$credit_kid" \
+  '{DB_PASSWORD:$value,CREDIT_SERVICE_TRUSTED_KEYS:$trust,CREDIT_SERVICE_PRIVATE_KEY:$key,CREDIT_SERVICE_KEY_ID:$kid}' > "$tmp/credit.json"
 jq -n --arg db "$admin_db" --arg key "$admin_key" --arg trust "$chat_caller_trusted_keys" \
   '{ADMIN_DB_PASSWORD:$db,ADMIN_SERVICE_PRIVATE_KEY:$key,ADMIN_SERVICE_KEY_ID:"admin-staging-1",ADMIN_SERVICE_TRUSTED_KEYS:$trust}' \
   > "$tmp/admin.json"
@@ -206,7 +228,7 @@ jq -n --arg username kafka-viewer --arg password "$(random_password)" \
 
 merge_user_secret "foc/$environment/user-service-secrets" "$tmp/user.json" USER_SERVICE_TRUSTED_KEYS
 put_file "$mail_secret" "$tmp/mail.json"
-put_file "foc/$environment/supplier-service-secrets" "$tmp/supplier.json"
+merge_file "$supplier_secret" "$tmp/supplier.json"
 merge_trust_file "foc/$environment/order-service-secrets" "$tmp/order.json" ORDER_SERVICE_TRUSTED_KEYS
 merge_trust_file "foc/$environment/credit-service-secrets" "$tmp/credit.json" CREDIT_SERVICE_TRUSTED_KEYS
 merge_trust_file "$admin_secret" "$tmp/admin.json" ADMIN_SERVICE_TRUSTED_KEYS

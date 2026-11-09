@@ -776,6 +776,103 @@
         }
       }
     },
+    "/internal/users/{userId}/authorization": {
+      "get": {
+        "operationId": "user_get__internal_users_userId_authorization",
+        "tags": [
+          "user"
+        ],
+        "x-owner": "user-service",
+        "security": [
+          {
+            "serviceBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentAuthorization"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/internal/users/{userId}/admin-eligibility": {
       "get": {
         "operationId": "user_get__internal_users_userId_admin_eligibility",
@@ -5353,6 +5450,36 @@
           "checkpoint",
           "records",
           "nextCursor"
+        ],
+        "additionalProperties": false
+      },
+      "CurrentAuthorization": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "REQUESTER",
+                "COURIER",
+                "ADMIN"
+              ]
+            },
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "userId",
+          "active",
+          "roles"
         ],
         "additionalProperties": false
       },

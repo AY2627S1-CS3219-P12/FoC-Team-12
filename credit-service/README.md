@@ -205,3 +205,15 @@ need the approved database startup and health checks.
 
 From `frontend`, run `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` for the UI
 completion checks.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).
+
+Configure CREDIT_USER_URL, CREDIT_SERVICE_KEY_ID and
+CREDIT_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
+and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
+configuration fails closed even when administrative Kafka consumers are disabled.

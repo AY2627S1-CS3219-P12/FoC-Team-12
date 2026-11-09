@@ -42,6 +42,7 @@ class CurrentUserSecurityTest {
     private static final String ISSUER = "friend-on-campus-user-service";
     private static final String AUDIENCE = "friend-on-campus-api";
 
+    @Autowired com.friendoncampus.user.service.JwtTokenService tokens;
     @Autowired MockMvc mvc;
     @Autowired JwtEncoder encoder;
     @Autowired JwtDecoder decoder;
@@ -155,8 +156,10 @@ class CurrentUserSecurityTest {
 
     @Test
     void rejectsInvalidUsernameChangePayloadsBeforeChangingTheProfile() throws Exception {
+        User user=User.register("invalid-name-"+UUID.randomUUID()+"@u.nus.edu","Valid","valid"+UUID.randomUUID().toString().substring(0,8),"hash");
+        user.activate();users.save(user);
         mvc.perform(patch("/api/users/me/username").header("Authorization", "Bearer " + token(ISSUER, List.of(AUDIENCE),
-                Instant.now().plusSeconds(60), UUID.randomUUID())).contentType("application/json")
+                Instant.now().plusSeconds(60), user.getId())).contentType("application/json")
                         .content("{\"username\":\"\"}"))
                 .andExpect(status().isBadRequest());
     }
@@ -258,6 +261,32 @@ class CurrentUserSecurityTest {
                         .content("{\"email\":\"missing@u.nus.edu\",\"code\":\"123456\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("Invalid or expired password reset code"));
+    }
+
+    @Test
+    void realIssuedTokenLosesProfileAndMutationAccessAfterBanAndRecoversAfterReactivation() throws Exception {
+        User user=User.register("stale-"+UUID.randomUUID()+"@u.nus.edu","Stale","stale"+UUID.randomUUID().toString().substring(0,8),"hash");
+        user.activate();users.save(user);
+        String before=tokens.issue(user,com.friendoncampus.user.domain.UserRole.REQUESTER).value();
+        mvc.perform(get("/api/users/me").header("Authorization","Bearer "+before)).andExpect(status().isOk());
+        user.ban();users.save(user);
+        mvc.perform(get("/api/users/me").header("Authorization","Bearer "+before)).andExpect(status().isForbidden());
+        mvc.perform(patch("/api/users/me/username").header("Authorization","Bearer "+before)
+                .contentType("application/json").content("{\"username\":\"Blocked\"}")).andExpect(status().isForbidden());
+        assertThat(users.findById(user.getId()).orElseThrow().getUsername()).isEqualTo("Stale");
+        user.activate();users.save(user);
+        mvc.perform(get("/api/users/me").header("Authorization","Bearer "+before)).andExpect(status().isOk());
+    }
+    @Test
+    void realIssuedAdminTokenCannotAccessProfileAfterRoleRemovalButRequesterTokenStillWorks() throws Exception {
+        User user=User.bootstrapAdmin("demote-"+UUID.randomUUID()+"@u.nus.edu","Demote","demote"+UUID.randomUUID().toString().substring(0,8),"hash");
+        user.activate();users.save(user);
+        String admin=tokens.issue(user,com.friendoncampus.user.domain.UserRole.ADMIN).value();
+        String requester=tokens.issue(user,com.friendoncampus.user.domain.UserRole.REQUESTER).value();
+        mvc.perform(get("/api/users/me").header("Authorization","Bearer "+admin)).andExpect(status().isOk());
+        user.demoteToUser();users.save(user);
+        mvc.perform(get("/api/users/me").header("Authorization","Bearer "+admin)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/users/me").header("Authorization","Bearer "+requester)).andExpect(status().isOk());
     }
 
     private String token(String issuer, List<String> audience, Instant expiresAt, UUID userId) {

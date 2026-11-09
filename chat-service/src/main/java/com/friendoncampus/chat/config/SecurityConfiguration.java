@@ -57,8 +57,9 @@ public class SecurityConfiguration {
 
     @Bean @Order(2)
     SecurityFilterChain securityFilterChain(HttpSecurity http, @Qualifier("userJwtDecoder") JwtDecoder jwtDecoder,
-            JwtAuthenticationConverter converter, ProblemSecurityHandler errors) throws Exception {
+            JwtAuthenticationConverter converter, ProblemSecurityHandler errors, com.friendoncampus.chat.authorization.CurrentAuthorization current) throws Exception {
         http
+                .addFilterAfter(new com.friendoncampus.chat.authorization.CurrentAuthorizationFilter(current), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth

@@ -16,6 +16,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest(CreditActionController.class)
 @Import({SecurityConfiguration.class,ApiProblems.class})
 class CreditActionHttpTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.friendoncampus.admin.authorization.CurrentAuthorization currentAuthorization;
     @Autowired MockMvc mvc;@MockitoBean JwtDecoder userJwtDecoder;@MockitoBean ServiceTokens tokens;@MockitoBean CreditActionService actions;
     UUID id=UUID.randomUUID(),key=UUID.randomUUID(),target=UUID.randomUUID();
     void role(String role){when(userJwtDecoder.decode("user")).thenReturn(Jwt.withTokenValue("user").header("alg","RS256").subject(target.toString()).claim("role",role).build());}

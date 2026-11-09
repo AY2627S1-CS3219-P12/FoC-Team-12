@@ -22,5 +22,14 @@ public class AdminEligibilityController {
         var user = users.findById(userId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
         return new Eligibility(userId, user.getStatus() == UserStatus.ACTIVE, user.hasRole(UserRole.ADMIN));
     }
+    @GetMapping("/internal/users/{userId}/authorization")
+    @SecurityRequirement(name = "serviceBearer")
+    @Transactional(readOnly = true)
+    public org.springframework.http.ResponseEntity<Authorization> authorization(@PathVariable UUID userId) {
+        var user=users.findById(userId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,"Account not found"));
+        return org.springframework.http.ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(new Authorization(userId,user.getStatus()==UserStatus.ACTIVE,user.getRoles()));
+    }
+    public record Authorization(UUID userId,boolean active,java.util.Set<UserRole> roles) { }
     public record Eligibility(UUID userId, boolean active, boolean administrator) { }
 }

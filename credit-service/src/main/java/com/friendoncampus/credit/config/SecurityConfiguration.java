@@ -48,7 +48,7 @@ public class SecurityConfiguration {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtDecoder jwtDecoder,
-            ObjectMapper objectMapper) throws Exception {
+            ObjectMapper objectMapper, com.friendoncampus.credit.authorization.CurrentAuthorization current) throws Exception {
         AuthenticationEntryPoint authenticationEntryPoint = (request, response, exception) -> writeProblem(
                 response, request, objectMapper, HttpStatus.UNAUTHORIZED,
                 "Unauthorized", "A valid bearer token is required");
@@ -57,6 +57,7 @@ public class SecurityConfiguration {
                 "Forbidden", "This token cannot access the requested credit resource");
 
         return http
+                .addFilterAfter(new com.friendoncampus.credit.authorization.CurrentAuthorizationFilter(current), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize

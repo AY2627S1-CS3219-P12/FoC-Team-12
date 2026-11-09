@@ -157,3 +157,7 @@ records use `sourceSequence: 0` to indicate that no global User/correction seque
 completeness is reconciled per completed operation, independently of the Order/Credit/Admin
 stream checkpoints. Read retries create no business effect. Chat owns retry/backfill and reports
 source/stream/case gap metadata; original outcome and operation IDs provide observability.
+
+General account and selected-role authorization is defined by the approved
+[current authorization contract](current-authorization.md). The compatibility Admin eligibility
+endpoint remains private and retains its existing caller ACL.

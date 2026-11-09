@@ -441,3 +441,15 @@ migrations.
 Running the service needs a PostgreSQL database (`DB_HOST`/`DB_PORT`/`DB_NAME`/
 `DB_USER`/`DB_PASSWORD`) and Compose wiring, which are shared root files added in
 a follow-up.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).
+
+Configure ORDER_USER_URL, ORDER_SERVICE_KEY_ID and
+ORDER_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
+and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
+configuration fails closed even when administrative Kafka consumers are disabled.
