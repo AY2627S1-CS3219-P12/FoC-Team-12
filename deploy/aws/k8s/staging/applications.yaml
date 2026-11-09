@@ -56,6 +56,8 @@ spec:
             - { name: DB_NAME, value: user_db }
             - { name: DB_USER, value: user_user }
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: user-service-secrets, key: DB_PASSWORD } } }
+            - { name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE, value: "2" }
+            - { name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE, value: "0" }
             - { name: JWT_PRIVATE_KEY, valueFrom: { secretKeyRef: { name: user-service-secrets, key: JWT_PRIVATE_KEY } } }
             - { name: USER_SERVICE_TRUSTED_KEYS, valueFrom: { secretKeyRef: { name: user-service-secrets, key: USER_SERVICE_TRUSTED_KEYS } } }
             - { name: USER_EVENTS_PUBLISHER_ENABLED, value: "true" }
@@ -105,6 +107,8 @@ spec:
             - { name: DB_NAME, value: supplier_db }
             - { name: DB_USER, value: supplier_user }
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: supplier-service-secrets, key: DB_PASSWORD } } }
+            - { name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE, value: "2" }
+            - { name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE, value: "0" }
             - { name: SUPPLIER_USER_URL, value: "http://user-service:8081" }
             - { name: SUPPLIER_SERVICE_KEY_ID, valueFrom: { secretKeyRef: { name: supplier-service-secrets, key: SUPPLIER_SERVICE_KEY_ID } } }
             - { name: SUPPLIER_SERVICE_PRIVATE_KEY, valueFrom: { secretKeyRef: { name: supplier-service-secrets, key: SUPPLIER_SERVICE_PRIVATE_KEY } } }
@@ -145,6 +149,8 @@ spec:
             - { name: DB_NAME, value: order_db }
             - { name: DB_USER, value: order_user }
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: order-service-secrets, key: DB_PASSWORD } } }
+            - { name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE, value: "2" }
+            - { name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE, value: "0" }
             - { name: ORDER_USER_URL, value: "http://user-service:8081" }
             - { name: ORDER_SERVICE_KEY_ID, valueFrom: { secretKeyRef: { name: order-service-secrets, key: ORDER_SERVICE_KEY_ID } } }
             - { name: ORDER_SERVICE_PRIVATE_KEY, valueFrom: { secretKeyRef: { name: order-service-secrets, key: ORDER_SERVICE_PRIVATE_KEY } } }
@@ -193,6 +199,8 @@ spec:
             - { name: DB_NAME, value: credit_db }
             - { name: DB_USER, value: credit_user }
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: credit-service-secrets, key: DB_PASSWORD } } }
+            - { name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE, value: "2" }
+            - { name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE, value: "0" }
             - { name: CREDIT_USER_URL, value: "http://user-service:8081" }
             - { name: CREDIT_SERVICE_KEY_ID, valueFrom: { secretKeyRef: { name: credit-service-secrets, key: CREDIT_SERVICE_KEY_ID } } }
             - { name: CREDIT_SERVICE_PRIVATE_KEY, valueFrom: { secretKeyRef: { name: credit-service-secrets, key: CREDIT_SERVICE_PRIVATE_KEY } } }
@@ -240,6 +248,8 @@ spec:
             - { name: ADMIN_DB_PORT, value: "5432" }
             - { name: ADMIN_DB_NAME, value: admin_db }
             - { name: ADMIN_DB_USER, value: admin_user }
+            - { name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE, value: "2" }
+            - { name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE, value: "0" }
             - { name: ADMIN_USER_URL, value: "http://user-service:8081" }
             - { name: ADMIN_USER_JWKS, value: "http://user-service:8081/.well-known/jwks.json" }
             - { name: ADMIN_CHAT_URL, value: "http://chat-service:8085" }
@@ -294,6 +304,8 @@ spec:
             - { name: DB_NAME, value: chat_db }
             - { name: DB_USER, value: chat_user }
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: chat-service-secrets, key: DB_PASSWORD } } }
+            - { name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE, value: "2" }
+            - { name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE, value: "0" }
             - { name: CHAT_JWT_JWK_SET_URI, value: "http://user-service:8081/.well-known/jwks.json" }
             - { name: CHAT_JWT_ISSUER, value: friend-on-campus-user-service }
             - { name: CHAT_JWT_AUDIENCE, value: friend-on-campus-api }
@@ -353,6 +365,8 @@ spec:
             - { name: DB_NAME, value: notification_db }
             - { name: DB_USER, value: notification_user }
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: notification-service-secrets, key: DB_PASSWORD } } }
+            - { name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE, value: "2" }
+            - { name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE, value: "0" }
             - { name: NOTIFICATION_JWT_JWK_SET_URI, value: "http://user-service:8081/.well-known/jwks.json" }
             - { name: NOTIFICATION_JWT_ISSUER, value: friend-on-campus-user-service }
             - { name: NOTIFICATION_JWT_AUDIENCE, value: friend-on-campus-api }
