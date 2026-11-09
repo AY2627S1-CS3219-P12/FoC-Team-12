@@ -79,6 +79,13 @@ activating the shared stack. Existing databases/containers are not reset or popu
 `python3 admin-service/scripts/runtime_smoke.py` uses a unique disposable project, real packaged
 Admin/User/gateway images, private databases and authenticated Kafka. Account activation and case
 eligibility are explicitly test-only setup, not proof of registration/email/Chat integration.
+Reviewer independence is checked against an explicit Python timeline fixture on a private,
+internal smoke-only network with no host port. Missing/unconfigured or incomplete evidence must
+return 503 without creating an action before complete fixture evidence permits the unrelated
+reviewer. This does not verify real Chat reconciliation or service-token validation. The fixture
+never runs in the normal stack. User's self-ban backstop uses a direct test-only Kafka command:
+an independent reviewer cannot also be a participant target in their own case. The reviewer is
+not inserted as an errand participant to make that test pass.
 Ban decisions and outcomes come from real User. Credit rejection outcomes remain test-only and
 are not evidence of Credit financial processing. The optional `ADMIN_RUNTIME_UI_REVIEW=true` holds
 the disposable GUI for up to five minutes and deletes its temporary credentials afterward.

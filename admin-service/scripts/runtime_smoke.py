@@ -5,6 +5,7 @@ Seeds TEST-ONLY case data and activates a disposable User account via fixture SQ
 inside this project's databases (not a reporting, email verification or bootstrap test).
 Credit outcomes are simulated by a test producer using Credit's broker principal;
 no Credit application or ledger runs. User bans/outcomes are produced by real User.
+Chat evidence is served by an explicit private test fixture, never a production fallback.
 Never run the simulated Credit producer against a shared stack.
 ADMIN_RUNTIME_CASE_EVENTS_ONLY=true omits User/Gateway and verifies four TEST-ONLY stored
 history envelopes through packaged Admin, real PostgreSQL and authenticated Kafka, then restart.
@@ -157,6 +158,41 @@ def main():
 """), encoding="utf-8")
         empty = directory / "empty.env"
         empty.touch()
+        evidence_directory = directory / "evidence"
+        evidence_directory.mkdir()
+        if not case_events_only:
+            # This fixture is isolated from the normal Compose stack and has no host port.
+            fixture_script = ROOT / "admin-service/scripts/runtime_evidence_fixture.py"
+            with override.open("a", encoding="utf-8") as stream:
+                stream.write("""  admin-evidence-fixture:
+    image: python:3.13-alpine
+    command: ["python3", "/fixture.py", "/evidence"]
+    volumes:
+      - type: bind
+        source: FIXTURE_SCRIPT
+        target: /fixture.py
+        read_only: true
+      - type: bind
+        source: FIXTURE_DATA
+        target: /evidence
+        read_only: true
+    networks: [admin-evidence-fixture]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+networks:
+  admin-evidence-fixture:
+    internal: true
+""".replace("FIXTURE_SCRIPT", json.dumps(fixture_script.as_posix()))
+       .replace("FIXTURE_DATA", json.dumps(evidence_directory.as_posix())))
+            content = override.read_text(encoding="utf-8")
+            content = content.replace("      ADMIN_ACTION_OUTCOME_TIMEOUT_SECONDS: 3",
+                "      ADMIN_CHAT_URL: http://admin-evidence-fixture:8090\n      ADMIN_ACTION_OUTCOME_TIMEOUT_SECONDS: 3")
+            content = content.replace("  admin-service:\n    ports:",
+                "  admin-service:\n    networks: [default, admin-data, admin-evidence-fixture]\n    ports:")
+            override.write_text(content, encoding="utf-8")
         prefix = ["docker", "compose", "--project-directory", str(ROOT), "--env-file", str(empty),
                   "-p", project, "-f", str(ROOT / "compose.yaml"), "-f", str(override)]
 
@@ -183,6 +219,8 @@ def main():
             compose("config", "--quiet")
             print("Building isolated Admin image" if case_events_only else "Building isolated Admin, User and gateway images", flush=True)
             compose("build", *( ["admin-service"] if case_events_only else ["admin-service", "user-service", "gateway"] ), timeout=1200)
+            if not case_events_only:
+                compose("up", "-d", "--wait", "admin-evidence-fixture", timeout=180)
             print("Starting private Admin database, authenticated broker and Admin" if case_events_only else "Starting private databases, User, authenticated broker and Admin", flush=True)
             compose("up", "-d", "--wait", "admin-service", timeout=1200)
             if case_events_only:
@@ -256,8 +294,18 @@ VALUES ('{case}','{target}','TEST ONLY runtime transport',CURRENT_TIMESTAMP,'TES
             path = f"/api/admin/cases/{case}/actions"
             body = {"type": "CREDIT_ADJUSTMENT", "targetUserId": target, "amount": -5,
                     "reason": "TEST ONLY runtime transport; no financial effect"}
+            status, problem = http(path, "POST", body, token, str(uuid.uuid4()))
+            assert status == 503, f"Missing evidence did not fail closed: {status}: {problem[:1000]}"
+            assert sql(f"SELECT count(*) FROM admin_actions WHERE case_id='{case}'") == "0"
+            evidence_file = evidence_directory / (case + ".json")
+            evidence = dict(orderId=order, requesterId=target, coverage="INCOMPLETE")
+            evidence_file.write_text(json.dumps(evidence), encoding="utf-8")
+            assert http(path, "POST", body, token, str(uuid.uuid4()))[0] == 503, "Incomplete evidence did not fail closed"
+            evidence["coverage"] = "COMPLETE"
+            evidence_file.write_text(json.dumps(evidence), encoding="utf-8")
             status, receipt = http(path, "POST", body, token, key)
-            assert status == 202, "Admin action was not durably accepted"
+            assert status == 202, f"Admin action was not durably accepted: {status}: {receipt[:1000]}"
+            print("PASS: missing/incomplete TEST-ONLY Chat evidence fails closed; unrelated reviewer accepted with complete fixture evidence", flush=True)
             operation = json.loads(receipt)["operationId"]
             poll(lambda: sql(f"SELECT published_at IS NOT NULL FROM admin_action_outbox WHERE operation_id='{operation}'") == "t")
             # Read the actual broker command as Credit, not directly from Admin's outbox.
@@ -317,8 +365,10 @@ VALUES ('{case}','{target}','TEST ONLY runtime transport',CURRENT_TIMESTAMP,'TES
             target_email = "sanction-target@u.nus.edu"
             assert http("/api/users/registrations", "POST", {"email":target_email,"username":"sanction-target","password":password})[0] in (201,503)
             sanction_target = user_sql(f"UPDATE users SET status='ACTIVE' WHERE email='{target_email}'; SELECT id FROM users WHERE email='{target_email}';").splitlines()[-1]
-            for participant in (sanction_target, actor):
+            for participant in (sanction_target,):
                 sql(f"INSERT INTO admin_case_participants(case_id,user_id) VALUES ('{case}','{participant}'); INSERT INTO admin_statements(case_id,reporter_id,description,submitted_at,eligibility_revision) VALUES ('{case}','{participant}','TEST ONLY sanctions',CURRENT_TIMESTAMP,'TEST-ONLY');")
+            evidence["historicalCourierIds"] = [sanction_target]
+            evidence_file.write_text(json.dumps(evidence), encoding="utf-8")
             exercise_outage=os.environ.get("ADMIN_RUNTIME_CONSUMER_OUTAGE","true")=="true"
             if exercise_outage:
                 env["USER_ADMIN_COMMANDS_ENABLED"] = "false"
@@ -368,14 +418,25 @@ VALUES ('{case}','{target}','TEST ONLY runtime transport',CURRENT_TIMESTAMP,'TES
             poll(lambda:int(user_sql(f"SELECT dispatch_version FROM user_sanction_outbox WHERE operation_id='{ban_op}'"))>generation)
             assert json.loads(http("/api/users/admin/accounts?query="+target_email,token=token)[1])["content"][0]["status"]=="ACTIVE", "Old operation rebanned reactivated account"
             assert json.loads(user_sql(f"SELECT payload FROM user_sanction_operations WHERE operation_id='{ban_op}'"))==owner_outcome
-            status,self_receipt=http(path,"POST",{"type":"BAN","targetUserId":actor,"reason":"TEST ONLY self protection"},token,str(uuid.uuid4()))
-            assert status==202
-            self_op=json.loads(self_receipt)["operationId"]
-            poll(lambda:json.loads(http(path+"/"+self_op,token=token)[1])["status"]=="REJECTED")
-            assert json.loads(http(path+"/"+self_op,token=token)[1])["reasonCode"]=="SELF_SANCTION_FORBIDDEN"
-            (samples/"rejected.json").write_text(user_sql(f"SELECT payload FROM user_sanction_operations WHERE operation_id='{self_op}'"),encoding="utf-8")
+            # User's defense-in-depth is exercised by a TEST-ONLY broker producer. A legitimate
+            # independent reviewer cannot also be an involved target of their own case.
+            self_command = json.loads(original_ban)
+            self_op = str(uuid.uuid4())
+            self_command.update(eventId=str(uuid.uuid4()), aggregateId=actor,
+                                occurredAt=datetime.now(timezone.utc).isoformat())
+            self_command["data"].update(operationId=self_op, targetUserId=actor,
+                                        reason="TEST ONLY direct command for User self protection")
+            broker('/opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 '
+                   '--command-config /tmp/runtime-admin-service.properties --topic admin.user.commands --sync '
+                   '--reader-property parse.key=true --reader-property key.separator="|" '
+                   '--command-property enable.idempotence=true --command-property acks=all',
+                   data=actor+"|"+json.dumps(self_command,separators=(",",":"))+"\n")
+            self_outcome = json.loads(poll(lambda:user_sql(f"SELECT payload FROM user_sanction_operations WHERE operation_id='{self_op}'")))
+            assert self_outcome["data"]["result"] == "REJECTED"
+            assert self_outcome["data"]["reasonCode"] == "SELF_SANCTION_FORBIDDEN"
+            (samples/"rejected.json").write_text(json.dumps(self_outcome),encoding="utf-8")
             assert user_sql(f"SELECT count(*) FROM user_account_audit WHERE operation_id='{ban_op}'")=="1"
-            print("PASS: REAL User Kafka ban/recovery, NO_CHANGE, protected self-ban, reason/audit reactivation and duplicate-after-reactivation",flush=True)
+            print("PASS: REAL User Kafka ban/recovery, NO_CHANGE, TEST-ONLY direct-command self-ban protection, reason/audit reactivation and duplicate-after-reactivation",flush=True)
             # Optional bounded visual review in this disposable environment, never a live fallback.
             if os.environ.get("ADMIN_RUNTIME_UI_REVIEW")=="true":
                 review_file=ROOT/"output"/"sanctions-ui-review.json"
