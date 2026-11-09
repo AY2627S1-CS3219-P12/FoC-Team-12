@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Clock3, ImagePlus, Languages, Send, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { fetchConversation, fetchImage, fetchMessages, fetchPreference, fetchQuickReplies, preserveTranslations, requestTranslation, savePreference, sendMessage, subscribeToChat, uploadImage, type ChatMessage } from '../api/chatApi'
+import { fetchConversation, fetchImage, fetchMessages, fetchPreference, fetchQuickReplies, preserveTranslations, requestTranslationUntilSettled, savePreference, sendMessage, subscribeToChat, uploadImage, type ChatMessage } from '../api/chatApi'
 import { readSession } from '../auth/session'
 
 const languages={en:'English',zh:'中文',ms:'Bahasa Melayu',ta:'தமிழ்'}
@@ -13,13 +13,25 @@ export function ChatPage(){
   const messages=useQuery<ChatMessage[]>({queryKey:['chat-messages',id],queryFn:()=>fetchMessages(id!),enabled:!!id,refetchInterval:5000,structuralSharing:(oldData,newData)=>preserveTranslations(oldData as ChatMessage[]|undefined,newData as ChatMessage[])})
   const quick=useQuery({queryKey:['chat-quick'],queryFn:fetchQuickReplies})
   const preference=useQuery({queryKey:['chat-preference'],queryFn:fetchPreference})
+  const messageSnapshot=useRef(messages.data)
+  useEffect(()=>{messageSnapshot.current=messages.data},[messages.data])
   useEffect(()=>id?subscribeToChat(
     id,
     (message)=>client.setQueryData<ChatMessage[]>(['chat-messages',id],(old)=>old?.some(x=>x.id===message.id)?old:[...(old??[]),message]),
     (event)=>client.setQueryData<ChatMessage[]>(['chat-messages',id],(old)=>old?.map(message=>message.id===event.translation.messageId?{...message,translation:event.translation}:message)),
     ()=>void client.invalidateQueries({queryKey:['chat-messages',id]}),
   ):undefined,[id,client])
-  useEffect(()=>{const target=preference.data?.preferredLanguage;if(!id||!target||!session?.userId)return;const missing=messages.data?.filter(message=>message.senderUserId!==session.userId&&(message.messageType==='TEXT'||message.messageType==='QUICK_REPLY')&&message.originalLanguage!==target&&message.translation?.targetLanguage!==target)??[];missing.forEach(message=>void requestTranslation(id,message.id,target).then(translation=>client.setQueryData<ChatMessage[]>(['chat-messages',id],old=>old?.map(item=>item.id===message.id?{...item,translation}:item))).catch(()=>undefined))},[id,messages.data,preference.data?.preferredLanguage,session?.userId,client])
+  const targetLanguage=preference.data?.preferredLanguage
+  const translationCandidateKey=messages.data?.filter(message=>message.senderUserId!==session?.userId&&(message.messageType==='TEXT'||message.messageType==='QUICK_REPLY')&&message.originalLanguage!==targetLanguage).map(message=>message.id).join(',')??''
+  useEffect(()=>{
+    if(!id||!targetLanguage||!session?.userId)return
+    const controller=new AbortController()
+    const candidates=messageSnapshot.current?.filter(message=>message.senderUserId!==session.userId&&(message.messageType==='TEXT'||message.messageType==='QUICK_REPLY')&&message.originalLanguage!==targetLanguage)??[]
+    candidates.filter(message=>message.translation?.targetLanguage!==targetLanguage||message.translation.status==='PENDING').forEach(message=>{
+      void requestTranslationUntilSettled(id,message.id,targetLanguage,{signal:controller.signal,onUpdate:(translation)=>client.setQueryData<ChatMessage[]>(['chat-messages',id],old=>old?.map(item=>item.id===message.id?{...item,translation}:item))}).catch(error=>{if((error as Error).name!=='AbortError')return undefined})
+    })
+    return()=>controller.abort()
+  },[id,targetLanguage,session?.userId,client,translationCandidateKey])
   const mutation=useMutation({mutationFn:async(input:{type:'TEXT'|'QUICK_REPLY'|'IMAGE';key?:string})=>{if(!id)throw new Error('Chat is not ready');if(input.type==='IMAGE'){if(!image)throw new Error('Choose an image');const a=await uploadImage(id,image);return sendMessage(id,{messageType:'IMAGE',attachmentId:a.id})}return sendMessage(id,{messageType:input.type,text:input.type==='TEXT'?text:undefined,quickReplyKey:input.key})},onSuccess:(saved)=>{client.setQueryData<ChatMessage[]>(['chat-messages',id],(old)=>old?.some(x=>x.id===saved.id)?old:[...(old??[]),saved]);setText('');setImage(null)}})
   if(conversation.isPending)return <section className="card state-panel"><h1>Preparing your private chat…</h1><p>The chat opens automatically when the courier assignment is confirmed.</p></section>
   if(conversation.isError)return <section className="card state-panel"><h1>Chat isn’t available yet</h1><p>The errand may not have an assigned courier, or the lifecycle event is still being processed.</p><Link className="text-link" to={`/errands/${orderId}`}>Back to errand</Link></section>

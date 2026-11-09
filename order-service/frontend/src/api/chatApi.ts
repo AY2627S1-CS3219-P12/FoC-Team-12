@@ -26,7 +26,26 @@ export const fetchQuickReplies=()=>request<{content:QuickReply[]}>('/api/chat/qu
 export const fetchPreference=()=>request<{preferredLanguage:string}>('/api/chat/preferences')
 export const savePreference=(preferredLanguage:string)=>request<{preferredLanguage:string}>('/api/chat/preferences',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({preferredLanguage})})
 export const sendMessage=(id:string,body:Record<string,unknown>)=>request<ChatMessage>(`/api/chat/conversations/${id}/messages`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clientMessageId:crypto.randomUUID(),...body})})
-export const requestTranslation=(id:string,messageId:string,targetLanguage:string)=>request<ChatTranslation>(`/api/chat/conversations/${id}/messages/${messageId}/translations`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetLanguage})})
+export const requestTranslation=(id:string,messageId:string,targetLanguage:string,signal?:AbortSignal)=>request<ChatTranslation>(`/api/chat/conversations/${id}/messages/${messageId}/translations`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({targetLanguage}),signal})
+export const fetchTranslation=(id:string,messageId:string,targetLanguage:string,signal?:AbortSignal)=>request<ChatTranslation>(`/api/chat/conversations/${id}/messages/${messageId}/translations/${encodeURIComponent(targetLanguage)}`,{signal})
+type TranslationPollingOptions={signal?:AbortSignal;pollIntervalMs?:number;maxPolls?:number;onUpdate?:(translation:ChatTranslation)=>void}
+const waitForPoll=(delay:number,signal?:AbortSignal)=>new Promise<void>((resolve,reject)=>{
+  if(signal?.aborted){reject(new DOMException('Translation polling was cancelled','AbortError'));return}
+  const abort=()=>{window.clearTimeout(timer);reject(new DOMException('Translation polling was cancelled','AbortError'))}
+  const timer=window.setTimeout(()=>{signal?.removeEventListener('abort',abort);resolve()},delay)
+  signal?.addEventListener('abort',abort,{once:true})
+})
+export async function requestTranslationUntilSettled(id:string,messageId:string,targetLanguage:string,options:TranslationPollingOptions={}):Promise<ChatTranslation>{
+  const {signal,pollIntervalMs=1500,maxPolls=40,onUpdate}=options
+  let translation=await requestTranslation(id,messageId,targetLanguage,signal)
+  onUpdate?.(translation)
+  for(let attempt=0;translation.status==='PENDING'&&attempt<maxPolls;attempt+=1){
+    await waitForPoll(pollIntervalMs,signal)
+    translation=await fetchTranslation(id,messageId,targetLanguage,signal)
+    onUpdate?.(translation)
+  }
+  return translation
+}
 export async function uploadImage(id:string,file:File):Promise<Attachment>{const data=new FormData();data.set('file',file);return request<Attachment>(`/api/chat/conversations/${id}/attachments`,{method:'POST',body:data})}
 export async function fetchImage(id:string,attachmentId:string):Promise<string>{const s=readSession();if(!s)throw new Error('Sign in required');const r=await fetch(`/api/chat/conversations/${id}/attachments/${attachmentId}`,{headers:{Authorization:`${s.tokenType} ${s.accessToken}`}});if(!r.ok)throw new Error('Image unavailable');return URL.createObjectURL(await r.blob())}
 function chatSocketUrl():string{
