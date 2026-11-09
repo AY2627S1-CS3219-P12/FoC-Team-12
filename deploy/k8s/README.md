@@ -59,7 +59,7 @@ pull without credentials; private repositories additionally require an `imagePul
 | Gateway | `arkanian4/foc-gateway-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 | Supplier | `arkanian4/foc-supplier-service:d3-1` |
 | Credit | `arkanian4/foc-credit-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
-| Order | `arkanian4/foc-order-service:sha-5386027a299cdf0096277b3968db59cce5466c48-r42588274532-1` |
+| Order | `arkanian4/foc-order-service:sha-0b1ce6370b045f104e899aac5791bfc64271935b-r42612413273-1` |
 | Chat | `arkanian4/foc-chat-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 | Admin | `arkanian4/foc-admin-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 
