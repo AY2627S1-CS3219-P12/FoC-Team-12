@@ -9,7 +9,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   fetchConversation,
@@ -18,7 +18,7 @@ import {
   fetchPreference,
   fetchQuickReplies,
   preserveTranslations,
-  requestTranslation,
+  requestTranslationUntilSettled,
   savePreference,
   sendMessage,
   subscribeToChat,
@@ -33,12 +33,14 @@ const languages = {
   ms: 'Bahasa Melayu',
   ta: 'தமிழ்',
 }
+
 export function ChatPage() {
   const { orderId = '' } = useParams()
   const session = readSession()
   const client = useQueryClient()
   const [text, setText] = useState('')
   const [image, setImage] = useState<File | null>(null)
+
   const conversation = useQuery({
     queryKey: ['chat', orderId],
     queryFn: () => fetchConversation(orderId),
@@ -46,7 +48,9 @@ export function ChatPage() {
     retryDelay: 1000,
     refetchInterval: (query) => (query.state.data ? false : 2000),
   })
+
   const id = conversation.data?.id
+
   const messages = useQuery<ChatMessage[]>({
     queryKey: ['chat-messages', id],
     queryFn: () => fetchMessages(id!),
@@ -58,14 +62,22 @@ export function ChatPage() {
         newData as ChatMessage[],
       ),
   })
+
   const quick = useQuery({
     queryKey: ['chat-quick'],
     queryFn: fetchQuickReplies,
   })
+
   const preference = useQuery({
     queryKey: ['chat-preference'],
     queryFn: fetchPreference,
   })
+
+  const messageSnapshot = useRef(messages.data)
+  useEffect(() => {
+    messageSnapshot.current = messages.data
+  }, [messages.data])
+
   useEffect(
     () =>
       id
@@ -95,37 +107,61 @@ export function ChatPage() {
         : undefined,
     [id, client],
   )
+
+  const targetLanguage = preference.data?.preferredLanguage
+  const translationCandidateKey =
+    messages.data
+      ?.filter(
+        (message) =>
+          message.senderUserId !== session?.userId &&
+          (message.messageType === 'TEXT' ||
+            message.messageType === 'QUICK_REPLY') &&
+          message.originalLanguage !== targetLanguage,
+      )
+      .map((message) => message.id)
+      .join(',') ?? ''
+
   useEffect(() => {
-    const target = preference.data?.preferredLanguage
-    if (!id || !target || !session?.userId) return
-    const missing =
-      messages.data?.filter(
+    if (!id || !targetLanguage || !session?.userId) return
+    const controller = new AbortController()
+    const candidates =
+      messageSnapshot.current?.filter(
         (message) =>
           message.senderUserId !== session.userId &&
           (message.messageType === 'TEXT' ||
             message.messageType === 'QUICK_REPLY') &&
-          message.originalLanguage !== target &&
-          message.translation?.targetLanguage !== target,
+          message.originalLanguage !== targetLanguage,
       ) ?? []
-    missing.forEach(
-      (message) =>
-        void requestTranslation(id, message.id, target)
-          .then((translation) =>
+
+    candidates
+      .filter(
+        (message) =>
+          message.translation?.targetLanguage !== targetLanguage ||
+          message.translation.status === 'PENDING',
+      )
+      .forEach((message) => {
+        void requestTranslationUntilSettled(id, message.id, targetLanguage, {
+          signal: controller.signal,
+          onUpdate: (translation) =>
             client.setQueryData<ChatMessage[]>(['chat-messages', id], (old) =>
               old?.map((item) =>
                 item.id === message.id ? { ...item, translation } : item,
               ),
             ),
-          )
-          .catch(() => undefined),
-    )
+        }).catch((error) => {
+          if ((error as Error).name !== 'AbortError') return undefined
+        })
+      })
+
+    return () => controller.abort()
   }, [
     id,
-    messages.data,
-    preference.data?.preferredLanguage,
+    targetLanguage,
     session?.userId,
     client,
+    translationCandidateKey,
   ])
+
   const mutation = useMutation({
     mutationFn: async (input: {
       type: 'TEXT' | 'QUICK_REPLY' | 'IMAGE'
@@ -151,6 +187,7 @@ export function ChatPage() {
       setImage(null)
     },
   })
+
   if (conversation.isPending)
     return (
       <section className="card state-panel">
@@ -158,6 +195,7 @@ export function ChatPage() {
         <p>This only takes a moment.</p>
       </section>
     )
+
   if (conversation.isError)
     return (
       <section className="card state-panel">
@@ -168,6 +206,7 @@ export function ChatPage() {
         </Link>
       </section>
     )
+
   return (
     <section className="chat-page" aria-labelledby="chat-title">
       <Link className="text-link chat-back" to={`/errands/${orderId}`}>
@@ -330,6 +369,7 @@ export function ChatPage() {
     </section>
   )
 }
+
 export function MessageBubble({
   message,
   mine,
@@ -339,6 +379,7 @@ export function MessageBubble({
 }) {
   const [url, setUrl] = useState('')
   const [showOriginal, setShowOriginal] = useState(false)
+
   useEffect(() => {
     if (!message.attachment) return
     let current = ''
@@ -350,6 +391,7 @@ export function MessageBubble({
       if (current) URL.revokeObjectURL(current)
     }
   }, [message])
+
   if (message.messageType === 'SYSTEM')
     return (
       <article className="system-message">
@@ -365,8 +407,10 @@ export function MessageBubble({
         </div>
       </article>
     )
+
   const translated =
     !mine && message.translation?.status === 'READY' && message.translation.text
+
   return (
     <article className={`message-bubble ${mine ? 'message-mine' : ''}`}>
       <span className="message-author">

@@ -92,6 +92,24 @@ The courier gets two notifications for T11 and T14: `ORDER_CANCELLED` + `CREDITS
 `ORDER_COMPLETED` + `CREDITS_RECEIVED`. Both are kept, so the lifecycle news is not delayed by
 Credit (approved 2026-11-04).
 
+### Reminders (built, iteration 11)
+
+Approved 2026-11-10. Derived from the errand state each `OrderTransitioned` reports, not from the
+action, so a missed or repeated event cannot leave a wrong reminder behind:
+
+| Errand state after the event | Reminders kept or armed (recipient, due) |
+| --- | --- |
+| `OPEN`, no courier | `ORDER_STILL_OPEN` (requester, `pickupDeadline − 30 min`) |
+| `ACCEPTED` | `PICKUP_DUE_SOON` (courier, `− 15 min`) and `PICKUP_OVERDUE` (courier, at the deadline) |
+| any other | none; pending ones are cancelled |
+
+Decisions: a reminder already past when it would be armed is skipped; the requester text suggests
+raising the reward or moving the pickup time without naming an amount; extending the deadline
+reminds again for the new one; a reminder sent more than 30 minutes late is dropped (`MISSED`).
+Stored in `notification_reminders` (V4): order, recipient, type, deadline, due time, title, status,
+the event that armed it. Sent reminders are ordinary notifications with business key
+`reminder:{id}`.
+
 ## Proposed contract: `OrderTransitioned` on `order.lifecycle.events`
 
 **Status: proposed, not approved.** The shape is the shared one in
@@ -347,6 +365,7 @@ Each one is a `/foc-iterate-feature notification-…` run.
 | 8 | `retention`: hourly batched deletion for the approved 30/90-day policy (V2 indexes) | Done (this change) |
 | 9 | Observability: metrics, alerts and structured logs ([Observability](#observability)) | After 3 |
 | 10 | Optional: server-sent events for the badge | If time allows, after 7 |
+| 11 | `pickup-reminders`: `ORDER_STILL_OPEN`, `PICKUP_DUE_SOON`, `PICKUP_OVERDUE` from lifecycle events; minute sender with `SKIP LOCKED` (V4) | Done (this change) |
 
 ## Verification
 

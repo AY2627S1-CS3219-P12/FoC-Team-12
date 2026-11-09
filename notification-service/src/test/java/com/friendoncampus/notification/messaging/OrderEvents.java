@@ -24,8 +24,18 @@ final class OrderEvents {
         }
     }
 
+    static final String PICKUP_DEADLINE = "2026-10-30T10:00:00Z";
+
     static Map<String, Object> transition(Errand errand, long sourceSequence, String action, String fromState,
             String toState, Map<String, Object> actor, UUID previousCourierId, UUID courierId, String reasonCode) {
+        return transition(errand, sourceSequence, action, fromState, toState, actor, previousCourierId, courierId,
+                reasonCode, PICKUP_DEADLINE);
+    }
+
+    /** The same, with the errand's pickup deadline at that point (an EDIT can move it). */
+    static Map<String, Object> transition(Errand errand, long sourceSequence, String action, String fromState,
+            String toState, Map<String, Object> actor, UUID previousCourierId, UUID courierId, String reasonCode,
+            String pickupDeadline) {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("orderId", errand.orderId().toString());
         snapshot.put("requesterId", errand.requesterId().toString());
@@ -34,7 +44,7 @@ final class OrderEvents {
         snapshot.put("title", TITLE);
         snapshot.put("description", "Flat white from the library cafe");
         snapshot.put("creditReward", 3);
-        snapshot.put("pickupDeadline", "2026-10-30T10:00:00Z");
+        snapshot.put("pickupDeadline", pickupDeadline);
         snapshot.put("pickupLocationId", "11111111-1111-4111-8111-111111111111");
         snapshot.put("dropoffLocationId", "22222222-2222-4222-8222-222222222222");
         snapshot.put("pickupLocationName", "Library cafe");
