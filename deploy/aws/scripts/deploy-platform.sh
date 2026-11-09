@@ -40,6 +40,31 @@ retry() {
   done
 }
 
+recover_pending_helm_release() {
+  local release=$1
+  local namespace=$2
+  local status
+  local revision
+
+  status=$(helm status "$release" --namespace "$namespace" --output json 2>/dev/null \
+    | jq -r '.info.status // empty' 2>/dev/null || true)
+
+  case "$status" in
+    pending-install|pending-upgrade|pending-rollback)
+      revision=$(helm history "$release" --namespace "$namespace" --output json \
+        | jq -r '[.[] | select(.status == "deployed")] | last | .revision // empty')
+      if [[ -z $revision ]]; then
+        echo "Helm release $namespace/$release is $status and has no deployed revision to restore." >&2
+        return 1
+      fi
+
+      echo "Recovering Helm release $namespace/$release from $status using deployed revision $revision."
+      helm rollback "$release" "$revision" \
+        --namespace "$namespace" --cleanup-on-fail --wait --timeout 10m
+      ;;
+  esac
+}
+
 job_diagnostics() {
   local namespace=$1
   local job=$2
@@ -110,8 +135,9 @@ retry 4 15 helm pull external-secrets \
   --destination "$chart_dir"
 external_secrets_chart="$chart_dir/external-secrets-$EXTERNAL_SECRETS_CHART_VERSION.tgz"
 
+recover_pending_helm_release external-secrets external-secrets
 helm upgrade --install external-secrets "$external_secrets_chart" \
-  --namespace external-secrets --create-namespace --wait --timeout 10m \
+  --namespace external-secrets --create-namespace --atomic --cleanup-on-fail --wait --timeout 10m \
   --set serviceAccount.name=external-secrets \
   --set-string "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=$EXTERNAL_SECRETS_ROLE_ARN"
 
