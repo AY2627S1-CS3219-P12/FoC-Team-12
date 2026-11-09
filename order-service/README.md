@@ -79,6 +79,27 @@ into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
   | `creditReward` | required integer, > 0 |
   | `pickupDeadline` | required, must be in the future (ISO-8601) |
 
+- **Optional header `Idempotency-Key`:** 1–64 characters from `A-Z a-z 0-9 - _`
+  (a UUID works), chosen by the client for one create request. It makes a retry
+  safe, for example after a timeout or a double-click:
+
+  | Request | Result |
+  | --- | --- |
+  | No key | `201`, a new order every time |
+  | New key | `201`, the order is created and remembers the key |
+  | Same requester, same key, same body | `200` with the order the first request created, `Location` set; nothing is written, so there is no second `OrderSubmitted` and no second reservation |
+  | Same requester, same key, different body | `409` with `code: IDEMPOTENCY_KEY_REUSED`; nothing is written |
+  | Malformed key | `400` with `code: INVALID_IDEMPOTENCY_KEY` |
+
+  Keys belong to the requester: another user's identical key is independent.
+  "Same body" compares the request as sent (after trimming), with the deadline as an
+  instant, so a later edit of the errand does not turn a late retry into a conflict.
+  Concurrent requests with one key are serialised, so exactly one creates the order.
+  A rejected request (`400`) stores nothing, so the key can be reused once it is fixed.
+  Body validation runs first, so a retry sent after the pickup deadline gets the usual
+  `400` for the deadline rather than the original order.
+  The Order UI sends one key per errand content: posting the same fields again
+  reuses it, and changing a field starts a new one.
 - **Success:** `201 Created`, `Location: /api/orders/{id}`, body is the created
   order in state `PENDING_CREDIT`.
 - **Validation failure:** `400` RFC-7807 `application/problem+json`. Field
@@ -166,6 +187,8 @@ problems with a `code` and the order's `currentState`:
 | `REWARD_ADJUSTMENT_PENDING` | 409 | Accept or edit while a reward change awaits Credit |
 | `VERSION_CONFLICT` | 409 | Edit based on an old `version`; the problem carries `currentVersion` |
 | `INVALID_QUERY` | 400 | A list endpoint got an invalid filter, sort or paging value (no `currentState`) |
+| `INVALID_IDEMPOTENCY_KEY` | 400 | Create sent a malformed `Idempotency-Key` (no `currentState`) |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | Create reused an `Idempotency-Key` with a different body (no `currentState`) |
 
 Every state change also stores an `order_transitions`
 history row in the same transaction; credit-changing ones also store an
@@ -400,7 +423,7 @@ runs the errand lifecycle end to end through the gateway (`baseUrl`, default
 | Folder | Shows |
 | --- | --- |
 | 0. Setup | Sign-in for requester, courier and admin (tokens are stored automatically), credit allocation, two Supplier locations |
-| 1. Create, read and edit | `401`/`403`/`400` on create, `PENDING_CREDIT → OPEN` via Credit, raising the reward reserves only the difference, `409 VERSION_CONFLICT`, history |
+| 1. Create, read and edit | `401`/`403`/`400` on create, a retried create with the same `Idempotency-Key` returns the same errand (`200`) and a changed body gets `409 IDEMPOTENCY_KEY_REUSED`, `PENDING_CREDIT → OPEN` via Credit, raising the reward reserves only the difference, `409 VERSION_CONFLICT`, history |
 | 2. Discover and accept | Pool with filters, own errands hidden, `403 SELF_ACCEPTANCE_FORBIDDEN`, wrong-role `403`, accept, the race loser's `409 ORDER_ALREADY_ACCEPTED`, courier's active list |
 | 3. Deliver and complete | Wrong-role `403`s, `409 CANCELLATION_NOT_ALLOWED` after pickup, completion pays the courier the full reward, a repeated completion returns `200` with no second effect |
 | 4. Cancel, compensate and withdraw | `403 NOT_ASSIGNED_COURIER`, withdrawal reopens, re-acceptance, `403 NOT_ORDER_REQUESTER`, cancelling an accepted 3-credit errand pays the courier `ceil(20%)` = 1, a repeated cancel is a no-op |

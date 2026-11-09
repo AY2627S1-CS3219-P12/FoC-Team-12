@@ -1,11 +1,14 @@
 package com.friendoncampus.order.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -28,7 +31,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.friendoncampus.order.domain.Order;
+import com.friendoncampus.order.domain.OrderErrorCode;
 import com.friendoncampus.order.service.CreateOrderCommand;
+import com.friendoncampus.order.service.CreateOrderResult;
+import com.friendoncampus.order.service.IdempotencyKeyException;
 import com.friendoncampus.order.service.OrderService;
 import com.friendoncampus.order.web.error.ApiExceptionHandler;
 
@@ -114,11 +120,11 @@ class OrderControllerValidationTest {
 
     @Test
     void createsOrderUsingJwtSubjectAsRequester() throws Exception {
-        when(orderService.createOrder(any(CreateOrderCommand.class))).thenAnswer(invocation -> {
+        when(orderService.createOrder(any(CreateOrderCommand.class), any())).thenAnswer(invocation -> {
             CreateOrderCommand command = invocation.getArgument(0);
-            return Order.submit(command.requesterId(), command.title(), command.description(),
+            return new CreateOrderResult(Order.submit(command.requesterId(), command.title(), command.description(),
                     command.pickupLocationId(), "COM1 Print Shop", command.dropoffLocationId(), "UTown Residence", command.creditReward(),
-                    command.pickupDeadline());
+                    command.pickupDeadline()), false);
         });
 
         mockMvc.perform(post("/api/orders")
@@ -138,7 +144,7 @@ class OrderControllerValidationTest {
                         .content(requestBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.title").exists());
-        verify(orderService, never()).createOrder(any());
+        verify(orderService, never()).createOrder(any(), any());
     }
 
     @Test
@@ -177,16 +183,16 @@ class OrderControllerValidationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ not json"))
                 .andExpect(status().isBadRequest());
-        verify(orderService, never()).createOrder(any());
+        verify(orderService, never()).createOrder(any(), any());
     }
 
     @Test
     void storesTheTrimmedLocationNamesTheClientSent() throws Exception {
-        when(orderService.createOrder(any(CreateOrderCommand.class))).thenAnswer(invocation -> {
+        when(orderService.createOrder(any(CreateOrderCommand.class), any())).thenAnswer(invocation -> {
             CreateOrderCommand command = invocation.getArgument(0);
-            return Order.submit(command.requesterId(), command.title(), command.description(),
+            return new CreateOrderResult(Order.submit(command.requesterId(), command.title(), command.description(),
                     command.pickupLocationId(), command.pickupLocationName(), command.dropoffLocationId(),
-                    command.dropoffLocationName(), command.creditReward(), command.pickupDeadline());
+                    command.dropoffLocationName(), command.creditReward(), command.pickupDeadline()), false);
         });
 
         mockMvc.perform(post("/api/orders")
@@ -215,6 +221,77 @@ class OrderControllerValidationTest {
                                 "UTown Residence", "10", futureDeadline())))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors.pickupLocationName").exists());
-        verify(orderService, never()).createOrder(any());
+        verify(orderService, never()).createOrder(any(), any());
+    }
+
+    private static Order submitted(CreateOrderCommand command) {
+        return Order.submit(command.requesterId(), command.title(), command.description(),
+                command.pickupLocationId(), command.pickupLocationName(), command.dropoffLocationId(),
+                command.dropoffLocationName(), command.creditReward(), command.pickupDeadline());
+    }
+
+    @Test
+    void passesTheIdempotencyKeyToTheService() throws Exception {
+        when(orderService.createOrder(any(CreateOrderCommand.class), any())).thenAnswer(invocation ->
+                new CreateOrderResult(submitted(invocation.getArgument(0)), false));
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Idempotency-Key", "6f1c2b7e-3d4a-4c1f-9b8e-2a7d5e0c9f13")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isCreated());
+        verify(orderService).createOrder(any(CreateOrderCommand.class), eq("6f1c2b7e-3d4a-4c1f-9b8e-2a7d5e0c9f13"));
+    }
+
+    @Test
+    void withoutAnIdempotencyKeyTheServiceGetsNone() throws Exception {
+        when(orderService.createOrder(any(CreateOrderCommand.class), any())).thenAnswer(invocation ->
+                new CreateOrderResult(submitted(invocation.getArgument(0)), false));
+
+        mockMvc.perform(post("/api/orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isCreated());
+        verify(orderService).createOrder(any(CreateOrderCommand.class), isNull());
+    }
+
+    @Test
+    void aReplayedRequestAnswers200WithTheExistingErrand() throws Exception {
+        when(orderService.createOrder(any(CreateOrderCommand.class), any())).thenAnswer(invocation ->
+                new CreateOrderResult(submitted(invocation.getArgument(0)), true));
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Idempotency-Key", "retry-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isOk())
+                .andExpect(header().exists("Location"))
+                .andExpect(jsonPath("$.state").value("PENDING_CREDIT"));
+    }
+
+    @Test
+    void rejectsAMalformedIdempotencyKeyWithoutCreating() throws Exception {
+        for (String key : List.of("has space", "a".repeat(65), "semi;colon", "")) {
+            mockMvc.perform(post("/api/orders")
+                            .header("Idempotency-Key", key)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(validBody()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code").value("INVALID_IDEMPOTENCY_KEY"));
+        }
+        verify(orderService, never()).createOrder(any(), any());
+    }
+
+    @Test
+    void aKeyReusedForADifferentErrandIs409() throws Exception {
+        when(orderService.createOrder(any(CreateOrderCommand.class), any())).thenThrow(
+                new IdempotencyKeyException(OrderErrorCode.IDEMPOTENCY_KEY_REUSED, "reused"));
+
+        mockMvc.perform(post("/api/orders")
+                        .header("Idempotency-Key", "retry-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
     }
 }

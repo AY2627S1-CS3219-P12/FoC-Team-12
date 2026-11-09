@@ -116,6 +116,12 @@ public class Order {
     @Column(name = "expired_at")
     private OffsetDateTime expiredAt;
 
+    @Column(name = "idempotency_key", length = 64, updatable = false)
+    private String idempotencyKey;
+
+    @Column(name = "idempotency_fingerprint", length = 64, updatable = false)
+    private String idempotencyFingerprint;
+
     protected Order() {
     }
 
@@ -147,6 +153,18 @@ public class Order {
         order.state = OrderState.PENDING_CREDIT;
         order.correlationId = UUID.randomUUID();
         return order;
+    }
+
+    /**
+     * Records the client's {@code Idempotency-Key} for this create request and the fingerprint of
+     * the request it came with. Only for a new order, before it is first stored.
+     */
+    public void claimIdempotencyKey(String key, String fingerprint) {
+        if (id != null) {
+            throw new IllegalStateException("An idempotency key can only be set on a new order");
+        }
+        idempotencyKey = key;
+        idempotencyFingerprint = fingerprint;
     }
 
     /** The SUBMIT transition recorded when a new order is first stored. */
@@ -599,6 +617,15 @@ public class Order {
 
     public OffsetDateTime getExpiredAt() {
         return expiredAt;
+    }
+
+    /** The {@code Idempotency-Key} the order was created with; null when none was sent. */
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public String getIdempotencyFingerprint() {
+        return idempotencyFingerprint;
     }
 
 }

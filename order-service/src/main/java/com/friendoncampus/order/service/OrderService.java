@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.friendoncampus.order.domain.OrderAction;
 import com.friendoncampus.order.domain.Order;
 import com.friendoncampus.order.domain.OrderDetails;
+import com.friendoncampus.order.domain.OrderErrorCode;
 import com.friendoncampus.order.domain.OrderState;
 import com.friendoncampus.order.domain.TerminalReason;
 import com.friendoncampus.order.domain.OrderTransition;
@@ -47,7 +48,37 @@ public class OrderService {
     /** Persists a new order in PENDING_CREDIT and records {@code OrderSubmitted} (Credit reserves). */
     @Transactional
     public Order createOrder(CreateOrderCommand command) {
-        Order order = orderRepository.saveAndFlush(Order.submit(
+        return createOrder(command, null).order();
+    }
+
+    /**
+     * As {@link #createOrder(CreateOrderCommand)}, made safe to retry by the client's
+     * {@code idempotencyKey} (null when none was sent). The first request with a key creates the
+     * order; a repeat by the same requester with the same request returns that order and writes
+     * nothing, so there is no second {@code OrderSubmitted} and no second reservation. The same key
+     * with a different request is rejected with {@code IDEMPOTENCY_KEY_REUSED}. Concurrent requests
+     * with one key are serialised by a transaction-scoped lock, so exactly one creates the order.
+     */
+    @Transactional
+    public CreateOrderResult createOrder(CreateOrderCommand command, String idempotencyKey) {
+        if (idempotencyKey == null) {
+            return new CreateOrderResult(submit(command, null, null), false);
+        }
+        String fingerprint = CreateOrderFingerprint.of(command);
+        orderRepository.lockIdempotencyKey(command.requesterId() + ":" + idempotencyKey);
+        return orderRepository.findByRequesterIdAndIdempotencyKey(command.requesterId(), idempotencyKey)
+                .map(existing -> {
+                    if (!existing.getIdempotencyFingerprint().equals(fingerprint)) {
+                        throw new IdempotencyKeyException(OrderErrorCode.IDEMPOTENCY_KEY_REUSED,
+                                "This Idempotency-Key was already used for a different errand");
+                    }
+                    return new CreateOrderResult(existing, true);
+                })
+                .orElseGet(() -> new CreateOrderResult(submit(command, idempotencyKey, fingerprint), false));
+    }
+
+    private Order submit(CreateOrderCommand command, String idempotencyKey, String fingerprint) {
+        Order order = Order.submit(
                 command.requesterId(),
                 command.title(),
                 command.description(),
@@ -56,9 +87,13 @@ public class OrderService {
                 command.dropoffLocationId(),
                 command.dropoffLocationName(),
                 command.creditReward(),
-                command.pickupDeadline()));
-        eventRecorder.record(order, order.submitted(now()));
-        return order;
+                command.pickupDeadline());
+        if (idempotencyKey != null) {
+            order.claimIdempotencyKey(idempotencyKey, fingerprint);
+        }
+        Order saved = orderRepository.saveAndFlush(order);
+        eventRecorder.record(saved, saved.submitted(now()));
+        return saved;
     }
 
     /** Returns the order if the caller may see it; otherwise reports it as not found. */

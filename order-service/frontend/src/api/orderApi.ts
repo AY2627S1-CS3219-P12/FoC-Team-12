@@ -212,10 +212,30 @@ export function updateOrder(
   })
 }
 
-export function createOrder(input: CreateOrderInput): Promise<Order> {
+/**
+ * A fresh `Idempotency-Key`. `crypto.randomUUID` exists only in secure contexts (HTTPS or
+ * localhost); over plain HTTP the key is built from `crypto.getRandomValues`, which is always there.
+ */
+export function newIdempotencyKey(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('')
+}
+
+/**
+ * POST /api/orders. `idempotencyKey` makes a retry safe: the same key with the same body returns the
+ * errand already created instead of posting (and reserving credits for) a second one.
+ */
+export function createOrder(
+  input: CreateOrderInput,
+  idempotencyKey?: string,
+): Promise<Order> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
   return request<Order>('/api/orders', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(input),
   })
 }

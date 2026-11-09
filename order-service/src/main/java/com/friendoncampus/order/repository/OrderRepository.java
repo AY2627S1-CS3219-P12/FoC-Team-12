@@ -37,6 +37,17 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     @Query("select o from Order o where o.id = :id")
     Optional<Order> findByIdForUpdate(@Param("id") UUID id);
 
+    /** The order this requester already created with {@code idempotencyKey}, if any. */
+    Optional<Order> findByRequesterIdAndIdempotencyKey(UUID requesterId, String idempotencyKey);
+
+    /**
+     * Serialises create requests that share one requester and {@code Idempotency-Key}: a
+     * transaction-scoped advisory lock, released at commit or rollback. A second request waits for
+     * the first to commit and then finds its order, instead of failing on the unique index.
+     */
+    @Query(value = "select true from pg_advisory_xact_lock(hashtextextended(:lockKey, 0))", nativeQuery = true)
+    Boolean lockIdempotencyKey(@Param("lockKey") String lockKey);
+
     /** IDs of orders in the given state whose deadline is at or before {@code now}, oldest first. */
     @Query("select o.id from Order o where o.state = :state and o.pickupDeadline <= :now"
             + " order by o.pickupDeadline asc, o.id asc")
