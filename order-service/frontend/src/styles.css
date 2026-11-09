@@ -240,6 +240,7 @@ a.button-secondary svg { width: 1rem; margin-right: .4rem; }
 .language-select { display:grid; grid-template-columns:auto 1fr; gap:.25rem .5rem; align-items:center; font-weight:700; }
 .language-select svg { width:1.1rem; }
 .language-select select { grid-column:1 / -1; min-height:2.75rem; padding:.55rem 2.25rem .55rem .75rem; border:1px solid var(--line); border-radius:.875rem; background:var(--surface); color:var(--ink); font:inherit; }
+.language-select small { grid-column:1 / -1; max-width:15rem; color:var(--muted); font-size:.7rem; font-weight:400; line-height:1.35; }
 .message-list { min-height:24rem; max-height:56vh; overflow:auto; display:flex; flex-direction:column; gap:.75rem; padding:1rem; border:1px solid var(--line); border-radius:1rem; background:#fff; }
 .chat-empty { margin:auto; text-align:center; color:var(--muted); }
 .message-bubble { align-self:flex-start; max-width:min(78%,32rem); padding:.7rem .85rem; border-radius:.9rem .9rem .9rem .2rem; background:var(--action-soft); }
@@ -247,6 +248,10 @@ a.button-secondary svg { width: 1rem; margin-right: .4rem; }
 .message-bubble p { margin:.15rem 0; white-space:pre-wrap; overflow-wrap:anywhere; }
 .message-bubble img { display:block; max-width:100%; max-height:20rem; border-radius:.5rem; }
 .message-author,.message-bubble time { display:block; font-size:.75rem; opacity:.75; }
+.translation-toggle { min-height:auto; margin:.25rem 0; padding:0; border:0; background:transparent; color:var(--action); font-size:.75rem; font-weight:700; text-decoration:underline; }
+.translation-toggle:hover:not(:disabled) { border:0; background:transparent; box-shadow:none; }
+.message-bubble .message-original { margin:.35rem 0; padding-top:.35rem; border-top:1px solid color-mix(in srgb,var(--action) 20%,transparent); color:var(--muted); font-size:.85rem; }
+.translation-status { display:block; margin:.25rem 0; color:var(--muted); font-size:.75rem; font-style:italic; }
 .system-message { align-self:center; display:flex; align-items:center; gap:.55rem; max-width:min(90%,34rem); padding:.55rem .8rem; border:1px solid var(--line); border-radius:1rem; background:var(--canvas); color:var(--muted); text-align:left; }
 .system-message svg { flex:0 0 auto; width:1rem; height:1rem; color:var(--action); }
 .system-message p { margin:0; color:var(--ink); font-size:.85rem; font-weight:700; }

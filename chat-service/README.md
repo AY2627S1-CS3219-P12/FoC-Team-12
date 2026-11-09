@@ -8,7 +8,8 @@ private S3 object storage and EKS Pod Identity behind the shared HTTPS gateway.
 
 Owner: **Eldridge**. Status: runnable core chat; preferences, localized quick replies, JWT
 security, lifecycle ingestion, durable messages, assignment privacy, private images, WebSockets
-and RabbitMQ fan-out are implemented. Amazon translation remains staged. Source: D3 slides
+and RabbitMQ fan-out are implemented. Gemini-backed translation preserves message originals and
+delivers completed translations through the existing live channel. Source: D3 slides
 10-14, D1 N2H1 and agreed Admin integration.
 
 ## Implemented core chat
@@ -173,18 +174,19 @@ access and streams each download from S3, so object keys and AWS credentials nev
 Failed metadata transactions trigger best-effort object cleanup; define an approved retention and
 orphan-reconciliation policy before introducing automatic deletion of valid chat history.
 
-Translate incoming text automatically for an authorized recipient's preferred language, or on an
-explicit authorized request for an allowed target language; persist original
-unchanged and translation state PENDING/READY/FAILED in PostgreSQL. Unique message/language/
-provider-version prevents duplicate jobs. Redis caches completed results; cache misses fall back
-to DB. Notify authorized subscribers when translation completes. Provider failure retries boundedly
-and leaves original readable. User text is sent to AWS Translate: disclose this in the UI/privacy
-notice and restrict AWS permissions; no images or unrelated private data sent for translation.
+Incoming text and quick replies are translated automatically for an authorized recipient's
+preferred language, or through an explicit authorized request for an allowed target language.
+The original is immutable and translation state is PENDING/PROCESSING/READY/FAILED in PostgreSQL.
+The unique message/language/provider/model constraint is both the durable cache and duplicate-job
+guard. RabbitMQ carries directed jobs between Chat replicas; interrupted jobs are recovered and
+provider failures retry at most three times. READY/FAILED changes are pushed to authorized
+subscribers through the existing WebSocket destination, while the original remains readable.
 
-The preferred-language feature changes the target selection but not this durability rule. During
-the core-chat iterations, the translation provider remains disabled/fake and no text leaves the
-local environment. The later translation iteration enables automatic jobs only after provider
-credentials, disclosure and failure behavior are verified.
+Only message text is sent server-side to the Google Gemini API; images, lifecycle evidence,
+identities and credentials are not sent. The UI must disclose third-party AI translation and let
+the recipient reveal the preserved original. Keep `CHAT_TRANSLATION_PROVIDER=disabled` when no
+approved `GEMINI_API_KEY` has been injected. The key belongs in `.env` locally and AWS Secrets
+Manager in staging, never in Git or the browser bundle.
 
 Do not implement message editing/deletion, arbitrary admin browsing, voice/video, email/SMS or a
 second ledger/logging backend. Retain terminal chat/case history; exact retention periods, user

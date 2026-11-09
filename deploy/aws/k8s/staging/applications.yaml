@@ -308,6 +308,10 @@ spec:
             - { name: CHAT_S3_BUCKET, value: CHAT_S3_BUCKET_REPLACED_BY_DEPLOY_SCRIPT }
             - { name: CHAT_S3_KEY_PREFIX, value: attachments }
             - { name: AWS_REGION, value: AWS_REGION_REPLACED_BY_DEPLOY_SCRIPT }
+            - { name: CHAT_TRANSLATION_PROVIDER, valueFrom: { secretKeyRef: { name: chat-service-secrets, key: CHAT_TRANSLATION_PROVIDER, optional: true } } }
+            - { name: GEMINI_API_KEY, valueFrom: { secretKeyRef: { name: chat-service-secrets, key: GEMINI_API_KEY, optional: true } } }
+            - { name: CHAT_GEMINI_MODEL, value: gemini-3.5-flash-lite }
+            - { name: CHAT_TRANSLATION_MAX_ATTEMPTS, value: "3" }
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70.0 -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1" }
           startupProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 120 }
           readinessProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 10, timeoutSeconds: 3 }
