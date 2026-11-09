@@ -27,14 +27,16 @@ public class CaseService {
     private final ChatEligibilityClient chat;
     private final ChatConversationClient conversations;
     private final CreditActionService creditActions;
+    private final ReviewerIndependenceService independence;
     private final TransactionTemplate transaction;
     private final JsonMapper json = JsonMapper.builder().build();
     private static final String CASE_COLUMNS = "id, order_id, state, reviewer_id, revision, created_at, correlation_id, source_sequence";
 
-    public CaseService(JdbcTemplate db, UserEligibilityClient users, ChatEligibilityClient chat, ChatConversationClient conversations, CreditActionService creditActions, PlatformTransactionManager manager) {
+    public CaseService(JdbcTemplate db, UserEligibilityClient users, ChatEligibilityClient chat, ChatConversationClient conversations, CreditActionService creditActions, PlatformTransactionManager manager, ReviewerIndependenceService independence) {
         this.db = db; this.users = users; this.chat = chat;
         this.conversations = conversations;
         this.creditActions = creditActions;
+        this.independence = independence;
         transaction = new TransactionTemplate(manager);
         transaction.setTimeout(15);
     }
@@ -82,12 +84,16 @@ public class CaseService {
     public Mutation claim(Jwt jwt, UUID key, UUID caseId, long expectedRevision) {
         UUID actor = requireAdmin(jwt);
         if (expectedRevision < 0) throw invalid("Revision must be non-negative.");
+        var initial = row(caseId).summary;
+        independence.verify(jwt, caseId, initial.orderId());
+        requireAdmin(jwt);
         String route = "/api/admin/cases/" + caseId + "/claim";
         String hash = hash(List.of(expectedRevision));
         return mutate(key, actor, route, hash, () -> {
             List<CaseRow> rows = db.query("SELECT " + CASE_COLUMNS + " FROM admin_cases WHERE id=? FOR UPDATE", this::caseRow, caseId);
             if (rows.isEmpty()) return problem(404, "Case not found.", route);
             CaseRow c = rows.get(0);
+            independence.require(caseId, c.summary.orderId(), actor);
             if (c.summary.revision() != expectedRevision) return problem(409, "This case has changed. Refresh it before claiming.", route);
             if (c.summary.state() != AdminCase.State.OPEN) return problem(409, "This case has already been claimed or resolved.", route);
             db.update("UPDATE admin_cases SET state='UNDER_REVIEW',reviewer_id=?,revision=revision+1,source_sequence=source_sequence+1 WHERE id=?", actor, caseId);
@@ -185,6 +191,8 @@ public class CaseService {
         UUID actor = requireAdmin(jwt);
         if (participantId == null || key == null) throw invalid("A participant and Idempotency-Key UUID are required.");
         var initial = conversationCase(actor, caseId, participantId);
+        independence.verify(jwt, caseId, initial.orderId());
+        requireAdmin(jwt);
         String route = "/api/admin/cases/" + caseId + "/conversations";
         String fingerprint = hash(List.of(participantId.toString()));
         // Reserve global operation identity in a short transaction. 503 is provisional, not proof
@@ -200,6 +208,7 @@ public class CaseService {
                 lock("request:" + key);
                 db.query("SELECT id FROM admin_cases WHERE id=? FOR UPDATE", r -> null, caseId);
                 conversationCase(actor, caseId, participantId);
+                independence.require(caseId, initial.orderId(), actor);
                 var previous = receipt(key, actor, route, fingerprint);
                 if (previous != null && previous.status() != 503) return previous;
                 var known = db.queryForList("SELECT conversation_id FROM admin_case_conversations WHERE case_id=? AND participant_user_id=?", UUID.class, caseId, participantId);

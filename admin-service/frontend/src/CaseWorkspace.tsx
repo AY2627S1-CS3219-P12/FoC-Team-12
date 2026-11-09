@@ -24,10 +24,13 @@ import {
 
 function message(error: unknown) {
   if (error instanceof CaseError || error instanceof AccessError) {
+    if (
+      error.message.startsWith('Reviewer independence could not be verified.')
+    )
+      return error.message
     if (error.status === 401)
       return 'Your session has expired. Sign in to continue.'
-    if (error.status === 403)
-      return 'Access denied. Select the appropriate workspace or contact an administrator.'
+    if (error.status === 403) return error.message
     if (error.status === 404)
       return 'This case is unavailable or you do not have access.'
     if (error.status < 500) return error.message
@@ -813,6 +816,16 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           <button onClick={state.retry}>Refresh case</button>
         </div>
         <SummaryCard value={value} />
+        <p>
+          Only an independent administrator can review this case. If you
+          requested the errand or were ever assigned as its courier, you cannot
+          claim it, take administrative actions, start a review conversation or
+          resolve it, even if you are already assigned as reviewer or did not
+          submit a report. Complete, fresh errand evidence is required to verify
+          independence. Refresh the evidence if review access cannot be
+          verified. The case stays open until an independent administrator can
+          review it.
+        </p>
         {mutation.error && (
           <p role="alert" className="workspace-error">
             {mutation.error}

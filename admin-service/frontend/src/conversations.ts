@@ -258,6 +258,11 @@ export function mergeMessages(known: ChatMessage[], additions: ChatMessage[]) {
 }
 export function chatFailure(error: unknown) {
   if (error instanceof CaseError) {
+    if (
+      error.message.startsWith('You cannot review this case because') ||
+      error.message.startsWith('Reviewer independence could not be verified.')
+    )
+      return error.message
     if (error.status === 401)
       return 'Your session expired. Sign in again to view the conversation.'
     if ([403, 404].includes(error.status))
