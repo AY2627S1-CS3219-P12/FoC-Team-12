@@ -39,6 +39,137 @@ Services never read or write another service's database. User and Order publish 
 Kafka; Credit owns all balance, reservation and ledger changes; Order consumes Credit outcomes to
 update its own workflow state.
 
+## Review draft: pending-credit timeout
+
+Status: **proposed; requires Order owner (XueTing) and Credit owner (Eldridge) approval before
+implementation.** This section documents the proposed shared behavior so both services implement
+the same race, retry and recovery semantics. It does not take effect merely by being present in
+this document.
+
+### Problem and ownership
+
+An Order can remain in `PENDING_CREDIT` indefinitely when no usable Credit outcome arrives. Order
+owns detection and the lifecycle decision; Credit owns any reservation cleanup. Neither service
+calls the other synchronously or reads the other's database.
+
+| Responsibility | Owner | Required behavior |
+| --- | --- | --- |
+| Detect a timed-out pending reservation | Order | Scan/lock eligible `PENDING_CREDIT` Orders and choose the lifecycle winner transactionally. |
+| End the Order workflow | Order | Move `PENDING_CREDIT -> EXPIRED` with `terminalReason=CREDIT_RESERVATION_TIMEOUT`. |
+| Request cleanup | Order | Publish the normal version-1 `OrderExpired` event in the same transaction through the Order outbox. |
+| Release an existing hold | Credit | Release an active reservation atomically and publish `CreditReleased`. |
+| Handle an absent hold | Credit | Record a durable, processed no-op for this timeout reason; do not create a ledger entry or publish a misleading release outcome. |
+| Handle late Credit replies | Order | Record the valid reply as `IGNORED`; do not reopen or otherwise mutate the expired Order. |
+
+### Timeout rule
+
+For an Order created at `createdAt` with pickup deadline `pickupDeadline`, the timeout instant is:
+
+```text
+creditTimeoutAt = min(pickupDeadline, createdAt + T)
+```
+
+`T` is deployment configuration, proposed initially as ISO-8601 duration `PT2M` (two minutes),
+not a value embedded in an event. The Order owner must approve the production value before
+implementation. Tests use an injected clock and may configure a shorter duration.
+
+At or after `creditTimeoutAt`, Order locks the row and expires it only when its state is still
+`PENDING_CREDIT`. The state change, transition/history row and `OrderExpired` outbox row commit in
+one transaction. Repeated scheduler runs must not create another transition or event.
+
+The timeout uses the existing version-1 `OrderExpired` wire shape with one new allowed reason:
+
+```json
+{
+  "operationId": "a4308455-1aed-41a7-ac70-fe79da33d9cf",
+  "orderId": "513ea56a-41d5-49ad-b6c5-df81e2dd2b25",
+  "reason": "CREDIT_RESERVATION_TIMEOUT",
+  "expiredAt": "2026-10-15T14:02:00Z"
+}
+```
+
+The envelope remains `eventVersion=1`, `aggregateType=Order`, `aggregateId=orderId`,
+`producer=order-service`, `actor={"type":"SYSTEM"}`, and Kafka key `orderId`. The timeout
+transition generates a fresh `operationId` once and preserves it across outbox publish retries.
+
+### Credit handling of the timeout event
+
+Credit validates and deduplicates the event before inspecting its own reservation state:
+
+| Credit reservation state | Credit behavior | Outcome event |
+| --- | --- | --- |
+| `ACTIVE` | Release the full reservation, update the account and reservation, and append `RESERVATION_RELEASED` to the ledger atomically. | Publish `CreditReleased` with the timeout event's `operationId`. |
+| `RELEASED` | Return the existing idempotent release result without changing balances or adding another ledger entry. | Publish/reuse the idempotent `CreditReleased` result according to existing release behavior. |
+| No reservation exists | Record the timeout cleanup operation as `NO_RESERVATION_TO_RELEASE`, mark the inbox event processed and advance the Order event-stream checkpoint. No balance or ledger mutation occurs. | **No Credit outcome event.** Order is already terminal and there is no release to report. |
+| Any incompatible non-active state | Preserve the existing validation failure and recovery behavior. | Retry when transient, then DLT if still invalid. |
+
+The absent-reservation no-op applies **only** when
+`OrderExpired.data.reason=CREDIT_RESERVATION_TIMEOUT`. A missing reservation for any other
+`OrderExpired` reason remains an inconsistency and follows the existing retry/DLT path. This avoids
+masking lost reservations or corrupted lifecycle data.
+
+The no-op, inbox completion, stream checkpoint and durable operation record commit together. A
+transaction failure rolls all of them back so Kafka can redeliver safely. Repeating the same
+`eventId` is `DUPLICATE`; reusing the same `operationId` with different content is still a
+conflict.
+
+### Late outcomes and race winner
+
+Order's Credit outcome consumer continues to validate `eventId`, `operationId`, producer and
+aggregate identity. For `CreditReserved` or `CreditReservationRejected` answering the original
+`OrderSubmitted` operation:
+
+- If the Order is still `PENDING_CREDIT`, apply the existing transition.
+- If the Order is `EXPIRED` with `terminalReason=CREDIT_RESERVATION_TIMEOUT`, store the Credit
+  inbox entry with outcome `IGNORED` and make no lifecycle, history or outbox change.
+- For any other unexpected state/outcome combination, retain the existing strict conflict/error
+  handling rather than broadly ignoring inconsistent events.
+- Redelivery of an already stored `eventId` remains `DUPLICATE`, not a second `IGNORED` record.
+
+Both the timeout scheduler and Credit outcome handler lock the Order row. Therefore exactly one
+path wins:
+
+1. `CreditReserved` locks first: Order leaves `PENDING_CREDIT`; the timeout scan skips it. Existing
+   pickup-deadline handling still applies.
+2. Timeout locks first: Order becomes `EXPIRED`; any later reservation/rejection outcome is
+   recorded as `IGNORED`.
+
+`OrderSubmitted` and its later `OrderExpired` are on `order.events`, use the same Order key and are
+therefore ordered for Credit within one Kafka partition. If the submission was processed and the
+outcome was merely delayed, the reservation exists and Credit releases it. If submission never
+created a reservation, timeout cleanup is the defined no-op. A manually replayed older submission
+after the timeout is classified as stale by Credit's Order aggregate-version checkpoint. Kafka does
+not guarantee ordering between `order.events` and `credit.events`, which is why Order must handle
+late outcomes explicitly.
+
+### Failure handling, reconciliation and observability
+
+- Valid late replies and the defined absent-reservation timeout no-op must not enter a DLT.
+- Invalid envelopes, identity/version conflicts, and missing reservations for non-timeout expiry
+  reasons retain normal retry/DLT handling.
+- Transient database or broker failures retain the existing bounded Kafka retry and outbox retry
+  behavior.
+- Order is the source of truth for timeout detection and exposes the terminal transition in its
+  history. Credit is the source of truth for whether a reservation was released or no hold existed.
+- Logs/metrics include `eventId`, `operationId`, `orderId`, `correlationId`, timeout reason and one
+  of `TIMEOUT_EXPIRED`, `LATE_OUTCOME_IGNORED`, `RESERVATION_RELEASED` or
+  `NO_RESERVATION_TO_RELEASE`. They must not include credentials or full personal-data payloads.
+- Reconciliation checks for timeout-expired Orders whose `OrderExpired` outbox event remains
+  unpublished/failed, Credit timeout inbox failures, and unexpected timeout records in either DLT.
+
+### Required cross-service tests before approval
+
+1. No Credit answer: Order expires once at `creditTimeoutAt`; Credit records the cleanup no-op and
+   no ledger entry/outcome event.
+2. Reservation committed but `CreditReserved` delayed: Order times out, Credit releases the hold
+   once, and the delayed outcome is `IGNORED` by Order.
+3. Delayed `CreditReservationRejected`: Order remains timeout-expired and records it as `IGNORED`.
+4. Duplicate `OrderExpired`: no second release, ledger entry, transition or outbox event.
+5. Missing reservation for a non-timeout expiry reason: the event is not silently accepted and
+   reaches the configured recovery/DLT path after retries.
+6. Concurrent timeout and `CreditReserved`: row locking produces one deterministic winner and no
+   expired Order is reopened.
+
 ## Kafka configuration
 
 The local broker, deterministic topic/ACL initializer and smoke-test commands are documented in
