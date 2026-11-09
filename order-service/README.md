@@ -376,6 +376,39 @@ at once: contract violations, an outcome the order's state cannot take
 
 They are read from the database at most every 5 s, and work with Kafka off too.
 
+**Credit reconciliation.** Every 5 min (`ORDER_CREDIT_RECONCILIATION_INTERVAL_MS`) Order
+looks for commands it sent Credit on `order.events` (`OrderSubmitted`,
+`OrderRewardChangeRequested`, `OrderCancelled`, `OrderExpired`, `OrderCompleted`) that
+have no Credit outcome for their `operationId` in the inbox
+`ORDER_CREDIT_RECONCILIATION_AFTER` (default `PT10M`) after Kafka acknowledged them,
+or after they were written if they are still unpublished. Any recorded outcome, `IGNORED`
+included, answers a command. It is read-only and **never re-sends**: Credit owns every
+ledger effect, and a new `operationId` would be a second operation. Each command is logged
+once per process:
+
+- `outcome=CREDIT_OUTCOME_MISSING` at `WARN`, with `eventId`, `eventType`, `operationId`,
+  `orderId`, `correlationId`, age and whether it was published;
+- `outcome=TIMEOUT_UNANSWERED` at `INFO` for a credit-timeout `OrderExpired`. Credit answers
+  it only when it held a reservation, so silence is expected when it did not.
+
+| Metric | Meaning |
+| --- | --- |
+| `order.credit.unanswered` | Commands without a Credit outcome after the threshold (timeouts excluded) |
+| `order.credit.unanswered.oldest.age` | Seconds since the oldest of them was published; `0` when none |
+| `order.credit.timeout.unanswered` | Credit-timeout expiries without a Credit outcome |
+
+Recovering a `CREDIT_OUTCOME_MISSING` command, using its `operationId` and `correlationId`:
+
+1. Unpublished: the relay is failing for it; check `order.outbox.max.attempts`, the stuck-row
+   `ERROR` log and the broker/ACLs. It is sent once the cause is fixed.
+2. Published: look for it in `order.events.DLT` (Credit could not process it) and in Credit's
+   inbox and `credit_operations`; look for Credit's answer in `credit.events.DLT` (Order could
+   not process it).
+3. Fix the cause and replay the **original** record from the DLT with the broker tooling. Both
+   inboxes deduplicate by `eventId`, so a replay applies at most once.
+
+Turn it off with `ORDER_CREDIT_RECONCILIATION_ENABLED=false`.
+
 | Setting | Env var | Default |
 | --- | --- | --- |
 | Turn Kafka on/off | `ORDER_KAFKA_ENABLED` | `true` (`false` runs without a broker; events wait unpublished) |

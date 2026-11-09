@@ -295,6 +295,8 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
 - **V7 (pending-credit timeout):** partial index `(created_at, id) WHERE state = 'PENDING_CREDIT'` for
   the timeout scan. `created_at` is now stamped from the service `Clock` at creation, so the
   timeout and every deadline share one clock. The new reason fits `terminal_reason`.
+- **V8 (credit reconciliation):** partial index on `processed_events (operation_id)`, so the
+  reconciliation check can look each `order.events` command's `operationId` up in the inbox.
 - **Reward editing** needs no migration: it maps the V1 `pending_credit_reward` column, and the
   new history actions (`EDIT`, `REWARD_CHANGE_APPLIED`, `REWARD_CHANGE_REJECTED`) fit the
   `order_transitions.action` VARCHAR.
@@ -357,13 +359,17 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | UI | `order-ui-role-scoped-errand`: an errand page that doesn't belong to the header role (on load or after a switch) goes to that role's own screen | PR #120 |
 | UI | `order-ui-design-alignment`: Order screens meet the shared `design.md` contract (button states, card radius, Lucide icons, loading placeholders, actionable empty/error panels, focus colour) | PR #123 |
 | UI | `order-ui-reorder`: Post again on a requester's ended errands opens Request help filled in except Pick up by (frontend only, existing `GET /api/orders/{id}`) | This change |
-
-| 11 | `order-create-idempotency`: optional `Idempotency-Key` on `POST /api/orders` (V5); a retry with the same key and body returns the first order (`200`) with no second `OrderSubmitted` or reservation, a changed body is `409 IDEMPOTENCY_KEY_REUSED`; the create page sends one key per errand content | Done (PR #152) |
+| 11 | `order-create-idempotency`: optional `Idempotency-Key` on `POST /api/orders` (V5); a retry with the same key and body returns the first order (`200`) with no second `OrderSubmitted` or reservation, a changed body is `409 IDEMPOTENCY_KEY_REUSED`; the create page sends one key per errand content | This change |
+| 14 | `order-pending-credit-timeout`: a PENDING_CREDIT order Credit does not answer by `min(pickupDeadline, createdAt + PT2M)` expires with `CREDIT_RESERVATION_TIMEOUT` and the normal `OrderExpired` (V7); late `CreditReserved`/`CreditReservationRejected` are `IGNORED`; the UI and Notification say the errand was not posted. Contract: blueprint "pending-credit timeout" (Credit owns the absent-reservation no-op) | This change |
+| 13 | `order-credit-reconciliation`: every 5 min, report `order.events` commands with no Credit outcome for their `operationId` 10 min (`PT10M`) after publishing (V8 index); WARN once per command with every ID, a credit-timeout expiry counted apart at INFO, `order.credit.*` gauges on ADMIN-only metrics, README recovery runbook. Detection only, never re-sends | This change |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
 | 12 | `order-messaging-hardening`: relay claims whole order-and-topic streams (V6), so replicas keep per-order order; batch 20 and a stuck-row `ERROR`; `OrderTransitionException`/unknown order go to `credit.events.DLT` without retries; `CreditReleased` must answer `OrderCancelled` or `OrderExpired`; `order.outbox.*` gauges on ADMIN-only `/actuator/metrics` | Done (PR #153) |
 | 14 | `order-pending-credit-timeout`: a PENDING_CREDIT order Credit does not answer by `min(pickupDeadline, createdAt + PT2M)` expires with `CREDIT_RESERVATION_TIMEOUT` and the normal `OrderExpired` (V7); late `CreditReserved`/`CreditReservationRejected` are `IGNORED`; the UI and Notification say the errand was not posted. Contract: blueprint "pending-credit timeout" (Credit owns the absent-reservation no-op) | This change |
 
 ## Decisions
+
+Confirmed by XueTing (2026-11-09): **credit reconciliation reports a command after `PT10M`** without
+an outcome, through logs and gauges only (no admin endpoint), and never re-sends.
 
 Confirmed by XueTing (2026-11-09): **the pending-credit timeout is `PT2M`** (Credit's draft value),
 configurable with `ORDER_CREDIT_RESERVATION_TIMEOUT`.

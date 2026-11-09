@@ -465,6 +465,9 @@ class OrderSecurityIntegrationTest {
         HttpResponse<String> admin = getMetrics("/actuator/metrics/order.outbox.pending", "ADMIN");
         assertThat(admin.statusCode()).isEqualTo(200);
         assertThat(admin.body()).contains("\"value\":3.0");
+        assertThat(getMetrics("/actuator/metrics/order.credit.unanswered", "ADMIN").statusCode())
+                .as("reconciliation gauge").isEqualTo(200);
+        assertThat(getMetrics("/actuator/metrics/order.credit.unanswered", "REQUESTER").statusCode()).isEqualTo(403);
 
         assertThat(getMetrics("/actuator/metrics", null).statusCode()).isEqualTo(401);
         for (String role : List.of("REQUESTER", "COURIER")) {
