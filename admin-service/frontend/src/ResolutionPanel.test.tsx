@@ -67,7 +67,7 @@ it('recovers a prepared resolution from the server after browser retry storage i
   )
   expect(screen.getByLabelText('Internal resolution reason')).toBeDisabled()
   expect(screen.getByRole('status')).toHaveTextContent(
-    'Case closure is in progress',
+    'This case is still closing',
   )
   fireEvent.click(screen.getByRole('button', { name: 'Resume case closure' }))
   await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
@@ -153,7 +153,7 @@ it.each(['PENDING', 'UNKNOWN'] as const)(
       screen.getByRole('button', { name: 'Review case closure' }),
     ).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Wait for every action’s outcome',
+      'Wait until every action is confirmed',
     )
   },
 )

@@ -18,7 +18,7 @@ export function RequireAdmin() {
       <section aria-live="polite" className={styles.panel}>
         <p className={styles.eyebrow}>Authentication required</p>
         <h1>Taking you to sign in…</h1>
-        <p>You need an administrator account to manage suppliers.</p>
+        <p>You need an admin account to manage locations.</p>
       </section>
     )
   }

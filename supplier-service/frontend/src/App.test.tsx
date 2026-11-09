@@ -309,7 +309,7 @@ describe('Public supplier directory', () => {
     renderRoute('/suppliers?type=Food')
 
     expect(
-      await screen.findByText('Locations could not be loaded'),
+      await screen.findByText('We couldn’t load locations'),
     ).toBeInTheDocument()
     expect(screen.getByTestId('location').textContent).toContain('type=Food')
     await user.click(screen.getByRole('button', { name: 'Try again' }))
@@ -438,7 +438,8 @@ describe('Public supplier details', () => {
     const { urls } = mockApi()
     renderRoute('/suppliers/not-a-uuid')
 
-    expect(screen.getByText('Invalid location link')).toBeInTheDocument()
+    expect(screen.getByText('Location not found')).toBeInTheDocument()
+    expect(screen.getByText('This link doesn’t look right.')).toBeInTheDocument()
     expect(urls.some((url) => url.includes('/api/suppliers/not-a-uuid'))).toBe(
       false,
     )

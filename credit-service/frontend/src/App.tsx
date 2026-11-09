@@ -84,12 +84,11 @@ export function App() {
             label: 'Sign in to FoC',
             onClick: () => navigateTo(signInPath()),
           }}
-          eyebrow="Authentication required"
+          eyebrow="Please sign in"
           icon={<LockKeyhole />}
           title="Sign in to view your credits"
         >
-          Your balance and ledger are private. Sign in with your FoC account to
-          continue.
+          Sign in to see your balance and history.
         </MessageState>
       </CreditShell>
     )
@@ -104,12 +103,11 @@ export function App() {
             label: 'Sign in again',
             onClick: () => navigateTo(signInPath()),
           }}
-          eyebrow="Session expired"
+          eyebrow="Signed out"
           icon={<ShieldAlert />}
           title="Please sign in again"
         >
-          Your session has ended, so we stopped loading your private credit
-          information.
+          You’ve been signed out. Sign in again to see your credits.
         </MessageState>
       </CreditShell>
     )
@@ -126,12 +124,11 @@ export function App() {
               void history.refetch()
             },
           }}
-          eyebrow="Connection problem"
+          eyebrow="Something went wrong"
           icon={<WifiOff />}
-          title="We could not load your credits"
+          title="We couldn’t load your credits"
         >
-          Your balance is safe. Check that the Credit Service is running, then
-          try again.
+          Your credits are safe. Please try again.
         </MessageState>
       </CreditShell>
     )

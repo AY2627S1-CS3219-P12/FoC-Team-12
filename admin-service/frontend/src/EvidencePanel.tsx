@@ -196,13 +196,13 @@ function complete(timeline: Timeline) {
 function failure(error: unknown) {
   if (error instanceof CaseError) {
     if (error.status === 401)
-      return 'Your session expired. Sign in again to view evidence.'
+      return 'You’ve been signed out. Sign in again to see the evidence.'
     if (error.status === 403 || error.status === 404)
-      return 'You no longer have access to this case evidence.'
+      return 'You no longer have access to this evidence.'
     if (error.status === 409)
-      return 'This evidence view changed or expired. Reload the timeline to view a consistent history.'
+      return 'This evidence changed. Reload the timeline to see the latest.'
   }
-  return 'We couldn’t load or verify the evidence. Try again; do not treat this view as complete.'
+  return 'We couldn’t load all the evidence. Try again — this view may be incomplete.'
 }
 function EvidenceData({
   record,
@@ -605,8 +605,8 @@ export function EvidencePanel({
             </h3>
             <p>
               {trustworthy
-                ? 'History is complete up to each source’s recorded checkpoint. Newer activity may be missing. See coverage technical details for the limits.'
-                : 'Some activity may be missing or unverified. Do not treat this history as complete.'}
+                ? 'History is complete up to the last check. Very recent activity may not show yet.'
+                : 'Some activity may be missing. This history may be incomplete.'}
             </p>
             <p>
               Completeness checked{' '}

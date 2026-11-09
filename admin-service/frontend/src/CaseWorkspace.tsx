@@ -30,21 +30,20 @@ function message(error: unknown) {
     )
       return error instanceof CaseError
         ? caseErrorMessage(error)
-        : 'Your account cannot access this workspace. Check your account mode.'
+        : 'Switch to the right role in your account menu to see this.'
     if (error.status === 401)
-      return 'Your session has expired. Sign in to continue.'
+      return 'You’ve been signed out. Please sign in again.'
     if (error.status === 403)
       return error instanceof CaseError
         ? caseErrorMessage(error)
-        : 'Your account cannot access this workspace. Check your account mode.'
-    if (error.status === 404)
-      return 'This case is unavailable or you do not have access.'
+        : 'Switch to the right role in your account menu to see this.'
+    if (error.status === 404) return 'This case isn’t available to you.'
     if (error.status < 500)
       return error instanceof CaseError
         ? caseErrorMessage(error)
-        : 'Your account cannot access this workspace. Check your account mode.'
+        : 'Switch to the right role in your account menu to see this.'
   }
-  return 'We couldn’t load this information. Try again shortly.'
+  return 'We couldn’t load this. Please try again.'
 }
 
 export function CaseWorkspace() {
@@ -124,7 +123,7 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
             {participant
               ? id && id !== 'new'
                 ? 'Check your case status and messages from your admin.'
-                : 'Tell us what happened so an admin can review the issue.'
+                : 'Tell us what happened and an admin will look into it.'
               : 'Review reports and assign yourself an open case to begin.'}
           </p>
         </div>
@@ -360,7 +359,7 @@ function useMutation<T>(storageKey: string) {
               'Reviewer independence could not be verified.',
             ))
           ? message(e)
-          : 'We couldn’t confirm the request’s outcome. Use the retry button to check the same request.',
+          : 'We’re not sure your report went through. Tap retry to check.',
       )
       if (e instanceof CaseError && e.status < 500) {
         sessionStorage.removeItem(storageKey)
@@ -379,7 +378,7 @@ function ReportEntry({ actor, orderId }: { actor: string; orderId: string }) {
     return (
       <section className="message-card">
         <h2>Choose an errand to report</h2>
-        <p>A report must be linked to a specific errand you participated in.</p>
+        <p>Pick the errand this is about.</p>
         <a className="button" href="/errands/mine">
           Go to my errands
         </a>
@@ -918,7 +917,7 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           <p>
             {value.reviewerId === actor
               ? 'You are the assigned reviewer.'
-              : 'You can view this case but cannot take review actions.'}
+              : 'Only the assigned reviewer can act on this case.'}
           </p>
         )}
       </section>

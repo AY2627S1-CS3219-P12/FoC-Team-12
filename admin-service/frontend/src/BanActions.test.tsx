@@ -72,7 +72,7 @@ it('requires a reason and confirmation, omits amount and preserves the exact req
   ).toHaveTextContent('ban for Participant 1')
   expect(
     screen.getByRole('region', { name: 'Confirm account ban' }),
-  ).toHaveTextContent('new protected requests are blocked')
+  ).toHaveTextContent('won’t be able to sign in or do anything new')
   expect(screen.queryByText(/sessions.*until expiry/)).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Confirm ban request' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
@@ -117,7 +117,7 @@ it('shows authoritative protected-account rejection with readable Singapore time
   )
   expect(screen.getByText(/Your own account is protected/)).toBeInTheDocument()
   expect(screen.getByText('Rejected')).toBeInTheDocument()
-  expect(screen.getByText(/Ban request rejected/)).toBeInTheDocument()
+  expect(screen.getByText(/Ban rejected/)).toBeInTheDocument()
 })
 it('keeps other reviewers read-only and labels UNKNOWN without declaring failure or success', () => {
   render(
@@ -133,5 +133,5 @@ it('keeps other reviewers read-only and labels UNKNOWN without declaring failure
     screen.queryByRole('button', { name: 'Review ban request' }),
   ).not.toBeInTheDocument()
   expect(screen.getByText('Outcome unconfirmed')).toBeInTheDocument()
-  expect(screen.getByText(/may already be applied/)).toBeInTheDocument()
+  expect(screen.getByText(/may already be done/)).toBeInTheDocument()
 })

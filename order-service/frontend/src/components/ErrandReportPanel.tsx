@@ -71,11 +71,11 @@ export function ErrandReportPanel({ orderId }: { orderId: string }) {
           <p role="alert" className="notice notice-error">
             {context.error instanceof OrderApiError &&
             context.error.status === 401
-              ? 'Your session expired. Sign in again to check your report.'
+              ? 'You’ve been signed out. Sign in again to see your report.'
               : context.error instanceof OrderApiError &&
                   context.error.status === 403
-                ? 'Your current account or workspace cannot access participant reports.'
-                : 'Reporting is temporarily unavailable. We could not check your existing report or eligibility.'}
+                ? 'Switch to Requester or Courier to report an issue.'
+                : 'We can’t load reports right now. Please try again.'}
           </p>
           <button
             type="button"
