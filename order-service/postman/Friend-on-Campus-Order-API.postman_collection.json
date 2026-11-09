@@ -135,6 +135,10 @@
     {
       "key": "tries",
       "value": "0"
+    },
+    {
+      "key": "createKey",
+      "value": ""
     }
   ],
   "item": [
@@ -858,6 +862,81 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{createKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{requesterToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Collect my printed notes\",\n  \"description\": \"A bound set of CS3219 lecture notes from the print shop.\",\n  \"pickupLocationId\": \"{{pickupLocationId}}\",\n  \"pickupLocationName\": \"{{pickupLocationName}}\",\n  \"dropoffLocationId\": \"{{dropoffLocationId}}\",\n  \"dropoffLocationName\": \"{{dropoffLocationName}}\",\n  \"creditReward\": 6,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// One key for this errand; the next request retries with it.",
+                  "pm.collectionVariables.set('createKey', pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.test('state PENDING_CREDIT', () => pm.expect(pm.response.json().state).to.eql('PENDING_CREDIT'));",
+                  "pm.test('requester is the token subject', () => pm.expect(pm.response.json().requesterId).to.eql(pm.collectionVariables.get('requesterId')));",
+                  "pm.collectionVariables.set('orderId', pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create errand - retry with the same Idempotency-Key (200, same errand)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{createKey}}"
               }
             ],
             "url": {
@@ -897,10 +976,68 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('201', () => pm.response.to.have.status(201));",
-                  "pm.test('state PENDING_CREDIT', () => pm.expect(pm.response.json().state).to.eql('PENDING_CREDIT'));",
-                  "pm.test('requester is the token subject', () => pm.expect(pm.response.json().requesterId).to.eql(pm.collectionVariables.get('requesterId')));",
-                  "pm.collectionVariables.set('orderId', pm.response.json().id);"
+                  "pm.test('200, not a second 201', () => pm.response.to.have.status(200));",
+                  "pm.test('the errand the first request created', () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('orderId')));",
+                  "pm.test('Location names it', () => pm.expect(pm.response.headers.get('Location')).to.eql('/api/orders/' + pm.collectionVariables.get('orderId')));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Create errand - same key, different body (409 IDEMPOTENCY_KEY_REUSED)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{createKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orders"
+              ]
+            },
+            "description": "",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{requesterToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Collect my printed notes\",\n  \"description\": \"A bound set of CS3219 lecture notes from the print shop.\",\n  \"pickupLocationId\": \"{{pickupLocationId}}\",\n  \"pickupLocationName\": \"{{pickupLocationName}}\",\n  \"dropoffLocationId\": \"{{dropoffLocationId}}\",\n  \"dropoffLocationName\": \"{{dropoffLocationName}}\",\n  \"creditReward\": 5,\n  \"pickupDeadline\": \"{{pickupDeadline}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('IDEMPOTENCY_KEY_REUSED', () => pm.expect(pm.response.json().code).to.eql('IDEMPOTENCY_KEY_REUSED'));"
                 ]
               }
             }

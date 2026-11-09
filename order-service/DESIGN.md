@@ -282,6 +282,11 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
 - **V4 (lifecycle events):** `orders.lifecycle_sequence` (default 0), the last `sourceSequence`
   taken. A native `UPDATE … RETURNING` takes the next one in the transition's transaction, so it
   never bumps the JPA version and a rollback returns the number.
+- **V5 (create idempotency):** `orders.idempotency_key` and `orders.idempotency_fingerprint`
+  (SHA-256 of the original create request; both null or both set), with a unique partial index on
+  `(requester_id, idempotency_key)`. Create takes a transaction-scoped advisory lock on the
+  requester and key before looking the key up, so concurrent retries wait for the first one and
+  then return its order; the unique index is the backstop.
 - **Reward editing** needs no migration: it maps the V1 `pending_credit_reward` column, and the
   new history actions (`EDIT`, `REWARD_CHANGE_APPLIED`, `REWARD_CHANGE_REJECTED`) fit the
   `order_transitions.action` VARCHAR.
@@ -344,6 +349,7 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | UI | `order-ui-role-scoped-errand`: an errand page that doesn't belong to the header role (on load or after a switch) goes to that role's own screen | PR #120 |
 | UI | `order-ui-design-alignment`: Order screens meet the shared `design.md` contract (button states, card radius, Lucide icons, loading placeholders, actionable empty/error panels, focus colour) | PR #123 |
 | UI | `order-ui-reorder`: Post again on a requester's ended errands opens Request help filled in except Pick up by (frontend only, existing `GET /api/orders/{id}`) | This change |
+| 11 | `order-create-idempotency`: optional `Idempotency-Key` on `POST /api/orders` (V5); a retry with the same key and body returns the first order (`200`) with no second `OrderSubmitted` or reservation, a changed body is `409 IDEMPOTENCY_KEY_REUSED`; the create page sends one key per errand content | This change |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
 
 ## Decisions
