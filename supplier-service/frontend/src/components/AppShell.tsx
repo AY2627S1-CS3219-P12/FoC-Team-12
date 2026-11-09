@@ -52,11 +52,11 @@ export function AppShell() {
           </a>
           <nav aria-label="Main navigation" className={styles.serviceNav}>
             <a href="/"><House aria-hidden="true" />Home</a>
-            <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>
+            {session?.role !== 'ADMIN' && <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>}
             <Link aria-current="page" to={locationsPath}>
               <Store aria-hidden="true" />Suppliers
             </Link>
-            <a href="/credits"><Coins aria-hidden="true" />Credits</a>
+            {session?.role !== 'ADMIN' && <a href="/credits"><Coins aria-hidden="true" />Credits</a>}
             {session?.role === 'ADMIN' && <a href="/admin"><ShieldCheck aria-hidden="true" />Admin</a>}
           </nav>
           <nav

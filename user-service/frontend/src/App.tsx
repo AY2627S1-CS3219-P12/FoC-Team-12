@@ -720,9 +720,9 @@ export function App() {
           </a>
           <nav className="profile-service-nav" aria-label="Main navigation">
             <a aria-current={adminUsersPage ? undefined : 'page'} href="/"><House aria-hidden="true" />Home</a>
-            <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>
+            {!adminMode && <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>}
             <a href={suppliersPath}><Store aria-hidden="true" />Suppliers</a>
-            <a href="/credits"><Coins aria-hidden="true" />Credits</a>
+            {!adminMode && <a href="/credits"><Coins aria-hidden="true" />Credits</a>}
             {adminMode && <a href="/admin"><ShieldCheck aria-hidden="true" />Admin</a>}
           </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">

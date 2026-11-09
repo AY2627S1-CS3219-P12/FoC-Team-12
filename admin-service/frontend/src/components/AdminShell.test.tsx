@@ -74,6 +74,12 @@ it('shows Admin only in active Admin mode and removes it when the session ends',
     'href',
     '/admin',
   )
+  const adminNav = screen.getByRole('navigation', { name: 'Main navigation' })
+  expect(screen.queryByRole('link', { name: 'Errands' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
+  expect(
+    Array.from(adminNav.querySelectorAll('a')).map((link) => link.textContent),
+  ).toEqual(['Home', 'Suppliers', 'Admin'])
   act(() => session('COURIER', true))
   expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument()
   act(() => session('ADMIN', true))

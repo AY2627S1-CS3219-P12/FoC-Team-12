@@ -153,6 +153,28 @@
   text-decoration: underline;
 }
 
+.card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.1rem;
+  box-shadow: var(--foc-shadow-soft);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.4rem;
+  background: var(--foc-blue);
+  content: '';
+}
+
+.card:hover { box-shadow: var(--foc-shadow); transform: translateY(-2px); }
+.badge { background: #f0f2fb; color: var(--foc-blue); }
+.cardLink { color: var(--foc-blue); }
+.primaryButton { border-color: #172641; border-radius: 0.75rem; background: #172641; }
+.primaryButton:hover { border-color: var(--foc-blue); background: var(--foc-blue); filter: none; }
+
 .skeletonGrid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

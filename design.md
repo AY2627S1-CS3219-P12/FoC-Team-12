@@ -11,8 +11,9 @@ FoC should feel like one campus application, not a collection of service dashboa
 
 - Start with the user's task: request help, run an errand, find a supplier or understand credits.
 - Use plain, action-led language. Explain consequences before irreversible actions.
-- Keep primary actions obvious and secondary detail quiet. Do not fill screens with decorative
-  cards, gradients, badges or explanatory copy that does not help a decision.
+- Keep primary actions obvious and secondary detail quiet. Use the dimensional brand, restrained
+  colour-blocking and soft elevation to orient people; decorative treatment must not compete with
+  a decision or obscure product state.
 - Preserve context across service routes. Navigation, identity and selected role must not jump,
   resize or silently reset when a different service renders the page.
 - Prefer a clear empty state with the next useful action over an empty table or developer message.
@@ -23,7 +24,8 @@ FoC should feel like one campus application, not a collection of service dashboa
 All signed-in service pages use the same shell and order:
 
 1. Friend on Campus brand, linking to `/`.
-2. `Home`, `Errands`, `Suppliers`, `Credits`; append `Admin` only in Admin mode.
+2. Participant modes show `Home`, `Errands`, `Suppliers`, `Credits`. Admin mode shows only
+   `Home`, `Suppliers`, `Admin`; participant Errands and Credits destinations are omitted.
 3. Requester/Courier selector for participant modes.
 4. Notification bell, signed in only: a Lucide `Bell` linking to `/notifications`, with the unread
    count as a small badge (`9+` above nine) and in its accessible name ("Notifications, 3 unread").
@@ -65,27 +67,32 @@ authoritative. A role switch must not alter balances, orders, profiles or other 
 
 | Purpose | Value |
 | --- | --- |
-| Canvas | `#f3f6f4` |
+| Canvas | `#f7f6f3` |
 | Surface | `#ffffff` |
-| Primary ink | `#20332d` |
-| Muted ink | `#57655f` |
-| Action | `#23654e` |
-| Action soft | `#e7f1ed` |
-| Border | `#d4ddd7` |
+| Primary ink | `#12151b` |
+| Brand navy / primary action | `#172641` |
+| Brand blue / active navigation | `#5068b3` |
+| Brand mauve | `#a36f76` |
+| Brand coral | `#df9b93` |
+| Brand gold | `#f1c675` |
+| Muted ink | `#686a70` |
+| Action soft | `#f0f2fb` |
+| Border | `#e8e6e1` |
 | Danger | `#a2372b` |
-| Keyboard focus | `#176bba` |
+| Keyboard focus | `#5068b3` |
 
 Meet WCAG AA contrast for text and controls. Never communicate status using colour alone.
 
 ### Type, spacing and shape
 
-- Use Public Sans with system sans-serif fallback and inherit it for all form controls.
+- Use DM Sans for interface and body copy, Manrope for headings and brand text, then Public Sans
+  and system sans-serif fallbacks. Inherit interface typography for all form controls.
 - Use a restrained type hierarchy: compact navigation, readable `1rem` body copy and responsive
   page headings. Avoid oversized dashboard metrics unless the value is the page's main purpose.
 - Base spacing on multiples of `0.25rem`; prefer `0.5`, `0.75`, `1`, `1.5`, `2` and `3rem`.
 - Controls are at least `2.75rem` high except compact segmented controls. Cards normally use
   `0.875–1rem` radii; pills are reserved for short statuses or filters.
-- Use the shared soft shadow for elevation. Hover movement is subtle (`1–2px`) and must not move
+- Use the shared navy-tinted soft shadow for elevation. Hover movement is subtle (`1–2px`) and must not move
   surrounding layout.
 
 ## Components and interaction
@@ -104,6 +111,20 @@ Meet WCAG AA contrast for text and controls. Never communicate status using colo
   interface icons or mix unrelated icon families.
 - **Motion:** keep transitions near `150–200ms`; respect `prefers-reduced-motion` and never require
   animation to understand state.
+
+### Operational surfaces
+
+- **Chat:** keep the errand context, privacy boundary and active/closed state visible above the
+  thread. Participant messages use aligned bubbles, lifecycle activity uses a neutral system
+  entry, and translation, quick replies, images and the composer remain part of one elevated
+  conversation surface. The owning Chat APIs remain authoritative for access and state.
+- **Notifications:** render event-backed rows newest first with an icon, plain-language category,
+  timestamp, unread text and available actions. Colour accents distinguish errand, credit,
+  completion and attention categories but never replace their text labels.
+- **Admin:** present the protected case queue as the dashboard's primary work area, followed by
+  platform tools. Filters, assignment, evidence, participant statements, private follow-up and
+  resolution remain visually distinct decision areas. Do not manufacture dashboard metrics when
+  the Admin API does not provide them.
 
 ## Key journeys
 

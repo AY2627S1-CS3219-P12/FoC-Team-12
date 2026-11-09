@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react'
-import { LoaderCircle, LockKeyhole, ShieldX, WifiOff } from 'lucide-react'
+import {
+  ArrowUpRight,
+  LoaderCircle,
+  LockKeyhole,
+  MapPinned,
+  ShieldCheck,
+  ShieldX,
+  Users,
+  WifiOff,
+} from 'lucide-react'
 import { AccessError, checkAccess, readSession } from './access'
 import { AdminShell } from './components/AdminShell'
 import { CaseQueue, CaseWorkspace } from './CaseWorkspace'
@@ -97,6 +106,12 @@ function Dashboard() {
             participants.
           </p>
         </div>
+        {state === 'ready' && (
+          <span className="role-chip admin-mode-chip">
+            <ShieldCheck aria-hidden="true" />
+            Admin mode
+          </span>
+        )}
       </div>
       {state === 'loading' && (
         <section className="message-card" role="status">
@@ -159,20 +174,39 @@ function Dashboard() {
         <>
           <CaseQueue key={token} actor={userId!} />
           <section className="admin-tools" aria-labelledby="admin-tools-title">
-            <h2 id="admin-tools-title">Administration tools</h2>
+            <div className="admin-tools-heading">
+              <div>
+                <p className="eyebrow">Platform controls</p>
+                <h2 id="admin-tools-title">Administration tools</h2>
+              </div>
+              <p>Manage access and campus reference data.</p>
+            </div>
             <nav className="service-grid" aria-label="Administration tools">
               <a className="service-card admin-card" href="/?view=users">
-                <h3>Manage users</h3>
-                <p>Manage accounts, admin roles, bans, and reactivation.</p>
+                <span className="admin-tool-icon" aria-hidden="true">
+                  <Users />
+                </span>
+                <div>
+                  <h3>Manage users</h3>
+                  <p>Manage accounts, admin roles, bans, and reactivation.</p>
+                </div>
                 <span className="service-action">
-                  Open account management →
+                  Open account management <ArrowUpRight aria-hidden="true" />
                 </span>
               </a>
               <a className="service-card admin-card" href="/admin/suppliers">
-                <h3>Campus suppliers</h3>
-                <p>Manage the campus locations used by your community.</p>
+                <span
+                  className="admin-tool-icon admin-tool-icon-coral"
+                  aria-hidden="true"
+                >
+                  <MapPinned />
+                </span>
+                <div>
+                  <h3>Campus suppliers</h3>
+                  <p>Manage the campus locations used by your community.</p>
+                </div>
                 <span className="service-action">
-                  Open supplier management →
+                  Open supplier management <ArrowUpRight aria-hidden="true" />
                 </span>
               </a>
             </nav>

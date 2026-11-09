@@ -356,3 +356,22 @@
 .notificationBell svg { width: 1.25rem; height: 1.25rem; stroke-width: 1.8; }
 .notificationBell:hover, .notificationBell:focus-visible, .notificationBell[aria-current='page'] { background: var(--foc-action-soft); color: var(--foc-action); }
 .notificationBadge { position: absolute; top: 0.3rem; right: 0.2rem; min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem; border: 2px solid var(--foc-surface); border-radius: 0.6rem; background: var(--foc-danger); color: white; font-size: 0.68rem; font-weight: 700; line-height: 0.85rem; text-align: center; }
+
+/* Sophisticated App Design Upgrade. */
+.header { min-height: 4.875rem; border-bottom-color: rgb(23 38 65 / 8%); background: rgb(255 255 255 / 90%); backdrop-filter: blur(16px); }
+.headerContent { width: min(100%, 90rem); min-height: 4.875rem; }
+.brand { font-family: 'Manrope', 'DM Sans', sans-serif; font-weight: 800; }
+.brand img { width: 3rem; height: 3rem; }
+.serviceNav a:hover, .serviceNav a:focus-visible, .serviceNav a[aria-current='page'] { color: var(--foc-blue); }
+.serviceNav a[aria-current='page']::after { background: var(--foc-blue); }
+.actions .workspaceSelectorOptions button:hover:not(:disabled) { background: var(--foc-action-soft); color: var(--foc-blue); }
+.actions .workspaceSelectorOptions button[aria-pressed='true'], .actions .workspaceSelectorOptions button[aria-pressed='true']:hover:not(:disabled) { background: #172641; }
+.accountAvatar { background: var(--foc-gold); color: #172641; }
+.notificationBell:hover, .notificationBell:focus-visible, .notificationBell[aria-current='page'] { background: var(--foc-action-soft); color: var(--foc-blue); }
+.notificationBadge { background: var(--foc-coral); color: #172641; }
+.main { width: min(calc(100% - 4rem), 82rem); padding-top: 3rem; }
+
+@media (max-width: 48rem) {
+  .brand img { width: 2.6rem; height: 2.6rem; }
+  .main { width: min(calc(100% - 2rem), 82rem); }
+}
