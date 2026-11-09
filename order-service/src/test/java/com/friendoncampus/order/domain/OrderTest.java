@@ -155,6 +155,33 @@ class OrderTest {
         assertThat(transition.creditEffect()).isEqualTo(CreditEffect.COMPENSATE);
     }
 
+    @Test
+    void cancellingAnAcceptedOrderJustBeforeTheDeadlineStillCompensatesTheCourier() {
+        Order order = order(OrderState.ACCEPTED, NOW.plusNanos(1_000));
+        ReflectionTestUtils.setField(order, "courierId", COURIER);
+
+        OrderTransition transition = order.cancel(REQUESTER, NOW);
+
+        assertThat(order.getTerminalReason()).isEqualTo(TerminalReason.REQUESTER_CANCELLED_ACCEPTED);
+        assertThat(transition.creditEffect()).isEqualTo(CreditEffect.COMPENSATE);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0", "1", "120"})
+    void cancellingAnAcceptedOrderOnceTheCourierIsLateReleasesInFull(long minutesLate) {
+        Order order = order(OrderState.ACCEPTED, NOW);
+        ReflectionTestUtils.setField(order, "courierId", COURIER);
+
+        OrderTransition transition = order.cancel(REQUESTER, NOW.plusMinutes(minutesLate));
+
+        assertThat(order.getState()).isEqualTo(OrderState.CANCELLED);
+        assertThat(order.getCourierId()).isNull();
+        assertThat(order.getTerminalReason()).isEqualTo(TerminalReason.REQUESTER_CANCELLED_COURIER_LATE);
+        assertThat(transition.courierId()).as("the late courier is still named in the history").isEqualTo(COURIER);
+        assertThat(transition.creditEffect()).isEqualTo(CreditEffect.RELEASE);
+        assertThat(transition.eventType()).isEqualTo("OrderCancelled");
+    }
+
     @ParameterizedTest
     @EnumSource(value = OrderState.class, names = {"PICKED_UP", "DELIVERED", "COMPLETED"})
     void cancelIsNeverAllowedOncePickedUp(OrderState state) {

@@ -278,10 +278,15 @@ export function ErrandPage() {
                     ask({
                       action: 'cancel',
                       title: 'Cancel this errand?',
+                      // Matches the backend: from the pickup deadline the courier is late and
+                      // the server releases everything; before it, the courier is compensated.
                       body:
-                        order.state === 'ACCEPTED'
+                        order.state === 'ACCEPTED' &&
+                        Date.now() < Date.parse(order.pickupDeadline)
                           ? 'A courier has accepted it, so they receive 20% of the reward as compensation.'
-                          : 'Your reserved credits are returned in full.',
+                          : order.state === 'ACCEPTED'
+                            ? "Your courier hasn't picked it up by the deadline, so your reserved credits are returned in full."
+                            : 'Your reserved credits are returned in full.',
                       label: 'Cancel errand',
                     })
                   }
@@ -378,9 +383,17 @@ function RequesterHeading({ order }: { order: Order }) {
   const creditTimedOut =
     order.state === 'EXPIRED' &&
     order.terminalReason === 'CREDIT_RESERVATION_TIMEOUT'
+  const courierLate =
+    order.state === 'CANCELLED' &&
+    order.terminalReason === 'REQUESTER_CANCELLED_COURIER_LATE'
   const [title, subtitle] = failure
     ? [failure.title, failure.detail]
-    : creditTimedOut
+    : courierLate
+      ? [
+          'Errand cancelled',
+          "The courier didn't pick it up by the deadline, so the reserved credits were returned in full.",
+        ]
+      : creditTimedOut
       ? [
           'Errand not posted',
           "Credit didn't confirm your reservation in time; any credits held are being returned.",
