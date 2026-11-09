@@ -21,10 +21,10 @@ describe('creditCheck', () => {
   it('blocks a reward above the available credits and says the limit', () => {
     expect(creditCheck({ kind: 'loaded', available: 10 }, 11)).toEqual({
       canPost: false,
-      message: 'You have 10 credits available. Lower the reward to 10 or less.',
+      message: 'You have 10 credits. Lower the reward to 10 or less.',
     })
     expect(creditCheck({ kind: 'loaded', available: 1 }, 2).message).toBe(
-      'You have 1 credit available. Lower the reward to 1 or less.',
+      'You have 1 credit. Lower the reward to 1 or less.',
     )
   })
 
@@ -42,7 +42,7 @@ describe('creditCheck', () => {
   it('blocks when Credit is unavailable', () => {
     const result = creditCheck({ kind: 'unavailable' }, 3)
     expect(result.canPost).toBe(false)
-    expect(result.message).toContain('posting is paused')
+    expect(result.message).toContain("can't check your credits")
   })
 })
 
@@ -55,7 +55,7 @@ describe('reservationOutcome', () => {
   it('explains each rejection reason', () => {
     expect(reservationOutcome('RESERVATION_FAILED', 'INSUFFICIENT_CREDITS', 1)).toMatchObject({
       kind: 'failed',
-      message: 'Not enough credits to reserve 1 credit. Lower the reward and post again.',
+      message: "You don't have enough credits for a reward of 1. Lower it and post again.",
       setUpCredits: false,
     })
     expect(
@@ -71,7 +71,7 @@ describe('reservationOutcome', () => {
       reservationOutcome('EXPIRED', 'CREDIT_RESERVATION_TIMEOUT', 3),
     ).toMatchObject({
       kind: 'failed',
-      message: expect.stringContaining("Credit didn't confirm"),
+      message: expect.stringContaining('Your credits are safe'),
       setUpCredits: false,
     })
   })
@@ -79,7 +79,7 @@ describe('reservationOutcome', () => {
   it('reports a deadline that passed while waiting', () => {
     expect(reservationOutcome('EXPIRED', 'PICKUP_DEADLINE_PASSED', 3)).toMatchObject({
       kind: 'failed',
-      message: expect.stringContaining('pickup time passed'),
+      message: expect.stringContaining('pickup time has already passed'),
     })
   })
 })
@@ -96,7 +96,7 @@ describe('rewardChangeCheck', () => {
     expect(rewardChangeCheck(loaded(2), 3, 5).canSave).toBe(true)
     expect(rewardChangeCheck(loaded(1), 3, 5)).toEqual({
       canSave: false,
-      message: 'Raising the reward to 5 needs 2 more credits, but you have 1 available. Choose 4 or less.',
+      message: "You don't have enough credits for 5. Choose 4 or less.",
     })
   })
 
@@ -128,7 +128,7 @@ describe('rewardChangeOutcome', () => {
       rewardChangeOutcome(open(3), [{ action: 'REWARD_CHANGE_REJECTED', orderVersion: 3 }], 5, 2),
     ).toEqual({
       kind: 'rejected',
-      message: 'Not enough credits to change the reward to 5. The reward stays at 3.',
+      message: "You don't have enough credits for a reward of 5, so it stays at 3.",
     })
   })
 
