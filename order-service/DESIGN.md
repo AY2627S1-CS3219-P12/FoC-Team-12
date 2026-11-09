@@ -287,6 +287,10 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   `(requester_id, idempotency_key)`. Create takes a transaction-scoped advisory lock on the
   requester and key before looking the key up, so concurrent retries wait for the first one and
   then return its order; the unique index is the backstop.
+- **V6 (outbox stream claim, after V5 from `order-create-idempotency`):** partial index `(aggregate_id, topic, created_at, id) WHERE
+  published_at IS NULL`, for the relay's per-stream claim: it locks each order-and-topic stream's
+  oldest unpublished row with `SKIP LOCKED`, then the rows behind it, so replicas never interleave
+  one order's events.
 - **Reward editing** needs no migration: it maps the V1 `pending_credit_reward` column, and the
   new history actions (`EDIT`, `REWARD_CHANGE_APPLIED`, `REWARD_CHANGE_REJECTED`) fit the
   `order_transitions.action` VARCHAR.
@@ -351,6 +355,7 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | UI | `order-ui-reorder`: Post again on a requester's ended errands opens Request help filled in except Pick up by (frontend only, existing `GET /api/orders/{id}`) | This change |
 | 11 | `order-create-idempotency`: optional `Idempotency-Key` on `POST /api/orders` (V5); a retry with the same key and body returns the first order (`200`) with no second `OrderSubmitted` or reservation, a changed body is `409 IDEMPOTENCY_KEY_REUSED`; the create page sends one key per errand content | This change |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
+| 12 | `order-messaging-hardening`: relay claims whole order-and-topic streams (V6), so replicas keep per-order order; batch 20 and a stuck-row `ERROR`; `OrderTransitionException`/unknown order go to `credit.events.DLT` without retries; `CreditReleased` must answer `OrderCancelled` or `OrderExpired`; `order.outbox.*` gauges on ADMIN-only `/actuator/metrics` | This change |
 
 ## Decisions
 

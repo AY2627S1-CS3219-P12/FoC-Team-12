@@ -241,6 +241,37 @@ class CreditOutcomeHandlerIntegrationTest {
     }
 
     @Test
+    void aReleaseAnsweringACommandThatFreesNoCreditIsAnOperationConflict() {
+        UUID orderId = createOrder();
+        handler.handle(reserved(published(orderId, "OrderSubmitted"), UUID.randomUUID()));
+        orderService.accept(orderId, COURIER);
+        orderService.pickUp(orderId, COURIER);
+        orderService.deliver(orderId, COURIER);
+        orderService.complete(orderId, REQUESTER);
+
+        assertThatThrownBy(() -> handler.handle(outcome(published(orderId, "OrderCompleted"), "CreditReleased",
+                Map.of("releasedAmount", 10, "availableBalance", 10, "reservedBalance", 0))))
+                .isInstanceOfSatisfying(CreditOutcomeRejectedException.class, exception ->
+                        assertThat(exception.getReasonCode()).isEqualTo("OPERATION_ID_CONFLICT"));
+        assertThat(order(orderId).getCreditStatus()).isEqualTo(CreditStatus.RESERVED);
+    }
+
+    @Test
+    void aReleaseAnsweringAnExpirySetsTheCreditStatus() {
+        UUID orderId = createOrder();
+        String reservedLate = reserved(published(orderId, "OrderSubmitted"), UUID.randomUUID());
+        jdbc.update("update orders set pickup_deadline = created_at + interval '1 microsecond' where id = ?", orderId);
+        // Reserved at or after the deadline: the order expires and asks Credit to release.
+        handler.handle(reservedLate);
+        assertThat(order(orderId).getState()).isEqualTo(OrderState.EXPIRED);
+
+        assertThat(handler.handle(outcome(published(orderId, "OrderExpired"), "CreditReleased",
+                Map.of("releasedAmount", 10, "availableBalance", 10, "reservedBalance", 0))))
+                .isEqualTo(Outcome.APPLIED);
+        assertThat(order(orderId).getCreditStatus()).isEqualTo(CreditStatus.RELEASED);
+    }
+
+    @Test
     void eventsFromTheWrongProducerAreRejected() {
         UUID orderId = createOrder();
         String forged = reserved(published(orderId, "OrderSubmitted"), UUID.randomUUID())

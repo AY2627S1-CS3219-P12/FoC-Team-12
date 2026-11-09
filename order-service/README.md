@@ -323,6 +323,9 @@ the pending reward and `CreditAdjustmentRejected` drops it (both only if the
 order is still `OPEN` with that reward pending; otherwise the event is recorded as
 `IGNORED`), and `CreditReleased`,
 `CreditSettled` and `CourierCompensated` only set the order's `creditStatus`.
+Each outcome must answer the command that asks for it: `CreditReleased` an
+`OrderCancelled` or `OrderExpired`, `CreditSettled` an `OrderCompleted`,
+`CourierCompensated` an `OrderCancelled`; anything else is `OPERATION_ID_CONFLICT`.
 Each event is validated, deduplicated by `eventId` in the `processed_events`
 inbox, and matched to the Order command it answers by `operationId`, all in one
 transaction.
@@ -333,14 +336,39 @@ their topic every second, keyed by the order UUID and reusing each row's stored
 acknowledges, and a failed send stays pending with `attempts` increased. Once an
 order's event fails, that order's later events **on the same topic** wait, so they
 are never published out of order; a failing `order.lifecycle.events` row never
-holds back that order's credit requests on `order.events`. A listener consumes `credit.events` as group `order-service` and
-acknowledges a record only after `CreditOutcomeHandler` commits; transient
-failures are retried three times with backoff, then the original record goes to
-`credit.events.DLT` (contract violations go there without retries).
+holds back that order's credit requests on `order.events`. This also holds with
+several Order replicas: a run claims a whole stream (one order's events on one
+topic) by locking that stream's oldest unpublished row with `FOR UPDATE SKIP
+LOCKED`, so another replica skips the stream until the first one commits, and can
+never send a later event ahead of an earlier one. A run claims at most 20 rows
+(`ORDER_KAFKA_OUTBOX_BATCH_SIZE`) and keeps them locked while it sends, so the
+batch stays small. A row that has failed 10 times (`ORDER_KAFKA_OUTBOX_STUCK_ATTEMPTS`)
+is logged once at `ERROR` as stuck, with its `eventId`, `operationId` and order,
+and keeps being retried.
+
+A listener consumes `credit.events` as group `order-service` and acknowledges a
+record only after `CreditOutcomeHandler` commits. Transient failures (database or
+broker trouble) are retried three times with backoff, then the original record
+goes to `credit.events.DLT`. Failures that would repeat on every attempt go there
+at once: contract violations, an outcome the order's state cannot take
+(`OrderTransitionException`) and an unknown order.
+
+**Backlog metrics.** `GET /actuator/metrics/{name}` needs an `ADMIN` session token
+(anyone else gets `401`/`403`). The relay backlog is:
+
+| Metric | Meaning |
+| --- | --- |
+| `order.outbox.pending` | Outbox rows Kafka has not acknowledged |
+| `order.outbox.oldest.age` | Seconds since the oldest of them was written; `0` when none waits |
+| `order.outbox.max.attempts` | Most failed sends of any of them; above the stuck threshold, a row is blocking its stream |
+
+They are read from the database at most every 5 s, and work with Kafka off too.
 
 | Setting | Env var | Default |
 | --- | --- | --- |
 | Turn Kafka on/off | `ORDER_KAFKA_ENABLED` | `true` (`false` runs without a broker; events wait unpublished) |
+| Relay batch size | `ORDER_KAFKA_OUTBOX_BATCH_SIZE` | `20` |
+| Stuck-row threshold | `ORDER_KAFKA_OUTBOX_STUCK_ATTEMPTS` | `10` failed attempts |
 | Publish `OrderTransitioned` | `ORDER_LIFECYCLE_EVENTS_ENABLED` | `false` (Compose sets `true`) |
 | Bootstrap servers | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` (Compose sets `kafka:9092`) |
 | Security protocol | `KAFKA_SECURITY_PROTOCOL` | `SASL_PLAINTEXT` |

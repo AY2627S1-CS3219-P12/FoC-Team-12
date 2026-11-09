@@ -125,7 +125,10 @@ public class CreditOutcomeHandler {
                 requireCommand(command, "OrderRewardChangeRequested", eventType);
                 return applyRewardOutcome(eventType, orderId, command, eventId);
             }
-            case "CreditReleased" -> recordCreditStatus(orderId, CreditStatus.RELEASED);
+            case "CreditReleased" -> {
+                requireCommand(command, Set.of("OrderCancelled", "OrderExpired"), eventType);
+                recordCreditStatus(orderId, CreditStatus.RELEASED);
+            }
             case "CreditSettled" -> {
                 requireCommand(command, "OrderCompleted", eventType);
                 recordCreditStatus(orderId, CreditStatus.SETTLED);
@@ -171,10 +174,15 @@ public class CreditOutcomeHandler {
     }
 
     private static void requireCommand(OutboxEvent command, String expected, String outcome) {
-        if (!command.getEventType().equals(expected)) {
+        requireCommand(command, Set.of(expected), outcome);
+    }
+
+    /** As {@link #requireCommand(OutboxEvent, String, String)}, for an outcome that may answer several command types. */
+    private static void requireCommand(OutboxEvent command, Set<String> expected, String outcome) {
+        if (!expected.contains(command.getEventType())) {
             throw reject("OPERATION_ID_CONFLICT",
                     outcome + " answers operation " + command.getOperationId() + ", which was "
-                            + command.getEventType() + ", not " + expected);
+                            + command.getEventType() + ", not " + String.join(" or ", expected.stream().sorted().toList()));
         }
     }
 
