@@ -10,7 +10,8 @@ import org.springframework.web.server.ResponseStatusException;
 public class CaseAccessService {
     private final AdminCaseRepository cases;
     private final UserEligibilityClient users;
-    public CaseAccessService(AdminCaseRepository cases, UserEligibilityClient users) { this.cases = cases; this.users = users; }
+    private final ReviewerIndependenceService independence;
+    public CaseAccessService(AdminCaseRepository cases, UserEligibilityClient users, ReviewerIndependenceService independence) { this.cases = cases; this.users = users; this.independence = independence; }
 
     // Verify User first, then read current case state. Never hold a case lock across HTTP
     // or reuse a case snapshot obtained before the potentially slow eligibility request.
@@ -26,6 +27,14 @@ public class CaseAccessService {
         boolean readConversation = target && (admin || own);
         boolean write = c.getClosureOperationId() == null && c.getState() == AdminCase.State.UNDER_REVIEW && readConversation
                 && (own || (admin && actorId.equals(c.getReviewerId())));
+        if (write && admin && actorId.equals(c.getReviewerId())) {
+            // No Chat call here: this endpoint is itself called by Chat authorization.
+            try { write = independence.independent(caseId, c.getOrderId(), actorId); }
+            catch (ResponseStatusException ex) {
+                if (ex.getStatusCode() != HttpStatus.SERVICE_UNAVAILABLE) throw ex;
+                write = false;
+            }
+        }
         List<UUID> visibleParticipants = admin ? c.getParticipants().stream().sorted().toList() : List.of(actorId);
         return new Access(caseId, c.getOrderId(), c.getState(), c.getReviewerId(), visibleParticipants, admin, readConversation, write,c.getClosureOperationId());
     }

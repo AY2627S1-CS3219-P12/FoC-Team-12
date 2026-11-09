@@ -19,6 +19,26 @@ record Chat/transport owner sign-off or deploy the shared drafts.
 
 ## Behavior and boundaries
 
+- Reviewer independence: an administrator who requested an errand or was ever assigned as its
+  courier cannot claim its case or act as reviewer, whether or not they reported. Claim, new
+  credit/ban requests, conversation initiation and resolution require fresh, complete trusted
+  Chat evidence derived from Order history. Existing conflicting assignments are blocked too.
+  Complete snapshot-wide participants include non-reporters; reports alone never establish
+  independence. Missing, malformed, stale, incomplete, contradictory or unavailable evidence is
+  503; verified involvement is 403. Denials do not create claims, actions, conversations or decisions.
+  An immutable completed action/resolution receipt may still be read on an identical replay;
+  it authorizes no new effect and never reverses previously accepted owner commands.
+- Admin V10 privately retains the evidence revision, Order checkpoint, monotonic involved IDs
+  and expiry for reviewer conversation-write callbacks. Only validated producer evidence creates
+  this proof; it never adds case participant membership. The lease expires at the earliest coverage/
+  checkpoint timestamp plus `app.resolution.evidence-max-age-seconds` (default 60 seconds).
+  A failed fresh verification withdraws the lease. A fresh first-page timeline read renews it;
+  old pinned pages cannot renew it. Chat callbacks never call Chat: a missing/expired proof denies
+  reviewer writes while authorized evidence/conversation reads remain available. A participant
+  replying to their own reviewer conversation retains participant access. User account checks
+  remain live. Evidence freshness is bounded, not an atomic lock across Order and Admin.
+  The GUI explains the restriction and exposes evidence refresh. If no independent administrator
+  is available, the case stays open; this iteration introduces no reassignment or reopening.
 - `GET /api/admin/session` is the foundation's Admin-owned access endpoint. User bearer
   authentication plus effective ADMIN mode and a fresh persisted active/administrator
   check returns `{userId, role: "ADMIN"}`. Invalid identity is 401, denied access 403,
@@ -65,7 +85,7 @@ Account/supplier tools link to their existing owners.
 | `GET /api/admin/reports/{caseId}` | Reporting participant only; own statement and case summary; unrelated users receive 404 |
 | `GET /api/admin/cases?status=&query=&page=&size=` | Current active ADMIN; status enum, optional exact case/order UUID, page 0+, size 1–100/default 20 |
 | `GET /api/admin/cases/{caseId}` | Current active ADMIN; `{case,statements,actions:[],resolution:null}` |
-| `POST /api/admin/cases/{caseId}/claim` | Current active ADMIN; `{expectedRevision}`; OPEN becomes UNDER_REVIEW with caller as reviewer |
+| `POST /api/admin/cases/{caseId}/claim` | Current active independent ADMIN; `{expectedRevision}`; OPEN becomes UNDER_REVIEW with caller as reviewer |
 
 Reporting validates a trimmed 1–2000 character statement. It calls Chat's documented
 `GET /internal/chat/orders/{orderId}/report-eligibility?userId=` using an Admin service
@@ -643,8 +663,9 @@ This checkout publishes Admin PostgreSQL on `127.0.0.1:5545`; use the regular `.
 password. Do not use disposable preview credentials or seed normal databases for this checklist.
 
 Roles needed: a regular requester, an assigned courier on the same real errand, an unrelated
-participant, and an active administrator who claims the case. An administrator testing their own
-report must switch to Requester/Courier; Admin mode is reserved for review. No accounts are
+participant, and an active independent administrator who claims the case. An administrator testing
+their own report must switch to Requester/Courier and use a different administrator who has never
+been involved in that errand for review. No accounts are
 automatically created by this frontend integration.
 
 1. As the requester, open Errands → My errands → a real errand. Below its details, check the

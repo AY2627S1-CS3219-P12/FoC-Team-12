@@ -23,11 +23,13 @@ public class ResolutionService {
     private final ChatConversationClient chat;
     private final TransactionTemplate tx;
     private final long maxAge;
+    private final ReviewerIndependenceService independence;
     private final JsonMapper json=JsonMapper.builder().build();
     public ResolutionService(JdbcTemplate db, CaseService cases, TimelineService timeline,
-            PlatformTransactionManager manager, ChatConversationClient chat, @Value("${app.resolution.evidence-max-age-seconds:60}") long maxAge) {
+            PlatformTransactionManager manager, ChatConversationClient chat, @Value("${app.resolution.evidence-max-age-seconds:60}") long maxAge, ReviewerIndependenceService independence) {
         if(maxAge<1)throw new IllegalArgumentException("Evidence age must be positive");
         this.db=db;this.cases=cases;this.timeline=timeline;this.maxAge=maxAge;this.chat=chat;
+        this.independence=independence;
         tx=new TransactionTemplate(manager);tx.setTimeout(15);
     }
     public CaseViews.Mutation resolve(Jwt actor, UUID id, UUID key, String resolution, long revision, List<Explanation> explanations) {
@@ -47,6 +49,7 @@ public class ResolutionService {
         eligible(initial,reviewer,revision);
         var evidence=timeline.read(actor,id,null,100); // Real producer read, never browser coverage.
         cases.evidenceCase(actor,id); // Recheck current User eligibility after remote work.
+        independence.require(id,initial.orderId(),reviewer);
         boolean continueResolution=Boolean.TRUE.equals(tx.execute(s->{
             db.execute("SET LOCAL lock_timeout='5s'");
             db.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",r->null,"request:"+key);
@@ -54,6 +57,7 @@ public class ResolutionService {
             if(completed!=null&&completed.status()!=503)return false;
             var rows=db.queryForList("SELECT * FROM admin_cases WHERE id=? FOR UPDATE",id);
             if(rows.isEmpty())throw error(404,"Case not found.");var c=rows.get(0);
+            independence.require(id,(UUID)c.get("order_id"),reviewer);
             eligible(new CaseViews.Summary(id,(UUID)c.get("order_id"),AdminCase.State.valueOf((String)c.get("state")),(UUID)c.get("reviewer_id"),((Number)c.get("revision")).longValue(),initial.createdAt()),reviewer,revision);
             var preparations=db.queryForList("SELECT operation_id,actor_id,request_hash FROM admin_resolution_preparations WHERE case_id=?",id);
             if(!preparations.isEmpty()){
@@ -79,6 +83,7 @@ public class ResolutionService {
             var rows=db.queryForList("SELECT * FROM admin_cases WHERE id=? FOR UPDATE",id);
             if(rows.isEmpty())throw error(404,"Case not found.");
             var c=rows.get(0);
+            independence.require(id,(UUID)c.get("order_id"),reviewer);
             eligible(new CaseViews.Summary(id,(UUID)c.get("order_id"),AdminCase.State.valueOf((String)c.get("state")),(UUID)c.get("reviewer_id"),((Number)c.get("revision")).longValue(),initial.createdAt()),reviewer,revision);
             var actions=db.queryForList("SELECT operation_id,status FROM admin_actions WHERE case_id=?",id);
             Set<String> required=new HashSet<>();

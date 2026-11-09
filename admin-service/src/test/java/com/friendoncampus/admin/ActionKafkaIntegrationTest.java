@@ -39,8 +39,21 @@ class ActionKafkaIntegrationTest {
     }
     @Autowired CreditActionService actions;@Autowired ActionKafkaTransport transport;@Autowired JdbcTemplate db;@Autowired KafkaTemplate<String,String> kafka;
     @MockitoBean UserEligibilityClient users;
+    @MockitoBean ChatTimelineClient timelines;
     final JsonMapper json=JsonMapper.builder().build();
-    @BeforeEach void clearTestRows(){db.execute("TRUNCATE admin_cases CASCADE");}
+    @BeforeEach void clearTestRows(){
+        db.execute("TRUNCATE admin_cases CASCADE");
+        // Explicit test-owned complete history; broker and database remain real.
+        when(timelines.fetch(any(),any(),anyString(),isNull(),eq(100))).thenAnswer(call->{
+            UUID id=call.getArgument(0), order=call.getArgument(1);
+            UUID requester=db.queryForObject("SELECT reporter_id FROM admin_statements WHERE case_id=?",UUID.class,id);
+            var e=(tools.jackson.databind.node.ObjectNode)json.readTree(EvidenceFixtures.serialize(EvidenceFixtures.timeline())
+                .replace(EvidenceFixtures.CASE.toString(),id.toString()).replace(EvidenceFixtures.ORDER.toString(),order.toString()).replace(EvidenceFixtures.ACTOR.toString(),requester.toString()));
+            ((tools.jackson.databind.node.ObjectNode)e.path("coverage")).put("asOf",Instant.now().toString());
+            for(var cp:e.path("coverage").path("checkpoints"))((tools.jackson.databind.node.ObjectNode)cp).put("checkedAt",Instant.now().toString());
+            return e;
+        });
+    }
     @Test void banCommandsAndUserOutcomeInboxStillUseTheirSeparateTransport() throws Exception {
         UUID caseId=UUID.randomUUID(),order=UUID.randomUUID(),target=UUID.randomUUID(),actor=UUID.randomUUID();
         when(users.find(any())).thenAnswer(call->new UserEligibilityClient.Eligibility(call.getArgument(0),true,true));
