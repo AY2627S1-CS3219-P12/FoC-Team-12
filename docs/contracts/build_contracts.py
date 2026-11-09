@@ -54,6 +54,7 @@ S['EvidenceData'] = {'oneOf': [
 S['EvidenceRecord'] = obj({'eventId': UUID, 'source': TEXT, 'stream': TEXT, 'sourceSequence': INT,
     'orderId': UUID, 'action': TEXT,'actorUserId': nullable(UUID), 'occurredAt': TIME,
     'ingestedAt': TIME,'data': ref('EvidenceData')})
+S['EvidenceData']['oneOf'][2]['properties'].update(ownerEventId=UUID,ownerService=enum('user-service','credit-service'))
 S['Eligibility'] = obj({'orderId': UUID,'userId': UUID,'eligible': {'type':'boolean'},
     'evidenceRevision': TEXT,'coverage': ref('Coverage')})
 S['Timeline'] = obj({'caseId': UUID, 'orderId': UUID, 'evidenceRevision': TEXT,
@@ -65,6 +66,8 @@ S['AdminEligibility'] = obj({'userId': UUID,'active': {'type':'boolean'},'admini
 S['CaseAccess'] = obj({'caseId': UUID,'orderId': UUID,'state': enum('OPEN','UNDER_REVIEW','RESOLVED'),
     'reviewerId': nullable(UUID),'allowedParticipantIds': array(UUID),
     'canReadEvidence': {'type':'boolean'},'canReadConversation': {'type':'boolean'},'canWriteConversation': {'type':'boolean'}})
+S['CaseAccess']['properties']['closureOperationId'] = nullable(UUID)
+S['ClosureAcknowledgement'] = obj({'caseId':UUID,'operationId':UUID,'readOnly':{'const':True}})
 S['Conversation'] = obj({'conversationId': UUID,'caseId': nullable(UUID),'orderId': UUID,
     'participantUserId': nullable(UUID),'readOnly': {'type':'boolean'}})
 S['Attachment'] = obj({'attachmentId': UUID,'mediaType': enum('image/jpeg','image/png','image/webp'),
@@ -128,6 +131,10 @@ cursor=[param('cursor'),param('limit',schema={'type':'integer','minimum':1,'maxi
 endpoint('/internal/chat/orders/{orderId}/report-eligibility','get','chat','Eligibility',internal=True,actor=True,params=[param('userId',schema=UUID,required=True)])
 endpoint('/internal/chat/cases/{caseId}/timeline','get','chat','Timeline',internal=True,actor=True,params=cursor)
 endpoint('/internal/chat/cases/{caseId}/conversations','post','chat','Conversation',obj({'participantUserId':UUID}),internal=True,actor=True,idem=True)
+endpoint('/internal/chat/cases/{caseId}/conversations','get','chat','Conversation',internal=True,actor=True,params=[param('participantUserId',schema=UUID,required=True)])
+endpoint('/internal/chat/cases/{caseId}/closure','post','chat','ClosureAcknowledgement',obj({'operationId':UUID}),internal=True,actor=True)
+endpoint('/internal/users/admin-operations/{operationId}','get','user','OwnerOutcome',internal=True)
+endpoint('/internal/credits/admin-operations/{operationId}','get','credits','OwnerOutcome',internal=True)
 endpoint('/internal/users/{userId}/admin-eligibility','get','user','AdminEligibility',internal=True)
 endpoint('/internal/admin/cases/{caseId}/access','get','admin','CaseAccess',internal=True,
     params=[param('actorId',schema=UUID,required=True),param('participantId',schema=UUID)])
@@ -165,6 +172,10 @@ S['Action'] = obj({'operationId':UUID,'caseId':UUID,'targetUserId':UUID,
     'reasonCode':nullable(TEXT),'createdAt':TIME,'completedAt':nullable(TIME)})
 S['CaseDetail'] = obj({'case':ref('CaseSummary'),'statements':array(ref('Statement')),
     'actions':array(ref('Action')),'resolution':nullable(TEXT)})
+S['ClosurePreparation'] = obj({'operationId':UUID,'resolution':TEXT,'revision':INT,
+    'explanations':array(obj({'operationId':UUID,'explanation':TEXT}))})
+S['CaseDetail']['properties']['closure'] = nullable(ref('ClosurePreparation'))
+S['ConversationReferences'] = array(ref('Conversation'))
 S['ParticipantReport'] = obj({'case':ref('CaseSummary'),'ownStatement':ref('Statement')})
 S['CasePage'] = obj({'content':array(ref('CaseSummary')),'page':INT,'size':INT,'totalElements':INT,'totalPages':INT})
 endpoint('/api/admin/reports','post','admin','ParticipantReport',obj({'orderId':UUID,'description':TEXT}),code=201,idem=True)
@@ -179,13 +190,14 @@ endpoint('/api/admin/cases/{caseId}','get','admin','CaseDetail')
 endpoint('/api/admin/cases/{caseId}/claim','post','admin','CaseSummary',obj({'expectedRevision':INT}),idem=True)
 endpoint('/api/admin/cases/{caseId}/timeline','get','admin','Timeline',params=cursor)
 endpoint('/api/admin/cases/{caseId}/conversations','post','admin','Conversation',obj({'participantUserId':UUID}),idem=True)
+endpoint('/api/admin/cases/{caseId}/conversations','get','admin','ConversationReferences')
+endpoint('/api/admin/reports/{caseId}/conversations','get','admin','ConversationReferences')
 endpoint('/api/admin/cases/{caseId}/actions','post','admin','Action',{'oneOf':[
     obj({'type':{'const':'CREDIT_ADJUSTMENT'},'targetUserId':UUID,'reason':TEXT,'amount':{'type':'integer','not':{'const':0}}}),
     obj({'type':{'const':'BAN'},'targetUserId':UUID,'reason':TEXT})]},code=202,idem=True)
 endpoint('/api/admin/cases/{caseId}/actions/{operationId}','get','admin','Action')
 endpoint('/api/admin/cases/{caseId}/resolve','post','admin','CaseDetail',obj({'resolution':TEXT,'expectedRevision':INT,
     'rejectedActionExplanations':{'type':'array','maxItems':1000,'items':obj({'operationId':UUID,'explanation':TEXT})}}, ['resolution','expectedRevision']),idem=True)
-write('n2h.openapi.json',api)
 
 # Standalone JSON Schema 2020-12 for NEW Kafka messages only.
 baseids={'operationId':UUID,'caseId':UUID,'orderId':UUID,'targetUserId':UUID,'requestedBy':UUID}
@@ -225,6 +237,9 @@ event('CaseActionCompleted','admin-service','AdminCase','admin.events',obj({**co
 event('CaseResolved','admin-service','AdminCase','admin.events',obj({**commoncase,'reviewerId':UUID,'resolvedAt':TIME}))
 events={'$schema':'https://json-schema.org/draft/2020-12/schema','title':'FoC N2H Kafka review draft',
         'description':'New messages only. Existing core v1 event schemas are not redefined.', 'oneOf':variants}
+S['OwnerOutcome'] = {'oneOf':[copy.deepcopy(v) for v in variants if v['title'] in {
+    'AdminCreditCorrectionApplied','AdminCreditCorrectionRejected','AdminUserBanApplied','AdminUserBanRejected'}]}
+write('n2h.openapi.json',api)
 write('n2h-events.schema.json',events)
 
 # Valid fixtures for each new event branch; cross-field relationships set explicitly below.
@@ -265,6 +280,8 @@ for path, methods in api['paths'].items():
     for method, op in methods.items():
         success=next(k for k in op['responses'] if k.startswith('2'))
         example=sample(op['responses'][success]['content']['application/json']['schema'])
+        if path == '/internal/users/admin-operations/{operationId}':
+            example=sample(next(v for v in variants if v['title']=='AdminUserBanApplied'))
         item={'operationId':op['operationId'],'status':int(success),'body':example}
         if 'requestBody' in op: item['requestBody']=sample(op['requestBody']['content']['application/json']['schema'])
         if path == '/api/admin/cases/{caseId}/resolve':
@@ -290,6 +307,8 @@ websocket={'$schema':'https://json-schema.org/draft/2020-12/schema', 'title':'Ch
         obj({'type':{'const':'ERROR'},'code':enum('INVALID_TICKET','FORBIDDEN','SESSION_EXPIRED','UNAVAILABLE')})]}
 # Standalone schema local references use $defs rather than OpenAPI components.
 websocket['$defs'].pop('ReportContext', None)  # Admin HTTP lookup is not a Chat wire change.
+for http_only in ['OwnerOutcome','ClosureAcknowledgement','ConversationReferences']:
+    websocket['$defs'].pop(http_only, None)
 write('chat-websocket.schema.json',json.loads(json.dumps(websocket).replace('#/components/schemas/','#/$defs/')))
 write('websocket.examples.json',[sample(branch) for branch in websocket['oneOf']])
 print(f'Generated {len(api["paths"])} HTTP paths, {len(variants)} new event variants and examples.')

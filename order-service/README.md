@@ -1,5 +1,21 @@
 # Order Service
 
+## Admin evidence integration
+
+Chat's pinned service identity reads `/internal/orders/orders/{orderId}/evidence` (the existing
+`/internal/orders/{orderId}/evidence` alias remains). The export preserves original outbox IDs,
+sequences, actors, snapshots and previous couriers. Its cursor pins an immutable committed prefix;
+new transitions are excluded until a new first-page read. Missing events, zero/legacy history or
+history without the initial SUBMIT baseline return unavailable rather than invented participants
+or completeness. Invalid cursor bounds are rejected. Service assertions enforce subject/key,
+audience, RSA strength, issued/not-before times, expiry and assertion identity.
+
+`OrderLifecycleEventIntegrationTest` verifies the exporter with real PostgreSQL and real Order
+domain transitions, including a new fact between pages and missing/legacy-baseline failures.
+No lifecycle or credit-request wire format changes. See
+[the approved integration protocol](../docs/integration/chat-admin-contract.md) and
+[actual acceptance/rollout evidence](../admin-service/INTEGRATION_READINESS.md).
+
 ## Admin reporting entry
 
 The errand detail screen includes a participant reporting panel using Admin-owned

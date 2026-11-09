@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: chat-service
-          image: arkanian4/foc-chat-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1
+          image: foc-chat-service:local-61c7062-completion-20261109-v2
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

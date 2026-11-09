@@ -77,7 +77,11 @@ public class EvidenceExportService {
                 if("CaseResolved".equals(type))EvidenceValidation.time(event.path("data"),"resolvedAt");
             }catch(Exception ex){throw missingBaseline();}
             Map<String,Object> data=new LinkedHashMap<>();data.put("kind","ADMIN");data.put("caseId",caseId);data.put("operationId",null);data.put("targetUserId",null);data.put("result",null);
-            if("CaseActionCompleted".equals(type))for(String field:List.of("operationId","targetUserId","result"))data.put(field,event.path("data").path(field).asText());
+            if("CaseActionCompleted".equals(type)){
+                for(String field:List.of("operationId","ownerEventId","targetUserId","result"))data.put(field,event.path("data").path(field).asText());
+                String actionType=db.queryForObject("SELECT type FROM admin_actions WHERE operation_id=?",String.class,UUID.fromString(event.path("data").path("operationId").asText()));
+                data.put("ownerService","BAN".equals(actionType)?"user-service":"credit-service");
+            }
             Map<String,Object> record=new LinkedHashMap<>();
             record.put("eventId",row.get("event_id"));record.put("source","admin-service");record.put("stream","admin.events");record.put("sourceSequence",sequence);record.put("orderId",orderId);
             record.put("action",type);record.put("actorUserId",event.path("actor").path("userId").asText());record.put("occurredAt",event.path("occurredAt").asText());

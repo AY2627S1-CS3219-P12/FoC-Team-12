@@ -24,12 +24,14 @@ public class CaseAccessService {
         if (!admin && (!own || !c.getParticipants().contains(actorId))) throw hidden();
         if (participantId != null && !target) throw hidden();
         boolean readConversation = target && (admin || own);
-        boolean write = c.getState() == AdminCase.State.UNDER_REVIEW && readConversation
+        boolean write = c.getClosureOperationId() == null && c.getState() == AdminCase.State.UNDER_REVIEW && readConversation
                 && (own || (admin && actorId.equals(c.getReviewerId())));
         List<UUID> visibleParticipants = admin ? c.getParticipants().stream().sorted().toList() : List.of(actorId);
-        return new Access(caseId, c.getOrderId(), c.getState(), c.getReviewerId(), visibleParticipants, admin, readConversation, write);
+        return new Access(caseId, c.getOrderId(), c.getState(), c.getReviewerId(), visibleParticipants, admin, readConversation, write,c.getClosureOperationId());
     }
     private static ResponseStatusException hidden() { return new ResponseStatusException(HttpStatus.NOT_FOUND, "Case not found"); }
     public record Access(UUID caseId, UUID orderId, AdminCase.State state, UUID reviewerId,
-            List<UUID> allowedParticipantIds, boolean canReadEvidence, boolean canReadConversation, boolean canWriteConversation) { }
+            List<UUID> allowedParticipantIds, boolean canReadEvidence, boolean canReadConversation, boolean canWriteConversation, UUID closureOperationId) {
+        public Access(UUID caseId,UUID orderId,AdminCase.State state,UUID reviewerId,List<UUID> participants,boolean evidence,boolean read,boolean write){this(caseId,orderId,state,reviewerId,participants,evidence,read,write,null);}
+    }
 }

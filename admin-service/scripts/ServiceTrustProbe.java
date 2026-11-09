@@ -10,7 +10,7 @@ import java.util.*;
 public final class ServiceTrustProbe {
     private static String encode(byte[] value) { return Base64.getUrlEncoder().withoutPadding().encodeToString(value); }
     private static String token(String prefix, String audience) throws Exception {
-        if (!Set.of("ADMIN", "CHAT").contains(prefix)) throw new IllegalArgumentException("Unsupported caller");
+        if (!Set.of("ADMIN", "CHAT", "CREDIT").contains(prefix)) throw new IllegalArgumentException("Unsupported caller");
         String kid = System.getenv(prefix + "_SERVICE_KEY_ID");
         if (kid == null || !kid.matches("[A-Za-z0-9._-]{1,100}")) throw new IllegalStateException("Missing caller identity");
         long now = Instant.now().getEpochSecond();
@@ -25,6 +25,7 @@ public final class ServiceTrustProbe {
     public static void main(String[] args) throws Exception {
         String prefix = args[0], receiver = args[1];
         String id = "00000000-0000-0000-0000-000000000001";
+        boolean operation = args.length>2 && "operation".equals(args[2]);
         String path = switch (receiver) {
             case "chat-service" -> "/internal/chat/orders/" + id + "/report-eligibility?userId=" + id;
             case "admin-service" -> "/internal/admin/cases/" + id + "/access";
@@ -33,8 +34,9 @@ public final class ServiceTrustProbe {
             case "credit-service" -> "/internal/credits/orders/" + id + "/evidence";
             default -> throw new IllegalArgumentException("Unsupported receiver");
         };
+        if(operation)path=switch(receiver){case "user-service"->"/internal/users/admin-operations/"+id;case "credit-service"->"/internal/credits/admin-operations/"+id;default->throw new IllegalArgumentException("Unsupported operation owner");};
         int port = switch(receiver) {case "user-service" -> 8081; case "order-service" -> 8082; case "credit-service" -> 8083; case "admin-service" -> 8084; default -> 8085;};
-        int expected = switch(receiver) {case "chat-service", "admin-service" -> 400; case "credit-service" -> 200; default -> 404;};
+        int expected = operation?404:switch(receiver) {case "chat-service", "admin-service" -> 400; case "credit-service" -> 200; default -> 404;};
         URI uri = URI.create("http://" + receiver + ".foc-local.svc.cluster.local.:" + port + path);
         var http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(3)).followRedirects(HttpClient.Redirect.NEVER).build();
         for (boolean wrongAudience : new boolean[]{true, false}) {

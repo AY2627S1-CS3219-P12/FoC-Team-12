@@ -65,12 +65,14 @@ export function CreditActions({
   participantIds,
   initialActions = [],
   kind = 'CREDIT_ADJUSTMENT',
+  closing = false,
 }: {
   summary: Summary
   actorId: string
   participantIds: string[]
   initialActions?: AdminAction[]
   kind?: 'CREDIT_ADJUSTMENT' | 'BAN'
+  closing?: boolean
 }) {
   const ban = kind === 'BAN'
   const failure = useCallback((e: unknown) => actionFailure(e, ban), [ban])
@@ -143,6 +145,7 @@ export function CreditActions({
     current.current = actions
   }, [actions])
   const writable =
+    !closing &&
     summary.state === 'UNDER_REVIEW' &&
     summary.reviewerId === actorId &&
     !denied &&

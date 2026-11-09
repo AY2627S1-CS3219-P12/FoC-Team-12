@@ -83,7 +83,7 @@ final class EvidenceValidation {
         var checkpoints=JSON.createArrayNode();for(var p:source.path("coverage").path("checkpoints"))checkpoints.add(pick(p,"source","stream","aggregateId","committedSequence","projectedSequence","checkedAt"));coverage.set("checkpoints",checkpoints);
         var gaps=JSON.createArrayNode();for(var g:source.path("coverage").path("blockingGaps"))gaps.add(pick(g,"source","stream","aggregateId","fromSequence","toSequence","reason"));coverage.set("blockingGaps",gaps);root.set("coverage",coverage);return root;
     }
-    private static tools.jackson.databind.node.ObjectNode publicSnapshot(JsonNode source){return pick(source,"orderId","requesterId","courierId","status","title","description","creditReward","pickupDeadline","pickupLocationId","dropoffLocationId","pickupLocationName","dropoffLocationName");}
+    private static tools.jackson.databind.node.ObjectNode publicSnapshot(JsonNode source){var result=pick(source,"orderId","requesterId","courierId","status","title","description","creditReward","pickupDeadline","pickupLocationId","dropoffLocationId","pickupLocationName","dropoffLocationName");result.put("pickupDeadline",java.time.OffsetDateTime.parse(source.path("pickupDeadline").asText()).toInstant().toString());return result;}
     private static tools.jackson.databind.node.ObjectNode pick(JsonNode source,String...fields){var target=JSON.createObjectNode();for(String field:fields)target.set(field,source.path(field));return target;}
     static void record(JsonNode r,UUID orderId) {
         uuid(r,"eventId"); text(r,"source"); text(r,"stream"); number(r,"sourceSequence"); equalUuid(r,"orderId",orderId);
@@ -111,7 +111,7 @@ final class EvidenceValidation {
     static UUID uuid(JsonNode n,String key){return UUID.fromString(text(n,key));}
     static void equalUuid(JsonNode n,String key,UUID expected){require(expected.equals(uuid(n,key)));}
     static void nullableUuid(JsonNode n,String key){require(n.has(key));if(!n.path(key).isNull())uuid(n,key);}
-    static void time(JsonNode n,String key){Instant.parse(text(n,key));}
+    static void time(JsonNode n,String key){java.time.OffsetDateTime.parse(text(n,key)).toInstant();}
     static void nullableTime(JsonNode n,String key){require(n.has(key));if(!n.path(key).isNull())time(n,key);}
     static void choice(JsonNode n,String key,Set<String> choices){require(choices.contains(text(n,key)));}
     static void integer(JsonNode n,String key){var v=n.path(key);require(v.isIntegralNumber()&&v.canConvertToLong());}

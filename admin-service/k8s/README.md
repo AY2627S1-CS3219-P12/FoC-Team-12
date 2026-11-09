@@ -1,5 +1,26 @@
 # Admin on local Minikube
 
+The current completion iteration is recorded in
+[integration readiness](../INTEGRATION_READINESS.md#integration-completion--9-november-2026).
+Its verified local User/Chat/Credit/Order images use `local-61c7062-completion-20261109-v2`;
+Admin uses the corrective `local-61c7062-completion-20261109-v3`. They must be built and loaded into the existing `foc-local`
+profile before applying their Deployment files. These are local worktree builds, not registry
+releases. The published-image result below is the historical baseline, not proof of this new code.
+
+After affected-owner review, provision only Credit's missing service identity/public User pin with
+`pwsh -File credit-service/k8s/Ensure-AdminIdentity.ps1 -Apply` from the repository root. Verify
+existing Admin/Chat pins with `Reconcile-ChatTrust.ps1` without `-Apply`. Reconcile the existing
+broker ACLs with `pwsh -File deploy/kafka/k8s/Apply-LocalKafka.ps1 -InitializeOnly`; this mode refuses
+runtime-script drift and does not restart the broker/UI or change credentials. Apply the reviewed
+RabbitMQ readiness timeout and the selected application manifests only. Roll out User/Credit/Order,
+then Chat, then Admin; keep the loopback gateway tunnel on 8089. Do not recreate storage or Secrets.
+
+Check the existing `Test-AdminDeployment.ps1` without database restart, actual User/Credit/Chat
+consumer assignments, signed positive/wrong-audience service probes, private-route isolation and
+the real GUI workflow. Pod readiness alone is insufficient. Record images, PVC identities,
+business IDs/results and remaining manual acceptance in readiness. See its recovery warning:
+old images that ignore prepared closures or the new ledger enum are not safe rollbacks after use.
+
 Current result: the approved reconciliation is complete, with six services on verified published
 `ce035ee` images, zero selected-manifest drift, V8 and passing lifecycle topic/ACL checks. Existing
 storage/signing identities were retained. Reporting/claiming/Kafka passed; Chat evidence, resolution

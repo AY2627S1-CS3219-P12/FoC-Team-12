@@ -6,6 +6,185 @@ requirements or approval of draft interfaces. Product scope remains in the Admin
 wire shapes in `docs/contracts/` remain review drafts until the affected owners agree them.
 Never replace an unavailable dependency with synthetic data in application code.
 
+## Integration completion — 9 November 2026
+
+This section supersedes the producer-gap status below for this iteration; historical acceptance
+results remain evidence only for their recorded images. Darryl approved Admin/User work, then
+explicitly authorized necessary Admin/Chat/Credit/Order/User repairs and nominated this task as
+shared editor. The recovery lookup, ten-minute snapshots, durable closure barrier and owner
+operation-read refinements were explicitly approved in this chat; see
+[the protocol](../docs/integration/chat-admin-contract.md#integration-completion-refinements--9-november-2026).
+
+Preservation: branch `codex/admin-service-integration-completion` starts at `61c7062`, equal to
+freshly fetched `origin/main`. There were no tracked uncommitted changes at entry. Existing
+untracked caches, Postman material, `output/` and `tmp/` were retained. No commit/push/merge
+occurred during implementation or rollout; publication was separately requested after acceptance.
+
+Prepared implementation:
+
+- Admin recovers missing local conversation confirmation through an authorized Chat GET,
+  without another creation POST. Resolution persists an actor/body/revision-bound preparation,
+  blocks new writes, waits for Chat's durable drain acknowledgement outside its locks, and
+  commits its decision/CaseResolved atomically. The GUI can resume the original operation after
+  browser retry storage is lost. Missing/outage/uncertain outcomes remain distinct.
+- Chat rechecks current case/account access for metadata, messages, images and live recipients;
+  authorized reviewing admins can read without being inserted as writers. Actor denial does not
+  permanently lock a thread. Order terminal events target ERRAND conversations only. Creation
+  requires the assigned reviewer and binds its request hash to that actor. Durable snapshots
+  preserve pagination and historical assignment periods. Source timestamp comparison accounts
+  for PostgreSQL microsecond precision; identity/content validation remains strict.
+- Credit has its own correction command listener, durable operation/inbox/quarantine/outbox,
+  available-only ledger effect and explicit wallet label. User eligibility is checked before
+  Credit locks accounts. Replays republish the original outcome, including after actor revocation.
+  Reserved credits stay unchanged; rejection/rollback/overflow are owner decisions.
+- User exposes its original sanction outcome to authenticated Chat only. Chat reconciles original
+  User/Credit outcomes against Admin's stored ownerEventId before claiming case-action coverage.
+  No global User version or unrelated stream checkpoint is used as sanction coverage.
+- Chat's independent `chat-service-timeline` listener retains original Admin/owner envelopes;
+  HTTP producer exports reconcile the safe timeline/backfill view. Both lifecycle and case-event
+  listeners commit through a separate transactional bean before acknowledging. Invalid/conflicting
+  raw facts are retained in Chat quarantine and their offsets are not silently skipped.
+- Order/Credit service assertions enforce pinned subject/key, audience, RSA strength, lifetime,
+  issued/not-before times and nonblank assertion identity. Order lifecycle business rules are unchanged.
+
+Final isolation checks: Credit full backend suite **69/69**; Admin affected PostgreSQL workflow,
+access/client and resolution HTTP checks **51/51**; Chat full backend suite **26/26**; Order real
+PostgreSQL lifecycle/evidence and signed service-assertion checks **12/12**; User sanction domain
+and actual Kafka listener/outbox checks **10/10**. All had zero failures/errors/skips. User's
+separate signed HTTP/current eligibility/context checks passed 15 (overlapping sanction coverage);
+the new route rejects anonymous/wrong-audience/non-Chat callers and distinguishes 404 absence.
+The real User listener applied a test-fixture ban, emitted its original outcome through Kafka,
+and replayed it after real reactivation without rebanning. Credit used an actual disposable broker
+pause/recovery. Admin baseline's other unchanged checks remain covered by the earlier 94-test run
+(one disposable Kafka startup timeout was rerun successfully). Admin GUI **78/78** and Credit GUI
+**19/19**, lint, TypeScript and production builds passed. OpenAPI/41 HTTP fixtures, 11 event fixtures,
+negative/schema/reference checks, five shared UI checks, Compose's 31 required variables across
+five environments and YAML parsing passed. These do not yet establish deployed business acceptance.
+Producer HTTP responses, accounts and command publishers inside isolated tests are explicitly
+test-owned fixtures; User/Credit outcomes and effects come from the actual owning implementation.
+
+Runtime preparation targets existing context/profile/namespace `foc-local` and the loopback-only
+gateway at `http://localhost:8089`. The signed-in GUI was verified against the original published
+images, not the new code. Final local image tags are
+`foc-{user,chat,credit,order}-service:local-61c7062-completion-20261109-v2`, with Admin's final
+corrective tag `foc-admin-service:local-61c7062-completion-20261109-v3` (built, loaded and deployed).
+
+| Built service | Local OCI image-index SHA-256 |
+| --- | --- |
+| Admin v3 | `92ffcb65470f3d11f1a16758eb1c0c33f93dfa79f2cfb0710102af0610d4ece6` |
+| User | `c5a4d42f1ce2d44cc32ee9fab1ef9b2961b57e096cba686fdc291d82651981dc` |
+| Chat | `80d41ebcef76b8fca68accd87096227e04826a5456a44b786ea966012ec8f5f7` |
+| Credit | `e28a30f95c520f3caf01e04dba0e3a63840730b47870c9c66f371357a9185c9d` |
+| Order | `b3476f357afba813be9f4520ab95f4c1a8e64aba06b56a46f27b3454a196fdfc` |
+
+The remote was fetched again before rollout preparation; the branch still has zero divergence
+from `origin/main` at `61c7062`. These images additionally include this task's uncommitted worktree
+changes. Server admission dry-runs passed all five Deployments, Credit configuration and RabbitMQ.
+Kafka's disposable mock-CLI initializer test passed serial execution/retry/failure checks; actual
+cluster ACL reconciliation and source delivery remain rollout checks.
+
+Prepared configuration enables existing User sanctions and Credit corrections, adds only Chat's
+documented case/outcome read ACLs, and provisions only a missing independent Credit signing key
+plus its public User pin. Existing DB/JWT/service keys and PVCs must be retained. RabbitMQ's
+existing CLI ping succeeds but exceeds its five-second readiness budget under load; the prepared
+timeout is 15 seconds and diagnostics use one Erlang scheduler (verified against the installed
+RabbitMQ script). No broad network exception or internal gateway route is added.
+
+The user explicitly confirmed completed affected-owner reviews and instructed rollout: Eldridge
+(Chat/Credit), XueTing (Order), Jun Hui (broker/shared runtime), Darryl (Admin/User).
+`Apply-LocalKafka.ps1 -InitializeOnly` validates unchanged runtime scripts
+and updates only the initializer/ACL job, without redeploying the broker, UI or credentials.
+
+Deployed checks, 9 November ~11:20 SGT: all five application Deployments rolled out; Admin V9,
+Chat V7 and Credit V6 migrated successfully. Kafka job `kafka-init-d100a5caf3` completed. User
+`user-service-admin` and Credit `credit-service-admin` received actual command partitions. Chat
+started before the ACL job completed and stopped its timeline consumer on authorization failure;
+a restart after ACL completion recovered it: actual assignment includes all three partitions of
+each of `admin.events`, `credit.admin.events` and `user.admin.events` (nine total), plus the
+separate lifecycle group. Rabbit connectivity recovered with a real authenticated connection.
+RabbitMQ required an explicit pod restart because its old unready pod blocked StatefulSet rollout;
+both startup and readiness CLI budgets are now 15 seconds and it is 1/1 Ready. All eight PVC UIDs
+match the pre-rollout snapshot. No database or Kafka broker restart, credential rotation or storage reset.
+The existing Credit signing identity was absent: only its new independent key/public User pin were
+added. Existing Admin/Chat trust pins verified unchanged.
+
+The deployed Admin smoke passed health/OpenAPI/UI, anonymous and invalid-token 401, private
+gateway-route 404, V9 persistence, actual Admin outcome assignments and the allowed/denied TCP
+matrix (including Admin denied User DB). Signed Chat-to-User/Order/Credit/Admin, Admin-to-Chat
+and Credit-to-User probes passed current trust; wrong audience returned 401. Chat-only operation
+reads returned 404 for an unknown operation from both User and Credit. These probes do not assert
+business outcomes. The subsequent completed real GUI acceptance used case
+`af44f37e-c126-4911-886e-26469ce29564` and labelled test errand
+`bb9932ec-2dc0-4a5f-8993-e65dbe5988bb` (one credit reserved through actual services).
+
+Live GUI exposed an additional compatibility defect: the original Order snapshot emits an ISO
+offset timestamp at minute precision (`2026-11-09T10:00Z`), rejected by Admin's seconds-only
+`Instant.parse`. Chat had successfully created snapshots and all producer exports returned 200.
+Admin now parses offset date-times and emits canonical UTC seconds for its public deadline;
+offset-free timestamps still fail closed. Six timeline-client checks, including this regression,
+passed. Admin's corrective image is `local-61c7062-completion-20261109-v3`, OCI index
+`92ffcb65470f3d11f1a16758eb1c0c33f93dfa79f2cfb0710102af0610d4ece6`; other services retain v2.
+Its rollout completed successfully. The full deployed Admin smoke/isolation/consumer-assignment
+check passed again on v3. No original event payload or business state was rewritten.
+
+Initial GUI observations: own report OPEN, claim UNDER_REVIEW, persisted private self-message in
+conversation `35f8ada9-f32f-4f41-a5c8-3158b4722171`. Cancelling the labelled OPEN errand produced
+real Credit release and restored wallet 10 available/0 reserved. A temporary +1 administrative
+correction completed SUCCEEDED through real Kafka. A paired -1 restoring correction was prepared;
+automatic review required user handoff for the financial confirmation, which the user reported
+clicking. After v3 recovery the same operation completed SUCCEEDED at 11:36:01 SGT and timeline
+showed available 10/reserved 0; no replacement request was created.
+
+Final live workflow, ~11:40 SGT:
+
+- Both +1 and -1 corrections SUCCEEDED; original Credit outcomes were reconciled through the
+  Chat-only reads and matched Admin's stored owner event identities. The real User self-ban
+  command was REJECTED at 11:36:36 SGT with self-access protection; account stayed active.
+- A second message at 11:37:15 persisted in the same conversation after Order cancellation.
+  CASE remained writable while the case was UNDER_REVIEW; ERRAND cancellation did not lock it.
+- The GUI displayed COMPLETE evidence, zero blocking gaps and 13 original records, including
+  Order, Credit, Admin and User outcomes. Resolution fetched fresh producer evidence itself.
+- Resolution committed RESOLVED revision 10 with the rejected-action explanation. Chat's
+  durable barrier made the same conversation read-only; both messages remain visible and the
+  send form is absent. Reloaded participant report shows RESOLVED revision 10, its own original
+  statement and private read-only history, without Admin's private resolution reason.
+- Screenshot: `output/integration-completion-resolved.jpg`. Runtime platform image IDs are in
+  `output/integration-completion-runtime-images.txt` (distinct from host OCI index hashes).
+  Admin v3 platform digest: `8d475dec0272cba5e37d88c21515fce2a9300dbd677b2a4f0b5c1eb38c458eb5`.
+  Final PVC comparison is identical. GUI remains loopback-accessible at `http://localhost:8089`.
+  Final wallet GUI independently confirmed 10 available/0 reserved and seven ledger entries,
+  including the two explicitly labelled administrative corrections; its test balance is restored.
+
+Acceptance limits and precise owner handoffs:
+
+- Darryl/Admin/User: accepted the demonstrated case, final wallet 10/0 and resolved read-only
+  participant history. A live positive ban/reactivation was not
+  applied to another person's account. Actual User implementation + Kafka fixture tests cover
+  APPLIED/replay/reactivation; any additional cluster acceptance needs a designated disposable
+  second account. Never use a real uninvolved account for this check.
+- Eldridge/Chat and Darryl/Admin: live GUI used one account in Requester/Admin modes. Distinct
+  unrelated participant, unassigned reviewing Admin, image access after revocation, historical
+  courier reassignment and immutable-page expiry were isolated-tested, not manually recreated
+  with multiple cluster accounts. Use designated test accounts for optional owner acceptance.
+- XueTing/Order and Eldridge/Credit: fresh labelled errand proves original lifecycle and
+  reserve/release evidence. Legacy errands with missing original baseline/ledger events remain
+  incomplete by design; repair/backfill requires owner-supplied original facts, never fabrication.
+- No external producer implementation blocker remains for this demonstrated Admin workflow.
+  Darryl explicitly accepted this iteration in chat on 9 November 2026, including the documented
+  multi-account/live positive-ban limits. Final fresh fetch still reports HEAD/origin/main
+  divergence 0/0 at `61c7062`; all five final application pods and RabbitMQ are 1/1 Ready.
+  This describes the pre-publication worktree; code is now grouped into User, Order, Credit,
+  Admin/Chat, shared wiring and verification-record commits for the requested PR. Local caches
+  and test artifacts remain excluded. Images retain their verified pre-commit build identities;
+  no registry publication or merge is part of this follow-up.
+
+Recovery: migrations Admin V9, Chat V7 and Credit V6 are additive and never rewrite applied
+migrations. After a closure preparation or correction exists, an old image that ignores the barrier
+or cannot read ADMIN_CORRECTION ledger entries is not a safe rollback. Preserve data and use a
+compatible roll-forward repair; disabling a new consumer pauses delivery without changing IDs.
+Resume pending closure with its original operation. Never clear receipts, reopen Chat, reverse
+ledger rows, rotate credentials or reset storage to make acceptance pass.
+
 ## Chat integration current state
 
 This section supersedes older handoffs below that describe Chat as documentation-only. The

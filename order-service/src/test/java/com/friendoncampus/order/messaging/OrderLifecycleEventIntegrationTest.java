@@ -349,4 +349,20 @@ class OrderLifecycleEventIntegrationTest {
         assertThat(credit).allSatisfy(row -> assertThat(row.getOperationId()).isNotNull());
         assertThat(lifecycle(orderId)).hasSize(3);
     }
+    @Test
+    void evidenceExportPinsTheOriginalPrefixAndRejectsMissingOrLegacyBaselines(){
+        UUID orderId=open(Duration.ofHours(1));
+        var exports=new com.friendoncampus.order.service.OrderEvidenceExportService(org.springframework.jdbc.core.simple.JdbcClient.create(jdbc));
+        var first=exports.read(orderId,null,1);assertThat(first.checkpoint().committedSequence()).isEqualTo(2);
+        orderService.accept(orderId,ALICE);
+        var next=exports.read(orderId,first.nextCursor(),1);assertThat(next.checkpoint().committedSequence()).isEqualTo(2);assertThat(next.records().get(0).get("action")).isEqualTo("OPEN");
+        assertThat(exports.read(orderId,null,100).checkpoint().committedSequence()).isEqualTo(3);
+        String invalid=java.util.Base64.getUrlEncoder().withoutPadding().encodeToString("3:-1".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        assertThatThrownBy(()->exports.read(orderId,invalid,1)).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        jdbc.update("DELETE FROM outbox_events WHERE aggregate_id=? AND topic='order.lifecycle.events' AND payload->'data'->>'action'='SUBMIT'",orderId);
+        assertThatThrownBy(()->exports.read(orderId,null,100)).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        UUID legacy=submit(Duration.ofHours(1));
+        jdbc.update("UPDATE outbox_events SET payload=jsonb_set(payload,'{data,action}','\"EDIT\"') WHERE aggregate_id=? AND topic='order.lifecycle.events'",legacy);
+        assertThatThrownBy(()->exports.read(legacy,null,100)).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+    }
 }

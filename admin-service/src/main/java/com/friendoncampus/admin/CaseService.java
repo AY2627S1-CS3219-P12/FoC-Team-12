@@ -65,6 +65,7 @@ public class CaseService {
                 CaseRow existing = rows.get(0);
                 caseId = existing.summary.caseId();
                 if (existing.summary.state() == AdminCase.State.RESOLVED) return problem(409, "This case is resolved and no longer accepts reports.", route);
+                if(closure(caseId)!=null)return problem(409,"Resolution preparation is pending; this case no longer accepts reports.",route);
                 if (hasStatement(caseId, actor)) return problem(409, "You have already submitted a statement for this errand.", route);
                 db.update("UPDATE admin_cases SET revision=revision+1 WHERE id=?", caseId);
             }
@@ -145,7 +146,14 @@ public class CaseService {
     Detail localDetail(UUID caseId) {
         return new Detail(row(caseId).summary,
                 db.query("SELECT reporter_id,description,submitted_at FROM admin_statements WHERE case_id=? ORDER BY submitted_at,reporter_id", this::statementRow, caseId), creditActions.list(caseId),
-                db.query("SELECT resolution FROM admin_case_decisions WHERE case_id=?",r->r.next()?r.getString(1):null,caseId));
+                db.query("SELECT resolution FROM admin_case_decisions WHERE case_id=?",r->r.next()?r.getString(1):null,caseId),closure(caseId));
+    }
+    private Closure closure(UUID caseId){
+        return db.query("SELECT operation_id,resolution,case_revision,explanations FROM admin_resolution_preparations WHERE case_id=?",r->{
+            if(!r.next())return null;List<ResolutionService.Explanation> explanations=new ArrayList<>();
+            json.readTree(r.getString("explanations")).properties().forEach(e->explanations.add(new ResolutionService.Explanation(UUID.fromString(e.getKey()),e.getValue().asText())));
+            return new Closure(r.getObject("operation_id",UUID.class),r.getString("resolution"),r.getLong("case_revision"),explanations);
+        },caseId);
     }
     public Summary evidenceCase(Jwt jwt,UUID caseId) {
         requireAdmin(jwt);
@@ -155,17 +163,22 @@ public class CaseService {
     public List<ChatConversationClient.Conversation> confirmedConversations(Jwt jwt, UUID caseId, boolean participantView) {
         UUID actor = participantView ? requireParticipant(jwt) : requireAdmin(jwt);
         if (participantView && !hasStatement(caseId, actor)) throw hidden();
-        row(caseId); // Unknown cases stay hidden instead of appearing to have an empty history.
-        // One local statement grants participant access. Discovery never calls Chat or creates a thread.
-        return db.query("""
-                SELECT r.conversation_id,r.participant_user_id,c.order_id,c.state,c.reviewer_id
+        var summary=row(caseId).summary;
+        List<ChatConversationClient.Conversation> result=new ArrayList<>(db.query("""
+                SELECT r.conversation_id,r.participant_user_id,c.order_id,c.state,c.reviewer_id,c.closure_operation_id
                 FROM admin_case_conversations r JOIN admin_cases c ON c.id=r.case_id
                 WHERE r.case_id=?
                 """ + (participantView ? " AND r.participant_user_id=?" : "") + " ORDER BY r.participant_user_id",
                 (r,n) -> new ChatConversationClient.Conversation(r.getObject("conversation_id",UUID.class), caseId,
                         r.getObject("order_id",UUID.class), r.getObject("participant_user_id",UUID.class),
-                        !"UNDER_REVIEW".equals(r.getString("state")) || (!participantView && !actor.equals(r.getObject("reviewer_id",UUID.class)))),
-                participantView ? new Object[]{caseId,actor} : new Object[]{caseId});
+                        r.getObject("closure_operation_id")!=null || !"UNDER_REVIEW".equals(r.getString("state")) || (!participantView && !actor.equals(r.getObject("reviewer_id",UUID.class)))),
+                participantView ? new Object[]{caseId,actor} : new Object[]{caseId}));
+        // Missing local confirmation is recovered through Chat's authorized READ, never a creation POST.
+        var targets=participantView?List.of(actor):db.queryForList("SELECT reporter_id FROM admin_statements WHERE case_id=? ORDER BY reporter_id",UUID.class,caseId);
+        for(UUID target:targets)if(result.stream().noneMatch(r->target.equals(r.participantUserId())))
+            conversations.find(caseId,summary.orderId(),target,jwt.getTokenValue()).ifPresent(result::add);
+        if(participantView)requireParticipant(jwt);else requireAdmin(jwt);
+        return List.copyOf(result);
     }
 
     public Mutation openConversation(Jwt jwt, UUID key, UUID caseId, UUID participantId) {
@@ -208,6 +221,7 @@ public class CaseService {
         var summary = row(caseId).summary;
         if (!actor.equals(summary.reviewerId())) throw forbidden("Only the assigned reviewer can initiate a conversation.");
         if (summary.state() != AdminCase.State.UNDER_REVIEW) throw new ResponseStatusException(HttpStatus.CONFLICT, "This case is not open for conversation initiation.");
+        if(closure(caseId)!=null)throw new ResponseStatusException(HttpStatus.CONFLICT,"Resolution preparation is pending; no new conversations can be initiated.");
         // Historical non-reporters are intentionally gated until owners agree callback membership.
         if (!hasStatement(caseId, participantId)) throw hidden();
         return summary;

@@ -31,7 +31,8 @@ public final class ServiceTokens {
             JWTClaimsSet c=token.getJWTClaimsSet();Instant now=Instant.now(),issued=c.getIssueTime().toInstant(),expires=c.getExpirationTime().toInstant();
             if(!"foc-service-auth".equals(c.getIssuer())||!c.getAudience().contains(audience)||!allowed.contains(c.getSubject())
                     ||!c.getSubject().equals(entry.path("subject").asText())||c.getJWTID()==null||c.getJWTID().isBlank()
-                    ||!expires.isAfter(now)||issued.isAfter(now.plusSeconds(5))||!expires.isAfter(issued)||expires.isAfter(issued.plusSeconds(60)))throw new IllegalArgumentException();
+                    ||!expires.isAfter(now)||issued.isAfter(now.plusSeconds(5))||!expires.isAfter(issued)||expires.isAfter(issued.plusSeconds(60))
+                    ||c.getNotBeforeTime()!=null&&c.getNotBeforeTime().toInstant().isAfter(now))throw new IllegalArgumentException();
             return new Jwt(raw,issued,expires,token.getHeader().toJSONObject(),c.getClaims());
         }catch(Exception ex){throw new BadJwtException("Invalid service assertion");}
     }

@@ -18,6 +18,7 @@ export type LedgerEntryType =
   | 'SETTLEMENT_CREDIT'
   | 'COMPENSATION_DEBIT'
   | 'COMPENSATION_CREDIT'
+  | 'ADMIN_CORRECTION'
 
 export type CreditTransaction = {
   id: string

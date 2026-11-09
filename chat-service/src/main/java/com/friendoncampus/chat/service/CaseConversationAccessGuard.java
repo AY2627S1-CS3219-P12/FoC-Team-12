@@ -1,54 +1,28 @@
 package com.friendoncampus.chat.service;
 
 import java.time.Clock;
-import java.time.OffsetDateTime;
 import java.util.UUID;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.JsonNode;
 
-/** Revalidates mutable Admin case permissions before every case-chat write. */
+/** Actor-specific denial never turns the entire conversation into a terminal state. */
 @Service
 public class CaseConversationAccessGuard {
     private final JdbcClient db;
-    private final Clock clock;
-    private final InternalServiceClient internalServices;
-
-    public CaseConversationAccessGuard(JdbcClient db, Clock clock, InternalServiceClient internalServices) {
-        this.db = db;
-        this.clock = clock;
-        this.internalServices = internalServices;
+    private final InternalServiceClient internal;
+    public CaseConversationAccessGuard(JdbcClient db,Clock clock,InternalServiceClient internal){this.db=db;this.internal=internal;}
+    public JsonNode access(UUID id,UUID actor) {
+        var row=db.sql("SELECT case_id,case_participant_id,order_id FROM chat_conversations WHERE id=:id AND conversation_type='CASE'")
+                .param("id",id).query((rs,n)->new Case(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),rs.getObject(3,UUID.class))).optional().orElse(null);
+        if(row==null)return null;
+        JsonNode access=internal.caseAccess(row.caseId,actor,row.participant);
+        if(!row.caseId.toString().equals(access.path("caseId").asText())||!row.order.toString().equals(access.path("orderId").asText())
+                ||!access.path("canReadConversation").isBoolean()||!access.path("canWriteConversation").isBoolean()
+                ||!access.path("canReadConversation").asBoolean())throw new ChatAccessException();
+        return access;
     }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean refresh(UUID conversationId, UUID actorId) {
-        CaseConversation conversation = db.sql("""
-                SELECT case_id,case_participant_id,status
-                FROM chat_conversations
-                WHERE id=:id AND conversation_type='CASE'
-                """).param("id", conversationId)
-                .query((rs, n) -> new CaseConversation(
-                        rs.getObject("case_id", UUID.class),
-                        rs.getObject("case_participant_id", UUID.class),
-                        rs.getString("status")))
-                .optional().orElse(null);
-        if (conversation == null) return true;
-        if ("READ_ONLY".equals(conversation.status())) return false;
-
-        boolean writable = internalServices.caseAccess(
-                conversation.caseId(), actorId, conversation.participantId())
-                .path("canWriteConversation").asBoolean(false);
-        if (writable) return true;
-
-        OffsetDateTime lockedAt = OffsetDateTime.now(clock);
-        db.sql("UPDATE chat_conversations SET status='READ_ONLY',locked_at=:at,updated_at=:at WHERE id=:id")
-                .param("at", lockedAt).param("id", conversationId).update();
-        db.sql("UPDATE chat_participants SET can_write=false,valid_until=COALESCE(valid_until,:at) WHERE conversation_id=:id")
-                .param("at", lockedAt).param("id", conversationId).update();
-        return false;
-    }
-
-    private record CaseConversation(UUID caseId, UUID participantId, String status) {}
+    public boolean requireRead(UUID id,UUID actor){return access(id,actor)!=null;}
+    public boolean refresh(UUID id,UUID actor){JsonNode a=access(id,actor);return a==null||a.path("canWriteConversation").asBoolean();}
+    private record Case(UUID caseId,UUID participant,UUID order){}
 }

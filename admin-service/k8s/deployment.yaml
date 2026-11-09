@@ -21,8 +21,8 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: admin-service
-          # Published CI tag verified during foc-local reconciliation; do not overwrite it.
-          image: arkanian4/foc-admin-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1
+          # Local integration build; load into foc-local before applying this manifest.
+          image: foc-admin-service:local-61c7062-completion-20261109-v3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

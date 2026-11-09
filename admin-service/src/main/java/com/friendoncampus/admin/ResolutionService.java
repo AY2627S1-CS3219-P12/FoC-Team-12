@@ -20,13 +20,14 @@ public class ResolutionService {
     private final JdbcTemplate db;
     private final CaseService cases;
     private final TimelineService timeline;
+    private final ChatConversationClient chat;
     private final TransactionTemplate tx;
     private final long maxAge;
     private final JsonMapper json=JsonMapper.builder().build();
     public ResolutionService(JdbcTemplate db, CaseService cases, TimelineService timeline,
-            PlatformTransactionManager manager, @Value("${app.resolution.evidence-max-age-seconds:60}") long maxAge) {
+            PlatformTransactionManager manager, ChatConversationClient chat, @Value("${app.resolution.evidence-max-age-seconds:60}") long maxAge) {
         if(maxAge<1)throw new IllegalArgumentException("Evidence age must be positive");
-        this.db=db;this.cases=cases;this.timeline=timeline;this.maxAge=maxAge;
+        this.db=db;this.cases=cases;this.timeline=timeline;this.maxAge=maxAge;this.chat=chat;
         tx=new TransactionTemplate(manager);tx.setTimeout(15);
     }
     public CaseViews.Mutation resolve(Jwt actor, UUID id, UUID key, String resolution, long revision, List<Explanation> explanations) {
@@ -42,14 +43,39 @@ public class ResolutionService {
         String route="/api/admin/cases/"+id+"/resolve";
         String hash=CreditActionService.hash(json.writeValueAsString(List.of(reason,revision,rejected)));
         var previous=receipt(key,reviewer,route,hash);
-        if(previous!=null)return previous; // Replays never depend on Chat being available again.
+        if(previous!=null&&previous.status()!=503)return previous; // Completed replays never depend on Chat again.
         eligible(initial,reviewer,revision);
         var evidence=timeline.read(actor,id,null,100); // Real producer read, never browser coverage.
         cases.evidenceCase(actor,id); // Recheck current User eligibility after remote work.
+        boolean continueResolution=Boolean.TRUE.equals(tx.execute(s->{
+            db.execute("SET LOCAL lock_timeout='5s'");
+            db.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",r->null,"request:"+key);
+            var completed=receipt(key,reviewer,route,hash);
+            if(completed!=null&&completed.status()!=503)return false;
+            var rows=db.queryForList("SELECT * FROM admin_cases WHERE id=? FOR UPDATE",id);
+            if(rows.isEmpty())throw error(404,"Case not found.");var c=rows.get(0);
+            eligible(new CaseViews.Summary(id,(UUID)c.get("order_id"),AdminCase.State.valueOf((String)c.get("state")),(UUID)c.get("reviewer_id"),((Number)c.get("revision")).longValue(),initial.createdAt()),reviewer,revision);
+            var preparations=db.queryForList("SELECT operation_id,actor_id,request_hash FROM admin_resolution_preparations WHERE case_id=?",id);
+            if(!preparations.isEmpty()){
+                var p=preparations.get(0);
+                if(!key.equals(p.get("operation_id"))||!reviewer.equals(p.get("actor_id"))||!hash.equals(p.get("request_hash")))throw error(409,"Resume the original prepared resolution with its original request key and body.");
+            }else{
+                if(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_mutation_receipts WHERE idempotency_key=?)",Boolean.class,key))throw error(409,"This request key belongs to a different request.");
+                validateActions(id,rejected.keySet());
+                validateEvidence(evidence,id,(UUID)c.get("order_id"),((Number)c.get("source_sequence")).longValue());
+                db.update("INSERT INTO admin_resolution_preparations(operation_id,case_id,actor_id,request_hash,resolution,case_revision,explanations) VALUES (?,?,?,?,?,?,?)",key,id,reviewer,hash,reason,revision,json.writeValueAsString(rejected));
+                db.update("UPDATE admin_cases SET closure_operation_id=? WHERE id=?",key,id);
+                db.update("INSERT INTO admin_mutation_receipts(idempotency_key,actor_id,route,request_hash,response_status,response_body) VALUES (?,?,?,?,503,?)",key,reviewer,route,hash,json.writeValueAsString(Map.of("detail","Resolution preparation is pending. Retry the same operation.")));
+            }
+            return true;
+        }));
+        if(!continueResolution)return receipt(key,reviewer,route,hash);
+        chat.prepareClosure(id,key,actor.getTokenValue()); // Remote drain acknowledgement, outside Admin locks.
+        cases.evidenceCase(actor,id);
         return tx.execute(s->{
             db.execute("SET LOCAL lock_timeout='5s'");
             db.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",r->null,"request:"+key);
-            var replay=receipt(key,reviewer,route,hash);if(replay!=null)return replay;
+            var replay=receipt(key,reviewer,route,hash);if(replay!=null&&replay.status()!=503)return replay;
             var rows=db.queryForList("SELECT * FROM admin_cases WHERE id=? FOR UPDATE",id);
             if(rows.isEmpty())throw error(404,"Case not found.");
             var c=rows.get(0);
@@ -72,9 +98,17 @@ public class ResolutionService {
             var envelope=CreditActionService.envelope(event,"CaseResolved","AdminCase",id,next,now,"admin-service",(UUID)c.get("correlation_id"),null,reviewer,data);
             db.update("INSERT INTO admin_case_outbox(event_id,case_id,source_sequence,event_type,topic,payload,created_at) VALUES (?,?,?,'CaseResolved','admin.events',?,?)",event,id,sequence,json.writeValueAsString(envelope),now.atOffset(ZoneOffset.UTC));
             String body=json.writeValueAsString(cases.localDetail(id));
-            db.update("INSERT INTO admin_mutation_receipts(idempotency_key,actor_id,route,request_hash,response_status,response_body) VALUES (?,?,?,?,200,?)",key,reviewer,route,hash,body);
+            db.update("UPDATE admin_mutation_receipts SET response_status=200,response_body=? WHERE idempotency_key=?",body,key);
             return new CaseViews.Mutation(200,body);
         });
+    }
+    private void validateActions(UUID id,Set<String> explanations){
+        Set<String> required=new HashSet<>();
+        for(var action:db.queryForList("SELECT operation_id,status FROM admin_actions WHERE case_id=?",id)){
+            if(Set.of("PENDING","UNKNOWN").contains(action.get("status")))throw error(409,"This case has pending or unknown actions. Wait for owner confirmation before resolving.");
+            if("REJECTED".equals(action.get("status")))required.add(action.get("operation_id").toString());
+        }
+        if(!required.equals(explanations))throw error(400,"Explain every rejected action and only rejected actions before resolving.");
     }
     private void validateEvidence(JsonNode e,UUID id,UUID order,long sequence){
         try{

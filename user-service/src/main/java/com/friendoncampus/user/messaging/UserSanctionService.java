@@ -80,7 +80,7 @@ public class UserSanctionService {
             JsonNode e=json.readTree(raw),d=e.path("data");
             check("admin-service".equals(e.path("producer").asText()) && "AdminUserBanRequested".equals(e.path("eventType").asText()));
             check("AdminAction".equals(e.path("aggregateType").asText()));
-            for (String f:List.of("eventVersion","aggregateVersion")) check(e.path(f).isIntegralNumber() && e.path(f).asLong()==1);
+            for (String f:List.of("eventVersion","aggregateVersion")) check(e.path(f).isIntegralNumber() && e.path(f).canConvertToLong() && e.path(f).asLong()==1);
             check(e.has("causationId") && e.path("causationId").isNull()); OffsetDateTime.parse(e.path("occurredAt").asText());
             UUID event=id(e,"eventId"),operation=id(d,"operationId"),target=id(d,"targetUserId"),actor=id(d,"requestedBy"),
                  caseId=id(d,"caseId"),order=id(d,"orderId"),correlation=id(e,"correlationId");

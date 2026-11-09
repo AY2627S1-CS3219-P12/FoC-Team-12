@@ -27,6 +27,8 @@ class CreditServiceApplicationTests {
     @MockitoBean CreditInboxEventRepository inbox;
     @MockitoBean CreditOutboxEventRepository outbox;
     @MockitoBean CreditEventStreamVersionRepository eventVersions;
+    @MockitoBean com.friendoncampus.credit.integration.AdminCreditCorrectionService adminCorrections;
+    @MockitoBean com.friendoncampus.credit.integration.AdminCreditOutbox adminOutbox;
 
     @Test
     void contextLoads() {
