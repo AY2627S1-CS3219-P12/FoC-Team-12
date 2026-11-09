@@ -756,6 +756,36 @@
       ],
       "additionalProperties": false
     },
+    "CurrentAuthorization": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "REQUESTER",
+              "COURIER",
+              "ADMIN"
+            ]
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "userId",
+        "active",
+        "roles"
+      ],
+      "additionalProperties": false
+    },
     "AdminEligibility": {
       "type": "object",
       "properties": {

@@ -313,8 +313,9 @@ effective `role`, and `availableRoles`. The caller must be authenticated and act
 Requester may select Courier (which persists the Courier assignment); only an account with the
 persisted Administrator assignment may select Admin. A caller cannot manufacture an Admin token by
 changing a browser value or request body. Replace the browser's stored access token with the
-returned token immediately. The prior stateless token remains valid until its normal 15-minute
-expiry; immediate cross-service token revocation is future work.
+returned token immediately. The prior token can still be used until expiry while its selected role remains assigned and the
+account remains ACTIVE. Every protected operation checks current account/role authorization.
+Switching workspace alone does not revoke another role or invalidate other session tokens.
 
 `PATCH /api/users/me/password` accepts the authenticated user's `currentPassword` and a
 15–64-character `newPassword`. The current password must match and the replacement must differ
@@ -527,3 +528,10 @@ That read creates no sanction and exposes no private audit reason. See the
 and [actual readiness/acceptance record](../admin-service/INTEGRATION_READINESS.md).
 `AdminOperationSecurityTest` verifies the route over real HTTP/PostgreSQL with independently
 generated test-only service identities, including wrong audience, non-Chat caller and missing result.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).

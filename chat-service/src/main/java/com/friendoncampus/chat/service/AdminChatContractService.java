@@ -17,13 +17,16 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class AdminChatContractService {
     private final JdbcClient db; private final Clock clock; private final JwtDecoder users;
+    private final com.friendoncampus.chat.authorization.CurrentAuthorization current;
     private final InternalServiceClient internal; private final JsonMapper json=JsonMapper.builder().build();
-    public AdminChatContractService(JdbcClient db,Clock clock,JwtDecoder userJwtDecoder,InternalServiceClient internal){
-        this.db=db;this.clock=clock;this.users=userJwtDecoder;this.internal=internal;
+    public AdminChatContractService(JdbcClient db,Clock clock,JwtDecoder userJwtDecoder,InternalServiceClient internal,com.friendoncampus.chat.authorization.CurrentAuthorization current){
+        this.db=db;this.clock=clock;this.users=userJwtDecoder;this.internal=internal;this.current=current;
     }
     public Jwt actor(String raw){
         if(raw==null||raw.isBlank())throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"A user token is required");
-        try{return users.decode(raw.startsWith("Bearer ")?raw.substring(7):raw);}catch(Exception ex){throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"A valid user token is required");}
+        final Jwt jwt;
+        try{jwt=users.decode(raw.startsWith("Bearer ")?raw.substring(7):raw);}catch(JwtException ex){throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,"A valid user token is required");}
+        current.require(jwt);return jwt;
     }
     @Transactional
     public Map<String,Object> eligibility(UUID orderId,UUID userId,Jwt actor){

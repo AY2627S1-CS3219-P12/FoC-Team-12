@@ -16,6 +16,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest(CaseController.class)
 @Import({SecurityConfiguration.class,ApiProblems.class})
 class CaseHttpTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.friendoncampus.admin.authorization.CurrentAuthorization currentAuthorization;
     @Autowired MockMvc mvc;
     @MockitoBean JwtDecoder userJwtDecoder;
     @MockitoBean ServiceTokens services;

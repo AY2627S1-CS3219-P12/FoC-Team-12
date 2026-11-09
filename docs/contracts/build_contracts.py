@@ -62,6 +62,8 @@ S['Timeline'] = obj({'caseId': UUID, 'orderId': UUID, 'evidenceRevision': TEXT,
     'records': array(ref('EvidenceRecord')),'coverage': ref('Coverage'), 'nextCursor': nullable(TEXT)})
 S['EvidenceExport'] = obj({'orderId': UUID,'snapshotId': TEXT,'checkpoint': ref('Checkpoint'),
     'records': array(ref('EvidenceRecord')),'nextCursor': nullable(TEXT)})
+S['CurrentAuthorization'] = obj({'userId': UUID,'active': {'type':'boolean'},'roles': array(enum('REQUESTER','COURIER','ADMIN'))})
+S['CurrentAuthorization']['properties']['roles']['uniqueItems'] = True
 S['AdminEligibility'] = obj({'userId': UUID,'active': {'type':'boolean'},'administrator': {'type':'boolean'}})
 S['CaseAccess'] = obj({'caseId': UUID,'orderId': UUID,'state': enum('OPEN','UNDER_REVIEW','RESOLVED'),
     'reviewerId': nullable(UUID),'allowedParticipantIds': array(UUID),
@@ -135,6 +137,7 @@ endpoint('/internal/chat/cases/{caseId}/conversations','get','chat','Conversatio
 endpoint('/internal/chat/cases/{caseId}/closure','post','chat','ClosureAcknowledgement',obj({'operationId':UUID}),internal=True,actor=True)
 endpoint('/internal/users/admin-operations/{operationId}','get','user','OwnerOutcome',internal=True)
 endpoint('/internal/credits/admin-operations/{operationId}','get','credits','OwnerOutcome',internal=True)
+endpoint('/internal/users/{userId}/authorization','get','user','CurrentAuthorization',internal=True)
 endpoint('/internal/users/{userId}/admin-eligibility','get','user','AdminEligibility',internal=True)
 endpoint('/internal/admin/cases/{caseId}/access','get','admin','CaseAccess',internal=True,
     params=[param('actorId',schema=UUID,required=True),param('participantId',schema=UUID)])

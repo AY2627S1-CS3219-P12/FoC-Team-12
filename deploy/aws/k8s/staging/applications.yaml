@@ -105,6 +105,9 @@ spec:
             - { name: DB_NAME, value: supplier_db }
             - { name: DB_USER, value: supplier_user }
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: supplier-service-secrets, key: DB_PASSWORD } } }
+            - { name: SUPPLIER_USER_URL, value: "http://user-service:8081" }
+            - { name: SUPPLIER_SERVICE_KEY_ID, valueFrom: { secretKeyRef: { name: supplier-service-secrets, key: SUPPLIER_SERVICE_KEY_ID } } }
+            - { name: SUPPLIER_SERVICE_PRIVATE_KEY, valueFrom: { secretKeyRef: { name: supplier-service-secrets, key: SUPPLIER_SERVICE_PRIVATE_KEY } } }
             - { name: SUPPLIER_JWT_JWK_SET_URI, value: "http://user-service:8081/.well-known/jwks.json" }
             - { name: SUPPLIER_JWT_ISSUER, value: friend-on-campus-user-service }
             - { name: SUPPLIER_JWT_AUDIENCE, value: friend-on-campus-api }
@@ -142,6 +145,9 @@ spec:
             - { name: DB_NAME, value: order_db }
             - { name: DB_USER, value: order_user }
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: order-service-secrets, key: DB_PASSWORD } } }
+            - { name: ORDER_USER_URL, value: "http://user-service:8081" }
+            - { name: ORDER_SERVICE_KEY_ID, valueFrom: { secretKeyRef: { name: order-service-secrets, key: ORDER_SERVICE_KEY_ID } } }
+            - { name: ORDER_SERVICE_PRIVATE_KEY, valueFrom: { secretKeyRef: { name: order-service-secrets, key: ORDER_SERVICE_PRIVATE_KEY } } }
             - { name: ORDER_JWT_JWK_SET_URI, value: "http://user-service:8081/.well-known/jwks.json" }
             - { name: ORDER_JWT_ISSUER, value: friend-on-campus-user-service }
             - { name: ORDER_JWT_AUDIENCE, value: friend-on-campus-api }
@@ -187,6 +193,9 @@ spec:
             - { name: DB_NAME, value: credit_db }
             - { name: DB_USER, value: credit_user }
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: credit-service-secrets, key: DB_PASSWORD } } }
+            - { name: CREDIT_USER_URL, value: "http://user-service:8081" }
+            - { name: CREDIT_SERVICE_KEY_ID, valueFrom: { secretKeyRef: { name: credit-service-secrets, key: CREDIT_SERVICE_KEY_ID } } }
+            - { name: CREDIT_SERVICE_PRIVATE_KEY, valueFrom: { secretKeyRef: { name: credit-service-secrets, key: CREDIT_SERVICE_PRIVATE_KEY } } }
             - { name: CREDIT_JWT_JWK_SET_URI, value: "http://user-service:8081/.well-known/jwks.json" }
             - { name: CREDIT_JWT_ISSUER, value: friend-on-campus-user-service }
             - { name: CREDIT_JWT_AUDIENCE, value: friend-on-campus-api }

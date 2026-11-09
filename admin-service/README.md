@@ -699,3 +699,15 @@ An unavailable Chat leaves the live case open with retry feedback.
 Manual acceptance: assigned/other reviewer permissions, reason and rejected-action explanations,
 confirmation/cancel, pending/unknown blockers, stale refresh, Chat-unavailable feedback, immutable
 resolved view and participant privacy. Check desktop/mobile layout, keyboard focus and SGT times.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).
+
+Configure ADMIN_USER_URL, ADMIN_SERVICE_KEY_ID and
+ADMIN_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
+and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
+configuration fails closed even when administrative Kafka consumers are disabled.

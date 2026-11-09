@@ -323,7 +323,7 @@ class GatewayServiceApplicationTests {
 
     @ParameterizedTest
     @ValueSource(strings = {"/internal/admin/cases/test/access", "/internal/admin/orders/test/evidence",
-            "/internal/users/test/admin-eligibility"})
+            "/internal/users/test/admin-eligibility", "/internal/users/test/authorization"})
     void neverExposesServiceOnlyCallbacks(String path) throws Exception {
         assertThat(get(path).statusCode()).isEqualTo(404);
     }

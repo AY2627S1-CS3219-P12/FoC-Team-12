@@ -242,3 +242,15 @@ fixtures. It checks current authorization/private images/live recipients, duplic
 legacy-lock recovery, Order/CASE isolation, closure draining, immutable paging, repeated courier
 assignment periods, empty baselines and owner-operation completeness. Production credentials and
 business data are never used by those fixtures.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).
+
+Configure CHAT_USER_URL, CHAT_SERVICE_KEY_ID and
+CHAT_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
+and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
+configuration fails closed even when administrative Kafka consumers are disabled.

@@ -47,6 +47,8 @@ import com.friendoncampus.credit.repository.CreditEventStreamVersionRepository;
 })
 @AutoConfigureMockMvc
 class CreditQuerySecurityTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.friendoncampus.credit.authorization.CurrentAuthorization currentAuthorization;
 
     private static final UUID USER_ID = UUID.fromString("10000000-0000-0000-0000-000000000000");
     private static final UUID OTHER_USER_ID = UUID.fromString("20000000-0000-0000-0000-000000000000");
