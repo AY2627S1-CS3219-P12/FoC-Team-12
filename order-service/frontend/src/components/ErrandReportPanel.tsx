@@ -55,6 +55,7 @@ export function ErrandReportPanel({ orderId }: { orderId: string }) {
         </p>
       </section>
     )
+  if (context.isSuccess && context.data.status === 'INELIGIBLE') return null
   return (
     <section
       className="card errand-report"
@@ -115,12 +116,7 @@ export function ErrandReportPanel({ orderId }: { orderId: string }) {
             Report an issue
           </a>
         </>
-      ) : (
-        <p className="subtle">
-          Reporting is not available for your account on this errand. Only
-          verified participants can report while reporting remains open.
-        </p>
-      )}
+      ) : null}
     </section>
   )
 }
