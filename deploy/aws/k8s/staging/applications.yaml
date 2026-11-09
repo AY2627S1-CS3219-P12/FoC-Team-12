@@ -39,7 +39,7 @@ kind: Deployment
 metadata: { name: user-service, namespace: foc-staging }
 spec:
   replicas: 1
-  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: user-service } }
   template:
     metadata: { labels: { app: user-service } }
@@ -90,7 +90,7 @@ kind: Deployment
 metadata: { name: supplier-service, namespace: foc-staging }
 spec:
   replicas: 1
-  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: supplier-service } }
   template:
     metadata: { labels: { app: supplier-service } }
@@ -132,7 +132,7 @@ kind: Deployment
 metadata: { name: order-service, namespace: foc-staging }
 spec:
   replicas: 1
-  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: order-service } }
   template:
     metadata: { labels: { app: order-service } }
@@ -182,7 +182,7 @@ kind: Deployment
 metadata: { name: credit-service, namespace: foc-staging }
 spec:
   replicas: 1
-  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: credit-service } }
   template:
     metadata: { labels: { app: credit-service } }
@@ -232,7 +232,7 @@ kind: Deployment
 metadata: { name: admin-service, namespace: foc-staging }
 spec:
   replicas: 1
-  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: admin-service } }
   template:
     metadata: { labels: { app: admin-service } }
@@ -286,7 +286,7 @@ kind: Deployment
 metadata: { name: chat-service, namespace: foc-staging }
 spec:
   replicas: 1
-  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: chat-service } }
   template:
     metadata: { labels: { app: chat-service } }
@@ -352,7 +352,7 @@ kind: Deployment
 metadata: { name: notification-service, namespace: foc-staging }
 spec:
   replicas: 1
-  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
+  strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: notification-service } }
   template:
     metadata: { labels: { app: notification-service } }

@@ -42,6 +42,12 @@ one NAT Gateway, one `db.t4g.micro` RDS instance and one Kafka broker with repli
 EKS Auto Mode may add/remove compute capacity for scheduled pods. The USD 25 budget is an alert,
 not a hard spending limit. Stop or destroy staging when it is not being demonstrated.
 
+Database-backed application Deployments do not surge during replacement. With one staging replica,
+Kubernetes stops the old pod before starting its replacement so the small RDS instance is not
+temporarily exhausted by two generations of connection pools. This permits brief service downtime
+during a staging rollout; production should combine appropriately sized database capacity with
+multiple replicas and a reviewed availability strategy.
+
 ## Directory map
 
 | Path | Purpose |
