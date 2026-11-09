@@ -77,6 +77,7 @@ The actor (`actor.userId`) is never notified.
 | --- | --- | --- |
 | T2 `PENDING_CREDIT → OPEN` | requester | `ORDER_OPENED` |
 | T3 `→ RESERVATION_FAILED` | requester | `ORDER_RESERVATION_FAILED` (`params.reason`) |
+| `PENDING_CREDIT → EXPIRED` (credit timeout, `CREDIT_RESERVATION_TIMEOUT`) | requester | `ORDER_RESERVATION_FAILED` (`params.reason`): the errand never reached the pool |
 | T8 `OPEN → ACCEPTED` | requester | `ORDER_ACCEPTED` |
 | T9 `ACCEPTED → OPEN` (courier withdrew) | requester | `ORDER_COURIER_WITHDREW` |
 | T10 `ACCEPTED → EXPIRED` (withdrew after deadline) | requester | `ORDER_EXPIRED` |

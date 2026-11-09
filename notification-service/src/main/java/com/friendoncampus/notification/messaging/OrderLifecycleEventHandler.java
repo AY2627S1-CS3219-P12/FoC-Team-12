@@ -163,7 +163,9 @@ public class OrderLifecycleEventHandler {
             case "ACCEPT" -> NotificationType.ORDER_ACCEPTED;
             case "WITHDRAW" -> "EXPIRED".equals(t.toState())
                     ? NotificationType.ORDER_EXPIRED : NotificationType.ORDER_COURIER_WITHDREW;
-            case "EXPIRE" -> NotificationType.ORDER_EXPIRED;
+            // From PENDING_CREDIT the errand never reached the pool: Credit did not answer in time.
+            case "EXPIRE" -> "PENDING_CREDIT".equals(t.fromState())
+                    ? NotificationType.ORDER_RESERVATION_FAILED : NotificationType.ORDER_EXPIRED;
             case "CANCEL" -> "ACCEPTED".equals(t.fromState()) ? NotificationType.ORDER_CANCELLED : null;
             case "PICK_UP" -> NotificationType.ORDER_PICKED_UP;
             case "DELIVER" -> NotificationType.ORDER_DELIVERED;

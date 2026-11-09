@@ -102,8 +102,9 @@ type and template values, so wording can change without rewriting past notificat
 | `ORDER_COMPLETED` | The requester confirmed they received "{title}". |
 
 `{n} credits` reads `1 credit` for one. `{reason}` is "you don't have enough credits"
-(`INSUFFICIENT_CREDITS`), "your credit account isn't set up yet" (`CREDIT_ACCOUNT_NOT_FOUND`), or
-"the credits couldn't be reserved" for any other code; free text is never shown.
+(`INSUFFICIENT_CREDITS`), "your credit account isn't set up yet" (`CREDIT_ACCOUNT_NOT_FOUND`),
+"Credit didn't confirm your credits in time" (`CREDIT_RESERVATION_TIMEOUT`), or "the credits
+couldn't be reserved" for any other code; free text is never shown.
 
 ## Mark one read
 
@@ -227,9 +228,10 @@ tests validate their events, and the shared `events.examples.json` fixture, agai
 | `OPEN` to `OPEN` (Credit reserved) | requester | `ORDER_OPENED` |
 | `OPEN` to `EXPIRED` (reserved after the deadline) | requester | `ORDER_EXPIRED` |
 | `FAIL_RESERVATION` | requester | `ORDER_RESERVATION_FAILED` (`params.reason` = `reasonCode`) |
+| `EXPIRE` from `PENDING_CREDIT` (Credit did not answer by the credit timeout) | requester | `ORDER_RESERVATION_FAILED` (`params.reason` = `CREDIT_RESERVATION_TIMEOUT`) |
 | `ACCEPT` | requester | `ORDER_ACCEPTED` |
 | `WITHDRAW` to `OPEN` | requester | `ORDER_COURIER_WITHDREW` |
-| `WITHDRAW` to `EXPIRED`, `EXPIRE` | requester | `ORDER_EXPIRED` |
+| `WITHDRAW` to `EXPIRED`, `EXPIRE` from `OPEN` | requester | `ORDER_EXPIRED` |
 | `CANCEL` from `ACCEPTED` | `previousCourierId` (the courier the cancellation removed) | `ORDER_CANCELLED` |
 | `PICK_UP` | requester | `ORDER_PICKED_UP` |
 | `DELIVER` | requester | `ORDER_DELIVERED` |

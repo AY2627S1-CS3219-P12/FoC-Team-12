@@ -374,9 +374,18 @@ function RequesterHeading({ order }: { order: Order }) {
     order.state === 'RESERVATION_FAILED'
       ? reservationFailure(order.terminalReason)
       : null
+  // Credit never answered, so the errand never reached the pool: "nobody picked it up" would be wrong.
+  const creditTimedOut =
+    order.state === 'EXPIRED' &&
+    order.terminalReason === 'CREDIT_RESERVATION_TIMEOUT'
   const [title, subtitle] = failure
     ? [failure.title, failure.detail]
-    : headings[order.state]
+    : creditTimedOut
+      ? [
+          'Errand not posted',
+          "Credit didn't confirm your reservation in time; any credits held are being returned.",
+        ]
+      : headings[order.state]
   return (
     <header className="errand-heading">
       <h1 id="errand-title">{title}</h1>

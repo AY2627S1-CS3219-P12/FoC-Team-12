@@ -182,6 +182,19 @@ class OrderLifecycleEventHandlerIntegrationTest {
     }
 
     @Test
+    void aCreditTimeoutTellsTheRequesterTheErrandWasNotPosted() {
+        Map<String, Object> event = transition(Errand.create(REQUESTER), 2, "EXPIRE", "PENDING_CREDIT", "EXPIRED",
+                system(), null, null, "CREDIT_RESERVATION_TIMEOUT");
+
+        assertThat(handle(event)).isEqualTo(Outcome.NOTIFIED);
+        Notification n = onlyNotificationFrom(event);
+        assertThat(n.getType().name()).isEqualTo("ORDER_RESERVATION_FAILED");
+        assertThat(n.getRecipientId()).isEqualTo(REQUESTER);
+        assertThat(NotificationMessages.messageFor(n)).isEqualTo(
+                "Your errand \"Buy coffee\" couldn't be posted: Credit didn't confirm your credits in time.");
+    }
+
+    @Test
     void aFailedReservationShowsOnlyApprovedReasons() {
         Map<String, String> expected = new LinkedHashMap<>();
         expected.put("INSUFFICIENT_CREDITS", "you don't have enough credits");
