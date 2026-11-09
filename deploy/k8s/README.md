@@ -1,8 +1,9 @@
 # Local Kubernetes (Minikube)
 
-For the current Admin integration completion, five selected Deployment files instead use local
-`foc-{user,chat,credit,order}-service:local-61c7062-completion-20261109-v2` and
-`foc-admin-service:local-61c7062-completion-20261109-v3` builds from this worktree.
+For the current Admin integration completion, four selected Deployment files instead use local
+`foc-{user,chat,credit}-service:local-61c7062-completion-20261109-v2` and
+`foc-admin-service:local-61c7062-completion-20261109-v3` builds from this worktree. Order is back
+on its published image (table below), which already contains that build's Order changes.
 Build each with its existing Dockerfile and run `minikube -p foc-local image load <tag>`
 before applying it. No image is published by that operation. The Docker Hub table below records
 the retained published baseline; consult [Admin readiness](../../admin-service/INTEGRATION_READINESS.md)
@@ -58,7 +59,7 @@ pull without credentials; private repositories additionally require an `imagePul
 | Gateway | `arkanian4/foc-gateway-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 | Supplier | `arkanian4/foc-supplier-service:d3-1` |
 | Credit | `arkanian4/foc-credit-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
-| Order | `arkanian4/foc-order-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
+| Order | `arkanian4/foc-order-service:sha-5386027a299cdf0096277b3968db59cce5466c48-r42588274532-1` |
 | Chat | `arkanian4/foc-chat-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 | Admin | `arkanian4/foc-admin-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 
