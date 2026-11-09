@@ -183,7 +183,10 @@ a compatible queue entry. `/admin/cases/{caseId}` has one styled return link to 
 Background eligibility rechecks preserve the current filters and page while successful;
 denial/unavailability removes protected content. Every API request still authorizes locally.
 
-Participant reporting is an errand workflow, not an administration tool. There is no Reports
+Participant reporting is an errand workflow, not an administration tool. There is no
+navigation link to the Admin dashboard for signed-out or Requester/Courier sessions; the
+shared header shows Admin only in active Admin mode, including after session changes.
+There is no Reports
 item in Admin navigation, no mixed participant/admin subnavigation and no standalone UUID
 entry or report lookup form. `/admin/reports/new?orderId={uuid}` accepts the selected errand
 context and displays it without an editable ID field. Missing/invalid context shows a return
