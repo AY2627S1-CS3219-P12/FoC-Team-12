@@ -136,5 +136,11 @@ resource "aws_security_group" "gateway_alb" {
     cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
+  # staging-edge owns the additional CloudFront VPC-origin ingress rule. Ignore ingress drift here
+  # so a later core apply does not delete that separately managed rule from this shared group.
+  lifecycle {
+    ignore_changes = [ingress]
+  }
+
   tags = { Name = "${local.name_prefix}-gateway-alb" }
 }
