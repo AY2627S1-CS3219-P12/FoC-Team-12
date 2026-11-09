@@ -110,6 +110,23 @@ retry 4 15 helm pull external-secrets \
   --destination "$chart_dir"
 external_secrets_chart="$chart_dir/external-secrets-$EXTERNAL_SECRETS_CHART_VERSION.tgz"
 
+# A cancelled GitHub runner can leave Helm's latest revision in a pending state. Helm then rejects
+# every later upgrade even though no operation is still running. Restore the newest successfully
+# deployed revision before retrying; fail closed when no safe revision exists.
+if history=$(helm history external-secrets --namespace external-secrets -o json 2>/dev/null); then
+  latest_status=$(jq -r 'last.status // ""' <<< "$history")
+  if [[ $latest_status == pending-* ]]; then
+    deployed_revision=$(jq -r '[.[] | select(.status == "deployed")][-1].revision // empty' <<< "$history")
+    if [[ -z $deployed_revision ]]; then
+      echo 'External Secrets is pending but has no deployed Helm revision to restore.' >&2
+      exit 1
+    fi
+    echo "Recovering interrupted External Secrets Helm revision via rollback to $deployed_revision."
+    helm rollback external-secrets "$deployed_revision" \
+      --namespace external-secrets --wait --timeout 10m
+  fi
+fi
+
 helm upgrade --install external-secrets "$external_secrets_chart" \
   --namespace external-secrets --create-namespace --wait --timeout 10m \
   --set serviceAccount.name=external-secrets \
