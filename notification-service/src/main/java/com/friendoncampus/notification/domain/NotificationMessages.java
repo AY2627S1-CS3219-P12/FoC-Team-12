@@ -44,6 +44,7 @@ public final class NotificationMessages {
         return switch (params.path("reason").asString()) {
             case "INSUFFICIENT_CREDITS" -> "you don't have enough credits";
             case "CREDIT_ACCOUNT_NOT_FOUND" -> "your credit account isn't set up yet";
+            case "CREDIT_RESERVATION_TIMEOUT" -> "Credit didn't confirm your credits in time";
             default -> "the credits couldn't be reserved";
         };
     }

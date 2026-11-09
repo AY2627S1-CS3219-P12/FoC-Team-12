@@ -7,7 +7,10 @@ package com.friendoncampus.notification.domain;
 public enum NotificationType {
     /** {@code OrderTransitioned} PENDING_CREDIT to OPEN: the requester's errand is live. */
     ORDER_OPENED,
-    /** To RESERVATION_FAILED: Credit could not reserve the reward, so the errand was not posted. */
+    /**
+     * To RESERVATION_FAILED, or EXPIRE from PENDING_CREDIT (Credit did not answer by the credit
+     * timeout): the reward was not reserved, so the errand was not posted.
+     */
     ORDER_RESERVATION_FAILED,
     /** OPEN to ACCEPTED: a courier accepted the requester's errand. */
     ORDER_ACCEPTED,
