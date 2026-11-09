@@ -134,7 +134,8 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    capacity and scaling.
 
 5. Initialize runtime values from a trusted workstation. The SendGrid values are read from shell
-   variables and are never printed. Optional bootstrap-admin values are handled the same way.
+   variables and are never printed. Optional bootstrap-admin and Gemini translation values are
+   handled the same way.
 
    ```bash
    export SENDGRID_API_KEY='set-locally'
@@ -142,13 +143,16 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    export ADMIN_BOOTSTRAP_EMAIL='student-id@u.nus.edu'
    export ADMIN_BOOTSTRAP_USERNAME='optional-admin'
    export ADMIN_BOOTSTRAP_PASSWORD='optional-strong-password'
+   export GEMINI_API_KEY='optional-chat-translation-key'
    deploy/aws/scripts/configure-secrets.sh
-   unset SENDGRID_API_KEY SENDGRID_FROM_EMAIL ADMIN_BOOTSTRAP_PASSWORD
+   unset SENDGRID_API_KEY SENDGRID_FROM_EMAIL ADMIN_BOOTSTRAP_PASSWORD GEMINI_API_KEY
    ```
 
    Re-running the helper preserves existing secret versions. Supplying all three
    `ADMIN_BOOTSTRAP_*` values explicitly updates only the bootstrap identity, which provides a
    safe repair path for an invalid initial address without rotating database or signing keys.
+   When `GEMINI_API_KEY` is supplied, the helper adds it and
+   `CHAT_TRANSLATION_PROVIDER=gemini` to the existing Chat secret without printing the key.
    The helper rejects bootstrap addresses outside the eligible NUS student domains before writing
    them. Rotate any other value with an explicit `aws secretsmanager put-secret-value --secret-id
    ... --secret-string file://...` command, then restart only the affected deployment so External

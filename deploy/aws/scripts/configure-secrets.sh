@@ -210,8 +210,10 @@ jq -n --arg db "$admin_db" --arg key "$admin_key" --arg trust "$chat_caller_trus
   '{ADMIN_DB_PASSWORD:$db,ADMIN_SERVICE_PRIVATE_KEY:$key,ADMIN_SERVICE_KEY_ID:"admin-staging-1",ADMIN_SERVICE_TRUSTED_KEYS:$trust}' \
   > "$tmp/admin.json"
 jq -n --arg db "$chat_db" --arg rabbit "$rabbitmq" --arg key "$chat_key" --arg trust "$chat_trusted_keys" \
+  --arg gemini "${GEMINI_API_KEY:-}" \
   '{DB_PASSWORD:$db,RABBITMQ_PASSWORD:$rabbit,CHAT_SERVICE_PRIVATE_KEY:$key,
-    CHAT_SERVICE_KEY_ID:"chat-staging-1",CHAT_SERVICE_TRUSTED_KEYS:$trust}' > "$tmp/chat.json"
+    CHAT_SERVICE_KEY_ID:"chat-staging-1",CHAT_SERVICE_TRUSTED_KEYS:$trust}
+    + (if $gemini == "" then {} else {CHAT_TRANSLATION_PROVIDER:"gemini",GEMINI_API_KEY:$gemini} end)' > "$tmp/chat.json"
 jq -n --arg value "$notification_db" '{DB_PASSWORD:$value}' > "$tmp/notification.json"
 jq -n \
   --arg admin "$(random_password)" --arg broker "$(random_password)" \

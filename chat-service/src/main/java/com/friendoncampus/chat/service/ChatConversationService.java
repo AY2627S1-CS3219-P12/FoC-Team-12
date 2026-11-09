@@ -98,8 +98,25 @@ public class ChatConversationService {
                    WHERE conversation_id=:id AND user_id=:actor))
             ORDER BY m.sequence ASC LIMIT :limit
             """).param("id", id).param("after", after).param("requester", requester)
-                .param("actor", actor).param("limit", Math.min(Math.max(limit, 1), 100))
+                .param("actor", actor)
+                .param("limit", Math.min(Math.max(limit, 1), 100))
                 .query((rs,n) -> mapMessage(rs)).list();
+    }
+
+    @Transactional(readOnly = true)
+    public Message message(UUID conversationId, UUID messageId, UUID actor) {
+        return db.sql("""
+                SELECT m.*,a.content_type,a.original_filename,a.size_bytes
+                FROM chat_messages m LEFT JOIN chat_attachments a ON a.id=m.attachment_id
+                WHERE m.id=:messageId AND m.conversation_id=:conversationId AND (
+                  EXISTS(SELECT 1 FROM chat_participants requester
+                    WHERE requester.conversation_id=:conversationId AND requester.user_id=:actor
+                      AND requester.relationship='REQUESTER')
+                  OR m.assignment_epoch IN (SELECT assignment_epoch FROM chat_participants participant
+                    WHERE participant.conversation_id=:conversationId AND participant.user_id=:actor)
+                )
+                """).param("messageId",messageId).param("conversationId",conversationId).param("actor",actor)
+                .query((rs,n)->mapMessage(rs)).optional().orElseThrow(ChatAccessException::new);
     }
 
     @Transactional

@@ -16,6 +16,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.friendoncampus.chat.service.ChatConversationService;
 import com.friendoncampus.chat.service.ChatConversationService.ChatMessageSaved;
+import com.friendoncampus.chat.translation.ChatTranslationService.TranslationChanged;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -28,8 +29,10 @@ public class LiveMessageBridge {
     public LiveMessageBridge(RabbitTemplate rabbit,SimpMessagingTemplate websocket,ChatConversationService chats){this.rabbit=rabbit;this.websocket=websocket;this.chats=chats;}
     @TransactionalEventListener(phase=TransactionPhase.AFTER_COMMIT)
     public void publish(ChatMessageSaved event){rabbit.convertAndSend(EXCHANGE,"",json.writeValueAsString(event.message()));}
+    @TransactionalEventListener(phase=TransactionPhase.AFTER_COMMIT)
+    public void publishTranslation(TranslationChanged event){rabbit.convertAndSend(EXCHANGE,"",json.writeValueAsString(event));}
     @RabbitListener(queues="#{chatLiveQueue.name}")
-    public void receive(String payload){JsonNode node=json.readTree(payload);chats.messageRecipients(java.util.UUID.fromString(node.path("id").asText())).forEach(user->websocket.convertAndSendToUser(user.toString(),"/queue/chat",payload));}
+    public void receive(String payload){JsonNode node=json.readTree(payload);String messageId=node.hasNonNull("id")?node.path("id").asText():node.path("translation").path("messageId").asText();chats.messageRecipients(java.util.UUID.fromString(messageId)).forEach(user->websocket.convertAndSendToUser(user.toString(),"/queue/chat",payload));}
 
     @Configuration
     static class RabbitConfig {

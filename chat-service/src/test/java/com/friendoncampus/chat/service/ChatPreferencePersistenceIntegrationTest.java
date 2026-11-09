@@ -27,8 +27,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import com.friendoncampus.chat.domain.ChatLanguage;
 import com.friendoncampus.chat.repository.ChatPreferenceRepository;
 import com.friendoncampus.chat.messaging.OrderLifecycleConsumer;
+import com.friendoncampus.chat.translation.ChatTranslationService;
+import com.friendoncampus.chat.translation.TranslationProvider;
 
-@SpringBootTest(properties = {"app.kafka.enabled=false", "app.rabbit.enabled=false"})
+@SpringBootTest(properties = {"app.kafka.enabled=false", "app.rabbit.enabled=false", "app.translation.provider=test"})
 @Testcontainers(disabledWithoutDocker = true)
 class ChatPreferencePersistenceIntegrationTest {
 
@@ -54,14 +56,72 @@ class ChatPreferencePersistenceIntegrationTest {
     @Autowired JdbcClient jdbcClient;
     @Autowired Clock clock;
     @Autowired ChatConversationService chats;
+    @Autowired ChatTranslationService translations;
 
     @Autowired AdminChatContractService adminChat;
 
     @MockitoBean InternalServiceClient internalServices;
+    @MockitoBean TranslationProvider translationProvider;
 
     @BeforeEach
     void clearPreferences() {
         jdbc.execute("TRUNCATE chat_messages,chat_attachments,chat_participants,chat_conversations,chat_processed_events,chat_preferences,chat_evidence_records,chat_projection_checkpoints,chat_case_conversation_requests CASCADE");
+        when(translationProvider.name()).thenReturn("test-provider");
+        when(translationProvider.model()).thenReturn("test-model");
+    }
+
+    @Test
+    void translatesIncomingTextOnceAndKeepsTheOriginalMessage() {
+        UUID order=UUID.randomUUID(),requester=UUID.randomUUID(),courier=UUID.randomUUID();
+        preferences.put(courier,"zh");
+        new OrderLifecycleConsumer(jdbcClient,clock,chats).process(event(order,requester,courier,"ACCEPT","ACCEPTED",1));
+        var conversation=chats.byOrder(order,requester);
+        var original=chats.sendText(conversation.id(),requester,UUID.randomUUID(),"TEXT","Meet at the library",null);
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_translations WHERE message_id=?",Integer.class,original.id())).isEqualTo(1);
+        when(translationProvider.translate("Meet at the library","en","zh")).thenReturn("在图书馆见。");
+        var jobs=translations.claimPending(10);
+        assertThat(jobs).hasSize(1);
+        translations.process(jobs.get(0));
+
+        var storedOriginal=chats.messages(conversation.id(),courier,0,100).stream()
+                .filter(message->message.id().equals(original.id())).findFirst().orElseThrow();
+        assertThat(storedOriginal.text()).isEqualTo("Meet at the library");
+        var translated=translations.get(conversation.id(),original.id(),courier,"zh");
+        assertThat(translated.sourceLanguage()).isEqualTo("en");
+        assertThat(translated.targetLanguage()).isEqualTo("zh");
+        assertThat(translated.status()).isEqualTo("READY");
+        assertThat(translated.text()).isEqualTo("在图书馆见。");
+        assertThat(translations.request(conversation.id(),original.id(),courier,"zh"))
+                .isEqualTo(translated);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_translations WHERE message_id=?",Integer.class,original.id())).isEqualTo(1);
+    }
+
+    @Test
+    void boundsProviderRetriesAndLeavesOriginalReadable() {
+        UUID order=UUID.randomUUID(),requester=UUID.randomUUID(),courier=UUID.randomUUID();
+        preferences.put(courier,"ms");
+        new OrderLifecycleConsumer(jdbcClient,clock,chats).process(event(order,requester,courier,"ACCEPT","ACCEPTED",1));
+        var conversation=chats.byOrder(order,requester);
+        var original=chats.sendText(conversation.id(),requester,UUID.randomUUID(),"TEXT","Please wait near the entrance",null);
+        when(translationProvider.translate("Please wait near the entrance","en","ms"))
+                .thenThrow(new IllegalStateException("provider unavailable"));
+
+        for(int attempt=1;attempt<=3;attempt++) {
+            var jobs=translations.claimPending(10);
+            assertThat(jobs).hasSize(1);
+            translations.process(jobs.get(0));
+            if(attempt<3) jdbc.update("UPDATE chat_translations SET next_attempt_at=now() WHERE message_id=?",original.id());
+        }
+
+        var failed=translations.get(conversation.id(),original.id(),courier,"ms");
+        assertThat(failed.status()).isEqualTo("FAILED");
+        assertThat(failed.text()).isNull();
+        assertThat(jdbc.queryForObject("SELECT attempts FROM chat_translations WHERE message_id=?",Integer.class,original.id())).isEqualTo(3);
+        assertThat(chats.messages(conversation.id(),courier,0,100)).anySatisfy(message->{
+            assertThat(message.id()).isEqualTo(original.id());
+            assertThat(message.text()).isEqualTo("Please wait near the entrance");
+        });
     }
 
     @Test
@@ -114,6 +174,8 @@ class ChatPreferencePersistenceIntegrationTest {
         consumer.process(event(order,requester,second,"ACCEPT","ACCEPTED",3));
         var secondMessage=chats.sendText(conversation.id(),second,UUID.randomUUID(),"TEXT","On my way",null);
         assertThat(chats.messageRecipients(secondMessage.id())).containsExactlyInAnyOrder(requester,second);
+        assertThatThrownBy(() -> translations.request(conversation.id(),secondMessage.id(),first,"zh"))
+                .isInstanceOf(ChatAccessException.class);
 
         assertThat(chats.messages(conversation.id(),requester,0,100)).hasSize(5);
         var secondHistory=chats.messages(conversation.id(),second,0,100);
