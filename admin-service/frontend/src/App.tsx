@@ -93,13 +93,10 @@ function Dashboard() {
           <p className="eyebrow">Administration</p>
           <h1>Admin dashboard</h1>
           <p>
-            Review reported errands, claim a case and follow up with
+            Review reported issues, assign yourself a case, and follow up with
             participants.
           </p>
         </div>
-        {state === 'ready' && (
-          <span className="role-chip">Access verified</span>
-        )}
       </div>
       {state === 'loading' && (
         <section className="message-card" role="status">
@@ -115,10 +112,11 @@ function Dashboard() {
           <span className="message-illustration" aria-hidden="true">
             <LockKeyhole />
           </span>
-          <p className="eyebrow">Authentication required</p>
+
           <h2 id="state-title">Sign in to continue</h2>
           <p>
-            Use your FoC account and select Admin mode to open this workspace.
+            Sign in with an admin account, then choose “Switch to Admin” in your
+            account menu.
           </p>
           <a className="button" href={signIn}>
             Sign in to FoC
@@ -133,8 +131,8 @@ function Dashboard() {
           <p className="eyebrow">Access restricted</p>
           <h2 id="state-title">This workspace is for administrators</h2>
           <p>
-            Your current session cannot access administration. If you have
-            administrator access, select Admin mode in the account menu.
+            You need an active admin account in Admin mode. Choose “Switch to
+            Admin” in your account menu if available.
           </p>
           <a className="button" href="/?view=profile">
             Go to your profile
@@ -146,12 +144,9 @@ function Dashboard() {
           <span className="message-illustration" aria-hidden="true">
             <WifiOff />
           </span>
-          <p className="eyebrow">Connection problem</p>
+          <p className="eyebrow">Access check unavailable</p>
           <h2>We couldn’t verify your access</h2>
-          <p>
-            Account verification is temporarily unavailable. Try again in a
-            moment to open the workspace.
-          </p>
+          <p>We couldn’t check your admin permissions. Try again shortly.</p>
           <button onClick={retry} type="button">
             Try again
           </button>
@@ -168,9 +163,7 @@ function Dashboard() {
             <nav className="service-grid" aria-label="Administration tools">
               <a className="service-card admin-card" href="/?view=users">
                 <h3>Manage users</h3>
-                <p>
-                  Review accounts, administrator assignments and account access.
-                </p>
+                <p>Manage accounts, admin roles, bans, and reactivation.</p>
                 <span className="service-action">
                   Open account management →
                 </span>

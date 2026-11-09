@@ -732,3 +732,5 @@ Configure ADMIN_USER_URL, ADMIN_SERVICE_KEY_ID and
 ADMIN_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
 and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
 configuration fails closed even when administrative Kafka consumers are disabled.
+
+Participant report pages use waiting-for-review, under-review and closed labels, with brief next-step guidance. Reviewer IDs and case revisions stay in the admin view. Displayed API diagnostics use concise recovery guidance while preserving the original errors for authorization and safe retries. Case assignment remains manual; no response-time or case-notification promise is implied.

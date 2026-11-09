@@ -143,19 +143,54 @@ it('distinguishes empty discovery from unavailable and never creates a thread on
     <ParticipantConversationStatus summary={summary} actorId={participant} />,
   )
   expect(
-    await screen.findByText(/No confirmed conversation is available/),
+    await screen.findByText(/An admin is reviewing your case/),
   ).toBeVisible()
   fetcher.mockImplementation(async () => response({}, 503))
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Refresh saved conversations' }),
-  )
+  fireEvent.click(screen.getByRole('button', { name: 'Check for messages' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Messaging is unavailable',
+    'We couldn’t load or update the conversation',
   )
   expect(
-    screen.queryByText(/No confirmed conversation is available/),
+    screen.queryByText(/An admin is reviewing your case/),
   ).not.toBeInTheDocument()
 })
+
+it.each([
+  ['OPEN', null, 'Your case is waiting for an admin.'],
+  ['UNDER_REVIEW', actor, 'An admin is reviewing your case.'],
+  ['RESOLVED', actor, 'This case is closed. No messages were exchanged.'],
+] as const)(
+  'explains the next step for an empty %s case without creating a conversation',
+  async (state, reviewerId, text) => {
+    const fetcher = vi.fn<Fetcher>(async () => response([]))
+    vi.stubGlobal('fetch', fetcher)
+    render(
+      <ParticipantConversationStatus
+        summary={{ ...summary, state, reviewerId }}
+        actorId={participant}
+      />,
+    )
+    expect(
+      await screen.findByText((value) => value.startsWith(text)),
+    ).toBeVisible()
+    expect(
+      screen.getByRole('button', { name: 'Check for messages' }),
+    ).toBeEnabled()
+    expect(
+      screen.getAllByText('Visible only to you and authorized admins.'),
+    ).toHaveLength(1)
+    expect(
+      fetcher.mock.calls.every(
+        ([, options]) => !options || options.method === 'GET',
+      ),
+    ).toBe(true)
+    if (state === 'RESOLVED') {
+      expect(
+        screen.queryByText(/can contact you|Check here for messages/),
+      ).not.toBeInTheDocument()
+    }
+  },
+)
 it('lets another admin select saved history without initiating or replying', async () => {
   vi.stubGlobal(
     'fetch',
@@ -171,7 +206,7 @@ it('lets another admin select saved history without initiating or replying', asy
   fireEvent.click(await screen.findByRole('button', { name: 'Participant 1' }))
   expect(await screen.findByText('Hello from the participant')).toBeVisible()
   expect(
-    screen.queryByRole('button', { name: 'Open private conversation' }),
+    screen.queryByRole('button', { name: 'Start private conversation' }),
   ).not.toBeInTheDocument()
   expect(screen.queryByLabelText('Message')).not.toBeInTheDocument()
 })
@@ -201,10 +236,10 @@ it('retains initiation identity after a lost response and reload, isolating part
   )
   fireEvent.click(await screen.findByRole('button', { name: 'Participant 1' }))
   fireEvent.click(
-    screen.getByRole('button', { name: 'Open private conversation' }),
+    screen.getByRole('button', { name: 'Start private conversation' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Messaging is unavailable',
+    'We couldn’t load or update the conversation',
   )
   view.unmount()
   render(
@@ -260,7 +295,7 @@ it('retries uncertain sends with the original clientMessageId and no optimistic 
   })
   fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'no delivery is assumed',
+    'Refresh to check its status before retrying a message',
   )
   expect(
     screen.queryByText('Please clarify the pickup', { selector: 'p' }),
@@ -273,7 +308,7 @@ it('retries uncertain sends with the original clientMessageId and no optimistic 
     ).toBeEnabled(),
   )
   fireEvent.click(screen.getByRole('button', { name: 'Retry same message' }))
-  expect(await screen.findByText('Message accepted by Chat.')).toBeVisible()
+  expect(await screen.findByText('Message sent.')).toBeVisible()
   expect(sends).toHaveLength(2)
   expect(sends[0]).toEqual(sends[1])
 })
@@ -293,11 +328,9 @@ it('does not acknowledge a send response belonging to another client operation',
   })
   fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'no delivery is assumed',
+    'Refresh to check its status before retrying a message',
   )
-  expect(
-    screen.queryByText('Message accepted by Chat.'),
-  ).not.toBeInTheDocument()
+  expect(screen.queryByText('Message sent.')).not.toBeInTheDocument()
   expect(
     sessionStorage.getItem(
       `foc.chat-pending.${actor}.${caseId}.${conversationId}`,
@@ -356,14 +389,16 @@ it('uses sequence pages, retries the same position and clears history after revo
     await screen.findByRole('button', { name: 'Load more messages' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Messaging is unavailable',
+    'We couldn’t load or update the conversation',
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Retry message page' }))
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Try loading more messages again' }),
+  )
   expect(await screen.findByText('Next 21')).toBeVisible()
   expect(urls.filter((u) => u.includes('after=20'))).toHaveLength(2)
   fireEvent.click(screen.getByRole('button', { name: 'Load more messages' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'unavailable to your account',
+    'unavailable or you no longer have access',
   )
   expect(screen.queryByText('Page 1')).not.toBeInTheDocument()
 })
@@ -437,7 +472,9 @@ it('rechecks Admin closure before sending even when Chat metadata is stale', asy
     target: { value: 'A reply' },
   })
   fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('read-only')
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'whether replies are available',
+  )
   expect(
     fetcher.mock.calls.every(([, options]) => options.method !== 'POST'),
   ).toBe(true)
@@ -463,7 +500,7 @@ it('clears history when Admin eligibility is revoked before another page read', 
     await screen.findByRole('button', { name: 'Load more messages' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'unavailable to your account',
+    'unavailable or you no longer have access',
   )
   expect(screen.queryByText('Private 1')).not.toBeInTheDocument()
 })

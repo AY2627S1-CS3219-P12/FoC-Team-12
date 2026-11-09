@@ -1,5 +1,5 @@
 import { readSession } from './auth/session'
-import { CaseError, isUuid, request } from './cases'
+import { CaseError, caseErrorMessage, isUuid, request } from './cases'
 
 export type Conversation = {
   conversationId: string
@@ -262,13 +262,13 @@ export function chatFailure(error: unknown) {
       error.message.startsWith('You cannot review this case because') ||
       error.message.startsWith('Reviewer independence could not be verified.')
     )
-      return error.message
+      return caseErrorMessage(error)
     if (error.status === 401)
       return 'Your session expired. Sign in again to view the conversation.'
     if ([403, 404].includes(error.status))
-      return 'This private conversation is unavailable to your account. Refresh case access.'
+      return 'This conversation is unavailable or you no longer have access. Refresh the case to check.'
     if (error.status === 409)
-      return 'The conversation is read-only or the request conflicts. Refresh the conversation before continuing.'
+      return 'We couldn’t complete the request. Refresh the conversation to check whether replies are available.'
   }
-  return 'Messaging is unavailable. Retry when Chat is available; no delivery is assumed.'
+  return 'We couldn’t load or update the conversation. Refresh to check its status before retrying a message.'
 }
