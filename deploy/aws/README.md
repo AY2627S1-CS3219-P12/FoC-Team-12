@@ -189,10 +189,10 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    Runtime provisioning pins the External Secrets chart and retries its download before invoking
    Helm. This isolates transient GitHub Releases/network timeouts from the Kubernetes installation;
    exhausting all download attempts still fails provisioning before any application rollout. The
-   deployment also detects a Helm revision left pending by an interrupted runner and rolls back to
-   the latest deployed External Secrets revision before retrying. The
-   deployment then restarts the External Secrets controller so a newly added IRSA service-account
-   annotation is injected into its pod even when Helm did not otherwise change the pod template.
+   deployment recovers an interrupted pending Helm operation from the last deployed revision and
+   performs atomic upgrades so an ordinary failure rolls back automatically. It then restarts the
+   External Secrets controller so a newly added IRSA service-account annotation is injected into
+   its pod even when Helm did not otherwise change the pod template.
 
    The database bootstrap temporarily grants the RDS master user membership in each application
    role while assigning database ownership, then revokes it. RDS master users are not PostgreSQL
@@ -204,8 +204,9 @@ use short-lived OIDC sessions instead of stored AWS credentials.
 On successful main-branch CI, `.github/workflows/cloud-deploy.yml` determines affected images,
 pushes immutable ECR tags, preserves current images for unchanged services, applies the overlay and
 waits for rollouts. It smoke-tests through the CloudFront hostname. If rollout or smoke testing
-fails, it restores the previous application images and exits failed. Staging deployments are
-serialized, so two releases cannot race.
+fails, it restores the previous application images and exits failed. Application deployments and
+infrastructure operations share one staging concurrency group, so two workflows cannot mutate the
+cluster or its Helm releases simultaneously.
 
 Cloud deployment does not replace the existing Docker Hub publishing workflow. Database migration
 compatibility remains each service owner's responsibility: an image rollback cannot undo a Flyway

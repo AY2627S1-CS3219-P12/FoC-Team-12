@@ -40,6 +40,31 @@ retry() {
   done
 }
 
+recover_pending_helm_release() {
+  local release=$1
+  local namespace=$2
+  local status
+  local revision
+
+  status=$(helm status "$release" --namespace "$namespace" --output json 2>/dev/null \
+    | jq -r '.info.status // empty' 2>/dev/null || true)
+
+  case "$status" in
+    pending-install|pending-upgrade|pending-rollback)
+      revision=$(helm history "$release" --namespace "$namespace" --output json \
+        | jq -r '[.[] | select(.status == "deployed")] | last | .revision // empty')
+      if [[ -z $revision ]]; then
+        echo "Helm release $namespace/$release is $status and has no deployed revision to restore." >&2
+        return 1
+      fi
+
+      echo "Recovering Helm release $namespace/$release from $status using deployed revision $revision."
+      helm rollback "$release" "$revision" \
+        --namespace "$namespace" --cleanup-on-fail --wait --timeout 10m
+      ;;
+  esac
+}
+
 job_diagnostics() {
   local namespace=$1
   local job=$2
@@ -110,25 +135,9 @@ retry 4 15 helm pull external-secrets \
   --destination "$chart_dir"
 external_secrets_chart="$chart_dir/external-secrets-$EXTERNAL_SECRETS_CHART_VERSION.tgz"
 
-# A cancelled GitHub runner can leave Helm's latest revision in a pending state. Helm then rejects
-# every later upgrade even though no operation is still running. Restore the newest successfully
-# deployed revision before retrying; fail closed when no safe revision exists.
-if history=$(helm history external-secrets --namespace external-secrets -o json 2>/dev/null); then
-  latest_status=$(jq -r 'last.status // ""' <<< "$history")
-  if [[ $latest_status == pending-* ]]; then
-    deployed_revision=$(jq -r '[.[] | select(.status == "deployed")][-1].revision // empty' <<< "$history")
-    if [[ -z $deployed_revision ]]; then
-      echo 'External Secrets is pending but has no deployed Helm revision to restore.' >&2
-      exit 1
-    fi
-    echo "Recovering interrupted External Secrets Helm revision via rollback to $deployed_revision."
-    helm rollback external-secrets "$deployed_revision" \
-      --namespace external-secrets --wait --timeout 10m
-  fi
-fi
-
+recover_pending_helm_release external-secrets external-secrets
 helm upgrade --install external-secrets "$external_secrets_chart" \
-  --namespace external-secrets --create-namespace --wait --timeout 10m \
+  --namespace external-secrets --create-namespace --atomic --cleanup-on-fail --wait --timeout 10m \
   --set serviceAccount.name=external-secrets \
   --set-string "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn=$EXTERNAL_SECRETS_ROLE_ARN"
 
