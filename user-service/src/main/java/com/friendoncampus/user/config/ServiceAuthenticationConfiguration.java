@@ -22,7 +22,7 @@ public class ServiceAuthenticationConfiguration {
         ServiceTokens tokens = new ServiceTokens("user-service", "user-service", "", "", trust);
         return http.securityMatcher("/internal/**").csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/internal/users/*/admin-eligibility").authenticated().anyRequest().denyAll())
+                .authorizeHttpRequests(a -> a.requestMatchers(HttpMethod.GET, "/internal/users/*/admin-eligibility", "/internal/users/admin-operations/*").authenticated().anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o.authenticationEntryPoint((q,r,e) -> {
                     r.setStatus(401); r.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
                     mapper.writeValue(r.getOutputStream(), ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "A valid service assertion is required"));
