@@ -18,10 +18,11 @@ No lifecycle or credit-request wire format changes. See
 
 ## Admin reporting entry
 
-The errand detail screen includes a participant reporting panel using Admin-owned
+The errand detail screen shows the reporting panel to its requester or assigned courier,
+not couriers browsing an open errand. Acceptance enables the courier's panel. It uses Admin-owned
 `GET /api/admin/orders/{orderId}/report-context` through the gateway. The panel offers Report an
 issue only after authoritative ELIGIBLE, or View your report for OWN_REPORT (including resolved
-cases). INELIGIBLE has no link or case metadata; failures show unavailable/retry instead of
+cases). INELIGIBLE hides the entire panel; failures show unavailable/retry instead of
 pretending no report exists. Query keys include actor, mode and order; auth/eligibility remain
 Admin/Chat responsibilities. Order lifecycle endpoints and database are unchanged.
 

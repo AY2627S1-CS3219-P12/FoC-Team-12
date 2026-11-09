@@ -13,7 +13,7 @@ const ORDER_URL = '/api/orders/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64'
 /** Serves `current` for GET and applies `next` for a POST action (or a problem). */
 function serve(current: Order, onAction?: (action: string) => { status?: number; body: unknown }) {
   return stubFetch((url, init) => {
-    if (url.startsWith('/api/admin/orders/')) return { body: { orderId: current.id, status: 'INELIGIBLE', caseId: null, state: null } }
+    if (url.startsWith('/api/admin/orders/')) return { body: { orderId: current.id, status: 'ELIGIBLE', caseId: null, state: null } }
     if (init?.method === 'POST' && onAction) return onAction(url.split('/').at(-1) ?? '')
     return { body: current }
   })
@@ -49,6 +49,8 @@ describe('ErrandPage', () => {
 
       expect(await screen.findByRole('heading', { name: 'Collect my printed notes' })).toBeInTheDocument()
       expect(screen.getByRole('heading', { name: 'Earn 18 credits' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Need help with this errand?' })).not.toBeInTheDocument()
+      expect(calls.some((call) => call.url.startsWith('/api/admin/orders/'))).toBe(false)
 
       await user.click(screen.getByRole('button', { name: 'Accept errand' }))
       const dialog = screen.getByRole('dialog', { name: 'Accept this errand?' })
@@ -57,6 +59,7 @@ describe('ErrandPage', () => {
       await user.click(within(dialog).getByRole('button', { name: 'Accept errand' }))
       expect(await screen.findByRole('heading', { name: "You're the courier" })).toBeInTheDocument()
       expect(calls.find((call) => call.init?.method === 'POST')?.url).toBe(`${ORDER_URL}/accept`)
+      expect(await screen.findByRole('link', { name: 'Report an issue' })).toBeInTheDocument()
     })
 
     it('cancelling the popup does not accept', async () => {

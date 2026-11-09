@@ -294,10 +294,12 @@ export function ErrandPage() {
         </section>
         <SidePanel order={order} view={view} />
       </div>
-      <ErrandReportPanel
-        key={`${session?.userId}.${session?.role}.${orderId}`}
-        orderId={orderId}
-      />
+      {view !== 'browser' && (
+        <ErrandReportPanel
+          key={`${session?.userId}.${session?.role}.${orderId}`}
+          orderId={orderId}
+        />
+      )}
       <ConfirmDialog
         body={confirming?.body ?? ''}
         busy={action.isPending}
