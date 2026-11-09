@@ -109,10 +109,12 @@ export function CaseConversations({
   summary,
   actorId,
   participantIds,
+  closing = false,
 }: {
   summary: Summary
   actorId: string
   participantIds: string[]
+  closing?: boolean
 }) {
   const [selected, setSelected] = useState('')
   const saved = useConfirmed(summary, actorId, false)
@@ -120,7 +122,9 @@ export function CaseConversations({
     (r) => r.participantUserId === selected,
   )
   const assigned =
-    summary.state === 'UNDER_REVIEW' && summary.reviewerId === actorId
+    !closing &&
+    summary.state === 'UNDER_REVIEW' &&
+    summary.reviewerId === actorId
   return (
     <section className="case-panel" aria-labelledby="case-conversations-title">
       <p className="eyebrow">Private follow-up</p>
@@ -168,7 +172,15 @@ export function CaseConversations({
       {selected &&
         participantIds.includes(selected) &&
         saved.references &&
-        (reference ? (
+        (reference && assigned ? (
+          <ReviewerConversation
+            key={`${actorId}.${summary.caseId}.${selected}`}
+            summary={summary}
+            actorId={actorId}
+            participantId={selected}
+            initialReference={reference}
+          />
+        ) : reference ? (
           <ConversationThread
             reference={reference}
             actorId={actorId}
@@ -196,16 +208,24 @@ function ReviewerConversation({
   summary,
   actorId,
   participantId,
+  initialReference,
 }: {
   summary: Summary
   actorId: string
   participantId: string
+  initialReference?: Conversation
 }) {
   const storageKey = `foc.conversation-pending.${actorId}.${summary.caseId}.${participantId}`
-  const [reference, setReference] = useState<Conversation>()
+  const [reference, setReference] = useState<Conversation | undefined>(
+    initialReference,
+  )
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState(() => {
     try {
+      if (initialReference) {
+        sessionStorage.removeItem(storageKey)
+        return null
+      }
       return sessionStorage.getItem(storageKey)
     } catch {
       return null
@@ -294,7 +314,7 @@ function ReviewerConversation({
           {error}
         </p>
       )}
-      {reference ? (
+      {reference && (
         <ConversationThread
           reference={reference}
           actorId={actorId}
@@ -303,11 +323,13 @@ function ReviewerConversation({
             summary.state === 'UNDER_REVIEW' && summary.reviewerId === actorId
           }
         />
-      ) : (
+      )}
+      {(!reference || initialReference) && (
         <>
           <p>
-            Open this participant’s existing conversation, or ask Chat to create
-            it if none exists.
+            {initialReference
+              ? 'Refresh access to this active case conversation. Its existing history is preserved.'
+              : 'Open a private conversation with this reporting participant.'}
           </p>
           {pending && (
             <p role="status">
@@ -327,7 +349,9 @@ function ReviewerConversation({
               ? 'Opening…'
               : pending
                 ? 'Retry opening conversation'
-                : 'Open private conversation'}
+                : initialReference
+                  ? 'Refresh conversation access'
+                  : 'Open private conversation'}
           </button>
         </>
       )}

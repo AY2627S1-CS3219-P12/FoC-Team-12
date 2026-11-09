@@ -108,3 +108,52 @@ Owners publish exact OpenAPI schemas and deterministic fixtures before dependent
 Acceptance: historical courier eligibility, source gaps, duplicate/conflict, delayed records,
 backfill/live overlap, consumer outage, irrelevant private-data exclusion, source checkpoint
 unavailable, cross-case access, separate participant chats and resolved read-only history.
+
+## Integration completion refinements — 9 November 2026
+
+Darryl explicitly approved the following bounded refinements for this iteration. Admin is the
+caller/recovery owner; Chat owns its storage and write barrier; User remains authoritative for
+current accounts. Affected owners still review the concrete shared deployment diff before rollout.
+
+- `GET /internal/chat/cases/{caseId}/conversations?participantUserId=` is a read-only recovery
+  lookup authenticated as Admin with the original actor in `X-Actor-Token`. Chat rechecks current
+  Admin/User access and returns the existing conversation reference only. Authorized absence is
+  404; unavailable dependencies are 503. It creates no state and never substitutes for initiation.
+  Admin reconciles the reference under its own case lock after rechecking authorization. Reads
+  preserve the conversation identity, including after case closure; retries cannot create a thread.
+- Timeline cursors pin a Chat-persisted immutable snapshot for ten minutes. Each page rechecks
+  current access, preserves its original revision/coverage, and returns 409/restart after expiry.
+  A new first-page read performs fresh producer reconciliation. A producer-confirmed empty stream
+  is a valid zero checkpoint; a missing producer/checkpoint remains incomplete.
+- Resolution has a durable Admin preparation operation identified by the original request key
+  and bound to actor, case, revision and normalized decision/explanations. Preparation checks fresh
+  complete evidence and terminal actions under the case lock. While prepared, Admin denies new
+  reports/actions/conversation writes and exposes pending closure to the reviewer. It does not
+  yet claim RESOLVED or emit CaseResolved. Existing reads remain authorized as before.
+- `POST /internal/chat/cases/{caseId}/closure` carries `{operationId}` plus Admin service identity
+  and the current reviewer actor. Chat verifies that the current Admin callback names that same
+  prepared operation, serializes creation with its case barrier, drains existing message/upload
+  transactions and commits its durable read-only barrier before returning
+  `{caseId,operationId,readOnly:true}`. Message writes recheck this barrier under the conversation
+  lock. Duplicate matching operations return the same acknowledgement; another operation conflicts.
+  Per-actor denial never closes the whole thread, and Order terminal events affect ERRAND threads only.
+- Admin commits its immutable decision and CaseResolved outbox only after that acknowledgement
+  and a final local revision/action/evidence check. All HTTP calls occur outside case/conversation
+  locks. An outage or lost response leaves preparation visible and retryable with the same key;
+  it does not reopen writes, invent success or allocate another operation. Admin owns resumption;
+  Chat retains the barrier. Operation/case IDs and bounded errors provide observability without
+  logging tokens, decision text or private messages. Rollback of images cannot undo a prepared
+  closure or emitted business event; use the original operation to reconcile it.
+
+Darryl also approved Chat-only repeatable reads at
+`GET /internal/users/admin-operations/{operationId}` and
+`GET /internal/credits/admin-operations/{operationId}`. They return the owner's immutable
+original outcome envelope, 404 for no durable result and 503 for unavailable storage. Existing
+RS256 service identity, audience and pinned trust apply; the User route additionally restricts
+the caller to Chat. Admin's evidence export includes its stored `ownerEventId` and action owner.
+Chat verifies operation/case/order/target/actor/result/event identity and records a blocking gap
+for absent or conflicting results. It never reads producer databases. Operation-scoped outcome
+records use `sourceSequence: 0` to indicate that no global User/correction sequence is claimed;
+completeness is reconciled per completed operation, independently of the Order/Credit/Admin
+stream checkpoints. Read retries create no business effect. Chat owns retry/backfill and reports
+source/stream/case gap metadata; original outcome and operation IDs provide observability.

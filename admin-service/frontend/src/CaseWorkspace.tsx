@@ -867,6 +867,7 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
       </section>
       <CreditActions
         key={`credit.${actor}.${id}`}
+        closing={!!state.data.closure}
         summary={value}
         actorId={actor}
         participantIds={state.data.statements.map((s) => s.reporterId)}
@@ -874,6 +875,7 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
       />
       <CreditActions
         key={`ban.${actor}.${id}`}
+        closing={!!state.data.closure}
         kind="BAN"
         summary={value}
         actorId={actor}
@@ -882,15 +884,17 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
       />
       <EvidencePanel key={id} caseId={id} orderId={value.orderId} />
       <ResolutionPanel
-        key={`resolve.${actor}.${id}`}
+        key={`resolve.${actor}.${id}.${state.data.closure?.operationId || ''}`}
         summary={value}
         actor={actor}
         actions={state.data.actions}
         resolution={state.data.resolution}
+        closure={state.data.closure}
         refresh={state.retry}
       />
       <CaseConversations
         key={`${actor}.${id}`}
+        closing={!!state.data.closure}
         summary={value}
         actorId={actor}
         participantIds={state.data.statements.map((s) => s.reporterId)}

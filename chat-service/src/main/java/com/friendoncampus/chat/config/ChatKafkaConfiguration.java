@@ -20,6 +20,10 @@ public class ChatKafkaConfiguration {
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(consumerFactory);
         factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
+        // Invalid/conflicting raw facts are durable in Chat quarantine. Do not skip their offsets.
+        factory.setCommonErrorHandler(new org.springframework.kafka.listener.DefaultErrorHandler((record,error)->{
+            throw new IllegalStateException("Evidence processing unavailable; quarantined record/offset retained",error);
+        },new org.springframework.util.backoff.FixedBackOff(1000L,2L)));
         return factory;
     }
 }

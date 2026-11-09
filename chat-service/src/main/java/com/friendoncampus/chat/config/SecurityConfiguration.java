@@ -45,8 +45,8 @@ public class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/internal/chat/orders/*/report-eligibility",
-                                "/internal/chat/cases/*/timeline").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/internal/chat/cases/*/conversations").authenticated()
+                                "/internal/chat/cases/*/timeline", "/internal/chat/cases/*/conversations").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/internal/chat/cases/*/conversations", "/internal/chat/cases/*/closure").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationEntryPoint(errors).accessDeniedHandler(errors)

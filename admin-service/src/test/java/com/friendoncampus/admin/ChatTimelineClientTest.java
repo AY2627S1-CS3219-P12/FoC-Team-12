@@ -27,6 +27,13 @@ class ChatTimelineClientTest {
         assertEquals("Bearer service-assertion",serviceHeader);assertEquals("original-jwt",actorHeader);assertTrue(path.contains("cursor=opaque%2B%2F%3Dcursor"));assertEquals("COMPLETE",data.path("coverage").path("status").asText());
     }
     @SuppressWarnings("unchecked") Map<String,Object> coverage(){return (Map<String,Object>)response.get("coverage");}
+    @SuppressWarnings("unchecked") @Test void acceptsOriginalOrderMinutePrecisionAndPublishesCanonicalDeadline(){
+        ((Map<String,Object>)response.get("order")).put("pickupDeadline","2026-11-09T10:00Z");
+        var result=client.fetch(CASE,ORDER,"user",null,20);
+        assertEquals("2026-11-09T10:00:00Z",result.path("order").path("pickupDeadline").asText());
+        ((Map<String,Object>)response.get("order")).put("pickupDeadline","2026-11-09T10:00");
+        unavailable(); // Offset-free local times remain invalid evidence.
+    }
     @Test void incompleteAndUnknownAreReturnedWithoutInventingCompleteness(){
         coverage().put("status","INCOMPLETE");coverage().put("blockingGaps",List.of(Map.of("source","order-service","stream","order.lifecycle.events","aggregateId",ORDER,"fromSequence",1,"toSequence",2,"reason","MISSING_SEQUENCE")));
         assertEquals("INCOMPLETE",client.fetch(CASE,ORDER,"user",null,20).path("coverage").path("status").asText());

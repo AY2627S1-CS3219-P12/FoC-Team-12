@@ -86,6 +86,29 @@ class CaseWorkflowTest {
         assertEquals(0,count("admin_cases"));assertEquals(0,count("admin_statements"));
     }
     @MockitoBean ChatTimelineClient timelines;
+    @Test void preparedResolutionBlocksWritesAndResumesTheOriginalOperationAfterChatOutage(){
+        UUID id=reviewCase(),key=UUID.randomUUID();evidence(id);long version=revision(id);
+        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"TEST ONLY barrier outage")).when(conversations).prepareClosure(eq(id),eq(key),anyString());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->resolve(id,key,version)).getStatusCode());
+        assertEquals("UNDER_REVIEW",db.queryForObject("SELECT state FROM admin_cases WHERE id=?",String.class,id));
+        assertEquals(key,service.detail(jwt(reviewer,"ADMIN"),id).closure().operationId());
+        assertFalse(access.check(id,reviewer,reporter).canWriteConversation());
+        assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->correction(id,UUID.randomUUID(),1)).getStatusCode());
+        assertEquals(409,report(courier,UUID.randomUUID()).status());
+        assertEquals(0,count("admin_case_decisions"));assertEquals(2,count("admin_case_outbox"));
+        assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->resolve(id,UUID.randomUUID(),version)).getStatusCode());
+        doNothing().when(conversations).prepareClosure(eq(id),eq(key),anyString());
+        var completed=resolve(id,key,version);assertEquals(200,completed.status());assertEquals(completed,resolve(id,key,version));
+        assertEquals(1,count("admin_resolution_preparations"));assertEquals(1,count("admin_case_decisions"));
+    }
+    @Test void lostConversationConfirmationIsRecoveredByReadWithoutAnotherCreation(){
+        UUID id=reviewCase(),conversation=UUID.randomUUID();
+        when(conversations.find(eq(id),eq(order),eq(reporter),anyString())).thenReturn(Optional.of(new ChatConversationClient.Conversation(conversation,id,order,reporter,false)));
+        long audit=count("admin_case_audit");
+        assertEquals(conversation,service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true).get(0).conversationId());
+        verify(conversations,never()).open(any(),any(),any(),any(),anyString());
+        assertEquals(0,count("admin_case_conversations"));assertEquals(audit,count("admin_case_audit"));
+    }
     @Autowired JdbcTemplate db;
     @MockitoBean UserEligibilityClient users;
     @MockitoBean ChatEligibilityClient chat;
