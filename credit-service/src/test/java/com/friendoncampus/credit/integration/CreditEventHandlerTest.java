@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -142,6 +143,24 @@ class CreditEventHandlerTest {
         JsonNode data = objectMapper.readTree(outcome.payloadJson());
         assertThat(data.get("reasonCode").stringValue()).isEqualTo("INSUFFICIENT_CREDITS");
         assertThat(data.has("message")).isFalse();
+    }
+
+    @Test
+    void timeoutWithoutReservationIsProcessedWithoutPublishingARelease() {
+        processHandlersImmediately();
+        UUID orderId = UUID.randomUUID();
+        UUID operationId = UUID.randomUUID();
+        CreditEventEnvelope incoming = orderEvent("OrderExpired", orderId, """
+                {"operationId":"%s","orderId":"%s","reason":"CREDIT_RESERVATION_TIMEOUT",
+                 "expiredAt":"2026-10-15T14:08:00Z"}
+                """.formatted(operationId, orderId));
+        when(reservations.releaseForPendingCreditTimeout(operationId, orderId)).thenReturn(Optional.empty());
+
+        assertThat(handler.handle(incoming)).isEqualTo(CreditEventCoordinator.ProcessingOutcome.PROCESSED);
+
+        verify(reservations).releaseForPendingCreditTimeout(operationId, orderId);
+        verify(reservations, never()).release(any(), any());
+        verify(outbox, never()).enqueue(any());
     }
 
     @Test

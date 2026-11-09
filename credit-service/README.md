@@ -101,6 +101,13 @@ difference when affordable; decreases release the difference. Cancellation or ex
 entire active reservation. Replayed operation UUIDs return the persisted outcome, while reuse with
 different inputs is rejected as an idempotency conflict.
 
+An `OrderExpired` event whose reason is `CREDIT_RESERVATION_TIMEOUT` is also valid when Credit never
+created the reservation. Credit records the operation as `NO_RESERVATION_TO_RELEASE`, completes the
+inbox event and advances the Order stream checkpoint without writing a ledger or outbox event. If a
+reservation exists, Credit releases it and publishes `CreditReleased` normally. A missing
+reservation for any other cancellation or expiry reason remains a retryable failure and follows the
+normal Kafka retry/dead-letter path.
+
 ## Settlement and compensation
 
 An active reservation is settled atomically by removing the full reserved amount from the
