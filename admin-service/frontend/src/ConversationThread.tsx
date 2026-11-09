@@ -198,7 +198,7 @@ function Thread({
       sessionStorage.setItem(storageKey, JSON.stringify(operation))
     } catch {
       setError(
-        'Your browser could not preserve this send for safe retry. No message was sent.',
+        'Your browser couldn’t save the message for a safe retry. Allow browser storage, then try again. Nothing was sent.',
       )
       return
     }
@@ -255,7 +255,11 @@ function Thread({
   return (
     <section className="conversation-thread" aria-label="Private conversation">
       <div className="section-heading">
-        <h3>Private conversation</h3>
+        <h3>
+          {participantView
+            ? 'Messages with your admin'
+            : 'Private conversation'}
+        </h3>
         <button
           className="button-secondary"
           disabled={busy || !permitted}
@@ -268,8 +272,9 @@ function Thread({
         </button>
       </div>
       <p className="case-scope-note">
-        This conversation is private to the selected participant and authorized
-        case administrators.
+        {participantView
+          ? 'Visible only to you and authorized admins.'
+          : 'Visible only to this participant and authorized admins.'}
       </p>
       {!permitted ? (
         <p role="alert">You cannot view another participant’s conversation.</p>
@@ -281,7 +286,7 @@ function Thread({
             </p>
           )}
           {busy && <p role="status">Loading conversation…</p>}
-          {sent && <p role="status">Message accepted by Chat.</p>}
+          {sent && <p role="status">Message sent.</p>}
           {!denied && (
             <>
               <p className="role-chip">
@@ -289,7 +294,7 @@ function Thread({
                   ? 'Replies enabled'
                   : !writable
                     ? 'Read-only'
-                    : 'Read-only until current access is confirmed'}
+                    : 'Replies temporarily unavailable'}
               </p>
               {messages.length ? (
                 <ol className="conversation-messages">
@@ -308,8 +313,10 @@ function Thread({
                           : message.senderUserId === reference.participantUserId
                             ? 'Participant'
                             : message.senderUserId === reviewerId
-                              ? 'Assigned reviewer'
-                              : 'Other authorized sender'}
+                              ? participantView
+                                ? 'Case admin'
+                                : 'Assigned reviewer'
+                              : 'Case admin'}
                       </strong>
                       <time dateTime={message.createdAt}>
                         {formatSingaporeTime(message.createdAt)}
@@ -319,7 +326,7 @@ function Thread({
                       ) : (
                         <p>
                           Image attachment · {message.attachment?.mediaType}.
-                          Image viewing is not available in this iteration.
+                          This image cannot be displayed here.
                         </p>
                       )}
                     </li>
@@ -327,7 +334,13 @@ function Thread({
                 </ol>
               ) : (
                 !busy &&
-                !error && <p>No messages recorded in this conversation.</p>
+                !error && (
+                  <p>
+                    {!writable
+                      ? 'No messages were exchanged.'
+                      : 'No messages yet.'}
+                  </p>
+                )
               )}
               {next && (
                 <button
@@ -340,14 +353,15 @@ function Thread({
               )}
               {!canWrite && (
                 <p>
-                  Replies are disabled for read-only cases, other reviewing
-                  administrators, or unverified conversation access.
+                  {!writable
+                    ? 'You can read this conversation, but replies are not available.'
+                    : 'We couldn’t verify whether you can reply. Refresh the conversation to check.'}
                 </p>
               )}
               {pending && (
                 <p role="status">
-                  A message is unconfirmed. Refresh access, then retry the same
-                  message to confirm delivery.
+                  We couldn’t confirm whether your message was sent. Refresh,
+                  then retry the same message to avoid a duplicate.
                 </p>
               )}
               {writable && (
@@ -370,12 +384,13 @@ function Thread({
                     onChange={(e) => setText(e.target.value)}
                   />
                   <small>
-                    Up to 4,000 characters. Attachments and translation are not
-                    available here yet.
+                    Up to 4,000 characters. Only text messages can be sent here.
                   </small>
                   <button disabled={!canWrite || busy || !text.trim()}>
                     {busy
-                      ? 'Please wait…'
+                      ? pending
+                        ? 'Sending…'
+                        : 'Loading…'
                       : pending
                         ? 'Retry same message'
                         : 'Send message'}
@@ -390,7 +405,7 @@ function Thread({
               disabled={busy}
               onClick={() => void more()}
             >
-              Retry message page
+              Try loading more messages again
             </button>
           )}
         </>

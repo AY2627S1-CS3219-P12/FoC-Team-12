@@ -53,7 +53,7 @@ function fill() {
     target: { value: target },
   })
   fireEvent.click(screen.getByLabelText('Subtract credits'))
-  fireEvent.change(screen.getByLabelText('Whole credits'), {
+  fireEvent.change(screen.getByLabelText('Number of credits'), {
     target: { value: '5' },
   })
   fireEvent.change(screen.getByLabelText('Reason for correction'), {
@@ -93,12 +93,12 @@ it('requires confirmation and preserves the same request after an uncertain subm
     screen.getByRole('button', { name: 'Confirm credit correction' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'No new financial outcome is confirmed',
+    'couldn’t confirm the correction request’s outcome',
   )
-  expect(screen.getByLabelText('Whole credits')).toBeDisabled()
+  expect(screen.getByLabelText('Number of credits')).toBeDisabled()
   fireEvent.click(screen.getByRole('button', { name: 'Retry same correction' }))
-  expect(await screen.findByText('PENDING')).toBeVisible()
-  expect(screen.getByText(/Waiting for Credit to confirm/)).toBeVisible()
+  expect(await screen.findByText('Awaiting confirmation')).toBeVisible()
+  expect(screen.getByText(/Waiting for confirmation/)).toBeVisible()
   const first = fetcher.mock.calls[0]![1],
     second = fetcher.mock.calls[1]![1]
   expect(first.body).toBe(second.body)
@@ -111,7 +111,7 @@ it('requires confirmation and preserves the same request after an uncertain subm
     amount: -5,
     reason: 'Missing item correction',
   })
-  expect(screen.queryByText('SUCCEEDED')).not.toBeInTheDocument()
+  expect(screen.queryByText('Completed')).not.toBeInTheDocument()
 })
 it('blocks empty/fractional/zero amounts and only offers verified participants', () => {
   const fetcher = vi.fn()
@@ -120,7 +120,7 @@ it('blocks empty/fractional/zero amounts and only offers verified participants',
   expect(screen.getAllByRole('option')).toHaveLength(2)
   fill()
   for (const amount of ['0', '1.5', '2147483648']) {
-    fireEvent.change(screen.getByLabelText('Whole credits'), {
+    fireEvent.change(screen.getByLabelText('Number of credits'), {
       target: { value: amount },
     })
     expect(
@@ -131,18 +131,20 @@ it('blocks empty/fractional/zero amounts and only offers verified participants',
 })
 it('lets other administrators review history without offering a correction form', () => {
   setup([action('REJECTED')], orderId)
-  expect(screen.getByText('REJECTED')).toBeVisible()
+  expect(screen.getByText('Rejected')).toBeVisible()
   expect(screen.getByText(/insufficient available credits/)).toBeVisible()
-  expect(screen.queryByLabelText('Whole credits')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Number of credits')).not.toBeInTheDocument()
 })
 it('shows UNKNOWN as uncertain and reconciles a late success without another command', async () => {
   const fetcher = vi.fn().mockResolvedValue(response(action('SUCCEEDED')))
   vi.stubGlobal('fetch', fetcher)
   setup([action('UNKNOWN')])
-  expect(screen.getByText('UNKNOWN')).toBeVisible()
-  expect(screen.getByText(/may already have taken effect/)).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: 'Refresh action status' }))
-  expect(await screen.findByText('SUCCEEDED')).toBeVisible()
+  expect(screen.getByText('Outcome unconfirmed')).toBeVisible()
+  expect(screen.getByText(/may already be applied/)).toBeVisible()
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Refresh correction status' }),
+  )
+  expect(await screen.findByText('Completed')).toBeVisible()
   expect(fetcher.mock.calls.every((c) => c[1].method === 'GET')).toBe(true)
   expect(screen.getAllByText('29 Oct 2026, 6:00:00 pm SGT')).toHaveLength(2)
 })
@@ -154,7 +156,7 @@ it('polls pending outcomes without submitting another correction', async () => {
   await act(async () => {
     await vi.advanceTimersByTimeAsync(5000)
   })
-  expect(screen.getByText('REJECTED')).toBeVisible()
+  expect(screen.getByText('Rejected')).toBeVisible()
   expect(fetcher).toHaveBeenCalledTimes(1)
 })
 it('keeps last known status on outage and hides history after access denial', async () => {
@@ -164,16 +166,20 @@ it('keeps last known status on outage and hides history after access denial', as
     .mockResolvedValue(response({}, 403))
   vi.stubGlobal('fetch', fetcher)
   setup([action('UNKNOWN')])
-  fireEvent.click(screen.getByRole('button', { name: 'Refresh action status' }))
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Refresh correction status' }),
+  )
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Last confirmed information is shown',
   )
-  expect(screen.getByText('UNKNOWN')).toBeVisible()
-  fireEvent.click(screen.getByRole('button', { name: 'Refresh action status' }))
-  await waitFor(() =>
-    expect(screen.queryByText('UNKNOWN')).not.toBeInTheDocument(),
+  expect(screen.getByText('Outcome unconfirmed')).toBeVisible()
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Refresh correction status' }),
   )
-  expect(screen.queryByLabelText('Whole credits')).not.toBeInTheDocument()
+  await waitFor(() =>
+    expect(screen.queryByText('Outcome unconfirmed')).not.toBeInTheDocument(),
+  )
+  expect(screen.queryByLabelText('Number of credits')).not.toBeInTheDocument()
 })
 it('does not silently replace invalid action history with an empty history', () => {
   setup([{ ...action(), caseId: orderId }])
@@ -183,5 +189,5 @@ it('does not silently replace invalid action history with an empty history', () 
   expect(
     screen.queryByText('No credit corrections recorded for this case.'),
   ).not.toBeInTheDocument()
-  expect(screen.queryByLabelText('Whole credits')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Number of credits')).not.toBeInTheDocument()
 })
