@@ -427,6 +427,68 @@ h1, h2, h3, .welcome-brand, .profile-brand { font-family: 'Manrope', 'DM Sans', 
   .profile-brand img { width: 2.6rem; height: 2.6rem; }
 }
 
+/* Authentication gateway upgrade. */
+.welcome-page .auth-card { padding:clamp(1.5rem,3vw,2.1rem); border-color:rgb(23 38 65 / 12%); border-radius:1.65rem; box-shadow:0 30px 80px rgb(23 38 65 / 13%); }
+.auth-card-intro .eyebrow { font-size:.7rem; letter-spacing:.11em; }
+.auth-card-intro p:last-child { font-size:.82rem; }
+.welcome-page .tabs { margin-top:.25rem; padding:.3rem; border-radius:.9rem; background:#f0f0ed; }
+.welcome-page .tab { border-radius:.7rem; color:var(--foc-muted); }
+.welcome-page .tab:hover:not(:disabled) { border-color:transparent; background:rgb(255 255 255 / 66%); color:var(--foc-ink); box-shadow:none; }
+.welcome-page .tab.active,.welcome-page .tab.active:hover:not(:disabled) { background:#fff; color:var(--foc-action); box-shadow:0 4px 12px rgb(23 38 65 / 10%); }
+.welcome-page .auth-form { gap:1rem; margin-top:1.35rem; }
+.auth-form-heading { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:.85rem; }
+.auth-form-heading > div { min-width:0; }
+.auth-form-heading h1 { margin:0; font-size:1.65rem; }
+.auth-form-heading .intro { margin-top:.35rem; font-size:.86rem; }
+.auth-form-kicker { margin:0 0 .25rem; color:var(--foc-blue); font-size:.68rem; font-weight:800; letter-spacing:.09em; text-transform:uppercase; }
+.auth-view-icon { display:grid; width:3.25rem; height:3.25rem; border-radius:1rem; background:var(--foc-action-soft); color:var(--foc-blue); place-items:center; transform:rotate(-3deg); }
+.auth-view-icon svg { width:1.35rem; height:1.35rem; stroke-width:1.8; }
+.auth-view-icon-coral { background:#fbefed; color:#a85f57; }
+.auth-view-icon-gold { background:#fff7df; color:#82601a; }
+.auth-view-icon-success { background:#edf6ef; color:#347044; }
+.welcome-page .auth-form label { gap:.45rem; font-size:.8rem; font-weight:700; }
+.welcome-page .auth-form input { min-height:3rem; padding:.72rem .85rem; border-color:var(--foc-line); border-radius:.75rem; background:#fbfaf8; }
+.welcome-page .auth-form input:focus { border-color:var(--foc-blue); outline:0; box-shadow:0 0 0 3px rgb(80 104 179 / 11%); }
+.welcome-page .auth-form input[aria-invalid='true'] { border-color:#cb8178; box-shadow:0 0 0 3px rgb(223 155 147 / 14%); }
+.welcome-page .password-toggle { top:.25rem; right:.25rem; color:var(--foc-blue); border-radius:.55rem; }
+.welcome-page .password-toggle:hover:not(:disabled) { border-color:transparent; background:var(--foc-action-soft); color:var(--foc-blue); box-shadow:none; }
+.auth-field-hint { color:var(--foc-muted); font-size:.7rem; font-weight:500; line-height:1.4; }
+.welcome-page .auth-submit { min-height:3rem; border-color:var(--foc-action); border-radius:.75rem; background:var(--foc-action); }
+.welcome-page .auth-submit:hover:not(:disabled) { border-color:var(--foc-blue); background:var(--foc-blue); }
+.welcome-page .auth-card .text-button { color:var(--foc-blue); font-weight:700; }
+.welcome-page .auth-card .text-button:hover:not(:disabled) { border-color:transparent; background:transparent; color:var(--foc-blue); box-shadow:none; text-decoration-thickness:2px; }
+.welcome-page .guest-link { border:1px solid var(--foc-line); border-radius:.75rem; background:#f8f9fd; color:var(--foc-blue); }
+.welcome-page .verification-email { padding:.75rem .85rem; border:1px solid #dce2f5; border-radius:.75rem; background:#f7f8fd; color:var(--foc-muted); font-size:.78rem; overflow-wrap:anywhere; }
+.welcome-page .auth-form > .error,.welcome-page .auth-form > .success { margin:0; padding:.7rem .8rem; border-radius:.7rem; font-size:.78rem; line-height:1.45; }
+.welcome-page .auth-form > .error { background:var(--foc-danger-soft); }
+.welcome-page .auth-form > .success { background:#edf6ef; color:#347044; }
+.welcome-page .auth-progress { margin-top:1.35rem; }
+.welcome-page .auth-progress li.current,.welcome-page .auth-progress li.complete { color:var(--foc-blue); }
+.welcome-page .auth-progress li.current > span { border-color:var(--foc-blue); background:var(--foc-blue); }
+.welcome-page .auth-progress li.complete > span { border-color:#dce2f5; background:var(--foc-action-soft); color:var(--foc-blue); }
+.welcome-page .auth-trust { border-top-color:var(--foc-line); color:var(--foc-muted); }
+.welcome-page .auth-trust svg { color:var(--foc-blue); }
+.auth-complete { display:grid; justify-items:start; gap:.8rem; margin-top:1.5rem; }
+.auth-complete h1,.auth-complete p { margin:0; }
+.auth-complete button { min-width:8rem; border-radius:.75rem; }
+.public-directory { display:flex; align-items:center; justify-content:space-between; gap:2rem; width:min(calc(100% - 4rem),78rem); margin:0 auto 5rem; padding:2rem 2.25rem; border:1px solid var(--foc-line); border-radius:1.5rem; background:linear-gradient(110deg,#fff 35%,#f7f8fd); box-shadow:var(--foc-shadow-soft); }
+.public-directory h2 { margin:.35rem 0 .45rem; font-size:clamp(1.7rem,3vw,2.45rem); letter-spacing:-.04em; }
+.public-directory p:last-child { margin:0; color:var(--foc-muted); }
+.public-directory a { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; gap:.5rem; min-height:3rem; padding:0 1rem; border-radius:.75rem; background:var(--foc-action); color:#fff; font-weight:700; text-decoration:none; }
+.public-directory a:hover { background:var(--foc-blue); }
+.public-directory a svg { width:1rem; height:1rem; }
+
+@media (max-width: 50rem) {
+  .public-directory { align-items:flex-start; flex-direction:column; width:min(calc(100% - 2rem),48rem); margin-bottom:2.5rem; }
+}
+
+@media (max-width: 31rem) {
+  .auth-form-heading { grid-template-columns:1fr; }
+  .auth-view-icon { width:2.8rem; height:2.8rem; }
+  .public-directory { padding:1.5rem 1.25rem; border-radius:1rem; }
+  .public-directory a { width:100%; }
+}
+
 /* Notification bell: shared across every frontend's header; keep in step with notification-service. */
 .notification-bell { position: relative; display: inline-grid; flex: 0 0 auto; width: 2.75rem; height: 2.75rem; border-radius: 0.625rem; color: var(--foc-muted); place-items: center; text-decoration: none; transition: background 150ms ease, color 150ms ease; }
 .notification-bell svg { width: 1.25rem; height: 1.25rem; stroke-width: 1.8; }
