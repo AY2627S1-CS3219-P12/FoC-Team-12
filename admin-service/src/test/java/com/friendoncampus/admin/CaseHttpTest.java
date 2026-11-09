@@ -16,11 +16,28 @@ import org.springframework.test.web.servlet.MockMvc;
 @WebMvcTest(CaseController.class)
 @Import({SecurityConfiguration.class,ApiProblems.class})
 class CaseHttpTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.friendoncampus.admin.authorization.CurrentAuthorization currentAuthorization;
     @Autowired MockMvc mvc;
     @MockitoBean JwtDecoder userJwtDecoder;
     @MockitoBean ServiceTokens services;
     @MockitoBean CaseService cases;
     UUID actor=UUID.randomUUID(), id=UUID.randomUUID(), order=UUID.randomUUID(), key=UUID.randomUUID();
+    @Test void confirmedConversationDiscoverySeparatesRolesAndDisablesCaching() throws Exception {
+        mvc.perform(get("/api/admin/reports/{id}/conversations",id)).andExpect(status().isUnauthorized());
+        role("REQUESTER");
+        mvc.perform(get("/api/admin/cases/{id}/conversations",id).header("Authorization","Bearer user")).andExpect(status().isForbidden());
+        var reference=new ChatConversationClient.Conversation(key,id,order,actor,true);
+        when(cases.confirmedConversations(any(),eq(id),eq(true))).thenReturn(List.of(reference));
+        mvc.perform(get("/api/admin/reports/{id}/conversations",id).header("Authorization","Bearer user"))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+                .andExpect(jsonPath("$[0].participantUserId").value(actor.toString())).andExpect(jsonPath("$[0].readOnly").value(true));
+        role("ADMIN");
+        mvc.perform(get("/api/admin/reports/{id}/conversations",id).header("Authorization","Bearer user")).andExpect(status().isForbidden());
+        when(cases.confirmedConversations(any(),eq(id),eq(false))).thenReturn(List.of());
+        mvc.perform(get("/api/admin/cases/{id}/conversations",id).header("Authorization","Bearer user"))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store")).andExpect(content().json("[]"));
+    }
     void role(String role){when(userJwtDecoder.decode("user")).thenReturn(Jwt.withTokenValue("user").header("alg","RS256").subject(actor.toString()).claim("role",role).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build());}
     @Test void reportContextRequiresParticipantModeAndIsNotCacheable() throws Exception {
         mvc.perform(get("/api/admin/orders/{id}/report-context",order)).andExpect(status().isUnauthorized());

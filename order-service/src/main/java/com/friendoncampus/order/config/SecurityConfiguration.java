@@ -38,8 +38,9 @@ public class SecurityConfiguration {
             HttpSecurity http,
             JwtDecoder jwtDecoder,
             JwtAuthenticationConverter jwtAuthenticationConverter,
-            ProblemSecurityHandler problemSecurityHandler) throws Exception {
+            ProblemSecurityHandler problemSecurityHandler, com.friendoncampus.order.authorization.CurrentAuthorization current) throws Exception {
         http
+                .addFilterAfter(new com.friendoncampus.order.authorization.CurrentAuthorizationFilter(current), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth

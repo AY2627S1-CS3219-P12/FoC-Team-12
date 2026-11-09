@@ -113,7 +113,7 @@ services:
       kafka-init:
         condition: service_completed_successfully
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
 
   user-db:
     image: postgres:17-alpine
@@ -141,6 +141,9 @@ services:
       DB_NAME: ${SUPPLIER_DB_NAME:?SUPPLIER_DB_NAME must be set}
       DB_USER: ${SUPPLIER_DB_USER:?SUPPLIER_DB_USER must be set}
       DB_PASSWORD: ${SUPPLIER_DB_PASSWORD:?SUPPLIER_DB_PASSWORD must be set}
+      SUPPLIER_USER_URL: http://user-service:8081
+      SUPPLIER_SERVICE_KEY_ID: ${SUPPLIER_SERVICE_KEY_ID:-supplier-service-1}
+      SUPPLIER_SERVICE_PRIVATE_KEY: ${SUPPLIER_SERVICE_PRIVATE_KEY:-}
       SUPPLIER_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
       SUPPLIER_JWT_ISSUER: friend-on-campus-user-service
       SUPPLIER_JWT_AUDIENCE: friend-on-campus-api
@@ -180,6 +183,10 @@ services:
       CREDIT_JWT_ISSUER: friend-on-campus-user-service
       CREDIT_JWT_AUDIENCE: friend-on-campus-api
       CREDIT_SERVICE_TRUSTED_KEYS: ${CREDIT_SERVICE_TRUSTED_KEYS:-{}}
+      CREDIT_SERVICE_KEY_ID: ${CREDIT_SERVICE_KEY_ID:-credit-service-1}
+      CREDIT_SERVICE_PRIVATE_KEY: ${CREDIT_SERVICE_PRIVATE_KEY:-}
+      CREDIT_USER_URL: http://user-service:8081
+      CREDIT_ADMIN_COMMANDS_ENABLED: ${CREDIT_ADMIN_COMMANDS_ENABLED:-false}
       SPRING_PROFILES_ACTIVE: ${CREDIT_SPRING_PROFILES_ACTIVE:-}
       CREDIT_DEMO_USER_ID: ${CREDIT_DEMO_USER_ID:-}
       KAFKA_ENABLED: "true"
@@ -222,6 +229,9 @@ services:
       DB_NAME: ${ORDER_DB_NAME:?ORDER_DB_NAME must be set}
       DB_USER: ${ORDER_DB_USER:?ORDER_DB_USER must be set}
       DB_PASSWORD: ${ORDER_DB_PASSWORD:?ORDER_DB_PASSWORD must be set}
+      ORDER_USER_URL: http://user-service:8081
+      ORDER_SERVICE_KEY_ID: ${ORDER_SERVICE_KEY_ID:-order-service-1}
+      ORDER_SERVICE_PRIVATE_KEY: ${ORDER_SERVICE_PRIVATE_KEY:-}
       ORDER_JWT_JWK_SET_URI: http://user-service:8081/.well-known/jwks.json
       ORDER_JWT_ISSUER: friend-on-campus-user-service
       ORDER_JWT_AUDIENCE: friend-on-campus-api

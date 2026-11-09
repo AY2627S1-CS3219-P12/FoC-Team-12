@@ -620,3 +620,15 @@ docker compose down
 
 This preserves the database volume. Running `docker compose down -v` also deletes the local
 database data and should only be used when an intentional reset is required.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).
+
+Configure SUPPLIER_USER_URL, SUPPLIER_SERVICE_KEY_ID and
+SUPPLIER_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
+and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
+configuration fails closed even when administrative Kafka consumers are disabled.

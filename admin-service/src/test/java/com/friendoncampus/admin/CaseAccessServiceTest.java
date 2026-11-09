@@ -11,12 +11,14 @@ class CaseAccessServiceTest {
     final UUID id = UUID.randomUUID(), order = UUID.randomUUID(), reviewer = UUID.randomUUID(), participant = UUID.randomUUID(), other = UUID.randomUUID();
     final AdminCaseRepository cases = mock(AdminCaseRepository.class);
     final UserEligibilityClient users = mock(UserEligibilityClient.class);
-    final CaseAccessService service = new CaseAccessService(cases, users);
+    final ReviewerIndependenceService independence = mock(ReviewerIndependenceService.class);
+    final CaseAccessService service = new CaseAccessService(cases, users, independence);
     void setup(AdminCase.State state, UUID actor, boolean active, boolean admin) {
         AdminCase c = mock(AdminCase.class);
         when(c.getOrderId()).thenReturn(order); when(c.getReviewerId()).thenReturn(reviewer); when(c.getState()).thenReturn(state);
         when(c.getParticipants()).thenReturn(Set.of(participant, other)); when(cases.findWithParticipantsById(id)).thenReturn(Optional.of(c));
         when(users.find(actor)).thenReturn(new UserEligibilityClient.Eligibility(actor, active, admin));
+        when(independence.independent(id, order, actor)).thenReturn(true);
     }
     @Test void isolatesParticipantFromEvidenceAndOtherConversation() {
         setup(AdminCase.State.UNDER_REVIEW, participant, true, false);
@@ -47,6 +49,18 @@ class CaseAccessServiceTest {
         setup(AdminCase.State.UNDER_REVIEW, reviewer, true, true);
         when(users.find(reviewer)).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, assertThrows(ResponseStatusException.class, () -> service.check(id, reviewer, participant)).getStatusCode());
+    }
+    @Test void involvedOrUnverifiableReviewerCannotWriteEvenTheirOwnConversation() {
+        for(boolean unavailable:List.of(false,true)) {
+            setup(AdminCase.State.UNDER_REVIEW,reviewer,true,true);
+            when(cases.findWithParticipantsById(id).orElseThrow().getParticipants()).thenReturn(Set.of(reviewer,participant));
+            if(unavailable)when(independence.independent(id,order,reviewer)).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
+            else when(independence.independent(id,order,reviewer)).thenReturn(false);
+            assertFalse(service.check(id,reviewer,participant).canWriteConversation());
+            assertFalse(service.check(id,reviewer,reviewer).canWriteConversation());
+            assertTrue(service.check(id,reviewer,participant).canReadConversation());
+        }
+        verify(independence,times(6)).independent(id,order,reviewer);
     }
     @Test void observesResolutionCommittedWhileEligibilityWasBeingChecked() {
         setup(AdminCase.State.UNDER_REVIEW, reviewer, true, true);

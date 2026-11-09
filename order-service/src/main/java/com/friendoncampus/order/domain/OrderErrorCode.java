@@ -15,7 +15,9 @@ public enum OrderErrorCode {
     REWARD_ADJUSTMENT_PENDING(HttpStatus.CONFLICT),
     VERSION_CONFLICT(HttpStatus.CONFLICT),
     INVALID_PICKUP_DEADLINE(HttpStatus.BAD_REQUEST),
-    INVALID_QUERY(HttpStatus.BAD_REQUEST);
+    INVALID_QUERY(HttpStatus.BAD_REQUEST),
+    INVALID_IDEMPOTENCY_KEY(HttpStatus.BAD_REQUEST),
+    IDEMPOTENCY_KEY_REUSED(HttpStatus.CONFLICT);
 
     private final HttpStatus status;
 

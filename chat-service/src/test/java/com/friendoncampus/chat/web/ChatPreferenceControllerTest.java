@@ -35,6 +35,8 @@ import com.friendoncampus.chat.web.error.ProblemSecurityHandler;
 @WebMvcTest(ChatPreferenceController.class)
 @Import({SecurityConfiguration.class, ProblemSecurityHandler.class, ApiExceptionHandler.class})
 class ChatPreferenceControllerTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.friendoncampus.chat.authorization.CurrentAuthorization currentAuthorization;
 
     private static final UUID USER_ID = UUID.fromString("722d6da3-93f0-4a7d-9820-ab05047a9253");
 

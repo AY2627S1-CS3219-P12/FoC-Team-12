@@ -49,12 +49,6 @@ public class OrderLifecycleConsumer {
         this.chats = chats;
     }
 
-    @KafkaListener(topics = "order.lifecycle.events", groupId = "chat-service-lifecycle")
-    public void receive(String payload, Acknowledgment acknowledgment) {
-        process(payload);
-        acknowledgment.acknowledge();
-    }
-
     @Transactional
     public void process(String payload) {
         JsonNode root = json.readTree(payload);
@@ -205,11 +199,11 @@ public class OrderLifecycleConsumer {
         db.sql("""
                 UPDATE chat_conversations
                 SET status='READ_ONLY',locked_at=:occurredAt,updated_at=:occurredAt
-                WHERE order_id=:orderId
+                WHERE order_id=:orderId AND conversation_type='ERRAND'
                 """).param("occurredAt", occurredAt).param("orderId", orderId).update();
         db.sql("""
                 UPDATE chat_participants SET can_write=false,valid_until=COALESCE(valid_until,:occurredAt)
-                WHERE conversation_id IN(SELECT id FROM chat_conversations WHERE order_id=:orderId)
+                WHERE conversation_id IN(SELECT id FROM chat_conversations WHERE order_id=:orderId AND conversation_type='ERRAND')
                 """).param("occurredAt", occurredAt).param("orderId", orderId).update();
     }
 

@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { CaseError, isUuid, request, type Summary } from './cases'
-import { chatFailure, conversation, type Conversation } from './conversations'
+import {
+  chatFailure,
+  confirmedConversations,
+  conversation,
+  type Conversation,
+} from './conversations'
 import { ConversationThread } from './ConversationThread'
 
 export function ParticipantConversationStatus({
   summary,
+  actorId,
 }: {
   summary: Summary
+  actorId: string
 }) {
+  const saved = useConfirmed(summary, actorId, true)
   return (
     <section
       className="conversation-status"
@@ -17,10 +25,23 @@ export function ParticipantConversationStatus({
       {summary.state === 'RESOLVED' && (
         <p>This case is resolved. Any existing conversation is read-only.</p>
       )}
-      <p>
-        Your conversation is not available here yet. Chat’s private conversation
-        lookup still needs to be integrated.
-      </p>
+      <SavedStatus saved={saved} />
+      {saved.references?.[0] ? (
+        <ConversationThread
+          reference={saved.references[0]}
+          actorId={actorId}
+          reviewerId={summary.reviewerId}
+          writable={summary.state === 'UNDER_REVIEW'}
+          participantView
+        />
+      ) : (
+        saved.references && (
+          <p>
+            No confirmed conversation is available. The assigned reviewer can
+            start a private conversation.
+          </p>
+        )
+      )}
       <p>
         Only the assigned reviewer can start the conversation. Other
         participants’ conversations are never shown here.
@@ -28,18 +49,82 @@ export function ParticipantConversationStatus({
     </section>
   )
 }
+function useConfirmed(
+  summary: Summary,
+  actorId: string,
+  participantView: boolean,
+) {
+  const [result, setResult] = useState<{
+    identity: string
+    references?: Conversation[]
+    error: string
+  }>()
+  const [attempt, setAttempt] = useState(0)
+  const { caseId, orderId, revision } = summary
+  const identity = `${actorId}.${caseId}.${orderId}.${participantView}.${revision}.${attempt}`
+  useEffect(() => {
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), 8000)
+    let active = true
+    confirmedConversations(
+      { caseId, orderId },
+      actorId,
+      participantView,
+      controller.signal,
+    )
+      .then((values) => {
+        if (active) setResult({ identity, references: values, error: '' })
+      })
+      .catch((e) => {
+        if (active) setResult({ identity, error: chatFailure(e) })
+      })
+      .finally(() => clearTimeout(timer))
+    return () => {
+      active = false
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [caseId, orderId, actorId, participantView, identity])
+  return {
+    references: result?.identity === identity ? result.references : undefined,
+    error: result?.identity === identity ? result.error : '',
+    retry: () => setAttempt((n) => n + 1),
+  }
+}
+function SavedStatus({ saved }: { saved: ReturnType<typeof useConfirmed> }) {
+  return (
+    <>
+      {saved.error ? (
+        <p role="alert">{saved.error}</p>
+      ) : (
+        !saved.references && <p role="status">Checking saved conversations…</p>
+      )}
+      <button className="button-secondary" onClick={saved.retry}>
+        Refresh saved conversations
+      </button>
+    </>
+  )
+}
 export function CaseConversations({
   summary,
   actorId,
   participantIds,
+  closing = false,
 }: {
   summary: Summary
   actorId: string
   participantIds: string[]
+  closing?: boolean
 }) {
   const [selected, setSelected] = useState('')
+  const saved = useConfirmed(summary, actorId, false)
+  const reference = saved.references?.find(
+    (r) => r.participantUserId === selected,
+  )
   const assigned =
-    summary.state === 'UNDER_REVIEW' && summary.reviewerId === actorId
+    !closing &&
+    summary.state === 'UNDER_REVIEW' &&
+    summary.reviewerId === actorId
   return (
     <section className="case-panel" aria-labelledby="case-conversations-title">
       <p className="eyebrow">Private follow-up</p>
@@ -55,11 +140,11 @@ export function CaseConversations({
             : summary.state === 'RESOLVED'
               ? 'This case is resolved. Existing conversations are read-only.'
               : 'Only the assigned reviewer can initiate conversations.'}{' '}
-          Existing conversation lookup for reviewing administrators is pending
-          Chat integration.
+          Select a participant to view an existing conversation.
         </p>
       )}
-      {assigned && (
+      <SavedStatus saved={saved} />
+      {saved.references && (
         <>
           <div
             className="conversation-picker"
@@ -84,19 +169,37 @@ export function CaseConversations({
           )}
         </>
       )}
-      {selected && participantIds.includes(selected) && (
-        <ReviewerConversation
-          key={`${actorId}.${summary.caseId}.${selected}`}
-          summary={summary}
-          actorId={actorId}
-          participantId={selected}
-        />
-      )}
+      {selected &&
+        participantIds.includes(selected) &&
+        saved.references &&
+        (reference && assigned ? (
+          <ReviewerConversation
+            key={`${actorId}.${summary.caseId}.${selected}`}
+            summary={summary}
+            actorId={actorId}
+            participantId={selected}
+            initialReference={reference}
+          />
+        ) : reference ? (
+          <ConversationThread
+            reference={reference}
+            actorId={actorId}
+            reviewerId={summary.reviewerId}
+            writable={assigned}
+          />
+        ) : assigned ? (
+          <ReviewerConversation
+            key={`${actorId}.${summary.caseId}.${selected}`}
+            summary={summary}
+            actorId={actorId}
+            participantId={selected}
+          />
+        ) : (
+          <p>No confirmed conversation is available for this participant.</p>
+        ))}
       <p className="case-scope-note">
-        Historical couriers who submitted a report are supported. Conversation
-        access for historical participants without reports awaits an agreed
-        authorization contract. This does not change ordinary errand chat
-        access.
+        Conversations are available for participants who submitted a report,
+        including historical couriers.
       </p>
     </section>
   )
@@ -105,17 +208,29 @@ function ReviewerConversation({
   summary,
   actorId,
   participantId,
+  initialReference,
 }: {
   summary: Summary
   actorId: string
   participantId: string
+  initialReference?: Conversation
 }) {
   const storageKey = `foc.conversation-pending.${actorId}.${summary.caseId}.${participantId}`
-  const [reference, setReference] = useState<Conversation>()
-  const [busy, setBusy] = useState(false)
-  const [pending, setPending] = useState(() =>
-    sessionStorage.getItem(storageKey),
+  const [reference, setReference] = useState<Conversation | undefined>(
+    initialReference,
   )
+  const [busy, setBusy] = useState(false)
+  const [pending, setPending] = useState(() => {
+    try {
+      if (initialReference) {
+        sessionStorage.removeItem(storageKey)
+        return null
+      }
+      return sessionStorage.getItem(storageKey)
+    } catch {
+      return null
+    }
+  })
   const [error, setError] = useState('')
   const active = useRef(true)
   const guard = useRef(false)
@@ -199,7 +314,7 @@ function ReviewerConversation({
           {error}
         </p>
       )}
-      {reference ? (
+      {reference && (
         <ConversationThread
           reference={reference}
           actorId={actorId}
@@ -208,11 +323,13 @@ function ReviewerConversation({
             summary.state === 'UNDER_REVIEW' && summary.reviewerId === actorId
           }
         />
-      ) : (
+      )}
+      {(!reference || initialReference) && (
         <>
           <p>
-            Open this participant’s existing conversation, or ask Chat to create
-            it if none exists.
+            {initialReference
+              ? 'Refresh access to this active case conversation. Its existing history is preserved.'
+              : 'Open a private conversation with this reporting participant.'}
           </p>
           {pending && (
             <p role="status">
@@ -232,7 +349,9 @@ function ReviewerConversation({
               ? 'Opening…'
               : pending
                 ? 'Retry opening conversation'
-                : 'Open private conversation'}
+                : initialReference
+                  ? 'Refresh conversation access'
+                  : 'Open private conversation'}
           </button>
         </>
       )}

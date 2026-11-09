@@ -51,6 +51,9 @@ spec:
             - name: management
               containerPort: 15672
           env:
+            # Keep diagnostics startup bounded inside this one-CPU local pod.
+            - name: RABBITMQ_CTL_ERL_ARGS
+              value: "+S 1:1"
             - name: RABBITMQ_DEFAULT_USER
               value: chat_service
             - name: RABBITMQ_DEFAULT_PASS
@@ -61,14 +64,15 @@ spec:
           startupProbe:
             exec:
               command: [rabbitmq-diagnostics, -q, ping]
-            periodSeconds: 5
-            timeoutSeconds: 5
+            periodSeconds: 20
+            timeoutSeconds: 15
             failureThreshold: 60
           readinessProbe:
             exec:
               command: [rabbitmq-diagnostics, -q, ping]
-            periodSeconds: 10
-            timeoutSeconds: 5
+            periodSeconds: 20
+            # The CLI ping succeeds but takes over five seconds under this local node's load.
+            timeoutSeconds: 15
           livenessProbe:
             tcpSocket:
               port: amqp

@@ -6,7 +6,14 @@ import {
 } from './CaseConversations'
 import { ConversationThread } from './ConversationThread'
 import { saveSession } from './auth/session'
-import { conversation, messagePage, type Conversation } from './conversations'
+import {
+  chatConversation,
+  chatMessage,
+  confirmedConversations,
+  conversation,
+  messagePage,
+  type Conversation,
+} from './conversations'
 import type { Summary } from './cases'
 
 const actor = '10000000-0000-4000-8000-000000000001',
@@ -22,6 +29,12 @@ const reference: Conversation = {
   participantUserId: participant,
   readOnly: false,
 }
+const metadata = {
+  id: conversationId,
+  orderId,
+  status: 'ACTIVE',
+  readOnly: false,
+}
 const summary: Summary = {
   caseId,
   orderId,
@@ -33,16 +46,13 @@ const summary: Summary = {
 function response(value: unknown, status = 200) {
   return { ok: status < 400, status, json: async () => value }
 }
-function message(
-  id = caseId,
-  sequence = 1,
-  text = 'Hello from the participant',
-) {
+function message(sequence = 1, text = 'Hello from the participant') {
   return {
-    id,
+    id: '70000000-0000-4000-8000-' + String(sequence).padStart(12, '0'),
     sequence,
     conversationId,
     senderUserId: participant,
+    clientMessageId: secondId,
     createdAt: '2026-10-29T10:00:00Z',
     text,
     attachment: null,
@@ -54,11 +64,24 @@ function thread(props: Partial<Parameters<typeof ConversationThread>[0]> = {}) {
       reference={reference}
       actorId={actor}
       reviewerId={actor}
-      writable={true}
+      writable
       {...props}
     />
   )
 }
+function standard(url: string) {
+  return response(
+    url.startsWith('/api/admin/')
+      ? [reference]
+      : url.includes('/messages')
+        ? [message()]
+        : metadata,
+  )
+}
+type Fetcher = (
+  url: string,
+  options: RequestInit,
+) => Promise<ReturnType<typeof response>>
 beforeEach(() => {
   sessionStorage.clear()
   saveSession({
@@ -72,45 +95,118 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-it('gates other administrators and participant discovery without inventing lookup', () => {
-  const fetcher = vi.fn()
+it('recovers a confirmed conversation after reload without creating another thread', async () => {
+  const fetcher = vi.fn<Fetcher>(async (url) => standard(url))
+  vi.stubGlobal('fetch', fetcher)
+  const view = render(
+    <CaseConversations
+      summary={summary}
+      actorId={actor}
+      participantIds={[participant]}
+    />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Participant 1' }))
+  expect(await screen.findByText('Hello from the participant')).toBeVisible()
+  view.unmount()
+  render(
+    <CaseConversations
+      summary={summary}
+      actorId={actor}
+      participantIds={[participant]}
+    />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Participant 1' }))
+  expect(await screen.findByText('Hello from the participant')).toBeVisible()
+  expect(
+    fetcher.mock.calls.every(([, options]) => options.method !== 'POST'),
+  ).toBe(true)
+})
+it('shows the participant’s saved thread and preserves resolved read-only history', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => standard(url)),
+  )
+  render(
+    <ParticipantConversationStatus
+      summary={{ ...summary, state: 'RESOLVED' }}
+      actorId={participant}
+    />,
+  )
+  expect(await screen.findByText('Hello from the participant')).toBeVisible()
+  expect(screen.queryByLabelText('Message')).not.toBeInTheDocument()
+  expect(screen.getByText('You')).toBeVisible()
+})
+it('distinguishes empty discovery from unavailable and never creates a thread on GET', async () => {
+  const fetcher = vi.fn(async () => response([]))
   vi.stubGlobal('fetch', fetcher)
   render(
-    <>
-      <CaseConversations
-        summary={summary}
-        actorId={participant}
-        participantIds={[participant]}
-      />
-      <ParticipantConversationStatus summary={summary} />
-    </>,
+    <ParticipantConversationStatus summary={summary} actorId={participant} />,
   )
   expect(
-    screen.getByText(/Only the assigned reviewer can initiate/),
+    await screen.findByText(/No confirmed conversation is available/),
   ).toBeVisible()
-  expect(screen.getByText(/Chat’s private conversation lookup/)).toBeVisible()
+  fetcher.mockImplementation(async () => response({}, 503))
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Refresh saved conversations' }),
+  )
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Messaging is unavailable',
+  )
+  expect(
+    screen.queryByText(/No confirmed conversation is available/),
+  ).not.toBeInTheDocument()
+})
+it('lets another admin select saved history without initiating or replying', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => standard(url)),
+  )
+  render(
+    <CaseConversations
+      summary={summary}
+      actorId={secondId}
+      participantIds={[participant]}
+    />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Participant 1' }))
+  expect(await screen.findByText('Hello from the participant')).toBeVisible()
   expect(
     screen.queryByRole('button', { name: 'Open private conversation' }),
   ).not.toBeInTheDocument()
-  expect(fetcher).not.toHaveBeenCalled()
+  expect(screen.queryByLabelText('Message')).not.toBeInTheDocument()
 })
-it('retries initiation with the same key and isolates selected participants', async () => {
+it('retains initiation identity after a lost response and reload, isolating participant selection', async () => {
   const openings: RequestInit[] = []
+  let confirmed = false
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, options: RequestInit) => {
       if (url.startsWith('/api/admin/')) {
+        if (options.method !== 'POST')
+          return response(confirmed ? [reference] : [])
         openings.push(options)
         if (openings.length === 1) throw new TypeError('lost response')
+        confirmed = true
         return response(reference)
       }
-      return response(
-        url.includes('/messages')
-          ? { content: [message()], nextCursor: null }
-          : reference,
-      )
+      return standard(url)
     }),
   )
+  const view = render(
+    <CaseConversations
+      summary={summary}
+      actorId={actor}
+      participantIds={[participant, secondId]}
+    />,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Participant 1' }))
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Open private conversation' }),
+  )
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'Messaging is unavailable',
+  )
+  view.unmount()
   render(
     <CaseConversations
       summary={summary}
@@ -118,13 +214,7 @@ it('retries initiation with the same key and isolates selected participants', as
       participantIds={[participant, secondId]}
     />,
   )
-  fireEvent.click(screen.getByRole('button', { name: 'Participant 1' }))
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Open private conversation' }),
-  )
-  expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Messaging is unavailable',
-  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Participant 1' }))
   fireEvent.click(
     screen.getByRole('button', { name: 'Retry opening conversation' }),
   )
@@ -138,10 +228,10 @@ it('retries initiation with the same key and isolates selected participants', as
     screen.queryByText('Hello from the participant'),
   ).not.toBeInTheDocument()
 })
-it('retries an uncertain send with the original clientMessageId and no optimistic delivery', async () => {
-  const sends: { clientMessageId: string; text: string }[] = []
+it('retries uncertain sends with the original clientMessageId and no optimistic delivery', async () => {
+  const sends: unknown[] = []
   const sentMessage = {
-    ...message(orderId, 2, 'Please clarify the pickup'),
+    ...message(2, 'Please clarify the pickup'),
     senderUserId: actor,
   }
   let accepted = false
@@ -152,16 +242,14 @@ it('retries an uncertain send with the original clientMessageId and no optimisti
         sends.push(JSON.parse(String(options.body)))
         if (sends.length === 1) throw new TypeError('lost reply')
         accepted = true
-        return response(sentMessage, 201)
+        sentMessage.clientMessageId = JSON.parse(
+          String(options.body),
+        ).clientMessageId
+        return response(sentMessage)
       }
-      return response(
-        url.includes('/messages')
-          ? {
-              content: accepted ? [message(), sentMessage] : [message()],
-              nextCursor: null,
-            }
-          : reference,
-      )
+      return url.includes('/messages')
+        ? response(accepted ? [message(), sentMessage] : [message()])
+        : standard(url)
     }),
   )
   render(thread())
@@ -189,15 +277,40 @@ it('retries an uncertain send with the original clientMessageId and no optimisti
   expect(sends).toHaveLength(2)
   expect(sends[0]).toEqual(sends[1])
 })
-it('preserves readable history and disables replies when Chat says read-only', async () => {
+it('does not acknowledge a send response belonging to another client operation', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, options: RequestInit) =>
+      options.method === 'POST'
+        ? response({ ...message(2, 'A reply'), senderUserId: actor })
+        : standard(url),
+    ),
+  )
+  render(thread())
+  await screen.findByText('Hello from the participant')
+  fireEvent.change(screen.getByLabelText('Message'), {
+    target: { value: 'A reply' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'no delivery is assumed',
+  )
+  expect(
+    screen.queryByText('Message accepted by Chat.'),
+  ).not.toBeInTheDocument()
+  expect(
+    sessionStorage.getItem(
+      `foc.chat-pending.${actor}.${caseId}.${conversationId}`,
+    ),
+  ).toContain('clientMessageId')
+})
+it('preserves history and disables replies when Chat says read-only', async () => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) =>
-      response(
-        url.includes('/messages')
-          ? { content: [message()], nextCursor: null }
-          : { ...reference, readOnly: true },
-      ),
+      url.startsWith('/api/chat/') && !url.includes('/messages')
+        ? response({ ...metadata, status: 'READ_ONLY', readOnly: true })
+        : standard(url),
     ),
   )
   render(thread())
@@ -213,42 +326,29 @@ it('denies a different participant before requesting history', () => {
   )
   expect(fetcher).not.toHaveBeenCalled()
 })
-it('prepares replies for a participant with their own validated reference', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) =>
-      response(
-        url.includes('/messages')
-          ? { content: [message()], nextCursor: null }
-          : reference,
-      ),
-    ),
-  )
-  render(thread({ actorId: participant, participantView: true }))
-  expect(await screen.findByText('You')).toBeVisible()
-  expect(screen.getByLabelText('Message')).toBeEnabled()
-})
-it('retries the same cursor, deduplicates overlap and clears history after revocation', async () => {
+it('uses sequence pages, retries the same position and clears history after revocation', async () => {
   let pages = 0
   const urls: string[] = []
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
       urls.push(url)
-      if (url.includes('cursor=')) {
-        pages++
-        if (pages === 1) return response({}, 503)
-        if (pages === 3) return response({}, 403)
-        return response({
-          content: [message(), message(orderId, 2, 'Next message')],
-          nextCursor: 'next-cursor',
-        })
+      if (url.includes('after=20')) {
+        if (++pages === 1) return response({}, 503)
+        return response(
+          Array.from({ length: 20 }, (_, i) =>
+            message(i + 21, 'Next ' + (i + 21)),
+          ),
+        )
       }
-      return response(
-        url.includes('/messages')
-          ? { content: [message()], nextCursor: 'opaque+/cursor' }
-          : reference,
-      )
+      if (url.includes('after=40')) return response({}, 403)
+      if (url.includes('/messages'))
+        return response(
+          Array.from({ length: 20 }, (_, i) =>
+            message(i + 1, 'Page ' + (i + 1)),
+          ),
+        )
+      return standard(url)
     }),
   )
   render(thread())
@@ -259,44 +359,76 @@ it('retries the same cursor, deduplicates overlap and clears history after revoc
     'Messaging is unavailable',
   )
   fireEvent.click(screen.getByRole('button', { name: 'Retry message page' }))
-  expect(await screen.findByText('Next message')).toBeVisible()
-  expect(screen.getAllByText('Hello from the participant')).toHaveLength(1)
-  expect(urls.filter((u) => u.includes('opaque%2B%2Fcursor'))).toHaveLength(2)
+  expect(await screen.findByText('Next 21')).toBeVisible()
+  expect(urls.filter((u) => u.includes('after=20'))).toHaveLength(2)
   fireEvent.click(screen.getByRole('button', { name: 'Load more messages' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'unavailable to your account',
   )
-  expect(
-    screen.queryByText('Hello from the participant'),
-  ).not.toBeInTheDocument()
+  expect(screen.queryByText('Page 1')).not.toBeInTheDocument()
 })
-it('rejects wrong-case references, wrong-thread messages and conflicting sequences', () => {
+it('rejects mismatched metadata/references/messages and nonadvancing pages; maps actual attachments', async () => {
   expect(() =>
     conversation({ ...reference, caseId: orderId }, reference),
   ).toThrow()
   expect(() =>
-    messagePage(
-      {
-        content: [{ ...message(), conversationId: secondId }],
-        nextCursor: null,
-      },
-      conversationId,
-    ),
+    chatConversation({ ...metadata, id: secondId }, reference),
   ).toThrow()
   expect(() =>
-    messagePage(
-      { content: [message(), message(orderId, 1)], nextCursor: null },
+    chatConversation({ ...metadata, status: 'READ_ONLY' }, reference),
+  ).toThrow()
+  expect(() =>
+    messagePage([{ ...message(), conversationId: secondId }], conversationId),
+  ).toThrow()
+  expect(() =>
+    messagePage([message(), message(1, 'conflict')], conversationId),
+  ).toThrow()
+  expect(() => messagePage([message()], conversationId, 1)).toThrow()
+  expect(() =>
+    messagePage({ content: [message()], nextCursor: null }, conversationId),
+  ).toThrow()
+  const image = {
+    ...message(),
+    text: null,
+    attachment: {
+      id: secondId,
+      contentType: 'image/png',
+      size: 42,
+      filename: 'private.png',
+    },
+  }
+  expect(chatMessage(image, conversationId).attachment).toEqual({
+    attachmentId: secondId,
+    mediaType: 'image/png',
+    sizeBytes: 42,
+  })
+  expect(() =>
+    chatMessage(
+      { ...image, attachment: { ...image.attachment, size: 0 } },
       conversationId,
     ),
   ).toThrow()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      response([{ ...reference, participantUserId: secondId }]),
+    ),
+  )
+  await expect(
+    confirmedConversations(
+      summary,
+      participant,
+      true,
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow()
 })
-it('rechecks read-only access before a send and never posts after closure', async () => {
-  let references = 0
-  const fetcher = vi.fn(async (url: string) => {
-    if (url.includes('/messages'))
-      return response({ content: [message()], nextCursor: null })
-    references++
-    return response({ ...reference, readOnly: references > 1 })
+it('rechecks Admin closure before sending even when Chat metadata is stale', async () => {
+  let checks = 0
+  const fetcher = vi.fn<Fetcher>(async (url) => {
+    if (url.startsWith('/api/admin/'))
+      return response([{ ...reference, readOnly: ++checks > 1 }])
+    return standard(url)
   })
   vi.stubGlobal('fetch', fetcher)
   render(thread())
@@ -306,5 +438,32 @@ it('rechecks read-only access before a send and never posts after closure', asyn
   })
   fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('read-only')
-  expect(fetcher).toHaveBeenCalledTimes(3)
+  expect(
+    fetcher.mock.calls.every(([, options]) => options.method !== 'POST'),
+  ).toBe(true)
+})
+it('clears history when Admin eligibility is revoked before another page read', async () => {
+  let checks = 0
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url.startsWith('/api/admin/'))
+        return ++checks > 1 ? response({}, 403) : response([reference])
+      if (url.includes('/messages'))
+        return response(
+          Array.from({ length: 20 }, (_, i) =>
+            message(i + 1, 'Private ' + (i + 1)),
+          ),
+        )
+      return standard(url)
+    }),
+  )
+  render(thread())
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Load more messages' }),
+  )
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'unavailable to your account',
+  )
+  expect(screen.queryByText('Private 1')).not.toBeInTheDocument()
 })

@@ -6,5 +6,6 @@ public enum CreditOperationType {
     ADJUST,
     RELEASE,
     SETTLE,
-    COMPENSATE
+    COMPENSATE,
+    ADMIN_CORRECTION
 }

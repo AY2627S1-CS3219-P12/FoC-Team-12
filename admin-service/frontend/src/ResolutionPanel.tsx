@@ -21,16 +21,27 @@ export function ResolutionPanel({
   actor,
   actions,
   resolution,
+  closure,
   refresh,
 }: {
   summary: Summary
   actor: string
   actions?: AdminAction[]
   resolution?: string | null
+  closure?: Detail['closure']
   refresh: () => void
 }) {
   const storage = `foc.resolve-pending.${actor}.${summary.caseId}`
   const [pending, setPending] = useState<Submission | null>(() => {
+    if (closure)
+      return {
+        key: closure.operationId,
+        body: {
+          resolution: closure.resolution,
+          expectedRevision: closure.revision,
+          rejectedActionExplanations: closure.explanations,
+        },
+      }
     try {
       const p = JSON.parse(
         sessionStorage.getItem(storage) || 'null',
@@ -150,6 +161,12 @@ export function ResolutionPanel({
       {error && (
         <p role="alert" className="workspace-error">
           {error}
+        </p>
+      )}
+      {closure && summary.state !== 'RESOLVED' && (
+        <p role="status">
+          Resolution preparation is pending. Conversations and new actions are
+          read only. Resume the original resolution below.
         </p>
       )}
       {done && (

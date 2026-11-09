@@ -531,6 +531,17 @@
                   "type": "null"
                 }
               ]
+            },
+            "ownerEventId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "ownerService": {
+              "type": "string",
+              "enum": [
+                "user-service",
+                "credit-service"
+              ]
             }
           },
           "required": [
@@ -745,6 +756,36 @@
       ],
       "additionalProperties": false
     },
+    "CurrentAuthorization": {
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "REQUESTER",
+              "COURIER",
+              "ADMIN"
+            ]
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "userId",
+        "active",
+        "roles"
+      ],
+      "additionalProperties": false
+    },
     "AdminEligibility": {
       "type": "object",
       "properties": {
@@ -811,6 +852,17 @@
         },
         "canWriteConversation": {
           "type": "boolean"
+        },
+        "closureOperationId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1644,6 +1696,16 @@
               "type": "null"
             }
           ]
+        },
+        "closure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClosurePreparation"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -1651,6 +1713,53 @@
         "statements",
         "actions",
         "resolution"
+      ],
+      "additionalProperties": false
+    },
+    "ClosurePreparation": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "resolution": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "explanations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "operationId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "explanation": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": [
+              "operationId",
+              "explanation"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "operationId",
+        "resolution",
+        "revision",
+        "explanations"
       ],
       "additionalProperties": false
     },

@@ -3,7 +3,13 @@ import { type FormEvent, useEffect, useState } from 'react'
 import { ErrandFormFields } from '../components/ErrandFormFields'
 import { ErrandTabs } from '../components/ErrandTabs'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { createOrder, fetchOrder, OrderApiError } from '../api/orderApi'
+import {
+  createOrder,
+  type CreateOrderInput,
+  fetchOrder,
+  newIdempotencyKey,
+  OrderApiError,
+} from '../api/orderApi'
 import { fetchCampusLocations, fetchMyCredits } from '../api/sharedApi'
 import { readSession } from '../auth/session'
 import { credits } from '../utils/orderFormatting'
@@ -90,9 +96,17 @@ export function CreateErrandPage() {
   useEffect(() => {
     if (copied) document.getElementById('field-pickupDeadline')?.focus()
   }, [copied])
+  // One Idempotency-Key per errand content: posting the same fields again after an error or a lost
+  // response reuses it, so the server returns the errand it may already have created instead of
+  // reserving credits twice. Changed fields, or a successful post, start a new key.
+  const [attempt, setAttempt] = useState<{ body: string; key: string } | null>(
+    null,
+  )
   const create = useMutation({
-    mutationFn: createOrder,
+    mutationFn: ({ input, key }: { input: CreateOrderInput; key: string }) =>
+      createOrder(input, key),
     onSuccess: (order) => {
+      setAttempt(null)
       void queryClient.invalidateQueries({ queryKey: ['orders'] })
       setPosted({ id: order.id, reward: order.creditReward })
     },
@@ -188,7 +202,7 @@ export function CreateErrandPage() {
     const byId = new Map(
       (locations.data ?? []).map((location) => [location.id, location]),
     )
-    create.mutate({
+    const input: CreateOrderInput = {
       title: fields.title.trim(),
       description: fields.description.trim(),
       pickupLocationId: fields.pickupLocationId,
@@ -197,7 +211,12 @@ export function CreateErrandPage() {
       dropoffLocationName: byId.get(fields.dropoffLocationId)?.name ?? '',
       creditReward: Number(fields.creditReward),
       pickupDeadline: new Date(fields.pickupDeadline).toISOString(),
-    })
+    }
+    const body = JSON.stringify(input)
+    const key =
+      attempt?.body === body ? attempt.key : newIdempotencyKey()
+    setAttempt({ body, key })
+    create.mutate({ input, key })
   }
 
   return (

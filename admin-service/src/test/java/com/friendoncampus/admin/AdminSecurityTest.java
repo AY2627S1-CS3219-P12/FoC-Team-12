@@ -18,6 +18,8 @@ import org.springframework.web.server.ResponseStatusException;
 @WebMvcTest(AdminController.class)
 @Import({SecurityConfiguration.class, ApiProblems.class})
 class AdminSecurityTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.friendoncampus.admin.authorization.CurrentAuthorization currentAuthorization;
     @Autowired MockMvc mvc;
     @MockitoBean JwtDecoder userJwtDecoder;
     @MockitoBean UserEligibilityClient users;

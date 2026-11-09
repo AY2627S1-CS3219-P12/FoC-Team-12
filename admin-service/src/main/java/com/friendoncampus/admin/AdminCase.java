@@ -12,6 +12,7 @@ public class AdminCase {
     @Column(name = "order_id", nullable = false, unique = true) private UUID orderId;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 16) private State state;
     @Column(name = "reviewer_id") private UUID reviewerId;
+    @Column(name = "closure_operation_id") private UUID closureOperationId;
     @Version private long revision;
     @ElementCollection
     @CollectionTable(name = "admin_case_participants", joinColumns = @JoinColumn(name = "case_id"))
@@ -21,5 +22,6 @@ public class AdminCase {
     public UUID getOrderId() { return orderId; }
     public State getState() { return state; }
     public UUID getReviewerId() { return reviewerId; }
+    public UUID getClosureOperationId() { return closureOperationId; }
     public Set<UUID> getParticipants() { return Set.copyOf(participants); }
 }

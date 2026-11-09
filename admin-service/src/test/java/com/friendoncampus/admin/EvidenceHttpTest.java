@@ -19,6 +19,8 @@ import tools.jackson.databind.json.JsonMapper;
 @WebMvcTest(EvidenceController.class)
 @Import({SecurityConfiguration.class,ApiProblems.class})
 class EvidenceHttpTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.friendoncampus.admin.authorization.CurrentAuthorization currentAuthorization;
     @Autowired MockMvc mvc;
     @MockitoBean JwtDecoder userJwtDecoder;
     @MockitoBean ServiceTokens services;

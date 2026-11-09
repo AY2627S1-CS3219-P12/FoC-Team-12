@@ -49,15 +49,16 @@ public class SecurityConfiguration {
                         .jwt(j -> j.decoder(raw -> tokens.decode(raw, Set.of("chat-service")))))
                 .build();
     }
-    @Bean @Order(2) SecurityFilterChain publicApi(HttpSecurity http, JwtDecoder userJwtDecoder, ObjectMapper mapper) throws Exception {
+    @Bean @Order(2) SecurityFilterChain publicApi(HttpSecurity http, JwtDecoder userJwtDecoder, ObjectMapper mapper, com.friendoncampus.admin.authorization.CurrentAuthorization current) throws Exception {
         common(http, mapper);
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setJwtGrantedAuthoritiesConverter(jwt -> List.of(new SimpleGrantedAuthority("ROLE_" + jwt.getClaimAsString("role"))));
-        return http.authorizeHttpRequests(a -> a
+        return http.addFilterAfter(new com.friendoncampus.admin.authorization.CurrentAuthorizationFilter(current), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
+                .authorizeHttpRequests(a -> a
                 .requestMatchers("/admin", "/admin/**", "/admin-assets/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/admin/session", "/api/admin/cases", "/api/admin/cases/*", "/api/admin/cases/*/timeline", "/api/admin/cases/*/actions/*").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/session", "/api/admin/cases", "/api/admin/cases/*", "/api/admin/cases/*/timeline", "/api/admin/cases/*/actions/*", "/api/admin/cases/*/conversations").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/admin/cases/*/claim", "/api/admin/cases/*/conversations", "/api/admin/cases/*/actions", "/api/admin/cases/*/resolve").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.GET,"/api/admin/orders/*/report-context").hasAnyRole("REQUESTER", "COURIER")
+                .requestMatchers(HttpMethod.GET,"/api/admin/orders/*/report-context", "/api/admin/reports/*/conversations").hasAnyRole("REQUESTER", "COURIER")
                 .requestMatchers("/api/admin/reports", "/api/admin/reports/*").hasAnyRole("REQUESTER", "COURIER")
                 .anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o.authenticationEntryPoint((q,r,e) -> problem(r,q,mapper,401))

@@ -39,6 +39,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.friendoncampus.order.domain.Order;
 import com.friendoncampus.order.service.CreateOrderCommand;
+import com.friendoncampus.order.service.CreateOrderResult;
 import com.friendoncampus.order.messaging.OrderEventRecorder;
 import com.friendoncampus.order.repository.OutboxEventRepository;
 import com.friendoncampus.order.service.OrderService;
@@ -69,6 +70,7 @@ import com.sun.net.httpserver.HttpServer;
                 "app.security.jwt.audience=" + OrderSecurityIntegrationTest.AUDIENCE
         })
 class OrderSecurityIntegrationTest {
+    @MockitoBean com.friendoncampus.order.authorization.CurrentAuthorization currentAuthorization;
 
     static final String ISSUER = "friend-on-campus-user-service";
     static final String AUDIENCE = "friend-on-campus-api";
@@ -121,16 +123,16 @@ class OrderSecurityIntegrationTest {
         assertThat(response.headers().firstValue("WWW-Authenticate")).hasValue("Bearer");
         assertThat(response.headers().firstValue("Content-Type")).hasValueSatisfying(
                 type -> assertThat(type).startsWith("application/problem+json"));
-        verify(orderService, never()).createOrder(any());
+        verify(orderService, never()).createOrder(any(), any());
     }
 
     @Test
     void createsOrderForRequesterAndBindsRequesterToSubject() throws Exception {
-        when(orderService.createOrder(any(CreateOrderCommand.class))).thenAnswer(invocation -> {
+        when(orderService.createOrder(any(CreateOrderCommand.class), any())).thenAnswer(invocation -> {
             CreateOrderCommand command = invocation.getArgument(0);
-            return Order.submit(command.requesterId(), command.title(), command.description(),
+            return new CreateOrderResult(Order.submit(command.requesterId(), command.title(), command.description(),
                     command.pickupLocationId(), "COM1 Print Shop", command.dropoffLocationId(), "UTown Residence", command.creditReward(),
-                    command.pickupDeadline());
+                    command.pickupDeadline()), false);
         });
 
         HttpResponse<String> response = post(token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, "REQUESTER",
@@ -149,7 +151,7 @@ class OrderSecurityIntegrationTest {
 
             assertThat(response.statusCode()).as(role).isEqualTo(403);
         }
-        verify(orderService, never()).createOrder(any());
+        verify(orderService, never()).createOrder(any(), any());
     }
 
     @Test
@@ -363,7 +365,7 @@ class OrderSecurityIntegrationTest {
         for (String token : invalidTokens) {
             assertThat(post(token).statusCode()).isEqualTo(401);
         }
-        verify(orderService, never()).createOrder(any());
+        verify(orderService, never()).createOrder(any(), any());
     }
 
     private HttpResponse<String> post(String bearerToken) throws Exception {

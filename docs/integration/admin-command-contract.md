@@ -98,10 +98,10 @@ those have reservation semantics. CaseActionCompleted references owner event and
 
 ## Ban enforcement limit and acceptance
 
-User prevents future login and checks current state on its privileged operations. New Admin/Chat
-privileged paths check current User eligibility. Existing tokens on unrelated services can remain
-valid until expiry under the current stateless contract. Immediate global revocation needs a
-separately agreed User-status check/projection per service; Kafka publication alone is insufficient.
+Protected operations across User, Admin, Supplier, Order, Credit and Chat require current account
+and selected-role permission; see [current authorization](current-authorization.md). Kafka
+publication alone does not enforce access. Logout/password-change token invalidation remains a
+separate User-owned token-session design; it is not implied by account/role revocation.
 
 Test: correction/debit/no negative balance; reserved unchanged; duplicate/conflicting operations;
 crash-after-effect; delayed/lost outcome; queued actor revoked; User unavailable; self/final-admin

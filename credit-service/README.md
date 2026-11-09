@@ -76,8 +76,9 @@ broker publisher records acknowledgement. Inbox receipt/failure transactions mak
 work discoverable without coupling the domain to Kafka.
 
 `totalBalance = availableBalance + reservedBalance` is derived rather than independently stored.
-Only initial allocation increases the closed economy; reserve, release, settlement and
-compensation move existing credits. User and Order UUIDs are cross-service identifiers rather than
+Initial allocation and explicitly authorized administrative issuance can increase credits;
+administrative removal can decrease them. Reserve, release, settlement and compensation move
+existing credits. User and Order UUIDs are cross-service identifiers rather than
 foreign keys to another service's database.
 
 ## Initial allocation
@@ -163,6 +164,35 @@ explicitly active. It is presentation scaffolding, not a replacement for the Kaf
 
 ## Verification
 
+### Administrative corrections
+
+`CREDIT_ADMIN_COMMANDS_ENABLED=true` activates the separate `credit-service-admin` group on
+`admin.credit.commands`; results go only to `credit.admin.events`. Standalone/Compose defaults
+remain off until Credit has its own `CREDIT_SERVICE_KEY_ID` / `CREDIT_SERVICE_PRIVATE_KEY` and
+User pins that public key. `CREDIT_USER_URL` supplies the current-admin eligibility endpoint.
+The prepared local Kubernetes configuration enables it after runtime review; credentials stay in Secrets.
+
+Credit checks User before opening an account transaction, then atomically records its operation,
+inbox, available-only correction, immutable ADMIN_CORRECTION ledger entry, private reason and
+outcome outbox. Reserved credits are unchanged. Replays return/republish the original outcome;
+changed operation/event content is quarantined. Malformed/unsupported commands are quarantined
+and signalled to the command DLT without inventing business outcomes. User/storage outages retain
+the original command for retry; broker outages retain leased outgoing work with its original IDs.
+
+Chat alone may read the immutable outcome at
+`GET /internal/credits/admin-operations/{operationId}` using the existing service assertion profile.
+404 means no recorded result; 503 means unavailable storage. Core Order evidence exports reject
+ledger effects that lack corresponding original producer evidence. Empty confirmed streams remain
+valid zero checkpoints. Existing User/Order credit topics and reservation/settlement behavior remain
+separate from administrative issuance/removal. See the [approved command contract](../docs/integration/admin-command-contract.md)
+and [current verification/rollout record](../admin-service/INTEGRATION_READINESS.md).
+
+`AdminCreditKafkaIntegrationTest` uses disposable real PostgreSQL/Kafka and explicitly test-owned
+User eligibility. It checks the actual listener/outbox, balances/reserved credits, duplicate replay,
+rejections/conflicts, rollback and broker pause/recovery. `AdminActorClientTest` checks signed
+User calls and unavailable-versus-denied results. These tests do not substitute for the recorded
+real-service GUI journey.
+
 From this directory:
 
 ```powershell
@@ -175,3 +205,15 @@ need the approved database startup and health checks.
 
 From `frontend`, run `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` for the UI
 completion checks.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).
+
+Configure CREDIT_USER_URL, CREDIT_SERVICE_KEY_ID and
+CREDIT_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
+and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
+configuration fails closed even when administrative Kafka consumers are disabled.

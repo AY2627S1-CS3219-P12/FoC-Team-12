@@ -3,6 +3,7 @@ package com.friendoncampus.order.web;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -13,9 +14,13 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.friendoncampus.order.domain.OrderErrorCode;
+import com.friendoncampus.order.service.CreateOrderResult;
+import com.friendoncampus.order.service.IdempotencyKeyException;
 import com.friendoncampus.order.service.OrderService;
 import com.friendoncampus.order.web.dto.CreateOrderRequest;
 import com.friendoncampus.order.web.dto.OrderResponse;
@@ -23,6 +28,7 @@ import com.friendoncampus.order.web.dto.OrderTransitionResponse;
 import com.friendoncampus.order.web.dto.UpdateOrderRequest;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -38,6 +44,9 @@ import jakarta.validation.Valid;
 @SecurityRequirement(name = "bearer-jwt")
 public class OrderController {
 
+    static final String IDEMPOTENCY_KEY = "Idempotency-Key";
+    private static final Pattern IDEMPOTENCY_KEY_PATTERN = Pattern.compile("[A-Za-z0-9_-]{1,64}");
+
     private final OrderService orderService;
 
     public OrderController(OrderService orderService) {
@@ -49,7 +58,10 @@ public class OrderController {
             summary = "Create an order",
             description = "Validates and stores a new order in PENDING_CREDIT. The requester identity "
                     + "is taken from the verified User Service JWT 'sub' claim; it is never read from "
-                    + "the request body or a header. Requires a REQUESTER session role.")
+                    + "the request body or a header. Requires a REQUESTER session role. Send an "
+                    + "Idempotency-Key to make the request safe to retry: repeating it with the same "
+                    + "key and body returns the errand already created (200) without reserving credits "
+                    + "again.")
     @ApiResponses({
             @ApiResponse(
                     responseCode = "201",
@@ -60,8 +72,13 @@ public class OrderController {
                             schema = @Schema(type = "string", example = "/api/orders/9fd58f13-c8d5-4320-b757-7893d69a4ae0")),
                     content = @Content(schema = @Schema(implementation = OrderResponse.class))),
             @ApiResponse(
+                    responseCode = "200",
+                    description = "A repeat of an earlier request with the same Idempotency-Key and body; "
+                            + "the errand it created is returned and nothing is written",
+                    content = @Content(schema = @Schema(implementation = OrderResponse.class))),
+            @ApiResponse(
                     responseCode = "400",
-                    description = "Missing or invalid order fields",
+                    description = "Missing or invalid order fields, or INVALID_IDEMPOTENCY_KEY",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
             @ApiResponse(
                     responseCode = "401",
@@ -70,18 +87,38 @@ public class OrderController {
             @ApiResponse(
                     responseCode = "403",
                     description = "Valid token, but the session role is not REQUESTER",
+                    content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE)),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "IDEMPOTENCY_KEY_REUSED: the key was already used for a different errand",
                     content = @Content(mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE))
     })
     @PostMapping
     public ResponseEntity<OrderResponse> createOrder(
             @AuthenticationPrincipal Jwt jwt,
+            @Parameter(description = "Client-chosen key for this create request, 1-64 characters from "
+                    + "A-Z, a-z, 0-9, '-' and '_' (a UUID works). Reuse it only to retry the same request.",
+                    example = "6f1c2b7e-3d4a-4c1f-9b8e-2a7d5e0c9f13")
+            @RequestHeader(name = IDEMPOTENCY_KEY, required = false) String idempotencyKey,
             @Valid @RequestBody CreateOrderRequest request) {
         // The decoder guarantees a present, UUID-shaped 'sub'; identity comes only from the token.
         UUID requesterId = UUID.fromString(jwt.getSubject());
-        OrderResponse response = OrderResponse.from(
-                orderService.createOrder(request.toCommand(requesterId)));
+        CreateOrderResult result = orderService.createOrder(request.toCommand(requesterId),
+                validIdempotencyKey(idempotencyKey));
+        OrderResponse response = OrderResponse.from(result.order());
         URI location = URI.create("/api/orders/" + response.id());
+        if (result.replayed()) {
+            return ResponseEntity.ok().location(location).body(response);
+        }
         return ResponseEntity.created(location).body(response);
+    }
+
+    private static String validIdempotencyKey(String key) {
+        if (key != null && !IDEMPOTENCY_KEY_PATTERN.matcher(key).matches()) {
+            throw new IdempotencyKeyException(OrderErrorCode.INVALID_IDEMPOTENCY_KEY,
+                    "Idempotency-Key must be 1-64 characters from A-Z, a-z, 0-9, '-' and '_'");
+        }
+        return key;
     }
 
     @Operation(

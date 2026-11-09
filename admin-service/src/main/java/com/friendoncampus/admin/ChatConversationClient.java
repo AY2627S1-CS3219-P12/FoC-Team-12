@@ -46,4 +46,29 @@ public class ChatConversationClient {
         }
     }
     public record Conversation(UUID conversationId, UUID caseId, UUID orderId, UUID participantUserId, boolean readOnly) { }
+    public Optional<Conversation> find(UUID caseId,UUID orderId,UUID participantId,String actorToken) {
+        try {
+            var request=HttpRequest.newBuilder(base.resolve("/internal/chat/cases/"+caseId+"/conversations?participantUserId="+participantId))
+                    .timeout(Duration.ofSeconds(3)).header("Authorization","Bearer "+tokens.issue("chat-service"))
+                    .header("X-Actor-Token",actorToken).GET().build();
+            var response=http.send(request,HttpResponse.BodyHandlers.ofString());
+            if(response.statusCode()==404)return Optional.empty();
+            if(response.statusCode()!=200)throw new IllegalStateException();
+            var data=json.readTree(response.body());
+            if(!caseId.toString().equals(data.path("caseId").asText())||!orderId.toString().equals(data.path("orderId").asText())
+                    ||!participantId.toString().equals(data.path("participantUserId").asText())||!data.path("readOnly").isBoolean())throw new IllegalStateException();
+            return Optional.of(new Conversation(UUID.fromString(data.path("conversationId").asText()),caseId,orderId,participantId,data.path("readOnly").asBoolean()));
+        }catch(Exception ex){if(ex instanceof InterruptedException)Thread.currentThread().interrupt();throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Conversation recovery is unavailable. Retry the read.");}
+    }
+    public void prepareClosure(UUID caseId,UUID operation,String actorToken) {
+        try {
+            var request=HttpRequest.newBuilder(base.resolve("/internal/chat/cases/"+caseId+"/closure"))
+                    .timeout(Duration.ofSeconds(8)).header("Authorization","Bearer "+tokens.issue("chat-service"))
+                    .header("X-Actor-Token",actorToken).header("Content-Type","application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("operationId",operation)))).build();
+            var response=http.send(request,HttpResponse.BodyHandlers.ofString());var body=json.readTree(response.body());
+            if(response.statusCode()!=200||!caseId.toString().equals(body.path("caseId").asText())||!operation.toString().equals(body.path("operationId").asText())
+                    ||!body.path("readOnly").isBoolean()||!body.path("readOnly").asBoolean())throw new IllegalStateException();
+        }catch(Exception ex){if(ex instanceof InterruptedException)Thread.currentThread().interrupt();throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Resolution preparation is pending. Retry the original resolution to confirm the conversation barrier.");}
+    }
 }

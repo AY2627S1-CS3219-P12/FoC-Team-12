@@ -19,3 +19,5 @@ data:
   # Apply only after the cluster's kafka-init has created order.lifecycle.events and Order's Write ACL.
   ORDER_LIFECYCLE_EVENTS_ENABLED: "true"
   JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
+  ORDER_USER_URL: http://user-service.foc-local.svc.cluster.local.:8081
+  ORDER_SERVICE_KEY_ID: order-service-1

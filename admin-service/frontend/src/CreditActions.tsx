@@ -45,11 +45,15 @@ function validateAction(value: AdminAction, caseId: string): AdminAction {
   return value
 }
 const actionFailure = (e: unknown, ban: boolean) =>
-  e instanceof CaseError && [401, 403, 404].includes(e.status)
-    ? 'You no longer have access to these case actions. Refresh case access.'
-    : e instanceof CaseError && e.status === 409
-      ? 'This request conflicts with the current case or an earlier operation. Refresh case access; do not create a replacement while its outcome is uncertain.'
-      : `The action service is unavailable. No new ${ban ? 'account' : 'financial'} outcome is confirmed. Retry an unconfirmed submission with the same request.`
+  e instanceof CaseError &&
+  (e.message.startsWith('You cannot review this case because') ||
+    e.message.startsWith('Reviewer independence could not be verified.'))
+    ? e.message
+    : e instanceof CaseError && [401, 403, 404].includes(e.status)
+      ? 'You no longer have access to these case actions. Refresh case access.'
+      : e instanceof CaseError && e.status === 409
+        ? 'This request conflicts with the current case or an earlier operation. Refresh case access; do not create a replacement while its outcome is uncertain.'
+        : `The action service is unavailable. No new ${ban ? 'account' : 'financial'} outcome is confirmed. Retry an unconfirmed submission with the same request.`
 const explanations = {
   PENDING:
     'Accepted by Admin. Waiting for Credit to confirm the financial outcome.',
@@ -65,12 +69,14 @@ export function CreditActions({
   participantIds,
   initialActions = [],
   kind = 'CREDIT_ADJUSTMENT',
+  closing = false,
 }: {
   summary: Summary
   actorId: string
   participantIds: string[]
   initialActions?: AdminAction[]
   kind?: 'CREDIT_ADJUSTMENT' | 'BAN'
+  closing?: boolean
 }) {
   const ban = kind === 'BAN'
   const failure = useCallback((e: unknown) => actionFailure(e, ban), [ban])
@@ -143,6 +149,7 @@ export function CreditActions({
     current.current = actions
   }, [actions])
   const writable =
+    !closing &&
     summary.state === 'UNDER_REVIEW' &&
     summary.reviewerId === actorId &&
     !denied &&
