@@ -3,6 +3,8 @@ package com.friendoncampus.credit.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,7 +44,7 @@ class CreditReservationServiceTest {
         requesterId = UUID.randomUUID();
         account = CreditAccount.empty(requesterId);
         account.grantInitialAllocation(10);
-        when(accounts.findByUserIdForUpdate(requesterId)).thenReturn(Optional.of(account));
+        lenient().when(accounts.findByUserIdForUpdate(requesterId)).thenReturn(Optional.of(account));
     }
 
     @Test
@@ -98,5 +100,19 @@ class CreditReservationServiceTest {
         assertThat(result.status()).isEqualTo(ReservationStatus.RELEASED);
         assertThat(result.availableBalance()).isEqualTo(10);
         assertThat(result.reservedBalance()).isZero();
+    }
+
+    @Test
+    void pendingCreditTimeoutWithoutReservationIsADurableNoOp() {
+        UUID operationId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+
+        assertThat(service.releaseForPendingCreditTimeout(operationId, orderId)).isEmpty();
+
+        verify(operations).saveAndFlush(argThat(operation ->
+                operation.getId().equals(operationId)
+                        && operation.getOrderId().equals(orderId)
+                        && operation.getResultCode().equals("NO_RESERVATION_TO_RELEASE")));
+        verify(ledger, never()).save(any());
     }
 }

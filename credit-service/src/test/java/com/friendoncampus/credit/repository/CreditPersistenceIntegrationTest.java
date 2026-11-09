@@ -17,6 +17,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import com.friendoncampus.credit.domain.CreditAccount;
+import com.friendoncampus.credit.domain.CreditEventStreamVersionId;
 import com.friendoncampus.credit.domain.InboxEventStatus;
 import com.friendoncampus.credit.integration.CreditEventCoordinator;
 import com.friendoncampus.credit.integration.CreditEventEnvelope;
@@ -24,6 +25,7 @@ import com.friendoncampus.credit.integration.CreditEventHandler;
 import com.friendoncampus.credit.integration.CreditOutboxService;
 import com.friendoncampus.credit.integration.EventVersionConflictException;
 import com.friendoncampus.credit.service.CreditReservationService;
+import com.friendoncampus.credit.service.CreditReservationNotFoundException;
 import com.friendoncampus.credit.service.InitialCreditAllocationService;
 
 @SpringBootTest
@@ -69,6 +71,12 @@ class CreditPersistenceIntegrationTest {
 
     @Autowired
     private CreditOperationRepository operations;
+
+    @Autowired
+    private CreditLedgerEntryRepository ledger;
+
+    @Autowired
+    private CreditEventStreamVersionRepository streamVersions;
 
     @Test
     void flywaySchemaMatchesJpaAndPersistsAnAccount() {
@@ -193,6 +201,89 @@ class CreditPersistenceIntegrationTest {
     }
 
     @Test
+    void pendingCreditTimeoutWithoutReservationCommitsNoOpInboxAndCheckpointAtomically() {
+        UUID userId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        allocationService.allocate(UUID.randomUUID(), userId);
+        eventHandler.handle(orderSubmittedEvent(UUID.randomUUID(), orderId, userId, 11));
+        long ledgerBefore = ledger.count();
+        long outboxBefore = outbox.count();
+        UUID timeoutOperationId = UUID.randomUUID();
+        CreditEventEnvelope timeout = orderExpiredEvent(
+                timeoutOperationId, orderId, 2, "CREDIT_RESERVATION_TIMEOUT");
+
+        assertThat(eventHandler.handle(timeout))
+                .isEqualTo(CreditEventCoordinator.ProcessingOutcome.PROCESSED);
+        assertThat(eventHandler.handle(timeout))
+                .isEqualTo(CreditEventCoordinator.ProcessingOutcome.DUPLICATE);
+
+        assertThat(reservations.findByOrderId(orderId)).isEmpty();
+        assertThat(operations.findById(timeoutOperationId)).isPresent().get().satisfies(operation ->
+                assertThat(operation.getResultCode()).isEqualTo("NO_RESERVATION_TO_RELEASE"));
+        assertThat(inbox.findById(timeout.eventId())).isPresent().get().satisfies(stored -> {
+            assertThat(stored.getStatus()).isEqualTo(InboxEventStatus.PROCESSED);
+            assertThat(stored.getAttemptCount()).isEqualTo(1);
+        });
+        assertThat(streamVersions.findById(new CreditEventStreamVersionId("Order", orderId)))
+                .isPresent().get().satisfies(stream -> {
+                    assertThat(stream.getLatestVersion()).isEqualTo(2);
+                    assertThat(stream.getLatestEventId()).isEqualTo(timeout.eventId());
+                    assertThat(stream.getLatestEventType()).isEqualTo("OrderExpired");
+                });
+        assertThat(ledger.count()).isEqualTo(ledgerBefore);
+        assertThat(outbox.count()).isEqualTo(outboxBefore);
+    }
+
+    @Test
+    void pendingCreditTimeoutReleasesExistingReservationOnce() {
+        UUID userId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        allocationService.allocate(UUID.randomUUID(), userId);
+        eventHandler.handle(orderSubmittedEvent(UUID.randomUUID(), orderId, userId, 3));
+        long ledgerBefore = ledger.count();
+        UUID timeoutOperationId = UUID.randomUUID();
+        CreditEventEnvelope timeout = orderExpiredEvent(
+                timeoutOperationId, orderId, 2, "CREDIT_RESERVATION_TIMEOUT");
+
+        assertThat(eventHandler.handle(timeout))
+                .isEqualTo(CreditEventCoordinator.ProcessingOutcome.PROCESSED);
+        assertThat(eventHandler.handle(timeout))
+                .isEqualTo(CreditEventCoordinator.ProcessingOutcome.DUPLICATE);
+
+        assertThat(reservations.findByOrderId(orderId)).isPresent().get().satisfies(reservation ->
+                assertThat(reservation.getStatus().name()).isEqualTo("RELEASED"));
+        assertThat(accounts.findById(userId)).isPresent().get().satisfies(account -> {
+            assertThat(account.getAvailableBalance()).isEqualTo(10);
+            assertThat(account.getReservedBalance()).isZero();
+        });
+        assertThat(operations.findById(timeoutOperationId)).isPresent().get().satisfies(operation ->
+                assertThat(operation.getResultCode()).isEqualTo("RELEASED"));
+        assertThat(ledger.count()).isEqualTo(ledgerBefore + 1);
+        assertThat(outbox.findAll()).filteredOn(event -> event.getCausationId() != null
+                        && event.getCausationId().equals(timeout.eventId()))
+                .singleElement().satisfies(event -> assertThat(event.getEventType()).isEqualTo("CreditReleased"));
+    }
+
+    @Test
+    void missingReservationForOtherExpiryReasonRemainsRetryableFailure() {
+        UUID operationId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        CreditEventEnvelope expired = orderExpiredEvent(operationId, orderId, 1, "PICKUP_DEADLINE_EXCEEDED");
+
+        assertThatThrownBy(() -> eventHandler.handle(expired))
+                .isInstanceOf(CreditReservationNotFoundException.class);
+
+        assertThat(operations.findById(operationId)).isEmpty();
+        assertThat(inbox.findById(expired.eventId())).isPresent().get().satisfies(stored -> {
+            assertThat(stored.getStatus()).isEqualTo(InboxEventStatus.FAILED);
+            assertThat(stored.getLastError()).contains("Credit reservation does not exist");
+        });
+        assertThat(streamVersions.findById(new CreditEventStreamVersionId("Order", orderId))).isEmpty();
+        assertThat(outbox.findAll()).noneSatisfy(event ->
+                assertThat(event.getCausationId()).isEqualTo(expired.eventId()));
+    }
+
+    @Test
     void unexpectedFailureRollsBackDomainAndOutboxButLeavesInboxRetryable() {
         UUID userId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
@@ -255,5 +346,27 @@ class CreditPersistenceIntegrationTest {
                 """
                 {"operationId":"%s","orderId":"%s","requesterId":"%s","creditReward":%d}
                 """.formatted(operationId, orderId, requesterId, reward));
+    }
+
+    private static CreditEventEnvelope orderExpiredEvent(
+            UUID operationId,
+            UUID orderId,
+            long aggregateVersion,
+            String reason) {
+        return new CreditEventEnvelope(
+                UUID.randomUUID(),
+                "OrderExpired",
+                1,
+                "Order",
+                orderId,
+                aggregateVersion,
+                OffsetDateTime.parse("2026-10-15T14:02:00Z"),
+                "order-service",
+                UUID.randomUUID(),
+                null,
+                "{\"type\":\"SYSTEM\"}",
+                """
+                {"operationId":"%s","orderId":"%s","reason":"%s","expiredAt":"2026-10-15T14:02:00Z"}
+                """.formatted(operationId, orderId, reason));
     }
 }

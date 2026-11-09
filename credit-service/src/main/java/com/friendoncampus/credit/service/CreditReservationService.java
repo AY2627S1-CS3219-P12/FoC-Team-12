@@ -1,5 +1,6 @@
 package com.friendoncampus.credit.service;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -19,6 +20,9 @@ import com.friendoncampus.credit.repository.CreditReservationRepository;
 
 @Service
 public class CreditReservationService {
+
+    private static final String CREDIT_RESERVATION_TIMEOUT = "CREDIT_RESERVATION_TIMEOUT";
+    private static final String NO_RESERVATION_TO_RELEASE = "NO_RESERVATION_TO_RELEASE";
 
     private final CreditAccountRepository accounts;
     private final CreditReservationRepository reservations;
@@ -161,6 +165,46 @@ public class CreditReservationService {
 
         CreditReservation reservation = reservations.findByOrderIdForUpdate(orderId)
                 .orElseThrow(() -> new CreditReservationNotFoundException(orderId));
+        return releaseExisting(operationId, orderId, requestHash, reservation);
+    }
+
+    /**
+     * Applies the cleanup requested by an Order that stopped waiting for Credit. Unlike a normal
+     * expiry/cancellation release, an absent reservation is a successful, durable no-op because
+     * Credit may never have created the hold before the Order timed out.
+     */
+    @Transactional
+    public Optional<ReservationResult> releaseForPendingCreditTimeout(UUID operationId, UUID orderId) {
+        requireIdentifiers(operationId, orderId);
+        String requestHash = fingerprint(CreditOperationType.RELEASE, orderId, CREDIT_RESERVATION_TIMEOUT);
+
+        CreditOperation previous = operations.findById(operationId).orElse(null);
+        if (previous != null) {
+            requireSameRequest(previous, CreditOperationType.RELEASE, requestHash);
+            if (NO_RESERVATION_TO_RELEASE.equals(previous.getResultCode())) {
+                return Optional.empty();
+            }
+            return Optional.of(currentResult(orderId, false));
+        }
+
+        CreditReservation reservation = reservations.findByOrderIdForUpdate(orderId).orElse(null);
+        if (reservation == null) {
+            operations.saveAndFlush(CreditOperation.completed(
+                    operationId,
+                    CreditOperationType.RELEASE,
+                    orderId,
+                    requestHash,
+                    NO_RESERVATION_TO_RELEASE));
+            return Optional.empty();
+        }
+        return Optional.of(releaseExisting(operationId, orderId, requestHash, reservation));
+    }
+
+    private ReservationResult releaseExisting(
+            UUID operationId,
+            UUID orderId,
+            String requestHash,
+            CreditReservation reservation) {
         CreditAccount account = requireAccount(reservation.getRequesterId(), true);
 
         if (reservation.getStatus() == ReservationStatus.RELEASED) {

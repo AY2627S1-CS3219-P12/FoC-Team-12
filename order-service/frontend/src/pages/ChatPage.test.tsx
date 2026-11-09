@@ -1,7 +1,29 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, test } from 'vitest'
-import type { ChatMessage } from '../api/chatApi'
+import { preserveTranslations, type ChatMessage } from '../api/chatApi'
 import { MessageBubble } from './ChatPage'
+
+function textMessage(overrides:Partial<ChatMessage>={}):ChatMessage {
+  return {
+    id:'10000000-0000-4000-8000-000000000002',
+    conversationId:'20000000-0000-4000-8000-000000000001',
+    senderUserId:'40000000-0000-4000-8000-000000000001',
+    sequence:2,
+    clientMessageId:'50000000-0000-4000-8000-000000000001',
+    messageType:'TEXT',
+    originalLanguage:'en',
+    quickReplyKey:null,
+    text:'I am on my way.',
+    attachment:null,
+    sourceEventId:null,
+    sourceSequence:null,
+    lifecycleAction:null,
+    lifecycleFromState:null,
+    lifecycleToState:null,
+    createdAt:'2026-11-08T04:31:00Z',
+    ...overrides,
+  }
+}
 
 describe('chat lifecycle activity', () => {
   test('renders a lifecycle event as a timestamped system entry instead of a participant bubble', () => {
@@ -30,5 +52,28 @@ describe('chat lifecycle activity', () => {
     expect(container.querySelector('.system-message')).toBeInTheDocument()
     expect(container.querySelector('.message-author')).not.toBeInTheDocument()
     expect(screen.getByText(/2026/).closest('time')).toHaveAttribute('datetime', message.createdAt)
+  })
+
+  test('shows a ready translation while preserving an accessible original', async () => {
+    const message: ChatMessage = textMessage({
+      translation: { messageId:'10000000-0000-4000-8000-000000000002',sourceLanguage:'en',targetLanguage:'zh',status:'READY',text:'我正在路上。' },
+    })
+
+    const user = (await import('@testing-library/user-event')).default.setup()
+    render(<MessageBubble message={message} mine={false} />)
+    expect(screen.getByText('我正在路上。')).toBeInTheDocument()
+    expect(screen.queryByText('I am on my way.')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button',{name:'View original'}))
+    expect(screen.getByText('I am on my way.')).toBeInTheDocument()
+  })
+
+  test('keeps live translation updates and preserves them across history refreshes', () => {
+    const ready = {messageId:'10000000-0000-4000-8000-000000000002',sourceLanguage:'en',targetLanguage:'ms',status:'READY' as const,text:'Saya sedang dalam perjalanan.'}
+
+    const liveUpdate = preserveTranslations([textMessage()], [textMessage({translation:ready})])
+    expect(liveUpdate.at(0)?.translation).toEqual(ready)
+
+    const historyRefresh = preserveTranslations(liveUpdate, [textMessage({translation:null})])
+    expect(historyRefresh.at(0)?.translation).toEqual(ready)
   })
 })

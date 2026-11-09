@@ -60,6 +60,19 @@ It does not generate/rotate keys or restart pods. Fresh clusters need separately
 service identities before using this existing-cluster helper. ServiceTrustProbe.java tests internal
 route/audience checks from caller pods without exporting their keys; it is not business acceptance.
 
+Translation stays disabled when the optional `chat-translation-secrets` Secret is absent. To
+enable Gemini locally, create that Secret from a private, ignored env file containing only
+`CHAT_TRANSLATION_PROVIDER=gemini` and `GEMINI_API_KEY=...`, then restart Chat:
+
+```bash
+kubectl --context=foc-local -n foc-local create secret generic chat-translation-secrets \
+  --from-env-file=.env.chat-translation --dry-run=client -o yaml | \
+  kubectl --context=foc-local apply -f -
+kubectl --context=foc-local -n foc-local rollout restart deployment/chat-service
+```
+
+Delete the temporary env file after applying it and never commit it.
+
 The RabbitMQ management page is intentionally not exposed through Gateway. For local inspection:
 
 ```bash

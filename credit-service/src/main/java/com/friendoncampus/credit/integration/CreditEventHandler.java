@@ -5,8 +5,11 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.friendoncampus.credit.service.CreditAccountNotFoundException;
@@ -25,12 +28,14 @@ import tools.jackson.databind.node.ObjectNode;
 @Service
 public class CreditEventHandler {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(CreditEventHandler.class);
     private static final int EVENT_VERSION = 1;
     private static final String USER_PRODUCER = "user-service";
     private static final String ORDER_PRODUCER = "order-service";
     private static final String USER_AGGREGATE = "User";
     private static final String ORDER_AGGREGATE = "Order";
     private static final String SYSTEM_ACTOR = "{\"type\":\"SYSTEM\"}";
+    private static final String CREDIT_RESERVATION_TIMEOUT = "CREDIT_RESERVATION_TIMEOUT";
 
     private final CreditEventCoordinator coordinator;
     private final InitialCreditAllocationService allocations;
@@ -144,8 +149,22 @@ public class CreditEventHandler {
     }
 
     private void release(CreditEventEnvelope envelope, ParsedEvent event) {
-        CreditReservationService.ReservationResult result =
-                reservations.release(event.operationId(), event.orderId());
+        Optional<CreditReservationService.ReservationResult> released =
+                event.type() == EventType.ORDER_EXPIRED && CREDIT_RESERVATION_TIMEOUT.equals(event.reason())
+                        ? reservations.releaseForPendingCreditTimeout(event.operationId(), event.orderId())
+                        : Optional.of(reservations.release(event.operationId(), event.orderId()));
+        if (released.isEmpty()) {
+            LOGGER.info(
+                    "outcome=NO_RESERVATION_TO_RELEASE eventId={} operationId={} orderId={} correlationId={} reason={}",
+                    envelope.eventId(), event.operationId(), event.orderId(), envelope.correlationId(), event.reason());
+            return;
+        }
+        CreditReservationService.ReservationResult result = released.orElseThrow();
+        if (event.type() == EventType.ORDER_EXPIRED && CREDIT_RESERVATION_TIMEOUT.equals(event.reason())) {
+            LOGGER.info(
+                    "outcome=RESERVATION_RELEASED eventId={} operationId={} orderId={} correlationId={} reason={}",
+                    envelope.eventId(), event.operationId(), event.orderId(), envelope.correlationId(), event.reason());
+        }
         Map<String, Object> data = orderData(event);
         data.put("releasedAmount", result.amount());
         data.put("availableBalance", result.availableBalance());
@@ -205,7 +224,7 @@ public class CreditEventHandler {
         UUID userId = requiredUuid(payload, "userId");
         requireAggregateId(envelope, userId);
         requiredTimestamp(payload, "activatedAt");
-        return new ParsedEvent(EventType.USER_ACTIVATED, operationId, userId, null, null, 0, false);
+        return new ParsedEvent(EventType.USER_ACTIVATED, operationId, userId, null, null, 0, null, false);
     }
 
     private ParsedEvent parseOrderSubmitted(CreditEventEnvelope envelope, ObjectNode payload) {
@@ -215,7 +234,7 @@ public class CreditEventHandler {
         requireAggregateId(envelope, orderId);
         UUID requesterId = requiredUuid(payload, "requesterId");
         int amount = requiredPositiveInteger(payload, "creditReward");
-        return new ParsedEvent(EventType.ORDER_SUBMITTED, operationId, requesterId, orderId, null, amount, false);
+        return new ParsedEvent(EventType.ORDER_SUBMITTED, operationId, requesterId, orderId, null, amount, null, false);
     }
 
     private ParsedEvent parseOrderRewardChange(CreditEventEnvelope envelope, ObjectNode payload) {
@@ -225,7 +244,7 @@ public class CreditEventHandler {
         requireAggregateId(envelope, orderId);
         int amount = requiredPositiveInteger(payload, "newCreditReward");
         return new ParsedEvent(
-                EventType.ORDER_REWARD_CHANGE_REQUESTED, operationId, null, orderId, null, amount, false);
+                EventType.ORDER_REWARD_CHANGE_REQUESTED, operationId, null, orderId, null, amount, null, false);
     }
 
     private ParsedEvent parseOrderCompleted(CreditEventEnvelope envelope, ObjectNode payload) {
@@ -235,7 +254,7 @@ public class CreditEventHandler {
         requireAggregateId(envelope, orderId);
         UUID courierId = requiredUuid(payload, "courierId");
         requiredTimestamp(payload, "completedAt");
-        return new ParsedEvent(EventType.ORDER_COMPLETED, operationId, null, orderId, courierId, 0, false);
+        return new ParsedEvent(EventType.ORDER_COMPLETED, operationId, null, orderId, courierId, 0, null, false);
     }
 
     private ParsedEvent parseOrderCancelled(CreditEventEnvelope envelope, ObjectNode payload) {
@@ -251,7 +270,7 @@ public class CreditEventHandler {
         if (!compensationRequired && courierId != null) {
             throw new IllegalArgumentException("courierId must be null when compensation is not required");
         }
-        requiredText(payload, "reason");
+        String reason = requiredText(payload, "reason");
         requiredTimestamp(payload, "cancelledAt");
         return new ParsedEvent(
                 EventType.ORDER_CANCELLED,
@@ -260,6 +279,7 @@ public class CreditEventHandler {
                 orderId,
                 courierId,
                 0,
+                reason,
                 compensationRequired);
     }
 
@@ -268,9 +288,9 @@ public class CreditEventHandler {
         UUID operationId = requiredUuid(payload, "operationId");
         UUID orderId = requiredUuid(payload, "orderId");
         requireAggregateId(envelope, orderId);
-        requiredText(payload, "reason");
+        String reason = requiredText(payload, "reason");
         requiredTimestamp(payload, "expiredAt");
-        return new ParsedEvent(EventType.ORDER_EXPIRED, operationId, null, orderId, null, 0, false);
+        return new ParsedEvent(EventType.ORDER_EXPIRED, operationId, null, orderId, null, 0, reason, false);
     }
 
     private ObjectNode readPayload(String payloadJson) {
@@ -415,6 +435,7 @@ public class CreditEventHandler {
             UUID orderId,
             UUID courierId,
             int amount,
+            String reason,
             boolean compensationRequired) {
     }
 }
