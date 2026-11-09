@@ -22,6 +22,16 @@ public class CreditEvidenceController {
     public CreditEvidenceController(ObjectProvider<JdbcClient> databases) {
         this.databases = databases;
     }
+    @GetMapping("/internal/credits/admin-operations/{operationId}")
+    public ResponseEntity<tools.jackson.databind.JsonNode> operation(@PathVariable UUID operationId) {
+        JdbcClient db=databases.getIfAvailable();
+        if(db==null)throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Credit evidence storage is unavailable");
+        try{
+        String payload=db.sql("SELECT payload FROM credit_admin_operations WHERE operation_id=:id").param("id",operationId)
+                .query(String.class).optional().orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Operation not found"));
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(tools.jackson.databind.json.JsonMapper.builder().build().readTree(payload));
+        }catch(org.springframework.dao.DataAccessException ex){throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Credit operation storage unavailable");}
+    }
 
     @GetMapping("/internal/credits/orders/{orderId}/evidence")
     public ResponseEntity<CreditEvidenceExportService.Export> evidence(

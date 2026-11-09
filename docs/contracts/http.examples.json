@@ -62,6 +62,104 @@
     }
   },
   {
+    "operationId": "chat_get__internal_chat_cases_caseId_conversations",
+    "status": 200,
+    "body": {
+      "conversationId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "participantUserId": "11111111-1111-4111-8111-111111111111",
+      "readOnly": true
+    }
+  },
+  {
+    "operationId": "chat_post__internal_chat_cases_caseId_closure",
+    "status": 200,
+    "body": {
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "operationId": "11111111-1111-4111-8111-111111111111",
+      "readOnly": true
+    },
+    "requestBody": {
+      "operationId": "11111111-1111-4111-8111-111111111111"
+    }
+  },
+  {
+    "operationId": "user_get__internal_users_admin_operations_operationId",
+    "status": 200,
+    "body": {
+      "eventId": "11111111-1111-4111-8111-111111111111",
+      "eventType": "AdminUserBanApplied",
+      "eventVersion": 1,
+      "aggregateType": "AdminAction",
+      "aggregateId": "11111111-1111-4111-8111-111111111111",
+      "aggregateVersion": 1,
+      "occurredAt": "2026-10-29T12:00:00Z",
+      "producer": "user-service",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "causationId": "11111111-1111-4111-8111-111111111111",
+      "actor": {
+        "type": "USER",
+        "userId": "11111111-1111-4111-8111-111111111111",
+        "role": "ADMIN"
+      },
+      "data": {
+        "operationId": "11111111-1111-4111-8111-111111111111",
+        "caseId": "11111111-1111-4111-8111-111111111111",
+        "orderId": "11111111-1111-4111-8111-111111111111",
+        "targetUserId": "11111111-1111-4111-8111-111111111111",
+        "requestedBy": "11111111-1111-4111-8111-111111111111",
+        "completedAt": "2026-10-29T12:00:00Z",
+        "result": "APPLIED",
+        "previousStatus": "ACTIVE",
+        "status": "BANNED"
+      }
+    }
+  },
+  {
+    "operationId": "credits_get__internal_credits_admin_operations_operationId",
+    "status": 200,
+    "body": {
+      "eventId": "11111111-1111-4111-8111-111111111111",
+      "eventType": "AdminCreditCorrectionApplied",
+      "eventVersion": 1,
+      "aggregateType": "AdminAction",
+      "aggregateId": "11111111-1111-4111-8111-111111111111",
+      "aggregateVersion": 1,
+      "occurredAt": "2026-10-29T12:00:00Z",
+      "producer": "credit-service",
+      "correlationId": "11111111-1111-4111-8111-111111111111",
+      "causationId": "11111111-1111-4111-8111-111111111111",
+      "actor": {
+        "type": "USER",
+        "userId": "11111111-1111-4111-8111-111111111111",
+        "role": "ADMIN"
+      },
+      "data": {
+        "operationId": "11111111-1111-4111-8111-111111111111",
+        "caseId": "11111111-1111-4111-8111-111111111111",
+        "orderId": "11111111-1111-4111-8111-111111111111",
+        "targetUserId": "11111111-1111-4111-8111-111111111111",
+        "requestedBy": "11111111-1111-4111-8111-111111111111",
+        "completedAt": "2026-10-29T12:00:00Z",
+        "result": "APPLIED",
+        "amount": 1,
+        "availableBalance": 1,
+        "reservedBalance": 1,
+        "ledgerEntryId": "11111111-1111-4111-8111-111111111111"
+      }
+    }
+  },
+  {
+    "operationId": "user_get__internal_users_userId_authorization",
+    "status": 200,
+    "body": {
+      "userId": "11111111-1111-4111-8111-111111111111",
+      "active": true,
+      "roles": []
+    }
+  },
+  {
     "operationId": "user_get__internal_users_userId_admin_eligibility",
     "status": 200,
     "body": {
@@ -472,6 +570,16 @@
     "requestBody": {
       "participantUserId": "11111111-1111-4111-8111-111111111111"
     }
+  },
+  {
+    "operationId": "admin_get__api_admin_cases_caseId_conversations",
+    "status": 200,
+    "body": []
+  },
+  {
+    "operationId": "admin_get__api_admin_reports_caseId_conversations",
+    "status": 200,
+    "body": []
   },
   {
     "operationId": "admin_post__api_admin_cases_caseId_actions",

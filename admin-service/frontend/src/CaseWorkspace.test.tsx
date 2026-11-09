@@ -4,7 +4,9 @@ import { App } from './App'
 import { saveSession } from './auth/session'
 
 // The header bell polls on its own and has its own tests; keep it out of these fetch sequences.
-vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
+vi.mock('./components/NotificationBell', () => ({
+  NotificationBell: () => null,
+}))
 
 const id = '10000000-0000-4000-8000-000000000001'
 const actor = '20000000-0000-4000-8000-000000000001'
@@ -284,16 +286,14 @@ it('routes an already-submitted errand to the private report instead of offering
   session()
   vi.stubGlobal(
     'fetch',
-    vi
-      .fn()
-      .mockResolvedValue(
-        response({
-          orderId: order,
-          status: 'OWN_REPORT',
-          caseId: id,
-          state: 'RESOLVED',
-        }),
-      ),
+    vi.fn().mockResolvedValue(
+      response({
+        orderId: order,
+        status: 'OWN_REPORT',
+        caseId: id,
+        state: 'RESOLVED',
+      }),
+    ),
   )
   render(<App />)
   expect(
@@ -383,6 +383,38 @@ it('claims using the displayed revision and explains conflicts without claiming 
   expect(JSON.parse(call[1].body)).toEqual({ expectedRevision: 1 })
   expect(screen.queryByText('Case assigned to you.')).not.toBeInTheDocument()
 })
+it.each([
+  [
+    403,
+    'You cannot review this case because you requested the errand or were one of its couriers. An independent administrator must review it.',
+  ],
+  [
+    503,
+    'Reviewer independence could not be verified. Refresh the evidence and try again. The case remains open.',
+  ],
+])(
+  'explains blocked review and preserves the open case (%s)',
+  async (status, detail) => {
+    window.history.replaceState({}, '', '/admin/cases/' + id)
+    session('ADMIN')
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(response({ userId: actor, role: 'ADMIN' }))
+      .mockResolvedValueOnce(response({ case: summary, statements: [] }))
+      .mockResolvedValue(response({ detail }, status as number))
+    mockServiceFetch(fetcher)
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Claim case' }))
+    expect(await screen.findByText(detail)).toBeVisible()
+    expect(
+      screen.getByText(
+        /Only an independent administrator can review this case/,
+      ),
+    ).toHaveTextContent('did not submit a report')
+    expect(screen.getByText('OPEN')).toBeVisible()
+    expect(screen.queryByText('Case assigned to you.')).not.toBeInTheDocument()
+  },
+)
 it('removes protected queue data when a later live administrator check denies access', async () => {
   window.history.replaceState({}, '', '/admin/cases')
   session('ADMIN')

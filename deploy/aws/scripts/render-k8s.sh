@@ -12,6 +12,7 @@ set -euo pipefail
 : "${CREDIT_IMAGE:?CREDIT_IMAGE is required}"
 : "${ADMIN_IMAGE:?ADMIN_IMAGE is required}"
 : "${CHAT_IMAGE:?CHAT_IMAGE is required}"
+: "${NOTIFICATION_IMAGE:?NOTIFICATION_IMAGE is required}"
 : "${CHAT_S3_BUCKET:?CHAT_S3_BUCKET is required}"
 : "${CHAT_SERVICE_ROLE_ARN:?CHAT_SERVICE_ROLE_ARN is required}"
 
@@ -34,4 +35,5 @@ sed \
   -e "s|image: foc-credit-service:bootstrap|image: $CREDIT_IMAGE|g" \
   -e "s|image: foc-admin-service:bootstrap|image: $ADMIN_IMAGE|g" \
   -e "s|image: foc-chat-service:bootstrap|image: $CHAT_IMAGE|g" \
+  -e "s|image: foc-notification-service:bootstrap|image: $NOTIFICATION_IMAGE|g" \
   "$manifest"

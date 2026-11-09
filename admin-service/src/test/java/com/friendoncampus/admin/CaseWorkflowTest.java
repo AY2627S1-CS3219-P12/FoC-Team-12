@@ -33,6 +33,139 @@ class CaseWorkflowTest {
     @Autowired CreditActionService creditActions;
     @Autowired ActionDeliveryStore deliveries;
     @Autowired ResolutionService resolutions;
+    @Autowired ReviewerIndependenceService independence;
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"REQUESTER","CURRENT_COURIER","HISTORICAL_COURIER"})
+    void involvedAdministratorsCannotClaimOrActEvenWhenAlreadyAssigned(String relationship) {
+        UUID id=caseId(report(reporter,UUID.randomUUID()));
+        UUID actor=relationship.equals("REQUESTER")?reporter:reviewer;
+        var e=freshEvidence(id);
+        if(!relationship.equals("REQUESTER")){
+            var p=json.createObjectNode().put("userId",actor.toString()).put("relationship","HISTORICAL_COURIER");
+            p.put("assignedAt",Instant.now().minusSeconds(120).toString());
+            if(relationship.equals("CURRENT_COURIER")) {
+                p.putNull("unassignedAt");
+                ((tools.jackson.databind.node.ObjectNode)e.path("order")).put("courierId",actor.toString());
+            }else p.put("unassignedAt",Instant.now().minusSeconds(90).toString());
+            ((tools.jackson.databind.node.ArrayNode)e.path("participants")).add(p);
+            assertEquals(0,db.queryForObject("SELECT count(*) FROM admin_statements WHERE case_id=? AND reporter_id=?",Integer.class,id,actor));
+        }
+        when(timelines.fetch(eq(id),eq(order),anyString(),isNull(),eq(100))).thenReturn(e);
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.claim(jwt(actor,"ADMIN"),UUID.randomUUID(),id,1)).getStatusCode());
+        assertEquals("OPEN",db.queryForObject("SELECT state FROM admin_cases WHERE id=?",String.class,id));
+        assertNull(db.queryForObject("SELECT reviewer_id FROM admin_cases WHERE id=?",UUID.class,id));
+        assertEquals(1,count("admin_case_audit"));assertEquals(1,count("admin_case_outbox"));
+        // Model a legacy conflicting assignment; no reassignment or reopening is fabricated.
+        db.update("UPDATE admin_cases SET state='UNDER_REVIEW',reviewer_id=? WHERE id=?",actor,id);
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(actor,"ADMIN"),id,UUID.randomUUID(),"CREDIT_ADJUSTMENT",reporter,json.valueToTree(1),"Reason")).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(actor,"ADMIN"),id,UUID.randomUUID(),"BAN",reporter,null,"Reason")).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(actor,"ADMIN"),UUID.randomUUID(),id,reporter)).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->resolutions.resolve(jwt(actor,"ADMIN"),id,UUID.randomUUID(),"Reason",1,List.of())).getStatusCode());
+        assertFalse(access.check(id,actor,reporter).canWriteConversation());
+        assertTrue(access.check(id,actor,reporter).canReadConversation());
+        assertEquals(0,count("admin_actions"));assertEquals(0,count("admin_action_outbox"));
+        assertEquals(0,count("admin_case_decisions"));assertEquals(0,count("admin_resolution_preparations"));
+        assertEquals(0,count("admin_case_conversations"));
+        assertEquals(1,count("admin_case_audit"));assertEquals(1,count("admin_case_outbox"));
+        verifyNoInteractions(conversations);
+    }
+
+    @Test void unavailableIndependenceBlocksClaimsAndLegacyReviewerMutationsWithoutSideEffects() {
+        UUID id=caseId(report(reporter,UUID.randomUUID()));
+        when(timelines.fetch(any(),any(),anyString(),any(),anyInt())).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->service.claim(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,1)).getStatusCode());
+        assertEquals("OPEN",db.queryForObject("SELECT state FROM admin_cases WHERE id=?",String.class,id));
+        db.update("UPDATE admin_cases SET state='UNDER_REVIEW',reviewer_id=? WHERE id=?",reviewer,id);
+        assertFalse(access.check(id,reviewer,reporter).canWriteConversation());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->correction(id,UUID.randomUUID(),1)).getStatusCode());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->creditActions.create(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"BAN",reporter,null,"Reason")).getStatusCode());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,reporter)).getStatusCode());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->resolve(id,UUID.randomUUID(),1)).getStatusCode());
+        assertEquals(0,count("admin_actions"));assertEquals(0,count("admin_case_decisions"));assertEquals(0,count("admin_resolution_preparations"));
+        assertEquals(1,count("admin_case_audit"));assertEquals(1,count("admin_case_outbox"));verifyNoInteractions(conversations);
+    }
+
+    @Test void callbackProofExpiresAndRefreshNeverForgetsHistoricalInvolvement() {
+        UUID id=reviewCase();
+        assertTrue(access.check(id,reviewer,reporter).canWriteConversation());
+        db.update("UPDATE admin_reviewer_evidence SET valid_until=CURRENT_TIMESTAMP-INTERVAL '1 second' WHERE case_id=?",id);
+        assertFalse(access.check(id,reviewer,reporter).canWriteConversation());
+        independence.verify(jwt(reviewer,"ADMIN"),id,order);
+        assertTrue(access.check(id,reviewer,reporter).canWriteConversation());
+        var e=freshEvidence(id);
+        var p=json.createObjectNode().put("userId",reviewer.toString()).put("relationship","HISTORICAL_COURIER");
+        p.putNull("assignedAt");p.putNull("unassignedAt");
+        ((tools.jackson.databind.node.ArrayNode)e.path("participants")).add(p);
+        independence.remember(id,order,e);
+        assertFalse(access.check(id,reviewer,reporter).canWriteConversation());
+        independence.remember(id,order,freshEvidence(id));
+        assertFalse(access.check(id,reviewer,reporter).canWriteConversation());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings={"stale","future","incomplete","unknown","gap","lag","checkpoint","identity","malformed","contradictory","snapshot"})
+    void unverifiedEvidenceWithdrawsExistingProofAndNeverClaims(String fault) {
+        UUID id=caseId(report(reporter,UUID.randomUUID()));
+        independence.remember(id,order,freshEvidence(id));
+        var e=freshEvidence(id);
+        var coverage=(tools.jackson.databind.node.ObjectNode)e.path("coverage");
+        switch(fault){
+            case "stale" -> coverage.put("asOf",Instant.now().minusSeconds(61).toString());
+            case "future" -> coverage.put("asOf",Instant.now().plusSeconds(20).toString());
+            case "incomplete" -> coverage.put("status","INCOMPLETE");
+            case "unknown" -> coverage.put("status","UNKNOWN");
+            case "gap" -> ((tools.jackson.databind.node.ArrayNode)coverage.path("blockingGaps")).add(json.createObjectNode());
+            case "lag" -> ((tools.jackson.databind.node.ObjectNode)coverage.path("checkpoints").get(0)).put("projectedSequence",0);
+            case "checkpoint" -> ((tools.jackson.databind.node.ArrayNode)coverage.path("checkpoints")).remove(0);
+            case "identity" -> e.put("orderId",UUID.randomUUID().toString());
+            case "malformed" -> e.remove("participants");
+            case "contradictory", "snapshot" -> {
+                var data=json.createObjectNode().put("kind","ORDER").put("fromState","OPEN").put("toState","OPEN").put("requesterId",reporter.toString());
+                data.putNull("courierId");data.putNull("previousCourierId");
+                var snapshot=((tools.jackson.databind.node.ObjectNode)e.path("order")).deepCopy();
+                if(fault.equals("contradictory"))data.put("previousCourierId",reviewer.toString());
+                else snapshot.put("courierId",reviewer.toString());
+                data.set("snapshot",snapshot);
+                var record=json.createObjectNode().put("eventId",UUID.randomUUID().toString()).put("source","order-service").put("stream","order.lifecycle.events").put("sourceSequence",1).put("orderId",order.toString()).put("action","WITHDRAWN").put("actorUserId",reporter.toString()).put("occurredAt",Instant.now().toString()).put("ingestedAt",Instant.now().toString());
+                record.set("data",data);
+                ((tools.jackson.databind.node.ArrayNode)e.path("records")).add(record);
+            }
+        }
+        when(timelines.fetch(eq(id),eq(order),anyString(),isNull(),eq(100))).thenReturn(e);
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->service.claim(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,1)).getStatusCode());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->independence.require(id,order,reviewer)).getStatusCode());
+        assertEquals("OPEN",db.queryForObject("SELECT state FROM admin_cases WHERE id=?",String.class,id));
+        assertEquals(1,count("admin_case_audit"));assertEquals(1,count("admin_case_outbox"));
+    }
+    @Test void confirmedReferencesRecoverPrivatelyWithoutChatAndBecomeReadOnlyAfterClosure() {
+        UUID id=reviewCase(), first=UUID.randomUUID(), second=UUID.randomUUID(), otherAdmin=UUID.randomUUID();
+        service.report(jwt(courier,"COURIER"),UUID.randomUUID(),order,"Historical courier statement");
+        when(conversations.open(eq(id),eq(order),eq(reporter),any(),anyString()))
+                .thenReturn(new ChatConversationClient.Conversation(first,id,order,reporter,false));
+        when(conversations.open(eq(id),eq(order),eq(courier),any(),anyString()))
+                .thenReturn(new ChatConversationClient.Conversation(second,id,order,courier,false));
+        assertTrue(service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true).isEmpty());
+        service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,reporter);
+        service.openConversation(jwt(reviewer,"ADMIN"),UUID.randomUUID(),id,courier);
+        clearInvocations(conversations,chat);
+        long audit=count("admin_case_audit"), outbox=count("admin_case_outbox");
+        var own=service.confirmedConversations(jwt(courier,"COURIER"),id,true);
+        assertEquals(1,own.size());assertEquals(second,own.get(0).conversationId());assertFalse(own.get(0).readOnly());
+        assertEquals(first,service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true).get(0).conversationId());
+        assertEquals(2,service.confirmedConversations(jwt(reviewer,"ADMIN"),id,false).size());
+        assertTrue(service.confirmedConversations(jwt(otherAdmin,"ADMIN"),id,false).stream().allMatch(ChatConversationClient.Conversation::readOnly));
+        assertEquals(HttpStatus.NOT_FOUND,assertThrows(ResponseStatusException.class,()->service.confirmedConversations(jwt(UUID.randomUUID(),"COURIER"),id,true)).getStatusCode());
+        db.update("UPDATE admin_cases SET state='RESOLVED' WHERE id=?",id);
+        assertTrue(service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true).get(0).readOnly());
+        assertTrue(service.confirmedConversations(jwt(reviewer,"ADMIN"),id,false).stream().allMatch(ChatConversationClient.Conversation::readOnly));
+        when(users.find(courier)).thenReturn(new UserEligibilityClient.Eligibility(courier,false,false));
+        assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.confirmedConversations(jwt(courier,"COURIER"),id,true)).getStatusCode());
+        when(users.find(reporter)).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true)).getStatusCode());
+        assertEquals(audit,count("admin_case_audit"));assertEquals(outbox,count("admin_case_outbox"));
+        verifyNoInteractions(conversations,chat);
+    }
     @Test void ownReportLookupIsPrivateAndWorksWithoutChatButNewReportsFailClosed(){
         UUID id=reviewCase();reset(chat);
         when(chat.check(any(),any(),anyString())).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
@@ -58,6 +191,29 @@ class CaseWorkflowTest {
         assertEquals(0,count("admin_cases"));assertEquals(0,count("admin_statements"));
     }
     @MockitoBean ChatTimelineClient timelines;
+    @Test void preparedResolutionBlocksWritesAndResumesTheOriginalOperationAfterChatOutage(){
+        UUID id=reviewCase(),key=UUID.randomUUID();evidence(id);long version=revision(id);
+        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"TEST ONLY barrier outage")).when(conversations).prepareClosure(eq(id),eq(key),anyString());
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->resolve(id,key,version)).getStatusCode());
+        assertEquals("UNDER_REVIEW",db.queryForObject("SELECT state FROM admin_cases WHERE id=?",String.class,id));
+        assertEquals(key,service.detail(jwt(reviewer,"ADMIN"),id).closure().operationId());
+        assertFalse(access.check(id,reviewer,reporter).canWriteConversation());
+        assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->correction(id,UUID.randomUUID(),1)).getStatusCode());
+        assertEquals(409,report(courier,UUID.randomUUID()).status());
+        assertEquals(0,count("admin_case_decisions"));assertEquals(2,count("admin_case_outbox"));
+        assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->resolve(id,UUID.randomUUID(),version)).getStatusCode());
+        doNothing().when(conversations).prepareClosure(eq(id),eq(key),anyString());
+        var completed=resolve(id,key,version);assertEquals(200,completed.status());assertEquals(completed,resolve(id,key,version));
+        assertEquals(1,count("admin_resolution_preparations"));assertEquals(1,count("admin_case_decisions"));
+    }
+    @Test void lostConversationConfirmationIsRecoveredByReadWithoutAnotherCreation(){
+        UUID id=reviewCase(),conversation=UUID.randomUUID();
+        when(conversations.find(eq(id),eq(order),eq(reporter),anyString())).thenReturn(Optional.of(new ChatConversationClient.Conversation(conversation,id,order,reporter,false)));
+        long audit=count("admin_case_audit");
+        assertEquals(conversation,service.confirmedConversations(jwt(reporter,"REQUESTER"),id,true).get(0).conversationId());
+        verify(conversations,never()).open(any(),any(),any(),any(),anyString());
+        assertEquals(0,count("admin_case_conversations"));assertEquals(audit,count("admin_case_audit"));
+    }
     @Autowired JdbcTemplate db;
     @MockitoBean UserEligibilityClient users;
     @MockitoBean ChatEligibilityClient chat;
@@ -69,10 +225,11 @@ class CaseWorkflowTest {
         db.execute("TRUNCATE admin_action_quarantine,admin_case_outbox,admin_case_audit,admin_mutation_receipts,admin_statements,admin_case_participants,admin_cases CASCADE");
         when(users.find(any())).thenAnswer(call -> new UserEligibilityClient.Eligibility(call.getArgument(0),true,true));
         when(chat.check(any(),any(),anyString())).thenReturn(new ChatEligibilityClient.Eligibility(true,true,"evidence-1"));
+        when(timelines.fetch(any(),eq(order),anyString(),isNull(),eq(100))).thenAnswer(call->freshEvidence(call.getArgument(0)));
     }
     UUID caseId(CaseViews.Mutation response) { return UUID.fromString(json.readTree(response.body()).path("case").path("caseId").asText()); }
     tools.jackson.databind.node.ObjectNode freshEvidence(UUID id) {
-        var node=(tools.jackson.databind.node.ObjectNode)json.readTree(EvidenceFixtures.serialize(EvidenceFixtures.timeline()).replace(EvidenceFixtures.CASE.toString(),id.toString()).replace(EvidenceFixtures.ORDER.toString(),order.toString()));
+        var node=(tools.jackson.databind.node.ObjectNode)json.readTree(EvidenceFixtures.serialize(EvidenceFixtures.timeline()).replace(EvidenceFixtures.CASE.toString(),id.toString()).replace(EvidenceFixtures.ORDER.toString(),order.toString()).replace(EvidenceFixtures.ACTOR.toString(),reporter.toString()));
         var coverage=(tools.jackson.databind.node.ObjectNode)node.path("coverage");coverage.put("asOf",Instant.now().toString());
         long sequence=db.queryForObject("SELECT source_sequence FROM admin_cases WHERE id=?",Long.class,id);
         for(var cp:coverage.path("checkpoints")){var checkpoint=(tools.jackson.databind.node.ObjectNode)cp;checkpoint.put("checkedAt",Instant.now().toString());checkpoint.put("committedSequence",sequence);checkpoint.put("projectedSequence",sequence);}
@@ -129,7 +286,8 @@ class CaseWorkflowTest {
     }
     @Test void actionDuringEvidenceReadInvalidatesResolutionAndConcurrentRetryCreatesOneDecision() throws Exception {
         UUID id=reviewCase();long version=revision(id);
-        when(timelines.fetch(eq(id),eq(order),anyString(),isNull(),eq(100))).thenAnswer(call->{var e=freshEvidence(id);correction(id,UUID.randomUUID(),1);return e;});
+        var intervene=new java.util.concurrent.atomic.AtomicBoolean(true);
+        when(timelines.fetch(eq(id),eq(order),anyString(),isNull(),eq(100))).thenAnswer(call->{var e=freshEvidence(id);if(intervene.getAndSet(false))correction(id,UUID.randomUUID(),1);return e;});
         assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->resolve(id,UUID.randomUUID(),version)).getStatusCode());
         assertEquals(0,count("admin_case_decisions"));deliver(outcome(db.queryForObject("SELECT operation_id FROM admin_actions",UUID.class),true));
         evidence(id);long current=revision(id);UUID key=UUID.randomUUID();

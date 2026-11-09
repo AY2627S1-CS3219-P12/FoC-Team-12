@@ -16,6 +16,11 @@ public class AdminChatContractController {
     public ResponseEntity<Map<String,Object>> timeline(@PathVariable UUID caseId,@RequestParam(required=false) String cursor,@RequestParam(defaultValue="20") int limit,@RequestHeader("X-Actor-Token") String token){return noStore(service.timeline(caseId,service.actor(token),cursor,limit));}
     @PostMapping("/internal/chat/cases/{caseId}/conversations")
     public ResponseEntity<Map<String,Object>> conversation(@PathVariable UUID caseId,@RequestHeader("Idempotency-Key") UUID key,@RequestHeader("X-Actor-Token") String token,@RequestBody ConversationRequest body){return noStore(service.openConversation(caseId,body.participantUserId(),key,service.actor(token)));}
+    @GetMapping("/internal/chat/cases/{caseId}/conversations")
+    public ResponseEntity<Map<String,Object>> find(@PathVariable UUID caseId,@RequestParam UUID participantUserId,@RequestHeader("X-Actor-Token") String token){return noStore(service.findConversation(caseId,participantUserId,service.actor(token)));}
+    @PostMapping("/internal/chat/cases/{caseId}/closure")
+    public ResponseEntity<Map<String,Object>> close(@PathVariable UUID caseId,@RequestHeader("X-Actor-Token") String token,@RequestBody ClosureRequest body){return noStore(service.prepareClosure(caseId,body.operationId(),service.actor(token)));}
     private static <T> ResponseEntity<T> noStore(T body){return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body);}
     public record ConversationRequest(UUID participantUserId){}
+    public record ClosureRequest(UUID operationId){}
 }

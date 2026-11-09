@@ -24,10 +24,13 @@ import {
 
 function message(error: unknown) {
   if (error instanceof CaseError || error instanceof AccessError) {
+    if (
+      error.message.startsWith('Reviewer independence could not be verified.')
+    )
+      return error.message
     if (error.status === 401)
       return 'Your session has expired. Sign in to continue.'
-    if (error.status === 403)
-      return 'Access denied. Select the appropriate workspace or contact an administrator.'
+    if (error.status === 403) return error.message
     if (error.status === 404)
       return 'This case is unavailable or you do not have access.'
     if (error.status < 500) return error.message
@@ -501,7 +504,10 @@ function ReportStatusData({ id }: { id: string }) {
         Submitted {formatSingaporeTime(state.data.ownStatement.submittedAt)}
       </p>
       <button onClick={state.retry}>Refresh status</button>
-      <ParticipantConversationStatus summary={state.data.case} />
+      <ParticipantConversationStatus
+        summary={state.data.case}
+        actorId={state.data.ownStatement.reporterId}
+      />
     </section>
   )
 }
@@ -810,6 +816,16 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           <button onClick={state.retry}>Refresh case</button>
         </div>
         <SummaryCard value={value} />
+        <p>
+          Only an independent administrator can review this case. If you
+          requested the errand or were ever assigned as its courier, you cannot
+          claim it, take administrative actions, start a review conversation or
+          resolve it, even if you are already assigned as reviewer or did not
+          submit a report. Complete, fresh errand evidence is required to verify
+          independence. Refresh the evidence if review access cannot be
+          verified. The case stays open until an independent administrator can
+          review it.
+        </p>
         {mutation.error && (
           <p role="alert" className="workspace-error">
             {mutation.error}
@@ -864,6 +880,7 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
       </section>
       <CreditActions
         key={`credit.${actor}.${id}`}
+        closing={!!state.data.closure}
         summary={value}
         actorId={actor}
         participantIds={state.data.statements.map((s) => s.reporterId)}
@@ -871,6 +888,7 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
       />
       <CreditActions
         key={`ban.${actor}.${id}`}
+        closing={!!state.data.closure}
         kind="BAN"
         summary={value}
         actorId={actor}
@@ -879,15 +897,17 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
       />
       <EvidencePanel key={id} caseId={id} orderId={value.orderId} />
       <ResolutionPanel
-        key={`resolve.${actor}.${id}`}
+        key={`resolve.${actor}.${id}.${state.data.closure?.operationId || ''}`}
         summary={value}
         actor={actor}
         actions={state.data.actions}
         resolution={state.data.resolution}
+        closure={state.data.closure}
         refresh={state.retry}
       />
       <CaseConversations
         key={`${actor}.${id}`}
+        closing={!!state.data.closure}
         summary={value}
         actorId={actor}
         participantIds={state.data.statements.map((s) => s.reporterId)}

@@ -190,6 +190,9 @@ spec:
         - podSelector:
             matchLabels:
               app: gateway
+        - podSelector:
+            matchLabels:
+              app: chat-service
       ports:
         - protocol: TCP
           port: 8082
@@ -233,6 +236,9 @@ spec:
         - podSelector:
             matchLabels:
               app: gateway
+        - podSelector:
+            matchLabels:
+              app: chat-service
       ports:
         - protocol: TCP
           port: 8083

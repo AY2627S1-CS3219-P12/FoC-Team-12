@@ -59,7 +59,15 @@ public class JwtConfiguration {
                     ? OAuth2TokenValidatorResult.success()
                     : OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token", "Invalid token audience", null));
             decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
-                    JwtValidators.createDefaultWithIssuer(properties.issuer()), audienceValidator));
+                    JwtValidators.createDefaultWithIssuer(properties.issuer()), audienceValidator, jwt -> {
+                        try {
+                            java.util.UUID.fromString(jwt.getSubject());
+                            com.friendoncampus.user.domain.UserRole.valueOf(jwt.getClaimAsString("role"));
+                            return OAuth2TokenValidatorResult.success();
+                        } catch(RuntimeException ex) {
+                            return OAuth2TokenValidatorResult.failure(new OAuth2Error("invalid_token","Invalid actor claims",null));
+                        }
+                    }));
             return decoder;
         } catch (Exception exception) {
             throw new IllegalStateException("Unable to configure JWT decoder", exception);

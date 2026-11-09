@@ -68,6 +68,10 @@ public class ChatConversationService {
 
     @Transactional(readOnly = true)
     public Conversation get(UUID id, UUID actor) {
+        var access=caseAccessGuard.access(id,actor);
+        if(access!=null)return db.sql("SELECT id,order_id,status FROM chat_conversations WHERE id=:id")
+                .param("id",id).query((rs,n)->new Conversation(rs.getObject(1,UUID.class),rs.getObject(2,UUID.class),
+                    rs.getString(3),!access.path("canWriteConversation").asBoolean()||!"ACTIVE".equals(rs.getString(3)))).single();
         return db.sql("""
                 SELECT c.id,c.order_id,c.status,EXISTS(SELECT 1 FROM chat_participants w
                   WHERE w.conversation_id=c.id AND w.user_id=:actor AND w.can_write AND w.valid_until IS NULL) AS actor_can_write
@@ -82,7 +86,7 @@ public class ChatConversationService {
     @Transactional(readOnly = true)
     public List<Message> messages(UUID id, UUID actor, long after, int limit) {
         requireParticipant(id, actor);
-        boolean requester = relationship(id, actor).equals("REQUESTER");
+        boolean requester = caseAccessGuard.requireRead(id,actor)||relationship(id, actor).equals("REQUESTER");
         return db.sql("""
             SELECT m.id,m.conversation_id,m.sender_user_id,m.sequence,m.client_message_id,m.message_type,
               m.original_language,m.quick_reply_key,m.text_content,m.created_at,m.attachment_id,
@@ -211,15 +215,16 @@ public class ChatConversationService {
 
     @Transactional(readOnly = true)
     public StoredAttachment attachment(UUID conversationId, UUID attachmentId, UUID actor) {
+        boolean caseReader=caseAccessGuard.requireRead(conversationId,actor);
         StoredAttachmentRecord stored = db.sql("""
                 SELECT a.content_type,a.original_filename,a.content,a.storage_provider,a.object_key,a.checksum_sha256
                 FROM chat_attachments a
                 JOIN chat_messages m ON m.attachment_id=a.id
                 WHERE a.id=:aid AND a.conversation_id=:cid AND (
-                  a.owner_user_id=:actor OR EXISTS(
+                  :caseReader OR a.owner_user_id=:actor OR EXISTS(
                     SELECT 1 FROM chat_participants p WHERE p.conversation_id=:cid AND p.user_id=:actor
                       AND (p.relationship='REQUESTER' OR p.assignment_epoch=m.assignment_epoch)))
-                """).param("aid",attachmentId).param("cid",conversationId).param("actor",actor)
+                """).param("aid",attachmentId).param("cid",conversationId).param("actor",actor).param("caseReader",caseReader)
                 .query((rs,n)->new StoredAttachmentRecord(rs.getString("content_type"),
                         rs.getString("original_filename"),rs.getBytes("content"),
                         rs.getString("storage_provider"),rs.getString("object_key"),
@@ -233,6 +238,7 @@ public class ChatConversationService {
     }
 
     public void requireParticipant(UUID id, UUID actor) {
+        if(caseAccessGuard.requireRead(id,actor))return;
         int count=db.sql("SELECT count(*) FROM chat_participants WHERE conversation_id=:id AND user_id=:actor")
                 .param("id",id).param("actor",actor).query(Integer.class).single();
         if(count==0) throw new ChatAccessException();
@@ -243,11 +249,19 @@ public class ChatConversationService {
                 SELECT DISTINCT p.user_id FROM chat_messages m
                 JOIN chat_participants p ON p.conversation_id=m.conversation_id
                 WHERE m.id=:messageId AND (p.relationship='REQUESTER' OR p.assignment_epoch=m.assignment_epoch)
-                """).param("messageId",messageId).query(UUID.class).list();
+                """).param("messageId",messageId).query(UUID.class).list().stream().filter(actor->{
+                    UUID conversation=db.sql("SELECT conversation_id FROM chat_messages WHERE id=:id").param("id",messageId).query(UUID.class).single();
+                    try{requireParticipant(conversation,actor);return true;}catch(ChatAccessException ex){return false;}
+                }).toList();
     }
     private String relationship(UUID id,UUID actor){return db.sql("SELECT relationship FROM chat_participants WHERE conversation_id=:id AND user_id=:actor ORDER BY assignment_epoch DESC LIMIT 1").param("id",id).param("actor",actor).query(String.class).optional().orElseThrow(ChatAccessException::new);}
     private void requireWritable(UUID id, UUID actor){
         if (!caseAccessGuard.refresh(id, actor)) throw new ChatConflictException("This conversation is read-only");
+        // The closure barrier drains this lock; no Admin/User callback occurs after it.
+        db.sql("SELECT id FROM chat_conversations WHERE id=:id FOR UPDATE").param("id",id).query(UUID.class).optional().orElseThrow(ChatAccessException::new);
+        int closed=db.sql("SELECT count(*) FROM chat_conversations c JOIN chat_case_closures x ON x.case_id=c.case_id WHERE c.id=:id")
+                .param("id",id).query(Integer.class).single();
+        if(closed!=0)throw new ChatConflictException("This conversation is read-only");
         int count=db.sql("SELECT count(*) FROM chat_participants p JOIN chat_conversations c ON c.id=p.conversation_id WHERE p.conversation_id=:id AND p.user_id=:actor AND p.can_write AND p.valid_until IS NULL AND c.status='ACTIVE'").param("id",id).param("actor",actor).query(Integer.class).single();
         if(count==0) throw new ChatConflictException("This conversation is read-only");
     }

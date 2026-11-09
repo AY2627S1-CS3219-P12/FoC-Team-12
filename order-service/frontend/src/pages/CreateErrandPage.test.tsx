@@ -141,6 +141,68 @@ describe('CreateErrandPage', () => {
     expect(String(body.pickupDeadline)).toMatch(/Z$/)
   })
 
+  it('reuses the Idempotency-Key when the same errand is posted again after an error', async () => {
+    let posts = 0
+    const { fetchMock, calls } = stubFetch((url, init) => {
+      if (url.startsWith('/api/suppliers'))
+        return { body: { items: [PICKUP, DROPOFF], totalPages: 1 } }
+      if (url.startsWith('/api/credits/me'))
+        return { body: { availableBalance: 10, reservedBalance: 0 } }
+      if (url === '/api/orders' && init?.method === 'POST') {
+        posts += 1
+        // The first answer is lost (for example a gateway timeout); the errand may exist already.
+        return posts === 1
+          ? { status: 503, body: { detail: 'Try again' } }
+          : { status: 200, body: order() }
+      }
+      return { body: order() }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderPage()
+
+    await fillValidForm(user)
+    await user.click(screen.getByRole('button', { name: 'Post errand' }))
+    expect(await screen.findByText('Try again')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Post errand' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'Errand page' }),
+    ).toBeInTheDocument()
+    const keys = calls
+      .filter((call) => call.init?.method === 'POST')
+      .map((call) => new Headers(call.init?.headers).get('Idempotency-Key'))
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toMatch(/^[0-9a-f-]{32,36}$/)
+    expect(keys[1]).toBe(keys[0])
+  })
+
+  it('uses a new Idempotency-Key once the errand is changed', async () => {
+    const { fetchMock, calls } = api({
+      create: { status: 503, body: { detail: 'Try again' } },
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const user = userEvent.setup()
+    renderPage()
+
+    await fillValidForm(user)
+    await user.click(screen.getByRole('button', { name: 'Post errand' }))
+    expect(await screen.findByText('Try again')).toBeInTheDocument()
+    await user.clear(screen.getByLabelText('Reward (credits)'))
+    await user.type(screen.getByLabelText('Reward (credits)'), '4')
+    await user.click(screen.getByRole('button', { name: 'Post errand' }))
+
+    await waitFor(() =>
+      expect(
+        calls.filter((call) => call.init?.method === 'POST'),
+      ).toHaveLength(2),
+    )
+    const [first, second] = calls
+      .filter((call) => call.init?.method === 'POST')
+      .map((call) => new Headers(call.init?.headers).get('Idempotency-Key'))
+    expect(second).not.toBe(first)
+  })
+
   it('blocks submission and explains missing fields (F1.1.1)', async () => {
     const { fetchMock, calls } = api()
     vi.stubGlobal('fetch', fetchMock)

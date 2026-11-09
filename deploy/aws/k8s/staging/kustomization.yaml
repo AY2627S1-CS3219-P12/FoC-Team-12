@@ -17,6 +17,7 @@ images:
   - { name: foc-credit-service, newName: foc-credit-service, newTag: bootstrap }
   - { name: foc-admin-service, newName: foc-admin-service, newTag: bootstrap }
   - { name: foc-chat-service, newName: foc-chat-service, newTag: bootstrap }
+  - { name: foc-notification-service, newName: foc-notification-service, newTag: bootstrap }
 patches:
   # The reusable Kafka base is namespace-neutral; application manifests name foc-staging directly.
   # Avoid a global namespace transformer because Kustomize cannot infer that the two CRDs below

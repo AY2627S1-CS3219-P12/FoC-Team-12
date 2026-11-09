@@ -1,5 +1,21 @@
 # Order Service
 
+## Admin evidence integration
+
+Chat's pinned service identity reads `/internal/orders/orders/{orderId}/evidence` (the existing
+`/internal/orders/{orderId}/evidence` alias remains). The export preserves original outbox IDs,
+sequences, actors, snapshots and previous couriers. Its cursor pins an immutable committed prefix;
+new transitions are excluded until a new first-page read. Missing events, zero/legacy history or
+history without the initial SUBMIT baseline return unavailable rather than invented participants
+or completeness. Invalid cursor bounds are rejected. Service assertions enforce subject/key,
+audience, RSA strength, issued/not-before times, expiry and assertion identity.
+
+`OrderLifecycleEventIntegrationTest` verifies the exporter with real PostgreSQL and real Order
+domain transitions, including a new fact between pages and missing/legacy-baseline failures.
+No lifecycle or credit-request wire format changes. See
+[the approved integration protocol](../docs/integration/chat-admin-contract.md) and
+[actual acceptance/rollout evidence](../admin-service/INTEGRATION_READINESS.md).
+
 ## Admin reporting entry
 
 The errand detail screen includes a participant reporting panel using Admin-owned
@@ -79,6 +95,27 @@ into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
   | `creditReward` | required integer, > 0 |
   | `pickupDeadline` | required, must be in the future (ISO-8601) |
 
+- **Optional header `Idempotency-Key`:** 1–64 characters from `A-Z a-z 0-9 - _`
+  (a UUID works), chosen by the client for one create request. It makes a retry
+  safe, for example after a timeout or a double-click:
+
+  | Request | Result |
+  | --- | --- |
+  | No key | `201`, a new order every time |
+  | New key | `201`, the order is created and remembers the key |
+  | Same requester, same key, same body | `200` with the order the first request created, `Location` set; nothing is written, so there is no second `OrderSubmitted` and no second reservation |
+  | Same requester, same key, different body | `409` with `code: IDEMPOTENCY_KEY_REUSED`; nothing is written |
+  | Malformed key | `400` with `code: INVALID_IDEMPOTENCY_KEY` |
+
+  Keys belong to the requester: another user's identical key is independent.
+  "Same body" compares the request as sent (after trimming), with the deadline as an
+  instant, so a later edit of the errand does not turn a late retry into a conflict.
+  Concurrent requests with one key are serialised, so exactly one creates the order.
+  A rejected request (`400`) stores nothing, so the key can be reused once it is fixed.
+  Body validation runs first, so a retry sent after the pickup deadline gets the usual
+  `400` for the deadline rather than the original order.
+  The Order UI sends one key per errand content: posting the same fields again
+  reuses it, and changing a field starts a new one.
 - **Success:** `201 Created`, `Location: /api/orders/{id}`, body is the created
   order in state `PENDING_CREDIT`.
 - **Validation failure:** `400` RFC-7807 `application/problem+json`. Field
@@ -166,6 +203,8 @@ problems with a `code` and the order's `currentState`:
 | `REWARD_ADJUSTMENT_PENDING` | 409 | Accept or edit while a reward change awaits Credit |
 | `VERSION_CONFLICT` | 409 | Edit based on an old `version`; the problem carries `currentVersion` |
 | `INVALID_QUERY` | 400 | A list endpoint got an invalid filter, sort or paging value (no `currentState`) |
+| `INVALID_IDEMPOTENCY_KEY` | 400 | Create sent a malformed `Idempotency-Key` (no `currentState`) |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | Create reused an `Idempotency-Key` with a different body (no `currentState`) |
 
 Every state change also stores an `order_transitions`
 history row in the same transaction; credit-changing ones also store an
@@ -284,6 +323,9 @@ the pending reward and `CreditAdjustmentRejected` drops it (both only if the
 order is still `OPEN` with that reward pending; otherwise the event is recorded as
 `IGNORED`), and `CreditReleased`,
 `CreditSettled` and `CourierCompensated` only set the order's `creditStatus`.
+Each outcome must answer the command that asks for it: `CreditReleased` an
+`OrderCancelled` or `OrderExpired`, `CreditSettled` an `OrderCompleted`,
+`CourierCompensated` an `OrderCancelled`; anything else is `OPERATION_ID_CONFLICT`.
 Each event is validated, deduplicated by `eventId` in the `processed_events`
 inbox, and matched to the Order command it answers by `operationId`, all in one
 transaction.
@@ -294,14 +336,39 @@ their topic every second, keyed by the order UUID and reusing each row's stored
 acknowledges, and a failed send stays pending with `attempts` increased. Once an
 order's event fails, that order's later events **on the same topic** wait, so they
 are never published out of order; a failing `order.lifecycle.events` row never
-holds back that order's credit requests on `order.events`. A listener consumes `credit.events` as group `order-service` and
-acknowledges a record only after `CreditOutcomeHandler` commits; transient
-failures are retried three times with backoff, then the original record goes to
-`credit.events.DLT` (contract violations go there without retries).
+holds back that order's credit requests on `order.events`. This also holds with
+several Order replicas: a run claims a whole stream (one order's events on one
+topic) by locking that stream's oldest unpublished row with `FOR UPDATE SKIP
+LOCKED`, so another replica skips the stream until the first one commits, and can
+never send a later event ahead of an earlier one. A run claims at most 20 rows
+(`ORDER_KAFKA_OUTBOX_BATCH_SIZE`) and keeps them locked while it sends, so the
+batch stays small. A row that has failed 10 times (`ORDER_KAFKA_OUTBOX_STUCK_ATTEMPTS`)
+is logged once at `ERROR` as stuck, with its `eventId`, `operationId` and order,
+and keeps being retried.
+
+A listener consumes `credit.events` as group `order-service` and acknowledges a
+record only after `CreditOutcomeHandler` commits. Transient failures (database or
+broker trouble) are retried three times with backoff, then the original record
+goes to `credit.events.DLT`. Failures that would repeat on every attempt go there
+at once: contract violations, an outcome the order's state cannot take
+(`OrderTransitionException`) and an unknown order.
+
+**Backlog metrics.** `GET /actuator/metrics/{name}` needs an `ADMIN` session token
+(anyone else gets `401`/`403`). The relay backlog is:
+
+| Metric | Meaning |
+| --- | --- |
+| `order.outbox.pending` | Outbox rows Kafka has not acknowledged |
+| `order.outbox.oldest.age` | Seconds since the oldest of them was written; `0` when none waits |
+| `order.outbox.max.attempts` | Most failed sends of any of them; above the stuck threshold, a row is blocking its stream |
+
+They are read from the database at most every 5 s, and work with Kafka off too.
 
 | Setting | Env var | Default |
 | --- | --- | --- |
 | Turn Kafka on/off | `ORDER_KAFKA_ENABLED` | `true` (`false` runs without a broker; events wait unpublished) |
+| Relay batch size | `ORDER_KAFKA_OUTBOX_BATCH_SIZE` | `20` |
+| Stuck-row threshold | `ORDER_KAFKA_OUTBOX_STUCK_ATTEMPTS` | `10` failed attempts |
 | Publish `OrderTransitioned` | `ORDER_LIFECYCLE_EVENTS_ENABLED` | `false` (Compose sets `true`) |
 | Bootstrap servers | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092` (Compose sets `kafka:9092`) |
 | Security protocol | `KAFKA_SECURITY_PROTOCOL` | `SASL_PLAINTEXT` |
@@ -400,7 +467,7 @@ runs the errand lifecycle end to end through the gateway (`baseUrl`, default
 | Folder | Shows |
 | --- | --- |
 | 0. Setup | Sign-in for requester, courier and admin (tokens are stored automatically), credit allocation, two Supplier locations |
-| 1. Create, read and edit | `401`/`403`/`400` on create, `PENDING_CREDIT → OPEN` via Credit, raising the reward reserves only the difference, `409 VERSION_CONFLICT`, history |
+| 1. Create, read and edit | `401`/`403`/`400` on create, a retried create with the same `Idempotency-Key` returns the same errand (`200`) and a changed body gets `409 IDEMPOTENCY_KEY_REUSED`, `PENDING_CREDIT → OPEN` via Credit, raising the reward reserves only the difference, `409 VERSION_CONFLICT`, history |
 | 2. Discover and accept | Pool with filters, own errands hidden, `403 SELF_ACCEPTANCE_FORBIDDEN`, wrong-role `403`, accept, the race loser's `409 ORDER_ALREADY_ACCEPTED`, courier's active list |
 | 3. Deliver and complete | Wrong-role `403`s, `409 CANCELLATION_NOT_ALLOWED` after pickup, completion pays the courier the full reward, a repeated completion returns `200` with no second effect |
 | 4. Cancel, compensate and withdraw | `403 NOT_ASSIGNED_COURIER`, withdrawal reopens, re-acceptance, `403 NOT_ORDER_REQUESTER`, cancelling an accepted 3-credit errand pays the courier `ceil(20%)` = 1, a repeated cancel is a no-op |
@@ -425,3 +492,15 @@ migrations.
 Running the service needs a PostgreSQL database (`DB_HOST`/`DB_PORT`/`DB_NAME`/
 `DB_USER`/`DB_PASSWORD`) and Compose wiring, which are shared root files added in
 a follow-up.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).
+
+Configure ORDER_USER_URL, ORDER_SERVICE_KEY_ID and
+ORDER_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
+and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
+configuration fails closed even when administrative Kafka consumers are disabled.

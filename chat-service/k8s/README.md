@@ -4,16 +4,20 @@ These manifests run the Chat Service with its private PostgreSQL database and a 
 persistent RabbitMQ broker in the existing `foc-local` Minikube namespace. This is a local/demo
 topology, not a highly available broker cluster.
 
-From the repository root, with Docker Desktop and `foc-local` running:
+The manifests pin published revision `ce035eee7ff4eda6972fa4554714051b6314b209` from successful
+[CI run 42501172138](https://github.com/AY2627S1-CS3219-P12/FoC-Team-12/actions/runs/42501172138),
+attempt 1. Admin, User, Order, Credit and Gateway use that same revision. These images exclude
+the Admin GUI/client edits in this PR. Do not substitute local side-chat builds as acceptance evidence.
+
+From the repository root, with Docker Desktop and the existing `foc-local` running:
 
 ```bash
-docker build -t foc-chat-service:local-323929b chat-service
-docker build -t foc-gateway-service:local-323929b gateway-service
-minikube -p foc-local image load foc-chat-service:local-323929b foc-gateway-service:local-323929b
-
 # Preserves broker data, adds the Chat identity if missing and reruns topic/ACL initialization.
 pwsh -File deploy/kafka/k8s/Apply-LocalKafka.ps1
 pwsh -File chat-service/k8s/New-ChatSecrets.ps1
+
+# Requires existing independent service signing keys; never copy User's JWT signing key.
+pwsh -File admin-service/k8s/Reconcile-ChatTrust.ps1 -Apply
 
 kubectl --context=foc-local apply \
   -f chat-service/k8s/config.yaml \
@@ -39,6 +43,22 @@ The secret helpers preserve existing credentials and refuse to replace a missing
 persistent volume already exists. Do not commit generated credentials. `Apply-LocalKafka.ps1`
 restarts the broker only when configuration or credential versions change, then reruns the
 idempotent initializer so the `chat_service` ACL exists.
+
+The Chat ConfigMap supplies explicit private Admin/User/Order/Credit URLs. Chat egress and producer
+ingress allow only the existing HTTP ports. The pinned image's spring UID/GID is 999; Kubernetes
+runAsNonRoot cannot verify its named image user without numeric runAsUser/runAsGroup settings.
+These IDs apply to the pinned ce035ee image; newer source uses UID/GID 10001. Recheck the image
+identity and update the manifest together when selecting a newer published tag.
+Use the repository policies rather than extra foc-user-chat, foc-kafka-chat or foc-gateway-chat
+runtime-only policies. Database access remains service-private.
+
+Reconcile-ChatTrust.ps1 checks Admin→Chat and Chat→Admin/User/Order/Credit pins against the existing
+signing identities. Default mode only checks; -Apply adds missing public pins. It validates every
+map before patching and checks resourceVersion to reject concurrent changes. Existing private
+keys, unrelated pins and database credentials are preserved; conflicting pins fail closed.
+It does not generate/rotate keys or restart pods. Fresh clusters need separately provisioned
+service identities before using this existing-cluster helper. ServiceTrustProbe.java tests internal
+route/audience checks from caller pods without exporting their keys; it is not business acceptance.
 
 Translation stays disabled when the optional `chat-translation-secrets` Secret is absent. To
 enable Gemini locally, create that Secret from a private, ignored env file containing only

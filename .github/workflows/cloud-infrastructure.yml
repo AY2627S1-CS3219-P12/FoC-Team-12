@@ -74,7 +74,8 @@ jobs:
         run: |
           test -n "$TF_VAR_budget_email"
           for name in user-service-secrets user-mail-secrets supplier-service-secrets order-service-secrets \
-            credit-service-secrets admin-service-secrets chat-service-secrets kafka-broker-secrets kafka-ui-secrets; do
+            credit-service-secrets admin-service-secrets chat-service-secrets notification-service-secrets \
+            kafka-broker-secrets kafka-ui-secrets; do
             aws secretsmanager get-secret-value --secret-id "foc/staging/$name" --query VersionId --output text >/dev/null
           done
           user_secret=$(aws secretsmanager get-secret-value \
@@ -123,7 +124,7 @@ jobs:
         run: |
           registry="${{ steps.backend.outputs.account_id }}.dkr.ecr.${AWS_REGION}.amazonaws.com"
           tag="bootstrap-${GITHUB_SHA}-r${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          for service in gateway-service user-service supplier-service order-service credit-service admin-service chat-service; do
+          for service in gateway-service user-service supplier-service order-service credit-service admin-service chat-service notification-service; do
             docker buildx build --platform linux/amd64 --push \
               -t "$registry/foc-$service:$tag" "$service"
           done
@@ -143,6 +144,7 @@ jobs:
           CREDIT_IMAGE: ${{ steps.images.outputs.registry }}/foc-credit-service:${{ steps.images.outputs.tag }}
           ADMIN_IMAGE: ${{ steps.images.outputs.registry }}/foc-admin-service:${{ steps.images.outputs.tag }}
           CHAT_IMAGE: ${{ steps.images.outputs.registry }}/foc-chat-service:${{ steps.images.outputs.tag }}
+          NOTIFICATION_IMAGE: ${{ steps.images.outputs.registry }}/foc-notification-service:${{ steps.images.outputs.tag }}
           CHAT_S3_BUCKET: foc-team-12-chat-attachments-${{ steps.backend.outputs.account_id }}-ap-southeast-1
         run: |
           RDS_HOST=$(aws ssm get-parameter --name /foc/staging/rds-host --query Parameter.Value --output text)

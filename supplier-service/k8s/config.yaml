@@ -12,3 +12,5 @@ data:
   SUPPLIER_JWT_ISSUER: friend-on-campus-user-service
   SUPPLIER_JWT_AUDIENCE: friend-on-campus-api
   JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=70.0"
+  SUPPLIER_USER_URL: http://user-service.foc-local.svc.cluster.local.:8081
+  SUPPLIER_SERVICE_KEY_ID: supplier-service-1

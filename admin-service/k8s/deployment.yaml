@@ -21,8 +21,8 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: admin-service
-          # Local-only immutable tag: build/load into foc-local; never publish over a release.
-          image: foc-admin-service:local-22bc8cc
+          # Local integration build; load into foc-local before applying this manifest.
+          image: foc-admin-service:local-61c7062-completion-20261109-v3
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

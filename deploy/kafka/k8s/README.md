@@ -1,5 +1,13 @@
 # Kafka and read-only UI on Minikube
 
+For an ACL/topic-only update to the existing ready broker, use
+`pwsh -File deploy/kafka/k8s/Apply-LocalKafka.ps1 -InitializeOnly` after shared-owner review.
+It verifies that all non-initializer runtime scripts match, updates only `initialize.sh`, and runs
+the existing idempotent Job. It does not provision/rotate credentials or redeploy the broker/UI.
+Missing resources or runtime drift require normal reviewed reconciliation instead. This iteration
+adds Chat's independent `chat-service-timeline` read access to existing Admin/User/Credit outcome
+topics; it does not grant business publishers broker-admin permission or change core topics.
+
 Shared editor: Darryl's infrastructure task. Jun Hui reviews the broker/UI setup; User, Order
 and Credit owners review their connection configuration. No business event contracts change.
 

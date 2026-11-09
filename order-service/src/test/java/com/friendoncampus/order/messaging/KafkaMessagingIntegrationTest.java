@@ -1,6 +1,9 @@
 package com.friendoncampus.order.messaging;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
@@ -33,6 +36,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
@@ -88,6 +92,9 @@ class KafkaMessagingIntegrationTest {
     @MockitoBean
     private JwtDecoder jwtDecoder;
 
+    @MockitoSpyBean
+    private CreditOutcomeHandler creditOutcomeHandler;
+
     @Autowired
     private OrderService orderService;
 
@@ -139,16 +146,18 @@ class KafkaMessagingIntegrationTest {
 
     /** A blueprint CreditReserved answering the order's OrderSubmitted. */
     private String creditReserved(JsonNode submitted) {
+        return creditOutcome(submitted, "CreditReserved", Map.of("reservationId", UUID.randomUUID().toString(),
+                "amount", 10, "availableBalance", 0, "reservedBalance", 10));
+    }
+
+    private String creditOutcome(JsonNode submitted, String eventType, Map<String, Object> extraData) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("operationId", submitted.get("data").get("operationId").asString());
         data.put("orderId", submitted.get("aggregateId").asString());
-        data.put("reservationId", UUID.randomUUID().toString());
-        data.put("amount", 10);
-        data.put("availableBalance", 0);
-        data.put("reservedBalance", 10);
+        data.putAll(extraData);
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", UUID.randomUUID().toString());
-        envelope.put("eventType", "CreditReserved");
+        envelope.put("eventType", eventType);
         envelope.put("eventVersion", 1);
         envelope.put("aggregateType", "Order");
         envelope.put("aggregateId", submitted.get("aggregateId").asString());
@@ -217,5 +226,24 @@ class KafkaMessagingIntegrationTest {
                 seen -> seen.stream().anyMatch(record -> key.equals(record.key())));
 
         assertThat(dlt).anyMatch(record -> key.equals(record.key()) && record.value().contains("not-a-uuid"));
+    }
+
+    @Test
+    void anOutcomeTheOrderCannotTakeGoesToTheDeadLetterTopicWithoutRetries() throws Exception {
+        UUID orderId = createOrder();
+        JsonNode submitted = submittedEvent(orderId);
+        orderService.confirmReservation(orderId, UUID.randomUUID());
+        // A rejection for an order that is already OPEN fails the same way on every attempt.
+        String rejected = creditOutcome(submitted, "CreditReservationRejected", Map.of("reasonCode", "REQUEST_CONFLICT"));
+        String eventId = json.readTree(rejected).get("eventId").asString();
+        publish("credit.events", orderId.toString(), rejected);
+
+        List<ConsumerRecord<String, String>> dlt = readUntil("credit.events.DLT",
+                seen -> seen.stream().anyMatch(record -> record.value().contains(eventId)));
+
+        assertThat(dlt).anyMatch(record -> record.value().contains(eventId));
+        // Retrying would call the handler 4 times over about 3.5 s of backoff; it ran once.
+        verify(creditOutcomeHandler, times(1)).handle(argThat(value -> value != null && value.contains(eventId)));
+        assertThat(state(orderId)).isEqualTo(OrderState.OPEN);
     }
 }

@@ -1,5 +1,14 @@
 # Local Kubernetes (Minikube)
 
+For the current Admin integration completion, five selected Deployment files instead use local
+`foc-{user,chat,credit,order}-service:local-61c7062-completion-20261109-v2` and
+`foc-admin-service:local-61c7062-completion-20261109-v3` builds from this worktree.
+Build each with its existing Dockerfile and run `minikube -p foc-local image load <tag>`
+before applying it. No image is published by that operation. The Docker Hub table below records
+the retained published baseline; consult [Admin readiness](../../admin-service/INTEGRATION_READINESS.md)
+for current build, owner review, deployment and business acceptance results. Gateway/Supplier and
+unrelated services retain their existing images. Credentials and PVCs are preserved.
+
 This setup follows the [course guide](https://sds-edu.github.io/SDS-Kubernetes-Guide/): Minikube
 with the Docker driver, YAML Deployments/Services, NodePort access and explicit scaling/rollouts.
 Docker Desktop's own Kubernetes feature is not needed. Cloud remains separate work. For the
@@ -45,15 +54,22 @@ pull without credentials; private repositories additionally require an `imagePul
 
 | Component | Published image |
 | --- | --- |
-| User | `arkanian4/foc-user-service:d3-1` |
-| Gateway | `arkanian4/foc-gateway-service:d3-2` |
+| User | `arkanian4/foc-user-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
+| Gateway | `arkanian4/foc-gateway-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 | Supplier | `arkanian4/foc-supplier-service:d3-1` |
-| Credit | `arkanian4/foc-credit-service:d3-1` |
-| Order | `arkanian4/foc-order-service:d3-1` |
-| Chat | local `foc-chat-service:local-323929b` until a reviewed published tag is selected |
+| Credit | `arkanian4/foc-credit-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
+| Order | `arkanian4/foc-order-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
+| Chat | `arkanian4/foc-chat-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
+| Admin | `arkanian4/foc-admin-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1` |
 
 Runtime passwords/signing keys are created separately in each teammate's cluster. They are not
 included in images or Git. Never add them to application resources or frontend build settings.
+
+The six workflow images above were verified in successful CI run `42501172138`, attempt 1, for
+committed revision `ce035eee7ff4eda6972fa4554714051b6314b209`. They replace the runtime-only local
+Admin/Chat/Gateway builds during the explicitly approved foc-local reconciliation. Uncommitted
+Admin client edits are not included in these published images. Current pins are in the deployment
+files; a later successful CI run does not automatically select or deploy another version.
 
 ## Apply a CI-published service update
 

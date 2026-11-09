@@ -45,8 +45,8 @@ public class SecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/internal/chat/orders/*/report-eligibility",
-                                "/internal/chat/cases/*/timeline").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/internal/chat/cases/*/conversations").authenticated()
+                                "/internal/chat/cases/*/timeline", "/internal/chat/cases/*/conversations").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/internal/chat/cases/*/conversations", "/internal/chat/cases/*/closure").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationEntryPoint(errors).accessDeniedHandler(errors)
@@ -57,8 +57,9 @@ public class SecurityConfiguration {
 
     @Bean @Order(2)
     SecurityFilterChain securityFilterChain(HttpSecurity http, @Qualifier("userJwtDecoder") JwtDecoder jwtDecoder,
-            JwtAuthenticationConverter converter, ProblemSecurityHandler errors) throws Exception {
+            JwtAuthenticationConverter converter, ProblemSecurityHandler errors, com.friendoncampus.chat.authorization.CurrentAuthorization current) throws Exception {
         http
+                .addFilterAfter(new com.friendoncampus.chat.authorization.CurrentAuthorizationFilter(current), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth

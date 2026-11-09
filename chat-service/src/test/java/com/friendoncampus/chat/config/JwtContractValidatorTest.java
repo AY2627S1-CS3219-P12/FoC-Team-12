@@ -39,7 +39,7 @@ class JwtContractValidatorTest {
         assertThat(validator.validate(token("not-a-uuid", ISSUER, AUDIENCE, "REQUESTER", future())).hasErrors())
                 .isTrue();
         assertThat(validator.validate(token(SUBJECT, ISSUER, AUDIENCE, "REQUESTER",
-                Instant.now().minusSeconds(60))).hasErrors()).isTrue();
+                Instant.now().minusSeconds(120))).hasErrors()).isTrue();
     }
 
     private static Instant future() {

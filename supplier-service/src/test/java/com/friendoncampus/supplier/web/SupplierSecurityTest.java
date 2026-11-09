@@ -45,6 +45,8 @@ import com.friendoncampus.supplier.service.SupplierService;
 })
 @AutoConfigureMockMvc
 class SupplierSecurityTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.friendoncampus.supplier.authorization.CurrentAuthorization currentAuthorization;
 
     private static final UUID SUPPLIER_ID = UUID.fromString("ca9bd61f-93da-4500-9e9d-48de1bea52fa");
 

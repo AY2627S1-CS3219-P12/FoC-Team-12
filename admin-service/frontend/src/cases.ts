@@ -38,6 +38,12 @@ export type BanAction = Omit<CreditAction, 'type' | 'amount'> & {
 }
 export type AdminAction = CreditAction | BanAction
 export type Detail = {
+  closure?: {
+    operationId: string
+    resolution: string
+    revision: number
+    explanations: { operationId: string; explanation: string }[]
+  } | null
   resolution?: string | null
   case: Summary
   statements: Statement[]

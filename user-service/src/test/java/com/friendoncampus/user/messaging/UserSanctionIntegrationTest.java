@@ -63,6 +63,12 @@ class UserSanctionIntegrationTest {
         assertEquals(1,db.queryForObject("SELECT count(*) FROM user_account_audit WHERE operation_id=?",Integer.class,op(c)));
         assertEquals("APPLIED",result(c,"result"));
     }
+    @Test void oversizedWireVersionCannotWrapAroundToTheSupportedVersion(){
+        var c=command(actor.getId(),target.getId());c.put("eventVersion",new java.math.BigInteger("18446744073709551617"));
+        assertFalse(sanctions.receive(target.getId().toString(),wire(c)));
+        assertEquals(UserStatus.ACTIVE,users.findById(target.getId()).orElseThrow().getStatus());
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM user_sanction_operations",Integer.class));
+    }
     @Test void noChangeAndBusinessRejectionsAreDurableAndSelfAccessIsProtected() {
         var self=command(actor.getId(),actor.getId());sanctions.receive(actor.getId().toString(),wire(self));
         assertEquals("SELF_SANCTION_FORBIDDEN",result(self,"reasonCode"));

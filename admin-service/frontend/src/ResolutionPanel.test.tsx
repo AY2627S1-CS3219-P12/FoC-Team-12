@@ -44,13 +44,49 @@ function enterReason() {
     target: { value: 'All available evidence reviewed' },
   })
 }
-it('requires confirmation and closes a no-action case with the original revision', async () => {
+it('recovers a prepared resolution from the server after browser retry storage is lost', async () => {
+  const operationId = '50000000-0000-4000-8000-000000000001'
   const fetcher = vi
     .fn()
     .mockResolvedValue({
       ok: true,
       json: async () => ({ case: { ...summary, state: 'RESOLVED' } }),
     })
+  vi.stubGlobal('fetch', fetcher)
+  render(
+    <ResolutionPanel
+      summary={summary}
+      actor={actor}
+      actions={[]}
+      closure={{
+        operationId,
+        resolution: 'Prepared decision',
+        revision: 3,
+        explanations: [],
+      }}
+      refresh={() => {}}
+    />,
+  )
+  expect(screen.getByLabelText('Resolution reason')).toBeDisabled()
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'Resolution preparation is pending',
+  )
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Retry same resolution request' }),
+  )
+  await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
+  expect(fetcher.mock.calls[0]![1].headers['Idempotency-Key']).toBe(operationId)
+  expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toEqual({
+    resolution: 'Prepared decision',
+    expectedRevision: 3,
+    rejectedActionExplanations: [],
+  })
+})
+it('requires confirmation and closes a no-action case with the original revision', async () => {
+  const fetcher = vi.fn().mockResolvedValue({
+    ok: true,
+    json: async () => ({ case: { ...summary, state: 'RESOLVED' } }),
+  })
   vi.stubGlobal('fetch', fetcher)
   const refresh = vi.fn()
   render(

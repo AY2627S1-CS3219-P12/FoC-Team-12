@@ -23,11 +23,13 @@ public class CreditActionService {
     private final UserEligibilityClient users;
     private final TransactionTemplate tx;
     private final long deadlineSeconds;
+    private final ReviewerIndependenceService independence;
     private final JsonMapper json=JsonMapper.builder().build();
     public CreditActionService(JdbcTemplate db,UserEligibilityClient users,PlatformTransactionManager manager,
-            @Value("${app.actions.outcome-timeout-seconds:30}") long deadlineSeconds){
+            @Value("${app.actions.outcome-timeout-seconds:30}") long deadlineSeconds, ReviewerIndependenceService independence){
         if(deadlineSeconds<1)throw new IllegalArgumentException("Outcome timeout must be positive");
         this.db=db;this.users=users;this.tx=new TransactionTemplate(manager);tx.setTimeout(15);this.deadlineSeconds=deadlineSeconds;
+        this.independence=independence;
     }
     public record Action(UUID operationId,UUID caseId,UUID targetUserId,String type,Integer amount,String reason,String status,String reasonCode,Instant createdAt,Instant completedAt) { }
     public CaseViews.Mutation create(Jwt jwt,UUID caseId,UUID key,String type,UUID target,JsonNode amount,String reason){
@@ -39,6 +41,17 @@ public class CreditActionService {
             throw problem(400,"Choose a participant and a reason of 1–2000 characters. Credit corrections require nonzero whole credits; bans must omit the amount.");
         Integer delta=ban?null:amount.asInt();String route="/api/admin/cases/"+caseId+"/actions";
         String fingerprint=hash(json.writeValueAsString(Arrays.asList(type,target.toString(),delta,text)));
+        var initial=db.queryForList("SELECT order_id,state,reviewer_id FROM admin_cases WHERE id=?",caseId);
+        if(initial.isEmpty())throw problem(404,"Case not found.");
+        var first=initial.get(0);
+        if(!actor.equals(first.get("reviewer_id")))throw problem(403,"Only the assigned reviewer can request case actions.");
+        // Terminal replays return the immutable receipt; no new effect is authorized.
+        boolean replay=Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_mutation_receipts WHERE idempotency_key=? AND actor_id=? AND route=? AND request_hash=?)",Boolean.class,key,actor,route,fingerprint));
+        if(!replay){
+            if(!"UNDER_REVIEW".equals(first.get("state")))throw problem(409,"Case actions require a case under review.");
+            independence.verify(jwt,caseId,(UUID)first.get("order_id"));
+            authorize(jwt);
+        }
         return tx.execute(status->{
             db.execute("SET LOCAL lock_timeout='5s'");
             db.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))",r->null,"request:"+key);
@@ -52,8 +65,10 @@ public class CreditActionService {
             var cases=db.queryForList("SELECT order_id,state,reviewer_id,correlation_id FROM admin_cases WHERE id=? FOR UPDATE",caseId);
             if(cases.isEmpty())throw problem(404,"Case not found.");
             var c=cases.get(0);
+            independence.require(caseId,(UUID)c.get("order_id"),actor);
             if(!actor.equals(c.get("reviewer_id")))throw problem(403,"Only the assigned reviewer can request case actions.");
             if(!"UNDER_REVIEW".equals(c.get("state")))throw problem(409,"Case actions require a case under review.");
+            if(Boolean.TRUE.equals(db.queryForObject("SELECT closure_operation_id IS NOT NULL FROM admin_cases WHERE id=?",Boolean.class,caseId)))throw problem(409,"Resolution is being prepared. Resume the existing resolution before taking further actions.");
             if(!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_statements WHERE case_id=? AND reporter_id=?)",Boolean.class,caseId,target)))throw problem(404,"Eligible case participant not found.");
             UUID operation=UUID.randomUUID(),eventId=UUID.randomUUID(),order=(UUID)c.get("order_id"),correlation=(UUID)c.get("correlation_id");Instant now=Instant.now();
             db.update("UPDATE admin_cases SET revision=revision+1 WHERE id=?",caseId);

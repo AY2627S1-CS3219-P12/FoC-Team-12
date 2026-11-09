@@ -289,7 +289,7 @@ class ChatPreferencePersistenceIntegrationTest {
     }
 
     @Test
-    void resolvedAdminCaseIsLockedBeforeTheNextParticipantWrite() {
+    void resolvedAdminCaseDeniesTheNextParticipantWriteWithoutTreatingActorDenialAsClosure() {
         UUID caseId=UUID.randomUUID(), orderId=UUID.randomUUID(), participant=UUID.randomUUID(), reviewer=UUID.randomUUID();
         var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
         when(internalServices.caseAccess(caseId,reviewer,participant)).thenReturn(mapper.readTree("""
@@ -315,7 +315,7 @@ class ChatPreferencePersistenceIntegrationTest {
                 .hasMessage("This conversation is read-only");
         assertThat(chats.get(conversationId,participant).readOnly()).isTrue();
         assertThat(jdbc.queryForObject("SELECT status FROM chat_conversations WHERE id=?",String.class,conversationId))
-                .isEqualTo("READ_ONLY");
+                .isEqualTo("ACTIVE");
     }
 
     private static String event(UUID order,UUID requester,UUID courier,String action,String to,long version){return event(order,requester,courier,action,to,version,courier);}

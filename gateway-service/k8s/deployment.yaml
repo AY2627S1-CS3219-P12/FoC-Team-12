@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: gateway
-          image: arkanian4/foc-gateway-service:sha-323929b57e3e89ceda1198c3f5f1a391822840db-r42401211890-1
+          image: arkanian4/foc-gateway-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8088

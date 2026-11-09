@@ -24,8 +24,9 @@ public class SecurityConfiguration {
 
     @Bean
     @Order(2)
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder, com.friendoncampus.user.authorization.CurrentAuthorization current) throws Exception {
         return http
+                .addFilterAfter(new com.friendoncampus.user.authorization.CurrentAuthorizationFilter(current), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/users/login", "/api/users/registrations", "/api/users/password-reset-requests",

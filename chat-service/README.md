@@ -214,4 +214,45 @@ integration must demonstrate events create permissions and evidence without manu
 Timeline iteration can run before translation to unblock Darryl; do not make Admin depend on the
 external translator. XueTing owns Order event completeness, Darryl owns case-access/admin-eligibility
 contracts, Jun Hui owns broker/ACL/DLT and shared wiring. Add CI commands when runnable code exists;
-no build/test command is currently available in this documentation-only folder.
+run `./mvnw verify` (Windows: `./mvnw.cmd verify`) for the runnable implementation.
+
+## Admin integration completion
+
+The [approved completion protocol](../docs/integration/chat-admin-contract.md#integration-completion-refinements--9-november-2026)
+defines read-only conversation recovery, ten-minute immutable timeline snapshots, per-operation
+User/Credit outcome reconciliation and the durable resolution write barrier. Current verification
+and deployment state live in [Admin readiness](../admin-service/INTEGRATION_READINESS.md).
+
+Private CASE reads, images and live recipients recheck current Admin/User access. Authorized
+reviewing admins may read without becoming writers. Only the assigned reviewer initiates a thread;
+the idempotency identity binds actor/body. Actor-specific denial does not close a thread, and Order
+terminal events close ERRAND threads only. An explicit current-reviewer initiation POST can restore
+an unresolved CASE row locked by old Order handling, preserving its ID/history and refusing any
+prepared closure. Reads do not reopen conversations.
+
+`chat-service-timeline` independently consumes original `admin.events`, `credit.admin.events` and
+`user.admin.events` with read-committed isolation. The transactional inbox retains original events;
+authenticated producer exports reconcile the safe timeline/backfill view. Lifecycle and case-event
+listeners commit through separate transactional beans before acknowledging. Invalid/conflicting
+facts are durably retained in `chat_evidence_failures`, offsets remain unacknowledged, and relevant
+coverage includes FAILED_INGESTION gaps. The Chat owner investigates original event/operation IDs
+and restores the producer/projection before resuming; never delete evidence or invent a complete
+checkpoint to clear a failure. Monitor consumer lag and this failure table in addition to readiness.
+
+`AdminChatIntegrationTest` uses real disposable PostgreSQL with explicitly test-owned producer HTTP
+fixtures. It checks current authorization/private images/live recipients, duplicate initiation,
+legacy-lock recovery, Order/CASE isolation, closure draining, immutable paging, repeated courier
+assignment periods, empty baselines and owner-operation completeness. Production credentials and
+business data are never used by those fixtures.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).
+
+Configure CHAT_USER_URL, CHAT_SERVICE_KEY_ID and
+CHAT_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
+and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
+configuration fails closed even when administrative Kafka consumers are disabled.

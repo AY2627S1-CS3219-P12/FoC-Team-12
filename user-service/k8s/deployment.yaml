@@ -20,12 +20,13 @@ spec:
     spec:
       containers:
         - name: user-service
-          image: foc-user-service:local-22bc8cc
+          image: foc-user-service:local-61c7062-completion-20261109-v2
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081
           env:
             - name: DB_HOST
-              value: user-db
+              value: user-db.foc-local.svc.cluster.local.
             - name: DB_PORT
               value: "5432"
             - name: DB_NAME
@@ -49,8 +50,10 @@ spec:
                   key: USER_SERVICE_TRUSTED_KEYS
             - name: USER_EVENTS_PUBLISHER_ENABLED
               value: "true"
+            - name: USER_ADMIN_COMMANDS_ENABLED
+              value: "true"
             - name: KAFKA_BOOTSTRAP_SERVERS
-              value: kafka:9092
+              value: kafka.foc-local.svc.cluster.local.:9092
             - name: KAFKA_SECURITY_PROTOCOL
               value: SASL_PLAINTEXT
             - name: KAFKA_SASL_MECHANISM

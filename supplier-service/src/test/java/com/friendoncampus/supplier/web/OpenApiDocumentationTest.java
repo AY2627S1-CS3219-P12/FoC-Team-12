@@ -23,6 +23,8 @@ import com.friendoncampus.supplier.repository.SupplierRepository;
 })
 @AutoConfigureMockMvc
 class OpenApiDocumentationTest {
+    @org.springframework.test.context.bean.override.mockito.MockitoBean
+    com.friendoncampus.supplier.authorization.CurrentAuthorization currentAuthorization;
 
     @Autowired
     private MockMvc mockMvc;

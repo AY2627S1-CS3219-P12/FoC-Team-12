@@ -14,13 +14,14 @@ locals {
   eks_oidc_provider = replace(local.eks_oidc_issuer, "https://", "")
 
   services = {
-    gateway  = "gateway-service"
-    user     = "user-service"
-    supplier = "supplier-service"
-    order    = "order-service"
-    credit   = "credit-service"
-    admin    = "admin-service"
-    chat     = "chat-service"
+    gateway      = "gateway-service"
+    user         = "user-service"
+    supplier     = "supplier-service"
+    order        = "order-service"
+    credit       = "credit-service"
+    admin        = "admin-service"
+    chat         = "chat-service"
+    notification = "notification-service"
   }
 
   secret_names = toset([
@@ -31,6 +32,7 @@ locals {
     "credit-service-secrets",
     "admin-service-secrets",
     "chat-service-secrets",
+    "notification-service-secrets",
     "kafka-broker-secrets",
     "kafka-ui-secrets"
   ])

@@ -3,6 +3,12 @@
 Local Kubernetes deployment: [Admin Minikube guide](k8s/README.md). Its database/PVC and
 credentials are independent of Docker Compose and disposable test stacks.
 
+The reconciled `foc-local` stack runs verified published `ce035ee` images. Real reporting,
+claiming and lifecycle publishing passed; Chat evidence/resolution and unresolved conversation
+locking block full acceptance. The Admin client fixes in this change are not in those images.
+See [deployed results](INTEGRATION_READINESS.md#reconciled-published-deployment-and-real-acceptance-results)
+and the [complete manual GUI procedure](INTEGRATION_READINESS.md#full-guibusiness-acceptance-procedure-after-owner-activation).
+
 Owner: Darryl. Java 17 / Spring Boot 4.1.1, PostgreSQL/Flyway, React/TypeScript/Vite.
 Scope: Admin backend/database/dashboard, current User eligibility, case-access callback,
 participant reporting/status, administrator queue/detail/claim, evidence/conversation consumers
@@ -13,6 +19,26 @@ record Chat/transport owner sign-off or deploy the shared drafts.
 
 ## Behavior and boundaries
 
+- Reviewer independence: an administrator who requested an errand or was ever assigned as its
+  courier cannot claim its case or act as reviewer, whether or not they reported. Claim, new
+  credit/ban requests, conversation initiation and resolution require fresh, complete trusted
+  Chat evidence derived from Order history. Existing conflicting assignments are blocked too.
+  Complete snapshot-wide participants include non-reporters; reports alone never establish
+  independence. Missing, malformed, stale, incomplete, contradictory or unavailable evidence is
+  503; verified involvement is 403. Denials do not create claims, actions, conversations or decisions.
+  An immutable completed action/resolution receipt may still be read on an identical replay;
+  it authorizes no new effect and never reverses previously accepted owner commands.
+- Admin V10 privately retains the evidence revision, Order checkpoint, monotonic involved IDs
+  and expiry for reviewer conversation-write callbacks. Only validated producer evidence creates
+  this proof; it never adds case participant membership. The lease expires at the earliest coverage/
+  checkpoint timestamp plus `app.resolution.evidence-max-age-seconds` (default 60 seconds).
+  A failed fresh verification withdraws the lease. A fresh first-page timeline read renews it;
+  old pinned pages cannot renew it. Chat callbacks never call Chat: a missing/expired proof denies
+  reviewer writes while authorized evidence/conversation reads remain available. A participant
+  replying to their own reviewer conversation retains participant access. User account checks
+  remain live. Evidence freshness is bounded, not an atomic lock across Order and Admin.
+  The GUI explains the restriction and exposes evidence refresh. If no independent administrator
+  is available, the case stays open; this iteration introduces no reassignment or reopening.
 - `GET /api/admin/session` is the foundation's Admin-owned access endpoint. User bearer
   authentication plus effective ADMIN mode and a fresh persisted active/administrator
   check returns `{userId, role: "ADMIN"}`. Invalid identity is 401, denied access 403,
@@ -59,7 +85,7 @@ Account/supplier tools link to their existing owners.
 | `GET /api/admin/reports/{caseId}` | Reporting participant only; own statement and case summary; unrelated users receive 404 |
 | `GET /api/admin/cases?status=&query=&page=&size=` | Current active ADMIN; status enum, optional exact case/order UUID, page 0+, size 1–100/default 20 |
 | `GET /api/admin/cases/{caseId}` | Current active ADMIN; `{case,statements,actions:[],resolution:null}` |
-| `POST /api/admin/cases/{caseId}/claim` | Current active ADMIN; `{expectedRevision}`; OPEN becomes UNDER_REVIEW with caller as reviewer |
+| `POST /api/admin/cases/{caseId}/claim` | Current active independent ADMIN; `{expectedRevision}`; OPEN becomes UNDER_REVIEW with caller as reviewer |
 
 Reporting validates a trimmed 1–2000 character statement. It calls Chat's documented
 `GET /internal/chat/orders/{orderId}/report-eligibility?userId=` using an Admin service
@@ -321,11 +347,28 @@ other responses are 503. Requests use two-second connect/three-second request bo
 automatic retries, redirects, logging of credentials, or synthetic fallback. Responses are no-store.
 
 Assigned reviewers can select a reporting participant in case detail and initiate/open that
-private thread. Other administrators and participants see honest pending-discovery states:
-the contracts contain no case-to-existing-conversation lookup, and no such interface is invented.
-Participant report status still exposes only its existing safe data and never another thread.
-Historical non-reporter discovery/entry also awaits the agreed authorization path. Real Chat
-does not yet exist in this checkout, so this is preparation, not verified live messaging.
+private thread. Chat now has a runnable implementation. Admin adapts the actual public Chat
+metadata `{id,orderId,status,readOnly}`, message arrays paged by exclusive `after` sequence and
+attachment metadata `{id,contentType,filename,size}`. Admin's internal initiation response retains
+the documented `{conversationId,caseId,orderId,participantUserId,readOnly}` shape.
+
+`GET /api/admin/cases/{caseId}/conversations` returns Admin's confirmed references to a current
+active ADMIN. `GET /api/admin/reports/{caseId}/conversations` returns at most the current reporting
+participant's own reference in REQUESTER/COURIER mode. Both return arrays, use `Cache-Control:
+no-store`, check current User eligibility and read only Admin's database. Missing/unauthorized
+cases are 404; User outage is 503. An empty array means no locally confirmed reference, not proof
+that Chat has no conversation. Reads create no receipt, event, audit, revision or Chat membership.
+Unknown historical non-reporters remain hidden under the current callback contract.
+
+After reload, participants recover their own confirmed thread automatically; administrators
+select a reporting participant to recover that reference without a creation POST. Other admins
+can select history, subject to Chat's separate authorization (its current stored-membership guard
+may deny them). OPEN/RESOLVED and other-admin references are read-only. The UI rechecks current
+Admin access and Chat metadata before each history load/page and send, combining both read-only
+decisions. Chat must still enforce current permissions on all of its endpoints and close/send races.
+An accepted Chat creation whose response/reference was never saved in Admin cannot be recovered
+by these GETs. Retry the original initiation key while authorized and UNDER_REVIEW; recovery after
+closure/revocation needs producer agreement. See [current producer gaps](INTEGRATION_READINESS.md#chat-integration-current-state).
 
 The reusable thread UI consumes the documented Chat public reference/history/send APIs directly
 with the User token. It validates case/order/participant/thread identity, message fields and ordered
@@ -334,13 +377,15 @@ Conversation changes unmount private history; denied access clears it. Read-only
 Chat permission disable replies; permissions are re-fetched before sends. Original message text
 and clientMessageId are held per account/case/thread in session storage for uncertain retries;
 no optimistic delivery is shown. Text is displayed as text, never HTML. SGT timestamps use the
-shared formatter. A refresh reloads authoritative REST history; browser retries retain opaque
-cursors. The Admin-only Vite proxy forwards `/api/chat` to the existing gateway, whose actual Chat
-routes still need a nominated shared editor. No gateway/shared config or Chat code is changed here.
+shared formatter. A refresh reloads REST history from sequence zero; Load more uses the last
+validated sequence as `after`, with limit 20. Full pages offer another read (an empty following page
+ends pagination); retries keep the same position. The Admin-only Vite proxy forwards `/api/chat`
+to the existing gateway, which now contains Chat REST/WebSocket routes. No gateway/shared config
+or Chat code is changed here.
 
-WebSocket live notifications/reconnect, discovery, private image viewing/uploads and translation
-are not implemented. Image messages show a non-downloadable attachment notice. Proposed limits,
-cursor direction/catch-up boundaries and WebSocket ticket behavior require producer agreement.
+WebSocket live notifications/reconnect, producer discovery of unconfirmed threads, private image
+viewing/uploads and translation are not implemented in Admin. Image messages show a
+non-downloadable attachment notice. WebSocket behavior requires separate producer agreement.
 Tests use explicitly test-only HTTP mocks; they cannot prove actual Chat persistence, access or
 delivery. Final verification must use Eldridge's producer through real routing/trust configuration.
 
@@ -348,7 +393,8 @@ Manual checks when Chat is available: select each reporting participant as the a
 verify isolated messages and safe same-key initiation/send retries; refresh/load multiple pages;
 revoke access/resolve during a request; confirm private history disappears on denial and replies
 disable on read-only. Check narrow mobile layout, keyboard selection/composer, and SGT timestamps.
-Participant and other-admin lookup must remain unavailable until the readiness gates are resolved.
+Confirmed-reference discovery is available; producer recovery and historical non-reporter gates
+remain open. Actual producer completeness/privacy/read-only acceptance is still required.
 
 ## Evidence timeline and recovery
 
@@ -416,7 +462,8 @@ fabricated, and recovery remains incomplete. Snapshot/cursor expiry or cleanup i
 in this iteration; retention requires a separately agreed recovery policy.
 
 All producer/consumer schemas remain the repository review drafts until affected owners sign
-off. Chat still has no runnable repository implementation. HTTP fixtures verify the Admin
+off where owner agreement is absent. Chat now has runnable code; current gaps are listed in
+INTEGRATION_READINESS.md. HTTP fixtures verify the Admin
 adapter and UI only; they are not proof of real historical participation, producer coverage,
 broker delivery or operational recovery. No Chat code, contract schema, gateway, Compose,
 broker or other service is changed by this iteration.
@@ -527,7 +574,7 @@ npm run format:check
 The PostgreSQL test uses an isolated Docker container and is skipped when Docker is absent;
 such a run does not verify PostgreSQL. JWT tests sign real RS256 tokens and serve test JWKS.
 User regression checks: run `./mvnw.cmd '-Dtest=AdminEligibilitySecurityTest,ServiceTokensTest,AdminLifecycleSecurityTest' test`
-inside `user-service`. Callback tests use test-only case fixtures; Chat has no runtime yet.
+inside `user-service`. Callback tests use test-only case fixtures; they do not verify live Chat.
 
 Manual: open `/admin` without a session, with Requester/Courier mode, then with active
 Admin mode. Check sign-in/denied/authorized states and account links. Revoke Admin access
@@ -616,8 +663,9 @@ This checkout publishes Admin PostgreSQL on `127.0.0.1:5545`; use the regular `.
 password. Do not use disposable preview credentials or seed normal databases for this checklist.
 
 Roles needed: a regular requester, an assigned courier on the same real errand, an unrelated
-participant, and an active administrator who claims the case. An administrator testing their own
-report must switch to Requester/Courier; Admin mode is reserved for review. No accounts are
+participant, and an active independent administrator who claims the case. An administrator testing
+their own report must switch to Requester/Courier and use a different administrator who has never
+been involved in that errand for review. No accounts are
 automatically created by this frontend integration.
 
 1. As the requester, open Errands → My errands → a real errand. Below its details, check the
@@ -672,3 +720,15 @@ An unavailable Chat leaves the live case open with retry feedback.
 Manual acceptance: assigned/other reviewer permissions, reason and rejected-action explanations,
 confirmation/cancel, pending/unknown blockers, stale refresh, Chat-unavailable feedback, immutable
 resolved view and participant privacy. Check desktop/mobile layout, keyboard focus and SGT times.
+
+## Current account authorization
+
+Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
+User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
+is 503. Existing resource and lifecycle rules still apply. See the
+[current authorization contract and acceptance checks](../docs/integration/current-authorization.md).
+
+Configure ADMIN_USER_URL, ADMIN_SERVICE_KEY_ID and
+ADMIN_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
+and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
+configuration fails closed even when administrative Kafka consumers are disabled.

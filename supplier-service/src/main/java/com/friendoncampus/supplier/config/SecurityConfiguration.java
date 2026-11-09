@@ -48,7 +48,7 @@ public class SecurityConfiguration {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtDecoder jwtDecoder,
-            ObjectMapper objectMapper) throws Exception {
+            ObjectMapper objectMapper, com.friendoncampus.supplier.authorization.CurrentAuthorization current) throws Exception {
         AuthenticationEntryPoint authenticationEntryPoint = (request, response, exception) -> {
             response.setHeader("WWW-Authenticate", "Bearer");
             writeProblem(
@@ -68,6 +68,7 @@ public class SecurityConfiguration {
                 "Administrator access is required");
 
         return http
+                .addFilterAfter(new com.friendoncampus.supplier.authorization.CurrentAuthorizationFilter(current), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
