@@ -282,6 +282,33 @@ describe('ErrandPage', () => {
     })
   })
 
+  describe('for the requester of an errand that expired', () => {
+    it('says Credit never confirmed it, not that nobody picked it up', async () => {
+      signIn(REQUESTER_ID, 'REQUESTER')
+      vi.stubGlobal(
+        'fetch',
+        serve(order({ state: 'EXPIRED', terminalReason: 'CREDIT_RESERVATION_TIMEOUT' })).fetchMock,
+      )
+      renderErrand()
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Errand not posted' })).toBeInTheDocument()
+      expect(screen.getByText(/didn't confirm your reservation in time/)).toBeInTheDocument()
+      expect(screen.queryByText(/Nobody picked it up/)).not.toBeInTheDocument()
+    })
+
+    it('keeps the deadline wording for an errand that reached the pool', async () => {
+      signIn(REQUESTER_ID, 'REQUESTER')
+      vi.stubGlobal(
+        'fetch',
+        serve(order({ state: 'EXPIRED', terminalReason: 'PICKUP_DEADLINE_PASSED' })).fetchMock,
+      )
+      renderErrand()
+
+      expect(await screen.findByRole('heading', { level: 1, name: 'Errand expired' })).toBeInTheDocument()
+      expect(screen.getByText(/Nobody picked it up/)).toBeInTheDocument()
+    })
+  })
+
   describe('in a header role the errand does not belong to', () => {
     it.each([
       ['their own errand as a Courier', REQUESTER_ID, 'COURIER', order(), 'Run errands'],

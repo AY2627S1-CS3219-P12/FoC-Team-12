@@ -198,6 +198,7 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
 | T1 | ∅ → PENDING_CREDIT | `POST /api/orders` | Any user, REQUESTER session; becomes R | Valid fields (F1.1.2), including the client-supplied location IDs and names; deadline > now | Credit **reserves** `creditReward` | `OrderSubmitted` | 400 errors map, 403 |
 | T2 | PENDING_CREDIT → OPEN | `CreditReserved` reply | Sys | State is PENDING_CREDIT and now < deadline; store `credit_reservation_id` | none | history only | Duplicate reply is ignored |
 | T2b | PENDING_CREDIT → EXPIRED | `CreditReserved` reply arrives at or after the deadline | Sys | now ≥ deadline | **Release** the full reservation | `OrderExpired` (reason `PICKUP_DEADLINE_PASSED`) | — |
+| T2c | PENDING_CREDIT → EXPIRED | Expiry job: no Credit answer by `min(pickupDeadline, createdAt + T)`, T = `PT2M` | Sys | State is PENDING_CREDIT once locked; `terminal_reason` `CREDIT_RESERVATION_TIMEOUT` | **Release** whatever Credit holds | `OrderExpired` (reason `CREDIT_RESERVATION_TIMEOUT`) | A later `CreditReserved`/`CreditReservationRejected` is `IGNORED` |
 | T3 | PENDING_CREDIT → RESERVATION_FAILED | `CreditReservationRejected` reply | Sys | State is PENDING_CREDIT; `terminal_reason` from `reasonCode` | none | history only | — |
 | T4 | OPEN → OPEN (details) | `PATCH /api/orders/{id}` with `version` | R | OPEN, no pending adjustment, version matches, valid fields, deadline > now | none (unless the reward changed, see T5) | history only | 400, 403 `NOT_ORDER_REQUESTER`, 409 `VERSION_CONFLICT` / `INVALID_STATE_TRANSITION` / `REWARD_ADJUSTMENT_PENDING` |
 | T5 | OPEN → OPEN (reward requested) | The same `PATCH` with a different `creditReward` | R | As T4; set `pending_credit_reward` and leave `credit_reward` unchanged | Credit **adjusts**: reserves the extra if affordable, or releases the difference | `OrderRewardChangeRequested` | As T4 |
@@ -291,6 +292,9 @@ Notation: **R** = the order's requester (session role `REQUESTER`). **C** = the 
   published_at IS NULL`, for the relay's per-stream claim: it locks each order-and-topic stream's
   oldest unpublished row with `SKIP LOCKED`, then the rows behind it, so replicas never interleave
   one order's events.
+- **V7 (pending-credit timeout):** partial index `(created_at, id) WHERE state = 'PENDING_CREDIT'` for
+  the timeout scan. `created_at` is now stamped from the service `Clock` at creation, so the
+  timeout and every deadline share one clock. The new reason fits `terminal_reason`.
 - **Reward editing** needs no migration: it maps the V1 `pending_credit_reward` column, and the
   new history actions (`EDIT`, `REWARD_CHANGE_APPLIED`, `REWARD_CHANGE_REJECTED`) fit the
   `order_transitions.action` VARCHAR.
@@ -354,10 +358,14 @@ Built in iteration `order-kafka-messaging` (was "still to build"):
 | UI | `order-ui-design-alignment`: Order screens meet the shared `design.md` contract (button states, card radius, Lucide icons, loading placeholders, actionable empty/error panels, focus colour) | PR #123 |
 | UI | `order-ui-reorder`: Post again on a requester's ended errands opens Request help filled in except Pick up by (frontend only, existing `GET /api/orders/{id}`) | This change |
 | 11 | `order-create-idempotency`: optional `Idempotency-Key` on `POST /api/orders` (V5); a retry with the same key and body returns the first order (`200`) with no second `OrderSubmitted` or reservation, a changed body is `409 IDEMPOTENCY_KEY_REUSED`; the create page sends one key per errand content | This change |
+| 14 | `order-pending-credit-timeout`: a PENDING_CREDIT order Credit does not answer by `min(pickupDeadline, createdAt + PT2M)` expires with `CREDIT_RESERVATION_TIMEOUT` and the normal `OrderExpired` (V7); late `CreditReserved`/`CreditReservationRejected` are `IGNORED`; the UI and Notification say the errand was not posted. Contract: blueprint "pending-credit timeout" (Credit owns the absent-reservation no-op) | This change |
 | 9 | Integration demo with User and Credit through the real broker (blueprint "Required integration demonstration") | Next. Credit's Kafka adapter is on `main` (#83); needs a demo script agreed with Credit and the broker owner |
 | 12 | `order-messaging-hardening`: relay claims whole order-and-topic streams (V6), so replicas keep per-order order; batch 20 and a stuck-row `ERROR`; `OrderTransitionException`/unknown order go to `credit.events.DLT` without retries; `CreditReleased` must answer `OrderCancelled` or `OrderExpired`; `order.outbox.*` gauges on ADMIN-only `/actuator/metrics` | This change |
 
 ## Decisions
+
+Confirmed by XueTing (2026-11-09): **the pending-credit timeout is `PT2M`** (Credit's draft value),
+configurable with `ORDER_CREDIT_RESERVATION_TIMEOUT`.
 
 Confirmed by XueTing (2026-10-18):
 - **Late pickup is allowed:** a courier may pick up an `ACCEPTED` order after the pickup deadline

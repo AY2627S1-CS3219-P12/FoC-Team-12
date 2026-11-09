@@ -187,7 +187,19 @@ order without any further effect, so the reward is never settled twice.
 **Expiry:** an `OPEN` order expires once `now >= pickupDeadline`. A background job
 does this every 30 s (`ORDER_EXPIRY_INTERVAL_MS`; turn it off with
 `ORDER_EXPIRY_ENABLED=false`), and any action on an overdue `OPEN` order expires
-it first and is rejected with `ORDER_EXPIRED`. Accepted orders never expire. Rejections are RFC-7807
+it first and is rejected with `ORDER_EXPIRED`.
+
+**Credit timeout:** the same job ends a `PENDING_CREDIT` order Credit has not
+answered by `min(pickupDeadline, createdAt + ORDER_CREDIT_RESERVATION_TIMEOUT)`
+(ISO-8601, default `PT2M`). It locks the order, re-checks that it is still
+waiting, and moves it to `EXPIRED` with `terminalReason` `CREDIT_RESERVATION_TIMEOUT`,
+publishing the normal `OrderExpired` with that `reason` so Credit releases anything
+it reserved (Credit records a timeout with no reservation as a no-op). A
+`CreditReserved` or `CreditReservationRejected` answering that order's
+`OrderSubmitted` afterwards is stored as `IGNORED`: the order is never reopened and
+the event never goes to the DLT. Whichever of the timeout and Credit's answer
+locks the order first wins. The shared contract is the "pending-credit timeout"
+section of the event blueprint. Accepted orders never expire. Rejections are RFC-7807
 problems with a `code` and the order's `currentState`:
 
 | Code | Status | When |
@@ -273,7 +285,7 @@ change credits:
 | --- | --- | --- |
 | `OrderSubmitted` | A valid order is stored as `PENDING_CREDIT` | Reserve the reward |
 | `OrderCancelled` | The requester cancels (`compensationRequired` when it was `ACCEPTED`) | Release, or compensate the courier |
-| `OrderExpired` | The deadline passes while `OPEN`, a reservation is confirmed too late, or a courier withdraws after the deadline | Release |
+| `OrderExpired` | The deadline passes while `OPEN`, a reservation is confirmed too late, a courier withdraws after the deadline, or Credit does not answer by the credit timeout (`reason` `CREDIT_RESERVATION_TIMEOUT`) | Release |
 | `OrderCompleted` | The requester confirms receipt | Settle the full reward to the courier |
 | `OrderRewardChangeRequested` | The requester edits an `OPEN` order's reward | Adjust the reservation to `newCreditReward` |
 
@@ -398,6 +410,7 @@ courier (session role `COURIER`), **Sys** = the expiry scheduler or a Credit rep
 | — | PENDING_CREDIT | R | Valid fields; deadline in the future | Reserve the reward | `OrderSubmitted` |
 | PENDING_CREDIT | OPEN | Sys | `CreditReserved` before the deadline | — | (history only) |
 | PENDING_CREDIT | EXPIRED | Sys | `CreditReserved` at or after the deadline | Release in full | `OrderExpired` |
+| PENDING_CREDIT | EXPIRED | Sys | No Credit answer by `min(pickupDeadline, createdAt + ORDER_CREDIT_RESERVATION_TIMEOUT)` (default 2 min); `terminalReason` `CREDIT_RESERVATION_TIMEOUT` | Release whatever Credit may hold | `OrderExpired` (`reason` `CREDIT_RESERVATION_TIMEOUT`) |
 | PENDING_CREDIT | RESERVATION_FAILED | Sys | `CreditReservationRejected`; `terminalReason` is `INSUFFICIENT_CREDITS`, `CREDIT_ACCOUNT_NOT_FOUND` or `CREDIT_RESERVATION_REJECTED` (other reason codes) | — | (history only) |
 | OPEN | OPEN (edit) | R | No reward adjustment pending; `version` matches | Adjust if the reward changed; the new reward applies only after `CreditAdjusted` | `OrderRewardChangeRequested` if the reward changed |
 | OPEN | CANCELLED | R | — | Release in full, no compensation | `OrderCancelled` |

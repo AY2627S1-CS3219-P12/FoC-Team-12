@@ -1,10 +1,13 @@
 package com.friendoncampus.order.service;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,20 +32,38 @@ import com.friendoncampus.order.repository.OrderTransitionRepository;
 @Service
 public class OrderService {
 
+    /** Credit's draft default (blueprint "pending-credit timeout"), approved by the Order owner. */
+    public static final Duration DEFAULT_CREDIT_RESERVATION_TIMEOUT = Duration.ofMinutes(2);
+
     private final OrderRepository orderRepository;
     private final OrderTransitionRepository transitionRepository;
     private final OrderEventRecorder eventRecorder;
     private final Clock clock;
+    private final Duration creditReservationTimeout;
 
     public OrderService(
             OrderRepository orderRepository,
             OrderTransitionRepository transitionRepository,
             OrderEventRecorder eventRecorder,
             Clock clock) {
+        this(orderRepository, transitionRepository, eventRecorder, clock, DEFAULT_CREDIT_RESERVATION_TIMEOUT);
+    }
+
+    @Autowired
+    public OrderService(
+            OrderRepository orderRepository,
+            OrderTransitionRepository transitionRepository,
+            OrderEventRecorder eventRecorder,
+            Clock clock,
+            @Value("${app.orders.credit-reservation-timeout:PT2M}") Duration creditReservationTimeout) {
+        if (creditReservationTimeout.isNegative() || creditReservationTimeout.isZero()) {
+            throw new IllegalArgumentException("app.orders.credit-reservation-timeout must be positive");
+        }
         this.orderRepository = orderRepository;
         this.transitionRepository = transitionRepository;
         this.eventRecorder = eventRecorder;
         this.clock = clock;
+        this.creditReservationTimeout = creditReservationTimeout;
     }
 
     /** Persists a new order in PENDING_CREDIT and records {@code OrderSubmitted} (Credit reserves). */
@@ -283,6 +304,35 @@ public class OrderService {
             return false;
         }
         apply(order, order.expire(now()));
+        return true;
+    }
+
+    /** IDs of PENDING_CREDIT orders whose credit timeout has been reached, for the expiry job. */
+    @Transactional(readOnly = true)
+    public List<UUID> findTimedOutPendingCreditOrderIds(int limit) {
+        OffsetDateTime now = now();
+        return orderRepository.findPendingCreditIdsTimedOut(now.minus(creditReservationTimeout), now,
+                PageRequest.of(0, limit));
+    }
+
+    /**
+     * Expires the order with {@code CREDIT_RESERVATION_TIMEOUT} if, once locked, it is still waiting
+     * for Credit and its timeout has been reached; returns false when a Credit answer got there first
+     * or it was already handled. The state, history row and {@code OrderExpired} outbox row commit
+     * together, so repeated runs write nothing more.
+     */
+    @Transactional
+    public boolean timeOutPendingCreditIfDue(UUID orderId) {
+        Order order = orderRepository.findByIdForUpdate(orderId).orElse(null);
+        if (order == null || order.getState() != OrderState.PENDING_CREDIT) {
+            return false;
+        }
+        OffsetDateTime timeoutAt = order.creditTimeoutAt(creditReservationTimeout);
+        OffsetDateTime now = now();
+        if (now.isBefore(timeoutAt)) {
+            return false;
+        }
+        apply(order, order.timeOutCreditReservation(timeoutAt, now));
         return true;
     }
 

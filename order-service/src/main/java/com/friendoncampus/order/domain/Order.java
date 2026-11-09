@@ -1,5 +1,6 @@
 package com.friendoncampus.order.domain;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -10,12 +11,11 @@ import java.util.UUID;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 
@@ -27,6 +27,7 @@ import jakarta.persistence.Version;
  */
 @Entity
 @Table(name = "orders")
+@EntityListeners(OrderTimestampListener.class)
 public class Order {
 
     @Id
@@ -238,6 +239,37 @@ public class Order {
         pendingCreditReward = null;
         return moveTo(OrderAction.EXPIRE, OrderState.EXPIRED, null, ActorRole.SYSTEM, null,
                 TerminalReason.PICKUP_DEADLINE_PASSED, CreditEffect.RELEASE, "OrderExpired", now);
+    }
+
+    /**
+     * Credit has not answered the reservation by {@code creditTimeoutAt} (blueprint "pending-credit
+     * timeout"): the order stops waiting and expires with {@link TerminalReason#CREDIT_RESERVATION_TIMEOUT}.
+     * {@code OrderExpired} asks Credit to release whatever it may have reserved; Credit treats a
+     * timeout with no reservation as a no-op.
+     */
+    public OrderTransition timeOutCreditReservation(OffsetDateTime creditTimeoutAt, OffsetDateTime now) {
+        requireState(OrderAction.EXPIRE, OrderState.PENDING_CREDIT);
+        if (now.isBefore(creditTimeoutAt)) {
+            throw new OrderTransitionException(OrderErrorCode.INVALID_STATE_TRANSITION, state,
+                    "The credit reservation has not timed out yet");
+        }
+        expiredAt = now;
+        return moveTo(OrderAction.EXPIRE, OrderState.EXPIRED, null, ActorRole.SYSTEM, null,
+                TerminalReason.CREDIT_RESERVATION_TIMEOUT, CreditEffect.RELEASE, "OrderExpired", now);
+    }
+
+    /**
+     * When a PENDING_CREDIT order stops waiting for Credit: {@code createdAt + timeout}, or the
+     * pickup deadline if that comes first.
+     */
+    public OffsetDateTime creditTimeoutAt(Duration timeout) {
+        OffsetDateTime byTimeout = createdAt.plus(timeout);
+        return byTimeout.isBefore(pickupDeadline) ? byTimeout : pickupDeadline;
+    }
+
+    /** True for an order that expired because Credit never answered its reservation. */
+    public boolean timedOutWaitingForCredit() {
+        return state == OrderState.EXPIRED && terminalReason == TerminalReason.CREDIT_RESERVATION_TIMEOUT;
     }
 
     /**
@@ -494,9 +526,15 @@ public class Order {
                 creditEffect, eventType, now);
     }
 
-    @PrePersist
-    void prepareForCreate() {
-        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+    /**
+     * Stamps the creation time. {@link OrderTimestampListener} calls this with the service clock just
+     * before the first insert, so the credit timeout ({@code createdAt + timeout}) is measured on the
+     * same clock as every other deadline. A stored order keeps the creation time it has.
+     */
+    public void stampCreatedAt(OffsetDateTime now) {
+        if (createdAt != null) {
+            throw new IllegalStateException("createdAt is already set");
+        }
         createdAt = now;
         updatedAt = now;
         if (stateChangedAt == null) {
@@ -504,9 +542,13 @@ public class Order {
         }
     }
 
-    @PreUpdate
-    void prepareForUpdate() {
-        updatedAt = OffsetDateTime.now(ZoneOffset.UTC);
+    /** Stamps a change to a stored order; never earlier than its creation. */
+    void stampUpdatedAt(OffsetDateTime now) {
+        updatedAt = createdAt != null && now.isBefore(createdAt) ? createdAt : now;
+    }
+
+    boolean isCreatedAtStamped() {
+        return createdAt != null;
     }
 
     public UUID getId() {

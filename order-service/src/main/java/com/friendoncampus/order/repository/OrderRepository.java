@@ -48,6 +48,16 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
     @Query(value = "select true from pg_advisory_xact_lock(hashtextextended(:lockKey, 0))", nativeQuery = true)
     Boolean lockIdempotencyKey(@Param("lockKey") String lockKey);
 
+    /**
+     * IDs of PENDING_CREDIT orders whose credit timeout has been reached, oldest first: created at or
+     * before {@code createdBy} ({@code now - timeout}), or with the pickup deadline already reached.
+     */
+    @Query("select o.id from Order o where o.state = com.friendoncampus.order.domain.OrderState.PENDING_CREDIT"
+            + " and (o.createdAt <= :createdBy or o.pickupDeadline <= :now)"
+            + " order by o.createdAt asc, o.id asc")
+    List<UUID> findPendingCreditIdsTimedOut(@Param("createdBy") OffsetDateTime createdBy,
+            @Param("now") OffsetDateTime now, Pageable page);
+
     /** IDs of orders in the given state whose deadline is at or before {@code now}, oldest first. */
     @Query("select o.id from Order o where o.state = :state and o.pickupDeadline <= :now"
             + " order by o.pickupDeadline asc, o.id asc")

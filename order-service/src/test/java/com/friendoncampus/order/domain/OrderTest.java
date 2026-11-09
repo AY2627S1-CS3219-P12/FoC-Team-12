@@ -3,6 +3,7 @@ package com.friendoncampus.order.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
@@ -502,5 +503,69 @@ class OrderTest {
         // 700 ns would round up to 1 µs in PostgreSQL; truncating keeps memory and storage equal.
         assertThat(order.getPickupDeadline()).isEqualTo(NOW);
         assertThat(order.isPastDeadline(NOW)).isTrue();
+    }
+
+    private static Order pendingCreatedAt(OffsetDateTime createdAt, OffsetDateTime deadline) {
+        Order order = order(OrderState.PENDING_CREDIT, deadline);
+        order.stampCreatedAt(createdAt);
+        return order;
+    }
+
+    @Test
+    void theCreditTimeoutIsCreationPlusTheTimeoutOrTheDeadlineIfSooner() {
+        Duration timeout = Duration.ofMinutes(2);
+
+        assertThat(pendingCreatedAt(NOW, NOW.plusHours(2)).creditTimeoutAt(timeout)).isEqualTo(NOW.plusMinutes(2));
+        assertThat(pendingCreatedAt(NOW, NOW.plusMinutes(1)).creditTimeoutAt(timeout)).isEqualTo(NOW.plusMinutes(1));
+    }
+
+    @Test
+    void aTimedOutReservationExpiresThePendingOrderAndAsksForARelease() {
+        Order order = pendingCreatedAt(NOW, NOW.plusHours(2));
+
+        OrderTransition transition = order.timeOutCreditReservation(NOW.plusMinutes(2), NOW.plusMinutes(2));
+
+        assertThat(order.getState()).isEqualTo(OrderState.EXPIRED);
+        assertThat(order.getTerminalReason()).isEqualTo(TerminalReason.CREDIT_RESERVATION_TIMEOUT);
+        assertThat(order.getExpiredAt()).isEqualTo(NOW.plusMinutes(2));
+        assertThat(order.timedOutWaitingForCredit()).isTrue();
+        assertThat(transition.action()).isEqualTo(OrderAction.EXPIRE);
+        assertThat(transition.fromState()).isEqualTo(OrderState.PENDING_CREDIT);
+        assertThat(transition.actorRole()).isEqualTo(ActorRole.SYSTEM);
+        assertThat(transition.actorId()).isNull();
+        assertThat(transition.creditEffect()).isEqualTo(CreditEffect.RELEASE);
+        assertThat(transition.eventType()).isEqualTo("OrderExpired");
+    }
+
+    @Test
+    void theCreditTimeoutIsNotReachedAMicrosecondEarly() {
+        Order order = pendingCreatedAt(NOW, NOW.plusHours(2));
+
+        assertThatThrownBy(() -> order.timeOutCreditReservation(NOW.plusMinutes(2), NOW.plusMinutes(2).minusNanos(1_000)))
+                .isInstanceOf(OrderTransitionException.class);
+        assertThat(order.getState()).isEqualTo(OrderState.PENDING_CREDIT);
+    }
+
+    @Test
+    void onlyAPendingOrderCanTimeOutWaitingForCredit() {
+        for (OrderState state : OrderState.values()) {
+            if (state == OrderState.PENDING_CREDIT) {
+                continue;
+            }
+            Order order = order(state);
+            assertThatThrownBy(() -> order.timeOutCreditReservation(NOW, NOW.plusMinutes(5)))
+                    .as(state.name())
+                    .isInstanceOfSatisfying(OrderTransitionException.class, exception ->
+                            assertThat(exception.getCode()).isEqualTo(OrderErrorCode.INVALID_STATE_TRANSITION));
+            assertThat(order.getState()).isEqualTo(state);
+        }
+    }
+
+    @Test
+    void anOrderExpiredByItsPickupDeadlineDidNotTimeOutWaitingForCredit() {
+        Order order = order(OrderState.OPEN, NOW.plusMinutes(1));
+        order.expire(NOW.plusMinutes(1));
+
+        assertThat(order.timedOutWaitingForCredit()).isFalse();
     }
 }
