@@ -230,6 +230,27 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    # Open http://localhost:8090 and use the existing kafka-ui-secrets dashboard login.
    ```
 
+   The `aws-staging-infra` GitHub environment variable `AWS_KAFBAT_VIEWER_ROLE_ARN` identifies the
+   human operator IAM role that receives this private access. `apply-core` adopts an existing EKS
+   access entry, maps it to the `foc-kafka-viewers` Kubernetes group and installs a namespace-scoped
+   Role. The Role permits pod discovery and port-forward creation but not exec, Secret access,
+   workload changes or public exposure. For the NUS sandbox, set it to the canonical IAM role ARN
+   shown by `aws eks list-access-entries --cluster-name foc-staging`; do not use the temporary
+   `arn:aws:sts::...:assumed-role/...` session ARN.
+
+   Retrieve the separate dashboard login without copying it into Git or shell history:
+
+   ```bash
+   aws secretsmanager get-secret-value \
+     --region ap-southeast-1 \
+     --secret-id foc/staging/kafka-ui-secrets \
+     --query SecretString \
+     --output text | jq '{
+       username: .KAFKA_UI_LOGIN_USERNAME,
+       password: .KAFKA_UI_LOGIN_PASSWORD
+     }'
+   ```
+
    The workflow validates the edge Terraform and resolves the required AWS-managed CloudFront
    policies before building images. If runtime deployment and the private ALB already succeeded but
    only CloudFront failed, run **apply-edge** after correcting the edge configuration. This resumes

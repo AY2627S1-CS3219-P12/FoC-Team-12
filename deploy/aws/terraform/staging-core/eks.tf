@@ -138,6 +138,81 @@ resource "aws_eks_access_policy_association" "deploy" {
   depends_on = [aws_eks_access_entry.deploy]
 }
 
+# Human operators keep the AWS-managed EKS View policy as their normal access boundary. This
+# optional group mapping adds only the Kubernetes subresource permission that View deliberately
+# omits, allowing Kafbat to remain private behind a local port-forward instead of a public route.
+resource "aws_eks_access_entry" "kafbat_viewer" {
+  count = var.kafbat_viewer_role_arn == "" ? 0 : 1
+
+  cluster_name      = aws_eks_cluster.main.name
+  principal_arn     = var.kafbat_viewer_role_arn
+  kubernetes_groups = ["foc-kafka-viewers"]
+  type              = "STANDARD"
+}
+
+# Terraform creates this namespace before the runtime workflow applies workloads. Existing staging
+# environments adopt it in the infrastructure workflow so this remains safe for both first-time and
+# already-running environments.
+resource "kubernetes_namespace_v1" "runtime" {
+  metadata {
+    name = "foc-staging"
+
+    labels = {
+      "app.kubernetes.io/part-of"    = "friend-on-campus"
+      "app.kubernetes.io/managed-by" = "terraform"
+    }
+  }
+
+  depends_on = [aws_eks_cluster.main]
+}
+
+resource "kubernetes_role_v1" "kafbat_port_forward" {
+  metadata {
+    name      = "kafbat-port-forward"
+    namespace = kubernetes_namespace_v1.runtime.metadata[0].name
+  }
+
+  rule {
+    api_groups = [""]
+    resources  = ["pods"]
+    verbs      = ["get", "list"]
+  }
+
+  # Deployment pod names change on rollout, so Kubernetes cannot restrict this subresource to a
+  # stable kafka-ui resourceName. The role remains namespace-scoped and grants no exec or mutation.
+  rule {
+    api_groups = [""]
+    resources  = ["pods/portforward"]
+    verbs      = ["create"]
+  }
+
+  rule {
+    api_groups     = [""]
+    resources      = ["services"]
+    resource_names = ["kafka-ui"]
+    verbs          = ["get"]
+  }
+}
+
+resource "kubernetes_role_binding_v1" "kafbat_port_forward" {
+  metadata {
+    name      = "kafbat-port-forward"
+    namespace = kubernetes_namespace_v1.runtime.metadata[0].name
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role_v1.kafbat_port_forward.metadata[0].name
+  }
+
+  subject {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Group"
+    name      = "foc-kafka-viewers"
+  }
+}
+
 # EKS Auto Mode provisions nodes in response to ordinary workload pods. A newly created cluster's
 # managed add-on pods can otherwise remain pending without triggering the first node, which makes
 # Terraform wait until its add-on timeout. This tiny, inert workload establishes initial capacity

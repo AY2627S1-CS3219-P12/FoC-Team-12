@@ -32,6 +32,7 @@ jobs:
       TF_INPUT: "false"
       TF_VAR_github_deploy_role_arn: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
       TF_VAR_budget_email: ${{ vars.AWS_BUDGET_EMAIL }}
+      TF_VAR_kafbat_viewer_role_arn: ${{ vars.AWS_KAFBAT_VIEWER_ROLE_ARN }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -62,6 +63,23 @@ jobs:
           if aws s3api head-bucket --bucket "$bucket" 2>/dev/null && \
              ! terraform -chdir=deploy/aws/terraform/staging-core state list | grep -qx 'aws_s3_bucket.chat_attachments'; then
             terraform -chdir=deploy/aws/terraform/staging-core import aws_s3_bucket.chat_attachments "$bucket"
+          fi
+      - name: Adopt existing staging operator access
+        if: inputs.operation == 'apply-core'
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          if kubectl get namespace foc-staging >/dev/null 2>&1 && \
+             ! terraform -chdir=deploy/aws/terraform/staging-core state list | grep -qx 'kubernetes_namespace_v1.runtime'; then
+            terraform -chdir=deploy/aws/terraform/staging-core import kubernetes_namespace_v1.runtime foc-staging
+          fi
+          if test -n "$TF_VAR_kafbat_viewer_role_arn" && \
+             aws eks describe-access-entry --cluster-name "$EKS_CLUSTER_NAME" \
+               --principal-arn "$TF_VAR_kafbat_viewer_role_arn" >/dev/null 2>&1 && \
+             ! terraform -chdir=deploy/aws/terraform/staging-core state list | \
+               grep -Fqx 'aws_eks_access_entry.kafbat_viewer[0]'; then
+            terraform -chdir=deploy/aws/terraform/staging-core import \
+              'aws_eks_access_entry.kafbat_viewer[0]' \
+              "$EKS_CLUSTER_NAME:$TF_VAR_kafbat_viewer_role_arn"
           fi
       - name: Plan core infrastructure
         if: inputs.operation == 'plan-core'
