@@ -27,10 +27,11 @@ All signed-in service pages use the same shell and order:
 2. Participant modes show `Home`, `Errands`, `Suppliers`, `Credits`. Admin mode shows only
    `Home`, `Suppliers`, `Admin`; participant Errands and Credits destinations are omitted.
 3. Requester/Courier selector for participant modes.
-4. Notification bell, signed in only: a Lucide `Bell` linking to `/notifications`, with the unread
-   count as a small badge (`9+` above nine) and in its accessible name ("Notifications, 3 unread").
-   It is `2.75rem` square with a `1.25rem` icon, centred, and marked current on the Notifications
-   page. Header rules for `1rem` navigation icons must exclude the bell.
+4. Notification bell in participant modes only: a Lucide `Bell` linking to `/notifications`, with
+   the unread count as a small badge (`9+` above nine) and in its accessible name
+   ("Notifications, 3 unread"). It is hidden in Admin mode, `2.75rem` square with a `1.25rem`
+   icon, centred, and marked current on the Notifications page. Header rules for `1rem` navigation
+   icons must exclude the bell.
 5. Account menu with profile, permitted administration actions and sign out.
 
 Every account menu links Profile to `/?view=profile`. Personal details, username editing and
@@ -65,7 +66,9 @@ The Requester/Courier selector is one control shared by every frontend:
 Changing role calls the User Service session-role endpoint. Only a valid replacement response may
 replace the stored JWT and selected role. While pending, both choices are disabled. On failure,
 keep the previous JWT and role, show an actionable error and leave backend authorization
-authoritative. A role switch must not alter balances, orders, profiles or other domain data.
+authoritative. A successful account-menu switch to Admin opens `/admin`; switching back to User
+opens `/`. This prevents participant-only pages from remaining visible under an Admin session. A
+role switch must not alter balances, orders, profiles or other domain data.
 
 ## Foundations
 
@@ -144,7 +147,9 @@ Meet WCAG AA contrast for text and controls. Never communicate status using colo
 - Signed-in Home prioritises requesting help and running errands, then exposes Suppliers, Credits
   and account information.
 - Errand screens adapt actions to the active Requester/Courier role while preserving access to the
-  user's own active and historical errands.
+  user's own active and historical errands. The Requester Errands destination is `/errands/mine`,
+  where **Create new errand** opens the separate `/errands/new` form; Courier Errands opens the
+  available request pool at `/errands/browse`.
 - Suppliers remain a discoverable participant destination; administration actions appear only in
   Admin mode and are still enforced by the Supplier backend.
 - Credits are an account view inside the main application, not a separate dashboard. Account

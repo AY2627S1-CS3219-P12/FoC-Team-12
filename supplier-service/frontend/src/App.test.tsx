@@ -16,7 +16,9 @@ import { supplierApi } from './api/client'
 import { navigateTo } from './navigation'
 
 // The header bell polls on its own and has its own tests; keep it out of these fetch sequences.
-vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
+vi.mock('./components/NotificationBell', () => ({
+  NotificationBell: () => null,
+}))
 
 vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 
@@ -452,7 +454,9 @@ describe('Public supplier details', () => {
     renderRoute('/suppliers/not-a-uuid')
 
     expect(screen.getByText('Location not found')).toBeInTheDocument()
-    expect(screen.getByText('This link doesn’t look right.')).toBeInTheDocument()
+    expect(
+      screen.getByText('This link doesn’t look right.'),
+    ).toBeInTheDocument()
     expect(urls.some((url) => url.includes('/api/suppliers/not-a-uuid'))).toBe(
       false,
     )
@@ -552,7 +556,9 @@ describe('Other frontend routes', () => {
     renderRoute('/suppliers')
 
     await screen.findByText("Anna's x Soup Union")
-    const accountMenuButton = screen.getByLabelText('Open account menu for Admin')
+    const accountMenuButton = screen.getByLabelText(
+      'Open account menu for Admin',
+    )
     const accountMenu = accountMenuButton.closest('details')
     await user.click(accountMenuButton)
     expect(accountMenu).toHaveAttribute('open')
@@ -567,7 +573,7 @@ describe('Other frontend routes', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       role: 'ADMIN',
     })
-    expect(navigateTo).toHaveBeenCalledWith('/admin/suppliers')
+    expect(navigateTo).toHaveBeenCalledWith('/admin')
     expect(accountMenu).not.toHaveAttribute('open')
     expect(
       JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}'),
@@ -596,15 +602,25 @@ describe('Other frontend routes', () => {
       await screen.findByRole('heading', { name: 'Campus locations' }),
     ).toBeInTheDocument()
     expect(
-      within(screen.getByRole('navigation', { name: 'Main navigation' }))
-        .getByRole('link', { name: 'Suppliers' }),
+      within(
+        screen.getByRole('navigation', { name: 'Main navigation' }),
+      ).getByRole('link', { name: 'Suppliers' }),
     ).toHaveAttribute('href', '/admin/suppliers')
-    expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
-      .getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin')
-    expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
-      .queryByRole('link', { name: 'Errands' })).not.toBeInTheDocument()
-    expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
-      .queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
+    expect(
+      within(
+        screen.getByRole('navigation', { name: 'Main navigation' }),
+      ).getByRole('link', { name: 'Admin' }),
+    ).toHaveAttribute('href', '/admin')
+    expect(
+      within(
+        screen.getByRole('navigation', { name: 'Main navigation' }),
+      ).queryByRole('link', { name: 'Errands' }),
+    ).not.toBeInTheDocument()
+    expect(
+      within(
+        screen.getByRole('navigation', { name: 'Main navigation' }),
+      ).queryByRole('link', { name: 'Credits' }),
+    ).not.toBeInTheDocument()
     await user.click(screen.getByLabelText('Open account menu for Admin'))
     expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute(
       'href',

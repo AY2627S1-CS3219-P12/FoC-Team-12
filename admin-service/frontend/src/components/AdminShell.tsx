@@ -8,6 +8,7 @@ import {
   type WorkspaceRole,
 } from '../auth/session'
 import { NotificationBell } from './NotificationBell'
+import { navigateTo } from '../navigation'
 
 import bagIcon from '../assets/foc-bag.svg'
 
@@ -25,6 +26,10 @@ export function AdminShell({
   const initial = session?.username.trim().charAt(0).toUpperCase() || 'F'
   const suppliersPath =
     session?.role === 'ADMIN' ? '/admin/suppliers' : '/suppliers'
+  const errandsPath =
+    session?.role === 'REQUESTER' || session?.role === 'USER'
+      ? '/errands/mine'
+      : '/errands/browse'
 
   useEffect(() => {
     const refreshSession = () => setSession(readSession())
@@ -63,6 +68,7 @@ export function AdminShell({
   const selectWorkspaceRoleFromMenu = async (role: WorkspaceRole) => {
     if (!(await selectWorkspaceRole(role))) return
     if (accountMenuRef.current) accountMenuRef.current.open = false
+    navigateTo(role === 'ADMIN' ? '/admin' : '/')
   }
 
   return (
@@ -78,13 +84,9 @@ export function AdminShell({
           </a>
           <nav aria-label="Main navigation" className="main-nav">
             <a href="/">Home</a>
-            {session?.role !== 'ADMIN' && (
-              <a href="/errands/browse">Errands</a>
-            )}
+            {session?.role !== 'ADMIN' && <a href={errandsPath}>Errands</a>}
             <a href={suppliersPath}>Suppliers</a>
-            {session?.role !== 'ADMIN' && (
-              <a href="/credits">Credits</a>
-            )}
+            {session?.role !== 'ADMIN' && <a href="/credits">Credits</a>}
             {session?.role === 'ADMIN' && (
               <a
                 aria-current={
@@ -125,7 +127,7 @@ export function AdminShell({
                 </span>
               </div>
             )}
-            <NotificationBell />
+            {session?.role !== 'ADMIN' && <NotificationBell />}
             {session ? (
               <details className="account-menu" ref={accountMenuRef}>
                 <summary

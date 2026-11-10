@@ -7,7 +7,9 @@ import { safeReturnTo, saveSession } from './auth/session'
 import { navigateTo } from './navigation'
 
 // The header bell polls on its own and has its own tests; keep it out of these fetch sequences.
-vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
+vi.mock('./components/NotificationBell', () => ({
+  NotificationBell: () => <span data-testid="notification-bell" />,
+}))
 
 vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 
@@ -206,7 +208,7 @@ test('opens the dashboard after the administrator selects Admin mode', async () 
   saveSession({
     accessToken: 'requester.jwt', tokenType: 'Bearer', expiresAt: '2030-01-01T00:15:00Z',
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', username: 'Admin', role: 'REQUESTER',
-    availableRoles: ['REQUESTER', 'ADMIN'],
+    availableRoles: ['REQUESTER'],
   })
   vi.stubGlobal('fetch', vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({
@@ -227,11 +229,12 @@ test('opens the dashboard after the administrator selects Admin mode', async () 
 
   const accountMenuButton = await screen.findByLabelText('Open account menu for Admin')
   const accountMenu = accountMenuButton.closest('details')
+  expect(screen.getByTestId('notification-bell')).toBeInTheDocument()
   await user.click(accountMenuButton)
   expect(accountMenu).toHaveAttribute('open')
   expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
     .queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument()
-  await user.click(screen.getByRole('button', { name: 'Switch to Admin' }))
+  await user.click(await screen.findByRole('button', { name: 'Switch to Admin' }))
 
   await waitFor(() => expect(accountMenu).not.toHaveAttribute('open'))
 
@@ -246,6 +249,7 @@ test('opens the dashboard after the administrator selects Admin mode', async () 
     .queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute('href', '/?view=users')
   expect(screen.getByRole('button', { name: 'Switch to User' })).toBeInTheDocument()
+  expect(screen.queryByTestId('notification-bell')).not.toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: 'Profile' })).not.toBeInTheDocument()
   expect(navigateTo).toHaveBeenCalledWith('/admin')
 })

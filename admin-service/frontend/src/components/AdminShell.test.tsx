@@ -4,6 +4,7 @@ import { AdminShell } from './AdminShell'
 import { saveSession, expireSession, type WorkspaceRole } from '../auth/session'
 
 vi.mock('./NotificationBell', () => ({ NotificationBell: () => null }))
+vi.mock('../navigation', () => ({ navigateTo: vi.fn() }))
 
 function session(role: WorkspaceRole, adminEligible = false) {
   saveSession({

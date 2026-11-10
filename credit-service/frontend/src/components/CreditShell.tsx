@@ -19,6 +19,10 @@ export function CreditShell({ children }: { children: ReactNode }) {
   const initial = session?.username.trim().charAt(0).toUpperCase() || 'F'
   const suppliersPath =
     session?.role === 'ADMIN' ? '/admin/suppliers' : '/suppliers'
+  const errandsPath =
+    session?.role === 'REQUESTER' || session?.role === 'USER'
+      ? '/errands/mine'
+      : '/errands/browse'
 
   useEffect(() => {
     const refreshSession = () => setSession(readSession())
@@ -49,6 +53,7 @@ export function CreditShell({ children }: { children: ReactNode }) {
   const selectWorkspaceRoleFromMenu = async (role: WorkspaceRole) => {
     if (!(await selectWorkspaceRole(role))) return
     if (accountMenuRef.current) accountMenuRef.current.open = false
+    navigateTo(role === 'ADMIN' ? '/admin' : '/')
   }
 
   return (
@@ -61,10 +66,12 @@ export function CreditShell({ children }: { children: ReactNode }) {
           </a>
           <nav aria-label="Main navigation" className="main-nav">
             <a href="/">Home</a>
-            {session?.role !== 'ADMIN' && <a href="/errands/browse">Errands</a>}
+            {session?.role !== 'ADMIN' && <a href={errandsPath}>Errands</a>}
             <a href={suppliersPath}>Suppliers</a>
             {session?.role !== 'ADMIN' && (
-              <a aria-current="page" href="/credits">Credits</a>
+              <a aria-current="page" href="/credits">
+                Credits
+              </a>
             )}
             {session?.role === 'ADMIN' && <a href="/admin">Admin</a>}
           </nav>
@@ -95,10 +102,13 @@ export function CreditShell({ children }: { children: ReactNode }) {
                 </span>
               </div>
             )}
-            <NotificationBell />
+            {session?.role !== 'ADMIN' && <NotificationBell />}
             {session ? (
               <details className="account-menu" ref={accountMenuRef}>
-                <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
+                <summary
+                  aria-label={`Open account menu for ${session.username}`}
+                  title="Account menu"
+                >
                   <span className="avatar" aria-hidden="true">
                     {initial}
                   </span>
@@ -114,7 +124,9 @@ export function CreditShell({ children }: { children: ReactNode }) {
                     session.role !== 'ADMIN' && (
                       <button
                         disabled={workspaceBusy}
-                        onClick={() => void selectWorkspaceRoleFromMenu('ADMIN')}
+                        onClick={() =>
+                          void selectWorkspaceRoleFromMenu('ADMIN')
+                        }
                         type="button"
                       >
                         Switch to Admin
@@ -123,7 +135,9 @@ export function CreditShell({ children }: { children: ReactNode }) {
                   {session.role === 'ADMIN' && (
                     <button
                       disabled={workspaceBusy}
-                      onClick={() => void selectWorkspaceRoleFromMenu('REQUESTER')}
+                      onClick={() =>
+                        void selectWorkspaceRoleFromMenu('REQUESTER')
+                      }
                       type="button"
                     >
                       Switch to User
@@ -144,7 +158,8 @@ export function CreditShell({ children }: { children: ReactNode }) {
               </details>
             ) : (
               <a className="sign-in-link" href="/?returnTo=%2Fcredits">
-                <LogIn aria-hidden="true" />Sign in
+                <LogIn aria-hidden="true" />
+                Sign in
               </a>
             )}
           </nav>

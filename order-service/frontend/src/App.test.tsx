@@ -59,19 +59,22 @@ describe('AppRoutes', () => {
     ).toBeInTheDocument()
   })
 
-  it('sends a requester to Request help', () => {
+  it('sends a requester to their errand history', () => {
     signIn('REQUESTER')
     renderAt('/errands')
     expect(
-      screen.getByRole('heading', { name: 'Create a campus errand' }),
+      screen.getByRole('heading', { name: 'My errands' }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Create new errand' }),
+    ).toHaveAttribute('href', '/errands/new')
   })
 
   it("keeps each role off the other role's screen", () => {
     signIn('REQUESTER')
     renderAt('/errands/browse')
     expect(
-      screen.getByRole('heading', { name: 'Create a campus errand' }),
+      screen.getByRole('heading', { name: 'My errands' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { name: 'Campus errands' }),

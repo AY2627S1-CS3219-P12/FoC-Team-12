@@ -19,6 +19,10 @@ export function NotificationShell({ children }: { children: ReactNode }) {
   const initial = session?.username.trim().charAt(0).toUpperCase() || 'F'
   const suppliersPath =
     session?.role === 'ADMIN' ? '/admin/suppliers' : '/suppliers'
+  const errandsPath =
+    session?.role === 'REQUESTER' || session?.role === 'USER'
+      ? '/errands/mine'
+      : '/errands/browse'
 
   useEffect(() => {
     const refreshSession = () => setSession(readSession())
@@ -49,6 +53,7 @@ export function NotificationShell({ children }: { children: ReactNode }) {
   const selectWorkspaceRoleFromMenu = async (role: WorkspaceRole) => {
     if (!(await selectWorkspaceRole(role))) return
     if (accountMenuRef.current) accountMenuRef.current.open = false
+    navigateTo(role === 'ADMIN' ? '/admin' : '/')
   }
 
   return (
@@ -62,7 +67,7 @@ export function NotificationShell({ children }: { children: ReactNode }) {
           <nav aria-label="Main navigation" className="main-nav">
             <a href="/">Home</a>
             {session?.role !== 'ADMIN' && (
-              <a href="/errands/browse">Errands</a>
+              <a href={errandsPath}>Errands</a>
             )}
             <a href={suppliersPath}>Suppliers</a>
             {session?.role !== 'ADMIN' && <a href="/credits">Credits</a>}
@@ -95,7 +100,7 @@ export function NotificationShell({ children }: { children: ReactNode }) {
                 </span>
               </div>
             )}
-            <NotificationBell current />
+            {session?.role !== 'ADMIN' && <NotificationBell current />}
             {session ? (
               <details className="account-menu" ref={accountMenuRef}>
                 <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">

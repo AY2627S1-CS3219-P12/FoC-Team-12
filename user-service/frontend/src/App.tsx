@@ -701,7 +701,13 @@ export function App() {
     const profilePage = requestedPage === 'profile'
     const homePage = !adminUsersPage && !profilePage
     const suppliersPath = adminMode ? '/admin/suppliers' : '/suppliers'
-    const canUseAdmin = session.availableRoles?.includes('ADMIN') ?? false
+    const canUseAdmin =
+      (session.availableRoles?.includes('ADMIN') ?? false) ||
+      (displayedProfile?.roles?.includes('ADMIN') ?? false)
+    const errandsPath =
+      session.role === 'REQUESTER' || session.role === 'USER'
+        ? '/errands/mine'
+        : '/errands/browse'
     const accountInitial = session.username.trim().charAt(0).toUpperCase()
     const accountNameParts = session.username.trim().split(/\s+/)
     const capitalLetters = session.username.match(/[A-Z]/g)?.join('') ?? ''
@@ -799,7 +805,7 @@ export function App() {
           </a>
           <nav className="profile-service-nav" aria-label="Main navigation">
             <a aria-current={homePage ? 'page' : undefined} href="/">Home</a>
-            {!adminMode && <a href="/errands/browse">Errands</a>}
+            {!adminMode && <a href={errandsPath}>Errands</a>}
             <a href={suppliersPath}>Suppliers</a>
             {!adminMode && <a href="/credits">Credits</a>}
             {adminMode && <a href="/admin">Admin</a>}
@@ -813,7 +819,7 @@ export function App() {
                   onClick={() => { void selectWorkspaceRole('COURIER') }}>Courier</button>
               </span>
             </div>}
-            <NotificationBell />
+            {!adminMode && <NotificationBell />}
             <details className="profile-account-menu" ref={accountMenuRef}>
               <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
                 <span aria-hidden="true" className="profile-account-avatar">{accountInitial}</span>

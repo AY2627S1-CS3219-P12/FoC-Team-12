@@ -4,6 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { sessionKey } from './auth/session'
+import { navigateTo } from './navigation'
+
+vi.mock('./navigation', () => ({
+  navigateTo: vi.fn(),
+  signInPath: () => '/?returnTo=%2Fcredits',
+}))
 
 const balance = {
   userId: '10000000-0000-0000-0000-000000000000',
@@ -104,6 +110,7 @@ describe('Credit dashboard', () => {
     cleanup()
     sessionStorage.clear()
     vi.restoreAllMocks()
+    vi.clearAllMocks()
     vi.unstubAllGlobals()
   })
 
@@ -138,6 +145,10 @@ describe('Credit dashboard', () => {
     expect(
       screen.getByRole('link', { name: 'Friend on Campus' }),
     ).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Errands' })).toHaveAttribute(
+      'href',
+      '/errands/mine',
+    )
     expect(
       screen.getByLabelText('4 of 10 credits available'),
     ).toBeInTheDocument()
@@ -253,6 +264,53 @@ describe('Credit dashboard', () => {
     })
   })
 
+  it('opens Admin home after switching from the Credits page', async () => {
+    sessionStorage.setItem(
+      sessionKey,
+      JSON.stringify({
+        accessToken: 'requester-token',
+        tokenType: 'Bearer',
+        expiresAt: new Date(Date.now() + 300_000).toISOString(),
+        userId: balance.userId,
+        username: 'admin',
+        role: 'REQUESTER',
+        availableRoles: ['REQUESTER', 'ADMIN'],
+      }),
+    )
+    const creditApi = mockSuccessfulApi()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === '/api/users/me/session-role') {
+          return response({
+            accessToken: 'admin-token',
+            tokenType: 'Bearer',
+            expiresAt: new Date(Date.now() + 300_000).toISOString(),
+            userId: balance.userId,
+            username: 'admin',
+            role: 'ADMIN',
+            availableRoles: ['REQUESTER', 'ADMIN'],
+          })
+        }
+        return creditApi(input, init)
+      }),
+    )
+    const user = userEvent.setup()
+    renderApp()
+
+    await screen.findByRole('heading', { name: /4 available/i })
+    expect(
+      screen.getByRole('link', { name: /^Notifications/ }),
+    ).toBeInTheDocument()
+    await user.click(screen.getByLabelText('Open account menu for admin'))
+    await user.click(screen.getByRole('button', { name: 'Switch to Admin' }))
+
+    await waitFor(() => expect(navigateTo).toHaveBeenCalledWith('/admin'))
+    expect(
+      screen.queryByRole('link', { name: /^Notifications/ }),
+    ).not.toBeInTheDocument()
+  })
+
   it('keeps administrator navigation and account actions consistent', async () => {
     signedInAdmin()
     const creditApi = mockSuccessfulApi()
@@ -283,6 +341,9 @@ describe('Credit dashboard', () => {
     const mainNav = screen.getByRole('navigation', { name: 'Main navigation' })
     expect(within(mainNav).queryByRole('link', { name: 'Errands' })).not.toBeInTheDocument()
     expect(within(mainNav).queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: /^Notifications/ }),
+    ).not.toBeInTheDocument()
     const accountMenuButton = screen.getByLabelText('Open account menu for admin')
     expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin')
     const accountMenu = accountMenuButton.closest('details')

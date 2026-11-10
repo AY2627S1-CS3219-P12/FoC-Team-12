@@ -51,6 +51,7 @@ function renderErrand() {
         <Routes>
           <Route element={<ErrandPage />} path="/errands/:orderId" />
           <Route element={<h1>Request help</h1>} path="/errands/new" />
+          <Route element={<h1>My errands</h1>} path="/errands/mine" />
           <Route element={<h1>Run errands</h1>} path="/errands/browse" />
         </Routes>
       </MemoryRouter>
@@ -578,14 +579,14 @@ describe('ErrandPage', () => {
         COURIER_ID,
         'REQUESTER',
         order({ state: 'ACCEPTED', courierId: COURIER_ID }),
-        'Request help',
+        'My errands',
       ],
       [
         "someone else's open errand as a Requester",
         STRANGER_ID,
         'REQUESTER',
         order(),
-        'Request help',
+        'My errands',
       ],
     ] as const)(
       "sends a user opening %s to that role's screen",
@@ -622,7 +623,7 @@ describe('ErrandPage', () => {
         'REQUESTER',
         order({ state: 'ACCEPTED', courierId: COURIER_ID }),
         "You're the courier",
-        'Request help',
+        'My errands',
       ],
     ] as const)(
       'leaves the errand on %s',
