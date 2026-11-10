@@ -32,6 +32,13 @@ action history is collapsed; pending or uncertain outcomes remain expanded. Conf
 same-request retry safeguards still apply. Closure presents three radio choices with the existing
 dispositions: keep a confirmed outcome with no active hold, return held credits, or pay the courier.
 
+Credit evidence labels each balance change and its before/after values at that historical event.
+Timeline filters apply only to loaded events and never change coverage or closure eligibility.
+Consecutive messages from the same identified sender/conversation within five minutes on the same
+SGT day share a compact group; intervening events, conversation changes and unknown senders break
+groups even when a filter hides those events. Each message retains its original text, timestamp,
+protected attachments and individual audit details. Load more evidence preserves the existing
+snapshot/cursor validation and appends activity in producer order.
 The dashboard does not generate, summarize or rephrase case content and has no LLM dependency.
 
 Cards sit side by side on desktop and stack on narrow screens. A `Reporter` badge marks each
@@ -64,7 +71,7 @@ feedback; the backend independently enforces reviewer independence even without 
 
 Verify with the frontend test suite, lint, TypeScript/production build and the root UI design checks.
 Manual checks: compare two statements at desktop and 375px; use each card's controls and Tab/Enter;
-verify the selected account in confirmation, change the account selector, close/reopen a panel,
+verify the selected account in confirmation, switch participant cards, close/reopen a panel,
 resume an uncertain request, and check non-reporter, other-reviewer and evidence-outage states.
 
 ## Behavior and boundaries

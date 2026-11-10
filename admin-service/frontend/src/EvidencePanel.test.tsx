@@ -511,3 +511,108 @@ it('renders original participant messages in the activity timeline without rewri
   render(<EvidencePanel caseId={caseId} orderId={orderId} />)
   expect(await screen.findByText('two bowls. one missing!!!')).toBeVisible()
 })
+
+function chatRecord(
+  id: string,
+  text: string,
+  changes: Partial<EvidenceRecord> = {},
+): EvidenceRecord {
+  return {
+    ...record(id),
+    source: 'chat-service',
+    stream: 'chat.messages',
+    action: 'MessageSent',
+    data: {
+      kind: 'CHAT',
+      caseId,
+      conversationId: caseId,
+      conversationType: 'ERRAND',
+      participantUserId: null,
+      messageId: id,
+      messageType: 'TEXT',
+      text,
+      attachment: null,
+    },
+    ...changes,
+  }
+}
+
+it('groups consecutive messages but retains each original message, timestamp and audit reference', async () => {
+  const data = timeline()
+  data.records = [
+    chatRecord(caseId, 'First original message'),
+    chatRecord(orderId, 'Second original message', {
+      occurredAt: '2026-10-29T10:00:06Z',
+    }),
+  ]
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(data)))
+  const { container } = render(
+    <EvidencePanel caseId={caseId} orderId={orderId} />,
+  )
+  expect(await screen.findByText('Second original message')).toBeVisible()
+  expect(screen.getByText('First original message')).toBeVisible()
+  expect(container.querySelectorAll('.timeline-message-group')).toHaveLength(1)
+  expect(container.querySelectorAll('.timeline-message')).toHaveLength(2)
+  expect(screen.getByText('29 Oct 2026, 6:00:06 pm SGT')).toBeVisible()
+  const details = container.querySelectorAll('.timeline-message details')
+  expect(details).toHaveLength(2)
+  for (const detail of details)
+    fireEvent.click(detail.querySelector('summary')!)
+  expect(
+    screen
+      .getAllByText(orderId, { exact: false })
+      .some((el) => el.textContent?.includes(orderId)),
+  ).toBe(true)
+})
+
+it('keeps intervening events as group boundaries when filtering messages and distinguishes an empty loaded filter', async () => {
+  const data = timeline()
+  data.records = [
+    chatRecord(caseId, 'Before event'),
+    record(actor),
+    chatRecord(orderId, 'After event'),
+  ]
+  data.nextCursor = 'next-page'
+  const fetcher = vi.fn().mockResolvedValue(response(data))
+  vi.stubGlobal('fetch', fetcher)
+  const { container } = render(
+    <EvidencePanel caseId={caseId} orderId={orderId} />,
+  )
+  await screen.findByText('After event')
+  fireEvent.click(screen.getByRole('button', { name: 'Messages' }))
+  expect(container.querySelectorAll('.timeline-message-group')).toHaveLength(2)
+  expect(
+    screen.queryByRole('heading', { name: 'Case opened' }),
+  ).not.toBeInTheDocument()
+  expect(screen.getByText(/Showing 2 of 3 loaded events/)).toHaveTextContent(
+    'More activity is available',
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Credits' }))
+  expect(
+    screen.getByText(/No matching events in loaded activity/),
+  ).toBeVisible()
+  expect(
+    screen.getByRole('button', { name: 'Load more evidence' }),
+  ).toBeEnabled()
+  expect(fetcher).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole('button', { name: 'All activity' }))
+  expect(screen.getByText('Before event')).toBeVisible()
+})
+
+it.each([
+  ['another sender', { actorUserId: orderId }],
+  ['an unidentified sender', { actorUserId: null }],
+  ['a gap over five minutes', { occurredAt: '2026-10-29T10:06:00Z' }],
+] as const)('does not merge messages with %s', async (_label, changes) => {
+  const data = timeline()
+  data.records = [
+    chatRecord(caseId, 'First'),
+    chatRecord(orderId, 'Separate', changes),
+  ]
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(data)))
+  const { container } = render(
+    <EvidencePanel caseId={caseId} orderId={orderId} />,
+  )
+  await screen.findByText('Separate')
+  expect(container.querySelectorAll('.timeline-message-group')).toHaveLength(2)
+})
