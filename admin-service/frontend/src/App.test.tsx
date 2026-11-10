@@ -1,4 +1,10 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import {
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  within,
+} from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { navigateTo } from './navigation'
@@ -60,9 +66,14 @@ it('opens tools only after live authorization', async () => {
     }),
   )
   render(<App />)
-  expect(await screen.findByText('Administration tools')).toBeVisible()
+  expect(await screen.findByText('Administration tools')).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: /Manage users/ })).toBeVisible()
-  const queue = screen.getByRole('heading', { name: /Case queue/ })
+  expect(
+    screen.getByRole('heading', { name: 'Keep campus running smoothly.' }),
+  ).toBeVisible()
+  const queue = screen.getByRole('heading', {
+    name: 'Cases needing attention',
+  })
   const tools = screen.getByRole('heading', { name: 'Administration tools' })
   expect(queue).toBeVisible()
   expect(
@@ -74,6 +85,62 @@ it('opens tools only after live authorization', async () => {
   expect(
     screen.queryByRole('link', { name: 'Reports' }),
   ).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'View all cases' })).toHaveAttribute(
+    'href',
+    '/admin/cases?status=OPEN',
+  )
+})
+it('builds the Admin overview from live case totals and open cases', async () => {
+  session()
+  const caseId = '11111111-1111-4111-8111-111111111111'
+  const orderId = '22222222-2222-4222-8222-222222222222'
+  const page = (totalElements: number, content: unknown[] = []) => ({
+    content,
+    page: 0,
+    size: content.length || 1,
+    totalElements,
+    totalPages: totalElements ? 1 : 0,
+  })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation(async (url: string) => {
+      if (url === '/api/admin/session')
+        return {
+          ok: true,
+          json: async () => ({ userId: 'actor', role: 'ADMIN' }),
+        }
+      const body = url.includes('status=OPEN')
+        ? page(2, [
+            {
+              caseId,
+              orderId,
+              state: 'OPEN',
+              reviewerId: null,
+              revision: 1,
+              createdAt: '2026-11-10T02:25:00Z',
+            },
+          ])
+        : url.includes('status=UNDER_REVIEW')
+          ? page(1)
+          : url.includes('status=RESOLVED')
+            ? page(4)
+            : page(7)
+      return { ok: true, json: async () => body }
+    }),
+  )
+
+  render(<App />)
+
+  const openMetric = (await screen.findByText('Open cases')).closest('article')!
+  await waitFor(() => expect(within(openMetric).getByText('2')).toBeVisible())
+  await waitFor(() =>
+    expect(
+      within(screen.getByLabelText('Case overview')).getByText('7'),
+    ).toBeVisible(),
+  )
+  expect(
+    await screen.findByRole('link', { name: `Review case ${caseId}` }),
+  ).toHaveAttribute('href', `/admin/cases/${caseId}?page=0&size=20&status=OPEN`)
 })
 it('denies a participant without exposing administrative tools', async () => {
   session('REQUESTER')

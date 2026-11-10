@@ -5,6 +5,7 @@ import {
   ClipboardList,
   RefreshCw,
   Search,
+  ShieldCheck,
 } from 'lucide-react'
 import { AdminShell } from './components/AdminShell'
 import { readSession } from './auth/session'
@@ -134,9 +135,12 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
         </div>
       </div>
       {!participant && (
-        <a className="back-link" href={'/admin' + window.location.search}>
+        <a
+          className="back-link"
+          href={id ? '/admin/cases' + window.location.search : '/admin'}
+        >
           <Arrow direction="back" />
-          Back to case queue
+          {id ? 'Back to case queue' : 'Back to Admin overview'}
         </a>
       )}
       {participant && id === 'new' && isUuid(suppliedOrder) && (
@@ -659,6 +663,135 @@ function queueParams(filters: QueueFilter) {
 function queueLocation(filters: QueueFilter) {
   return queueParams(filters) + (filters.status ? '' : '&status=ALL')
 }
+
+export function AdminDashboardOverview({ actor }: { actor: string }) {
+  const open = useRemote<Page>('cases?page=0&size=2&status=OPEN')
+  const underReview = useRemote<Page>('cases?page=0&size=1&status=UNDER_REVIEW')
+  const resolved = useRemote<Page>('cases?page=0&size=1&status=RESOLVED')
+  const all = useRemote<Page>('cases?page=0&size=1')
+  const metrics = [
+    {
+      label: 'Open cases',
+      value: open.data?.totalElements,
+      detail: 'Needs attention',
+    },
+    {
+      label: 'Under review',
+      value: underReview.data?.totalElements,
+      detail: 'In active review',
+    },
+    {
+      label: 'Resolved cases',
+      value: resolved.data?.totalElements,
+      detail: 'Review completed',
+    },
+    {
+      label: 'Total cases',
+      value: all.data?.totalElements,
+      detail: 'All reported issues',
+    },
+  ]
+  const retry = () => {
+    open.retry()
+    underReview.retry()
+    resolved.retry()
+    all.retry()
+  }
+
+  return (
+    <div className="admin-overview">
+      <section className="admin-metrics" aria-label="Case overview">
+        {metrics.map((metric) => (
+          <article key={metric.label} aria-busy={metric.value === undefined}>
+            <span>{metric.label}</span>
+            <strong>{metric.value ?? '—'}</strong>
+            <small>{metric.detail}</small>
+          </article>
+        ))}
+      </section>
+
+      <section aria-labelledby="priority-queue-title">
+        <div className="admin-priority-heading">
+          <div>
+            <p className="eyebrow">Priority queue</p>
+            <h2 id="priority-queue-title">Cases needing attention</h2>
+          </div>
+          <a className="admin-view-all" href="/admin/cases?status=OPEN">
+            View all cases
+            <Arrow />
+          </a>
+        </div>
+
+        <div
+          className="admin-priority-list"
+          aria-busy={!open.data && !open.error}
+        >
+          {open.error ? (
+            <div className="admin-priority-state" role="alert">
+              <h3>Cases could not be loaded</h3>
+              <p>{open.error}</p>
+              <button onClick={retry} type="button">
+                Try again
+              </button>
+            </div>
+          ) : !open.data ? (
+            <div className="admin-priority-state" role="status">
+              Loading priority cases…
+            </div>
+          ) : open.data.content.length === 0 ? (
+            <div className="admin-priority-state">
+              <span className="empty-queue-icon" aria-hidden="true">
+                <ClipboardList aria-hidden="true" className="ui-icon" />
+              </span>
+              <h3>No open cases</h3>
+              <p>New participant reports will appear here.</p>
+            </div>
+          ) : (
+            <ul>
+              {open.data.content.map((value) => (
+                <li key={value.caseId}>
+                  <a
+                    href={`/admin/cases/${value.caseId}?page=0&size=20&status=OPEN`}
+                    aria-label={`Review case ${value.caseId}`}
+                  >
+                    <span className="admin-priority-icon" aria-hidden="true">
+                      <ShieldCheck />
+                    </span>
+                    <span className="admin-priority-main">
+                      <span className="case-status status-open">
+                        <span aria-hidden="true" />
+                        Open
+                      </span>
+                      <strong>Case {value.caseId}</strong>
+                      <span>Errand {value.orderId}</span>
+                    </span>
+                    <span className="admin-priority-meta">
+                      <span>
+                        {value.reviewerId
+                          ? value.reviewerId === actor
+                            ? 'Assigned to you'
+                            : 'Assigned'
+                          : 'Unassigned'}
+                      </span>
+                      <time dateTime={value.createdAt}>
+                        {formatSingaporeTime(value.createdAt)}
+                      </time>
+                    </span>
+                    <span className="admin-priority-action">
+                      Review
+                      <Arrow />
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export function CaseQueue({ actor }: { actor: string }) {
   const [filters, setFilters] = useState(initialFilters)
   const [query, setQuery] = useState(filters.query)

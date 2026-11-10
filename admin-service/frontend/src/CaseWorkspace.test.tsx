@@ -168,7 +168,7 @@ it('preserves queue context in case detail without participant navigation links'
   await screen.findByText('Case details')
   expect(
     screen.getByRole('link', { name: 'Back to case queue' }),
-  ).toHaveAttribute('href', '/admin' + context)
+  ).toHaveAttribute('href', '/admin/cases' + context)
   expect(
     screen.queryByRole('link', { name: 'Participant reports' }),
   ).not.toBeInTheDocument()
@@ -176,11 +176,11 @@ it('preserves queue context in case detail without participant navigation links'
     screen.queryByRole('navigation', { name: 'Case navigation' }),
   ).not.toBeInTheDocument()
 })
-it('opens the queue directly on the dashboard and restores filters and page from the URL', async () => {
+it('opens the full queue route and restores filters and page from the URL', async () => {
   window.history.replaceState(
     {},
     '',
-    '/admin?page=2&size=20&status=UNDER_REVIEW&query=' + order,
+    '/admin/cases?page=2&size=20&status=UNDER_REVIEW&query=' + order,
   )
   session('ADMIN')
   const fetcher = vi
@@ -212,7 +212,7 @@ it('opens the queue directly on the dashboard and restores filters and page from
   )
 })
 it('keeps all-reports selection on a reload without sending the UI marker to the API', async () => {
-  window.history.replaceState({}, '', '/admin?status=ALL')
+  window.history.replaceState({}, '', '/admin/cases?status=ALL')
   session('ADMIN')
   const fetcher = vi
     .fn()
@@ -333,7 +333,9 @@ it('does not query the queue until live administrator eligibility is confirmed',
   mockServiceFetch(fetcher)
   render(<App />)
   expect(
-    await screen.findByText('This workspace is for administrators'),
+    await screen.findByText(
+      'Switch to the right role in your account menu to see this.',
+    ),
   ).toBeVisible()
   expect(fetcher).toHaveBeenCalledTimes(1)
   expect(fetcher.mock.calls[0]![0]).toBe('/api/admin/session')
@@ -514,7 +516,9 @@ it('removes protected queue data when a later live administrator check denies ac
   expect(await screen.findByText('Case ' + id)).toBeVisible()
   fireEvent.focus(window)
   expect(
-    await screen.findByText('This workspace is for administrators'),
+    await screen.findByText(
+      'Switch to the right role in your account menu to see this.',
+    ),
   ).toBeVisible()
   expect(screen.queryByText('Case ' + id)).not.toBeInTheDocument()
 })

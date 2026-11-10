@@ -135,10 +135,11 @@ Meet WCAG AA contrast for text and controls. Never communicate status using colo
 - **Notifications:** render event-backed rows newest first with an icon, plain-language category,
   timestamp, unread text and available actions. Colour accents distinguish errand, credit,
   completion and attention categories but never replace their text labels.
-- **Admin:** present the protected case queue as the dashboard's primary work area, followed by
-  platform tools. Filters, assignment, evidence, participant statements, private follow-up and
-  resolution remain visually distinct decision areas. Do not manufacture dashboard metrics when
-  the Admin API does not provide them.
+- **Admin:** present a protected overview with Admin-API-backed case counts and a short open-case
+  priority queue, followed by platform tools. The full queue remains the primary review work area
+  and keeps filters, assignment, evidence, participant statements, private follow-up and resolution
+  visually distinct. Never manufacture supplier, member or case metrics that the Admin API does
+  not provide.
 
 ## Key journeys
 
