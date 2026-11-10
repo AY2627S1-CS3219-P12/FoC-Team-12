@@ -24,6 +24,7 @@ import {
   CaseError,
   caseErrorMessage,
   isUuid,
+  isReportContext,
   request,
   uuidPattern,
   type Detail,
@@ -438,7 +439,7 @@ function ReportEntryContext({
   const context = useRemote<ReportContext>(`orders/${orderId}/report-context`)
   if (!context.data)
     return <Feedback {...context} loading="Checking reporting access…" />
-  if (context.data.orderId !== orderId)
+  if (!isReportContext(context.data, orderId))
     return (
       <p role="alert">
         We couldn’t check reporting access. Refresh the page and try again.
@@ -452,8 +453,16 @@ function ReportEntryContext({
   )
     return (
       <section className="case-panel">
-        <h2>You already reported this errand</h2>
-        <p>View your report, case status, and messages.</p>
+        <h2>
+          {context.data.status === 'PREPARING_REVIEW'
+            ? 'Preparing review'
+            : 'You already reported this errand'}
+        </h2>
+        <p>
+          {context.data.status === 'PREPARING_REVIEW'
+            ? 'Your request is saved. Check progress while the errand and chat are prepared for review.'
+            : 'View your report, case status, and messages.'}
+        </p>
         <a className="button" href={'/admin/reports/' + context.data.caseId}>
           View your report
         </a>
@@ -474,6 +483,7 @@ function ReportEntryContext({
     )
   if (
     context.data.status !== 'ELIGIBLE' &&
+    context.data.status !== 'REPORT_REQUEST_AVAILABLE' &&
     context.data.status !== 'PREPARATION_AVAILABLE' &&
     context.data.status !== 'CASE_PARTICIPANT'
   )

@@ -579,17 +579,21 @@ The errand detail screen shows the reporting panel to its requester or assigned 
 couriers browsing an open errand. Acceptance enables the assigned courier's panel. It uses the
 Admin-owned `GET /api/admin/orders/{orderId}/report-context` endpoint through the gateway.
 
-The panel offers **Report an issue** only after authoritative `ELIGIBLE`, or **View your report**
-for `OWN_REPORT`, including resolved cases. `INELIGIBLE` hides the panel; dependency failures show
-an unavailable/retry state rather than implying that no report exists. Query keys include the
-actor, mode, and order; authorization and eligibility remain Admin/Chat responsibilities. Order
-lifecycle endpoints and the Order database are unchanged.
+The panel offers **Report an issue** for `REPORT_REQUEST_AVAILABLE`: it permits saving a
+request, without asserting eligibility or pausing the errand. Order checks involvement when it
+consumes the review command. `PREPARING_REVIEW` shows **Preparing review**, links to the private
+progress page and polls the context every three seconds while visible. Only `OWN_REPORT` shows
+an accepted statement's status; `CASE_PARTICIPANT` offers the verified party their case and a
+statement link while unresolved. The frontend also accepts the former `PREPARATION_AVAILABLE`
+spelling and legacy `ELIGIBLE`/`INELIGIBLE` responses during mixed-version rollout. Unknown or
+malformed responses remain unavailable with retry. Query keys isolate actor, mode and errand;
+no GET or poll submits a request. Authorization and lifecycle mutations remain backend-owned.
 
 An unavailable Order detail may still show the reporting-access panel, allowing a historical
 participant with a known errand URL to ask Admin/Chat without exposing hidden Order details. My
 errands does not yet discover every withdrawn historical assignment; that remains a separate
-Order-owned history/API concern. Without authoritative Chat eligibility, new reporting stays
-blocked.
+Order-owned history/API concern. Saving a request does not grant case access or prove eligibility; Admin accepts it only after
+Order and Chat confirmations arrive.
 
 Use the gateway at <http://localhost:8088> for cross-service GUI checks. The Vite preview also
 proxies Admin paths through that gateway; isolated frontend fixtures are test-only.

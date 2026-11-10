@@ -31,9 +31,40 @@ export type ReportContext = {
     | 'INELIGIBLE'
     | 'CASE_PARTICIPANT'
     | 'PREPARING_REVIEW'
-    | 'PREPARATION_AVAILABLE'
+    | 'REPORT_REQUEST_AVAILABLE'
+    | 'PREPARATION_AVAILABLE' // Compatibility with older Admin deployments.
   caseId: string | null
   state: Summary['state'] | null
+}
+export function isReportContext(
+  value: unknown,
+  orderId: string,
+): value is ReportContext {
+  if (!value || typeof value !== 'object') return false
+  const context = value as Record<string, unknown>
+  if (context.orderId !== orderId || typeof context.status !== 'string')
+    return false
+  if (
+    ['OWN_REPORT', 'CASE_PARTICIPANT', 'PREPARING_REVIEW'].includes(
+      context.status,
+    )
+  )
+    return (
+      typeof context.caseId === 'string' &&
+      isUuid(context.caseId) &&
+      typeof context.state === 'string' &&
+      ['OPEN', 'UNDER_REVIEW', 'RESOLVED'].includes(context.state)
+    )
+  return (
+    [
+      'REPORT_REQUEST_AVAILABLE',
+      'PREPARATION_AVAILABLE',
+      'ELIGIBLE',
+      'INELIGIBLE',
+    ].includes(context.status) &&
+    context.caseId === null &&
+    context.state === null
+  )
 }
 export type CreditAction = {
   operationId: string

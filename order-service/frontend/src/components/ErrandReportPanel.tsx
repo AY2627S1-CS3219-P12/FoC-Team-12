@@ -32,6 +32,8 @@ export function ErrandReportPanel({ orderId }: { orderId: string }) {
     enabled: !!participantMode,
     retry: false,
     staleTime: 0,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'PREPARING_REVIEW' ? 3000 : false,
   })
   if (!session)
     return (
@@ -85,6 +87,20 @@ export function ErrandReportPanel({ orderId }: { orderId: string }) {
             Retry report access
           </button>
         </>
+      ) : context.data.status === 'PREPARING_REVIEW' ? (
+        <>
+          <p role="status">
+            Preparing review. Your request is saved. The errand pauses when the
+            request is processed; review is ready after the errand and chat are
+            confirmed.
+          </p>
+          <a
+            className="button-secondary"
+            href={`/admin/reports/${context.data.caseId}`}
+          >
+            View review progress
+          </a>
+        </>
       ) : context.data.status === 'OWN_REPORT' ? (
         <>
           <p>
@@ -125,11 +141,14 @@ export function ErrandReportPanel({ orderId }: { orderId: string }) {
             </a>
           )}
         </>
-      ) : context.data.status === 'ELIGIBLE' ? (
+      ) : context.data.status === 'ELIGIBLE' ||
+        context.data.status === 'REPORT_REQUEST_AVAILABLE' ||
+        context.data.status === 'PREPARATION_AVAILABLE' ? (
         <>
           <p>
             Tell the review team about an issue with this errand. Your report
-            and status are private.
+            and status are private. Your involvement is checked when you submit
+            a request for review.
           </p>
           <a
             className="button-secondary"

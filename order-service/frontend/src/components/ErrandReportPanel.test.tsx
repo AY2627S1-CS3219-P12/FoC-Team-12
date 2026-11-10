@@ -1,3 +1,4 @@
+import reportApi from '../../../../docs/contracts/n2h.openapi.json'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
@@ -171,4 +172,112 @@ it('explains a report to a verified nonreporter and offers their statement and a
   expect(
     screen.getByRole('link', { name: 'View case and contact admin' }),
   ).toHaveAttribute('href', '/admin/reports/' + caseId)
+})
+
+// Exercise the actual producer schema, rather than repeating a stale status list in mocks.
+const publishedContexts =
+  reportApi.components.schemas.ReportContext.oneOf.flatMap((branch) =>
+    branch.properties.status.enum.map((status) => ({
+      orderId: id,
+      status,
+      caseId: branch.properties.caseId.type === 'null' ? null : caseId,
+      state: branch.properties.state.type === 'null' ? null : 'OPEN',
+    })),
+  )
+it.each(publishedContexts)(
+  'supports published Admin report-context $status',
+  async (body) => {
+    signIn(REQUESTER_ID, 'REQUESTER')
+    vi.stubGlobal('fetch', stubFetch(() => ({ body })).fetchMock)
+    show()
+    const labels: Record<string, string> = {
+      REPORT_REQUEST_AVAILABLE: 'Report an issue',
+      PREPARING_REVIEW: 'View review progress',
+      OWN_REPORT: 'View your report',
+      CASE_PARTICIPANT: 'View case and contact admin',
+    }
+    expect(labels[body.status]).toBeDefined()
+    expect(
+      await screen.findByRole('link', { name: labels[body.status] }),
+    ).toBeVisible()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    if (body.status === 'PREPARING_REVIEW') {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Your request is saved',
+      )
+      expect(
+        screen.queryByRole('link', { name: 'Report an issue' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByText(/Your report is awaiting review/),
+      ).not.toBeInTheDocument()
+    }
+  },
+)
+it('accepts the previous available spelling while older Admin deployments drain', async () => {
+  signIn(REQUESTER_ID, 'REQUESTER')
+  vi.stubGlobal(
+    'fetch',
+    stubFetch(() => ({
+      body: {
+        orderId: id,
+        status: 'PREPARATION_AVAILABLE',
+        caseId: null,
+        state: null,
+      },
+    })).fetchMock,
+  )
+  show()
+  expect(
+    await screen.findByRole('link', { name: 'Report an issue' }),
+  ).toBeVisible()
+})
+it.each([
+  { status: 'PREPARING_REVIEW', caseId: null, state: 'OPEN' },
+  { status: 'PREPARING_REVIEW', caseId, state: null },
+  { status: 'REPORT_REQUEST_AVAILABLE', caseId, state: 'OPEN' },
+  { status: 'UNRECOGNIZED_STATUS', caseId: null, state: null },
+])('rejects malformed or unsupported context $status', async (body) => {
+  signIn(REQUESTER_ID, 'REQUESTER')
+  vi.stubGlobal(
+    'fetch',
+    stubFetch(() => ({ body: { orderId: id, ...body } })).fetchMock,
+  )
+  show()
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'We can’t load reports right now',
+  )
+  expect(
+    screen.queryByRole('link', { name: 'Report an issue' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: 'View review progress' }),
+  ).not.toBeInTheDocument()
+})
+it('polls a saved preparation until the report is accepted without submitting another request', async () => {
+  signIn(REQUESTER_ID, 'REQUESTER')
+  let ready = false
+  const { fetchMock, calls } = stubFetch(() => ({
+    body: {
+      orderId: id,
+      status: ready ? 'OWN_REPORT' : 'PREPARING_REVIEW',
+      caseId,
+      state: 'OPEN',
+    },
+  }))
+  vi.stubGlobal('fetch', fetchMock)
+  show()
+  await screen.findByRole('link', { name: 'View review progress' })
+  ready = true
+  expect(
+    await screen.findByRole(
+      'link',
+      { name: 'View your report' },
+      { timeout: 6000 },
+    ),
+  ).toBeVisible()
+  expect(calls.length).toBeGreaterThan(1)
+  expect(
+    calls.every((call) => !call.init?.method || call.init.method === 'GET'),
+  ).toBe(true)
 })

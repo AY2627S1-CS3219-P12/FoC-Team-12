@@ -695,11 +695,15 @@ See [sanctions ownership, behavior, recovery and verification](SANCTIONS_INTEGRA
 Order's errand detail links to Admin reporting through the regular gateway. The read-only
 `GET /api/admin/orders/{orderId}/report-context` requires a current active Requester/Courier JWT.
 `OWN_REPORT` returns only that actor's existing case ID and safe state, even during a Chat outage.
-Otherwise Admin asks Chat for verified reporting eligibility: `ELIGIBLE` offers the errand-scoped
-form; `INELIGIBLE` returns null case/state and exposes no other participant's case. Incomplete or
-unavailable eligibility returns 503, never an empty/no-report success. Responses are no-store.
-The GET creates no rows/events, needs no mutation identity and may be retried safely. Admin's
-existing POST still rechecks Chat eligibility and locks case state before accepting a statement.
+An actor's pending preparation returns `PREPARING_REVIEW` with only their private case reference,
+before general `CASE_PARTICIPANT` navigation is considered. Verified nonreporters receive
+`CASE_PARTICIPANT`. A new request returns `REPORT_REQUEST_AVAILABLE` with null case/state,
+without a Chat lookup, eligibility claim or disclosure of another party's case. This replaces the
+former `PREPARATION_AVAILABLE` spelling; both frontends accept that spelling during rollout.
+Responses are no-store. The GET creates no rows/events and can be retried safely. POST saves a
+private preparation and durable command with HTTP 202; Order verifies involvement and freezes the
+errand, Chat confirms its barrier, and only then does Admin accept the statement. Preparation
+progress is not an accepted report or a promise that the errand has already paused.
 
 The new-report page checks the same context so repeat visits lead to View your report rather than
 a duplicate statement form. Current account/role and per-report access stay backend-enforced.

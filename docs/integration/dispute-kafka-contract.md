@@ -15,9 +15,12 @@ when it processes the command. Ordinary actions committed before that boundary r
 actions after it are blocked locally, including expiry. Chat independently commits its barrier.
 Admin accepts the statement and enables assignment only after both owner confirmations.
 The UI calls the interval **Preparing review** and polls the private local status.
-The report-context endpoint returns `PREPARATION_AVAILABLE` for a new request without asserting
-reporting eligibility or disclosing an existing case. It requires no Chat lookup. Pending private
-status reveals only the caller's saved preparation until Order verifies membership.
+The report-context endpoint returns `REPORT_REQUEST_AVAILABLE` for a new request without asserting
+reporting eligibility or disclosing an existing case. It requires no Chat lookup. This is the
+canonical replacement for the former PREPARATION_AVAILABLE spelling; consumers accept that former
+spelling during rollout, while new producers emit REPORT_REQUEST_AVAILABLE. Pending private
+status (PREPARING_REVIEW) reveals only the caller's saved preparation until Order verifies
+membership, and takes precedence over general verified-participant navigation.
 
 Admin authenticates the original HTTP user and records only their UUID and effective role.
 No JWT, bearer credential, password, private key, report description or decision text enters
