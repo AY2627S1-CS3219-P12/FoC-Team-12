@@ -136,6 +136,13 @@ For other environments, follow the dedicated guides:
 └── docs/                  # Shared contracts and integration decisions
 ```
 
+## AI use
+
+**Tool cited:** OpenAI ChatGPT/Codex. It was used only to clarify or format team-provided
+requirements and to assist with implementation code, unit tests, debugging, refactoring and
+documentation after requirements and architecture were finalized by the team; all AI-assisted
+work was reviewed and verified by team members.
+
 ## Authors and acknowledgments
 
 | Contributor | Primary responsibility | Additional responsibility |
