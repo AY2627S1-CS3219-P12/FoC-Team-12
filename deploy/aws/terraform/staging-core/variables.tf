@@ -48,3 +48,28 @@ variable "vpc_cidr" {
   description = "CIDR reserved for the staging VPC."
   default     = "10.42.0.0/16"
 }
+
+variable "msk_kafka_version" {
+  type        = string
+  description = "Pinned Amazon MSK Kafka version. Update only after client and MSK compatibility review."
+  default     = "4.2.x.kraft"
+}
+
+variable "msk_broker_instance_type" {
+  type        = string
+  description = "Provisioned MSK broker size; three brokers are created across three AZs."
+  # T3 brokers cannot run MSK's KRaft metadata mode. M7g is the smallest production-oriented
+  # Graviton family supported by the pinned KRaft release.
+  default = "kafka.m7g.large"
+}
+
+variable "msk_broker_storage_gib" {
+  type        = number
+  description = "Encrypted EBS storage allocated to each MSK broker."
+  default     = 20
+
+  validation {
+    condition     = var.msk_broker_storage_gib >= 1
+    error_message = "msk_broker_storage_gib must be at least 1 GiB."
+  }
+}

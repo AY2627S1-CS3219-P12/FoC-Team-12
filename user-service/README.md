@@ -176,8 +176,8 @@ configuration validation; do not log their values.
 | --- | --- |
 | `USER_EVENTS_PUBLISHER_ENABLED` | `false`; Compose sets `true` |
 | `KAFKA_BOOTSTRAP_SERVERS` | `localhost:29092`; Compose sets `kafka:9092` |
-| `KAFKA_SECURITY_PROTOCOL` | `SASL_PLAINTEXT` for the local broker; `SASL_SSL` is also supported |
-| `KAFKA_SASL_MECHANISM` | `PLAIN` |
+| `KAFKA_SECURITY_PROTOCOL` | `SASL_PLAINTEXT` locally; AWS MSK uses encrypted `SASL_SSL` |
+| `KAFKA_SASL_MECHANISM` | `PLAIN` locally; AWS MSK uses `SCRAM-SHA-512` |
 | `KAFKA_USERNAME` | `user_service` |
 | `KAFKA_PASSWORD` | Runtime secret; Compose maps `KAFKA_USER_SERVICE_PASSWORD` from ignored `.env` |
 | `USER_EVENTS_POLL_INTERVAL_MS` | `5000` between bounded batches |
@@ -218,11 +218,11 @@ SELECT event_id, user_id, attempt_count, published_at, next_attempt_at, last_fai
 FROM user_event_outbox ORDER BY occurred_at;
 ```
 
-Kubernetes supplies the publisher enable flag, `kafka:9092` broker address and `user_service`
-credential through the reviewed Deployment and `user-kafka-client` Secret. Provision Kafka first
-and select the verified SHA-tagged User image containing this migration and publisher. Kafka does
-not belong on the HTTP gateway. Check database compatibility before rolling an application image
-back.
+Local Minikube supplies the publisher enable flag, `kafka:9092` broker address and `user_service`
+credential through its reviewed Deployment and `user-kafka-client` Secret. AWS staging instead
+projects the same identity into the User pod and connects it to the private MSK SCRAM endpoints.
+Provision the selected broker before the application. Kafka does not belong on the HTTP gateway.
+Check database compatibility before rolling an application image back.
 
 ### Verification
 

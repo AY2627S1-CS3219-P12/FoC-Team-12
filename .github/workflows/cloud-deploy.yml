@@ -106,10 +106,21 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+      - name: Check MSK runtime readiness
+        id: runtime
+        run: |
+          ready=$(aws ssm get-parameter --name /foc/staging/msk-runtime-ready \
+            --query Parameter.Value --output text 2>/dev/null || printf false)
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+          if [ "$ready" != true ]; then
+            echo '::warning::Published images were not deployed because MSK has not completed one-time provisioning.'
+          fi
       - uses: azure/setup-helm@v4
+        if: steps.runtime.outputs.ready == 'true'
         with:
           version: v3.19.0
       - name: Resolve current and changed images
+        if: steps.runtime.outputs.ready == 'true'
         run: |
           aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
           account_id=$(aws sts get-caller-identity --query Account --output text)
@@ -135,14 +146,16 @@ jobs:
           env | grep -E '^(GATEWAY|USER|SUPPLIER|ORDER|CREDIT|ADMIN|CHAT|NOTIFICATION)_IMAGE=' >> "$GITHUB_ENV"
           echo "CHAT_S3_BUCKET=$CHAT_S3_BUCKET" >> "$GITHUB_ENV"
       - name: Deploy and smoke-test with rollback on failure
+        if: steps.runtime.outputs.ready == 'true'
         run: |
           RDS_HOST=$(aws ssm get-parameter --name /foc/staging/rds-host --query Parameter.Value --output text)
           RDS_MASTER_SECRET_ARN=$(aws ssm get-parameter --name /foc/staging/rds-master-secret-arn --query Parameter.Value --output text)
           ALB_SECURITY_GROUP_ID=$(aws ssm get-parameter --name /foc/staging/alb-security-group-id --query Parameter.Value --output text)
           EXTERNAL_SECRETS_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/external-secrets-role-arn --query Parameter.Value --output text)
           CHAT_SERVICE_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/chat-service-role-arn --query Parameter.Value --output text)
+          MSK_BOOTSTRAP_SERVERS=$(aws ssm get-parameter --name /foc/staging/msk-bootstrap-brokers --query Parameter.Value --output text)
           PUBLIC_URL=$(aws ssm get-parameter --name /foc/staging/public-url --query Parameter.Value --output text)
-          export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID EXTERNAL_SECRETS_ROLE_ARN CHAT_SERVICE_ROLE_ARN PUBLIC_URL
+          export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID EXTERNAL_SECRETS_ROLE_ARN CHAT_SERVICE_ROLE_ARN MSK_BOOTSTRAP_SERVERS PUBLIC_URL
           if deploy/aws/scripts/deploy-platform.sh && deploy/aws/scripts/smoke-test.sh; then
             exit 0
           fi
@@ -153,7 +166,7 @@ jobs:
           done < "$RUNNER_TEMP/previous-images"
           exit 1
       - name: Show Kubernetes diagnostics on failure
-        if: failure()
+        if: failure() && steps.runtime.outputs.ready == 'true'
         run: |
           kubectl -n foc-staging get pods,deployments,hpa,ingress -o wide
           kubectl -n foc-staging get events --sort-by=.lastTimestamp | tail -100

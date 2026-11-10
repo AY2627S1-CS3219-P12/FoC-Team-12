@@ -18,6 +18,7 @@ set -euo pipefail
 : "${NOTIFICATION_IMAGE:?NOTIFICATION_IMAGE is required}"
 : "${CHAT_S3_BUCKET:?CHAT_S3_BUCKET is required}"
 : "${CHAT_SERVICE_ROLE_ARN:?CHAT_SERVICE_ROLE_ARN is required}"
+: "${MSK_BOOTSTRAP_SERVERS:?MSK_BOOTSTRAP_SERVERS is required}"
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 profile_args=()
@@ -150,6 +151,7 @@ export AWS_REGION RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID
 export GATEWAY_IMAGE USER_IMAGE SUPPLIER_IMAGE ORDER_IMAGE CREDIT_IMAGE ADMIN_IMAGE CHAT_IMAGE NOTIFICATION_IMAGE
 export CHAT_S3_BUCKET
 export CHAT_SERVICE_ROLE_ARN
+export MSK_BOOTSTRAP_SERVERS
 rendered=$(mktemp)
 trap 'rm -f "$rendered"; rm -rf "$chart_dir"' EXIT
 "$root/deploy/aws/scripts/render-k8s.sh" > "$rendered"
@@ -180,11 +182,7 @@ wait_for_job foc-staging database-bootstrap 900
 
 kubectl -n foc-staging create configmap kafka-scripts \
   --from-file=lib.sh="$root/deploy/kafka/lib.sh" \
-  --from-file=broker-entrypoint.sh="$root/deploy/kafka/broker-entrypoint.sh" \
-  --from-file=healthcheck.sh="$root/deploy/kafka/healthcheck.sh" \
   --from-file=initialize.sh="$root/deploy/kafka/initialize.sh" \
-  --from-file=verify.sh="$root/deploy/kafka/verify.sh" \
-  --from-file=probe.sh="$root/deploy/kafka/k8s/probe.sh" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 cli_dir=$(mktemp -d)
@@ -197,11 +195,10 @@ kubectl -n foc-staging create configmap kafka-cli --from-file="$cli_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl apply -f "$rendered"
-kubectl -n foc-staging rollout status statefulset/kafka --timeout=20m
 kubectl -n foc-staging rollout status statefulset/rabbitmq --timeout=20m
 
-job="kafka-init-$(date +%s)"
-sed "s/name: kafka-init/name: $job/" "$root/deploy/kafka/k8s/initialize-job.yaml" \
+job="msk-init-$(date +%s)"
+sed "s/name: msk-init/name: $job/" "$root/deploy/aws/k8s/staging/msk-initialize-job.yaml" \
   | kubectl -n foc-staging create -f -
 wait_for_job foc-staging "$job" 1200
 
@@ -210,5 +207,11 @@ for deployment in user-service supplier-service order-service credit-service adm
   kubectl -n foc-staging rollout status "deployment/$deployment" --timeout=20m
 done
 
+# The successful MSK initialization and application rollout are the cutover point. Remove the old
+# single-broker workload but retain its PVC for an explicit, reviewed cleanup after verification.
+kubectl -n foc-staging delete statefulset kafka --ignore-not-found
+kubectl -n foc-staging delete service kafka kafka-headless --ignore-not-found
+kubectl -n foc-staging delete configmap kafka-config --ignore-not-found
+
 kubectl -n foc-staging get ingress gateway
-echo 'Staging workloads are healthy. The private ALB may need several minutes to become Active.'
+echo 'Staging workloads are healthy on Amazon MSK. The private ALB may need several minutes to become Active.'

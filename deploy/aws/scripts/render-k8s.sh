@@ -15,6 +15,7 @@ set -euo pipefail
 : "${NOTIFICATION_IMAGE:?NOTIFICATION_IMAGE is required}"
 : "${CHAT_S3_BUCKET:?CHAT_S3_BUCKET is required}"
 : "${CHAT_SERVICE_ROLE_ARN:?CHAT_SERVICE_ROLE_ARN is required}"
+: "${MSK_BOOTSTRAP_SERVERS:?MSK_BOOTSTRAP_SERVERS is required}"
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 manifest=$(mktemp)
@@ -28,6 +29,7 @@ sed \
   -e "s|AWS_REGION_REPLACED_BY_DEPLOY_SCRIPT|$AWS_REGION|g" \
   -e "s|CHAT_S3_BUCKET_REPLACED_BY_DEPLOY_SCRIPT|$CHAT_S3_BUCKET|g" \
   -e "s|CHAT_SERVICE_ROLE_ARN_REPLACED_BY_DEPLOY_SCRIPT|$CHAT_SERVICE_ROLE_ARN|g" \
+  -e "s|MSK_BOOTSTRAP_SERVERS_REPLACED_BY_DEPLOY_SCRIPT|$MSK_BOOTSTRAP_SERVERS|g" \
   -e "s|image: foc-gateway-service:bootstrap|image: $GATEWAY_IMAGE|g" \
   -e "s|image: foc-user-service:bootstrap|image: $USER_IMAGE|g" \
   -e "s|image: foc-supplier-service:bootstrap|image: $SUPPLIER_IMAGE|g" \

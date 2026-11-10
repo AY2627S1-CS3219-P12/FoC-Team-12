@@ -10,3 +10,6 @@ output "chat_attachment_bucket_name" { value = aws_s3_bucket.chat_attachments.id
 output "chat_service_role_arn" { value = aws_iam_role.chat_service.arn }
 output "ecr_repository_urls" { value = { for key, repo in aws_ecr_repository.service : key => repo.repository_url } }
 output "runtime_secret_arns" { value = { for key, secret in aws_secretsmanager_secret.runtime : key => secret.arn } }
+output "msk_cluster_arn" { value = aws_msk_cluster.main.arn }
+output "msk_bootstrap_brokers_sasl_scram" { value = aws_msk_cluster.main.bootstrap_brokers_sasl_scram }
+output "msk_scram_secret_arns" { value = { for key, secret in aws_secretsmanager_secret.msk_scram : key => secret.arn } }

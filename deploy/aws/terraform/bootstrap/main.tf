@@ -114,10 +114,40 @@ data "aws_iam_policy_document" "infra" {
       "eks:*",
       "elasticloadbalancing:*",
       "logs:*",
+      "kafka:*",
       "rds:*",
       "secretsmanager:*",
       "ssm:*",
       "sts:GetCallerIdentity"
+    ]
+    resources = ["*"]
+  }
+
+  # MSK SCRAM credentials require a customer-managed symmetric KMS key. The infrastructure
+  # workflow creates and owns only the foc-staging-prefixed key and alias declared by Terraform.
+  statement {
+    sid = "ManageMskEncryptionKey"
+    actions = [
+      "kms:CreateAlias",
+      "kms:CancelKeyDeletion",
+      "kms:CreateGrant",
+      "kms:CreateKey",
+      "kms:DeleteAlias",
+      "kms:DescribeKey",
+      "kms:DisableKey",
+      "kms:DisableKeyRotation",
+      "kms:EnableKey",
+      "kms:EnableKeyRotation",
+      "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
+      "kms:ListAliases",
+      "kms:ListResourceTags",
+      "kms:PutKeyPolicy",
+      "kms:ScheduleKeyDeletion",
+      "kms:TagResource",
+      "kms:UntagResource",
+      "kms:UpdateAlias",
+      "kms:UpdateKeyDescription"
     ]
     resources = ["*"]
   }
@@ -259,6 +289,7 @@ data "aws_iam_policy_document" "infra" {
         "vpcorigin.cloudfront.amazonaws.com",
         "eks.amazonaws.com",
         "elasticloadbalancing.amazonaws.com",
+        "kafka.amazonaws.com",
         "rds.amazonaws.com",
         "spot.amazonaws.com"
       ]

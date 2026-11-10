@@ -64,12 +64,15 @@ public class UserEventConfiguration {
         }
         properties.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, protocol);
         if (protocol.startsWith("SASL_")) {
-            if (!"PLAIN".equals(settings.saslMechanism())) {
-                throw new IllegalArgumentException("The current Kafka identity contract requires SASL PLAIN");
-            }
-            properties.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
+            String mechanism = settings.saslMechanism();
+            String loginModule = switch (mechanism) {
+                case "PLAIN" -> "org.apache.kafka.common.security.plain.PlainLoginModule";
+                case "SCRAM-SHA-512" -> "org.apache.kafka.common.security.scram.ScramLoginModule";
+                default -> throw new IllegalArgumentException("Unsupported Kafka SASL mechanism");
+            };
+            properties.put(SaslConfigs.SASL_MECHANISM, mechanism);
             properties.put(SaslConfigs.SASL_JAAS_CONFIG,
-                    "org.apache.kafka.common.security.plain.PlainLoginModule required username=\""
+                    loginModule + " required username=\""
                     + jaas(settings.username()) + "\" password=\"" + jaas(settings.password()) + "\";");
         }
         return properties;
