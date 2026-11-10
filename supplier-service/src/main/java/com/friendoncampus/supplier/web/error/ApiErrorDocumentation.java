@@ -58,6 +58,24 @@ public final class ApiErrorDocumentation {
             @Schema(format = "int64", example = "1", minimum = "0", nullable = true) Long currentVersion) {
     }
 
+    @Schema(name = "InvalidSupplierImageProblem", description = "Problem Details response for an invalid image upload")
+    public record InvalidSupplierImage(
+            @Schema(example = "about:blank") String type,
+            @Schema(example = "Invalid supplier image") String title,
+            @Schema(example = "400") int status,
+            @Schema(example = "Image must be a JPEG, PNG, or WebP file") String detail,
+            @Schema(example = "/api/admin/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa/image") String instance) {
+    }
+
+    @Schema(name = "SupplierImageUnavailableProblem", description = "Problem Details response when private image storage is unavailable")
+    public record SupplierImageUnavailable(
+            @Schema(example = "about:blank") String type,
+            @Schema(example = "Supplier image unavailable") String title,
+            @Schema(example = "503") int status,
+            @Schema(example = "The supplier image is temporarily unavailable") String detail,
+            @Schema(example = "/api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa/image") String instance) {
+    }
+
     @Schema(name = "UnauthorizedProblem", description = "Problem Details response when a valid bearer token is absent")
     public record Unauthorized(
             @Schema(example = "about:blank") String type,

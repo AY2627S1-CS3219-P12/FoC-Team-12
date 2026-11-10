@@ -19,9 +19,13 @@ import com.friendoncampus.supplier.repository.SupplierSpecifications;
 public class SupplierService {
 
     private final SupplierRepository supplierRepository;
+    private final SupplierImageCleanup imageCleanup;
 
-    public SupplierService(SupplierRepository supplierRepository) {
+    public SupplierService(
+            SupplierRepository supplierRepository,
+            SupplierImageCleanup imageCleanup) {
         this.supplierRepository = supplierRepository;
+        this.imageCleanup = imageCleanup;
     }
 
     public Page<Supplier> listActiveSuppliers(SupplierQuery supplierQuery) {
@@ -113,6 +117,7 @@ public class SupplierService {
                     supplier.getVersion());
         }
 
+        String previousObjectKey = supplier.getImageObjectKey();
         supplier.updateDetails(
                 command.name(),
                 command.type(),
@@ -133,6 +138,9 @@ public class SupplierService {
                     command.version(),
                     null,
                     exception);
+        }
+        if (previousObjectKey != null && !previousObjectKey.equals(supplier.getImageObjectKey())) {
+            imageCleanup.deleteAfterCommit(previousObjectKey);
         }
         return supplier;
     }
@@ -177,6 +185,7 @@ public class SupplierService {
                     supplier.getVersion());
         }
 
+        String imageObjectKey = supplier.getImageObjectKey();
         try {
             supplierRepository.delete(supplier);
             supplierRepository.flush();
@@ -187,5 +196,6 @@ public class SupplierService {
                     null,
                     exception);
         }
+        imageCleanup.deleteAfterCommit(imageObjectKey);
     }
 }

@@ -77,6 +77,9 @@ the complete API and a safer responsive workflow:
   remain shareable through URL parameters.
 - L02/L03 use one reusable form containing every real Supplier field. Status is selectable on
   creation and remains a separate version-checked action during editing.
+- L02/L03 also provide one explicit image-source choice: no photo, an external HTTPS/HTTP URL,
+  or a JPEG/PNG/WebP upload. Uploaded images remain confined to Supplier details, use the same
+  placeholder and error behavior, and never make the private object-store URL public.
 - L04/L05 are implemented as focused confirmation dialogs and accessible in-page success
   feedback instead of separate destructive-action routes. This keeps context on small screens
   and makes cancellation unambiguous.

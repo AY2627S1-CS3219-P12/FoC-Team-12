@@ -175,4 +175,28 @@ class SupplierTest {
         assertThat(supplier.getUpdatedAt()).isEqualTo(updatedAt);
         assertThat(supplier.getVersion()).isZero();
     }
+
+    @Test
+    void switchesBetweenExternalAndUploadedImageSources() {
+        Supplier supplier = Supplier.create(
+                "Campus Cafe", "Food", "COM3", null, null,
+                1.2948, 103.7716, null, null,
+                "https://example.com/original.jpg", SupplierStatus.ACTIVE);
+
+        String previous = supplier.useUploadedImage("images/supplier/one", "image/webp");
+
+        assertThat(previous).isNull();
+        assertThat(supplier.getImageUrl()).isNull();
+        assertThat(supplier.getImageObjectKey()).isEqualTo("images/supplier/one");
+        assertThat(supplier.getImageContentType()).isEqualTo("image/webp");
+
+        supplier.updateDetails(
+                "Campus Cafe", "Food", "COM3", null, null,
+                1.2948, 103.7716, null, null,
+                "https://example.com/replacement.jpg");
+
+        assertThat(supplier.getImageUrl()).isEqualTo("https://example.com/replacement.jpg");
+        assertThat(supplier.hasUploadedImage()).isFalse();
+        assertThat(supplier.getImageContentType()).isNull();
+    }
 }

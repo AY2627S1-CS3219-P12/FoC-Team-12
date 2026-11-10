@@ -184,14 +184,16 @@ jobs:
           CHAT_IMAGE: ${{ steps.images.outputs.registry }}/foc-chat-service:${{ steps.images.outputs.tag }}
           NOTIFICATION_IMAGE: ${{ steps.images.outputs.registry }}/foc-notification-service:${{ steps.images.outputs.tag }}
           CHAT_S3_BUCKET: foc-team-12-chat-attachments-${{ steps.backend.outputs.account_id }}-ap-southeast-1
+          SUPPLIER_S3_BUCKET: foc-team-12-supplier-images-${{ steps.backend.outputs.account_id }}-ap-southeast-1
         run: |
           RDS_HOST=$(aws ssm get-parameter --name /foc/staging/rds-host --query Parameter.Value --output text)
           RDS_MASTER_SECRET_ARN=$(aws ssm get-parameter --name /foc/staging/rds-master-secret-arn --query Parameter.Value --output text)
           ALB_SECURITY_GROUP_ID=$(aws ssm get-parameter --name /foc/staging/alb-security-group-id --query Parameter.Value --output text)
           EXTERNAL_SECRETS_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/external-secrets-role-arn --query Parameter.Value --output text)
           CHAT_SERVICE_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/chat-service-role-arn --query Parameter.Value --output text)
+          SUPPLIER_SERVICE_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/supplier-service-role-arn --query Parameter.Value --output text)
           MSK_BOOTSTRAP_SERVERS=$(aws ssm get-parameter --name /foc/staging/msk-bootstrap-brokers --query Parameter.Value --output text)
-          export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID EXTERNAL_SECRETS_ROLE_ARN CHAT_SERVICE_ROLE_ARN MSK_BOOTSTRAP_SERVERS
+          export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID EXTERNAL_SECRETS_ROLE_ARN CHAT_SERVICE_ROLE_ARN SUPPLIER_SERVICE_ROLE_ARN MSK_BOOTSTRAP_SERVERS
           deploy/aws/scripts/deploy-platform.sh
       - name: Lock down and verify Amazon MSK
         if: inputs.operation == 'provision-runtime'

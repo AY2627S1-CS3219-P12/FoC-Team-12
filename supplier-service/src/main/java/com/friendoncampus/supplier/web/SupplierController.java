@@ -1,8 +1,10 @@
 package com.friendoncampus.supplier.web;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.UUID;
 
+import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.friendoncampus.supplier.service.DeleteSupplierCommand;
 import com.friendoncampus.supplier.service.SupplierQuery;
+import com.friendoncampus.supplier.service.SupplierImageService;
 import com.friendoncampus.supplier.service.SupplierService;
 import com.friendoncampus.supplier.web.dto.ChangeSupplierStatusRequest;
 import com.friendoncampus.supplier.web.dto.CreateSupplierRequest;
@@ -44,9 +47,13 @@ import jakarta.validation.Valid;
 public class SupplierController {
 
     private final SupplierService supplierService;
+    private final SupplierImageService supplierImageService;
 
-    public SupplierController(SupplierService supplierService) {
+    public SupplierController(
+            SupplierService supplierService,
+            SupplierImageService supplierImageService) {
         this.supplierService = supplierService;
+        this.supplierImageService = supplierImageService;
     }
 
     @Operation(
@@ -132,6 +139,44 @@ public class SupplierController {
             @Parameter(description = "Supplier UUID", required = true, example = "ca9bd61f-93da-4500-9e9d-48de1bea52fa")
             @PathVariable UUID id) {
         return SupplierResponse.from(supplierService.getSupplier(id));
+    }
+
+    @Operation(
+            operationId = "getSupplierImage",
+            summary = "Get an uploaded supplier image",
+            description = "Streams an uploaded JPEG, PNG, or WebP image from private object storage. External image URLs are returned directly in the Supplier representation instead.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Uploaded supplier image",
+                    content = @Content(
+                            mediaType = "image/*",
+                            schema = @Schema(type = "string", format = "binary"))),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Supplier or uploaded image not found",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierNotFound.class))),
+            @ApiResponse(
+                    responseCode = "503",
+                    description = "Image storage is temporarily unavailable",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierImageUnavailable.class)))
+    })
+    @GetMapping("/{id}/image")
+    public ResponseEntity<byte[]> getSupplierImage(
+            @Parameter(description = "Supplier UUID", required = true)
+            @PathVariable UUID id) {
+        SupplierImageService.SupplierImage image = supplierImageService.load(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(image.contentType()))
+                .contentLength(image.content().length)
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(1)).cachePublic().immutable())
+                .eTag("\"supplier-" + id + "-v" + image.supplierVersion() + "\"")
+                .header("X-Content-Type-Options", "nosniff")
+                .body(image.content());
     }
 
     @Operation(

@@ -103,6 +103,15 @@ kind: Service
 metadata: { name: user-service, namespace: foc-staging }
 spec: { type: ClusterIP, selector: { app: user-service }, ports: [{ name: http, port: 8081, targetPort: http }] }
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: supplier-service
+  namespace: foc-staging
+  annotations:
+    eks.amazonaws.com/role-arn: SUPPLIER_SERVICE_ROLE_ARN_REPLACED_BY_DEPLOY_SCRIPT
+automountServiceAccountToken: true
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata: { name: supplier-service, namespace: foc-staging }
@@ -122,7 +131,8 @@ spec:
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: DoNotSchedule
           labelSelector: { matchLabels: { app: supplier-service } }
-      automountServiceAccountToken: false
+      serviceAccountName: supplier-service
+      automountServiceAccountToken: true
       containers:
         - name: supplier-service
           image: foc-supplier-service:bootstrap
@@ -142,6 +152,10 @@ spec:
             - { name: SUPPLIER_JWT_JWK_SET_URI, value: "http://user-service:8081/.well-known/jwks.json" }
             - { name: SUPPLIER_JWT_ISSUER, value: friend-on-campus-user-service }
             - { name: SUPPLIER_JWT_AUDIENCE, value: friend-on-campus-api }
+            - { name: SUPPLIER_IMAGE_STORAGE, value: s3 }
+            - { name: SUPPLIER_S3_BUCKET, value: SUPPLIER_S3_BUCKET_REPLACED_BY_DEPLOY_SCRIPT }
+            - { name: SUPPLIER_S3_KEY_PREFIX, value: images }
+            - { name: AWS_REGION, value: AWS_REGION_REPLACED_BY_DEPLOY_SCRIPT }
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70.0" }
           startupProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 60 }
           readinessProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 10, timeoutSeconds: 3 }
