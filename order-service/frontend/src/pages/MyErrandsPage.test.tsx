@@ -21,7 +21,7 @@ function renderPage() {
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/errands/mine']}>
         <MyErrandsPage />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -57,7 +57,13 @@ describe('MyErrandsPage', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
-    expect(screen.getByText('Requester activity')).toBeInTheDocument()
+    expect(screen.getByText('Your activity')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Your recent errands' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Create new errand' }),
+    ).toHaveAttribute('href', '/errands/new')
     expect(
       await within(section('Active')).findByRole('heading', {
         name: 'Get my lunch',
@@ -141,6 +147,13 @@ describe('MyErrandsPage', () => {
     renderPage()
 
     expect(screen.getByText('Courier activity')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Campus errands' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Past errands' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
     expect(
       await within(section('Active')).findByRole('heading', {
         name: 'Carry my laptop',

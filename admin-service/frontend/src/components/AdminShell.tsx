@@ -1,5 +1,4 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { ClipboardList, Coins, House, ShieldCheck, Store } from 'lucide-react'
 import {
   clearSession,
   readSession,
@@ -78,25 +77,13 @@ export function AdminShell({
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className="main-nav">
-            <a href="/">
-              <House aria-hidden="true" />
-              Home
-            </a>
+            <a href="/">Home</a>
             {session?.role !== 'ADMIN' && (
-              <a href="/errands/browse">
-                <ClipboardList aria-hidden="true" />
-                Errands
-              </a>
+              <a href="/errands/browse">Errands</a>
             )}
-            <a href={suppliersPath}>
-              <Store aria-hidden="true" />
-              Suppliers
-            </a>
+            <a href={suppliersPath}>Suppliers</a>
             {session?.role !== 'ADMIN' && (
-              <a href="/credits">
-                <Coins aria-hidden="true" />
-                Credits
-              </a>
+              <a href="/credits">Credits</a>
             )}
             {session?.role === 'ADMIN' && (
               <a
@@ -107,7 +94,6 @@ export function AdminShell({
                 }
                 href="/admin"
               >
-                <ShieldCheck aria-hidden="true" />
                 Admin
               </a>
             )}
@@ -186,7 +172,7 @@ export function AdminShell({
                     type="button"
                     onClick={() => {
                       clearSession()
-                      window.location.assign('/?view=profile')
+                      window.location.assign('/')
                     }}
                   >
                     Sign out

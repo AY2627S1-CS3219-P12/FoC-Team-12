@@ -91,14 +91,6 @@
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
-.card::before {
-  position: absolute;
-  inset: 0 0 auto;
-  height: 0.4rem;
-  background: var(--card-tone);
-  content: '';
-}
-
 .card:hover {
   box-shadow: var(--foc-shadow);
   transform: translateY(-2px);

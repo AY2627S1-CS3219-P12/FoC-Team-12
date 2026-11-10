@@ -46,7 +46,7 @@ describe('ErrandTabs', () => {
         <ErrandTabs />
       </MemoryRouter>,
     )
-    return within(screen.getByRole('navigation', { name: 'Errands' }))
+    return within(screen.getByRole('navigation', { name: /Errands/i }))
   }
 
   it('shows Request help and My errands to a requester, marking the current one', () => {
@@ -61,11 +61,14 @@ describe('ErrandTabs', () => {
     expect(nav.getByRole('link', { name: 'Request help' })).not.toHaveAttribute('aria-current')
   })
 
-  it('shows Run errands and My errands to a courier', () => {
+  it('shows route-backed open and past tabs to a courier', () => {
     signIn(COURIER_ID, 'COURIER')
     const nav = tabs('/errands/browse')
 
-    expect(nav.getAllByRole('link').map((link) => link.textContent)).toEqual(['Run errands', 'My errands'])
-    expect(nav.getByRole('link', { name: 'Run errands' })).toHaveAttribute('aria-current', 'page')
+    expect(nav.getAllByRole('link').map((link) => [link.textContent, link.getAttribute('href')])).toEqual([
+      ['Open requests', '/errands/browse'],
+      ['Past errands', '/errands/mine'],
+    ])
+    expect(nav.getByRole('link', { name: 'Open requests' })).toHaveAttribute('aria-current', 'page')
   })
 })

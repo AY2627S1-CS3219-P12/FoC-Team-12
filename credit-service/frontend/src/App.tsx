@@ -140,9 +140,6 @@ export function App() {
         <div>
           <p className="eyebrow">My wallet</p>
           <h1>Your credits</h1>
-          <p>
-            See what is ready to spend and follow every change in your ledger.
-          </p>
         </div>
         <span className="role-chip">{session.role.toLowerCase()}</span>
       </div>

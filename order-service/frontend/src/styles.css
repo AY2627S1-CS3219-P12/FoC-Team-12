@@ -125,7 +125,6 @@ button:disabled {
   font-weight: 600;
   text-decoration: none;
 }
-.main-nav a svg,
 .header-actions > a:not(.notification-bell) svg {
   width: 1rem;
   height: 1rem;
@@ -1185,6 +1184,7 @@ button:hover:not(:disabled),
   min-height: 23rem;
   overflow: hidden;
   padding: 0;
+  border: 1px solid var(--line);
   border-radius: 1.35rem;
   transition:
     transform 180ms ease,
@@ -1287,16 +1287,26 @@ button:hover:not(:disabled),
   color: var(--action);
   box-shadow: 0 8px 22px rgb(23 38 65 / 12%);
   line-height: 1;
+  text-align: center;
   white-space: nowrap;
 }
 .reward strong {
+  display: block;
+  width: 100%;
   font-family: 'Manrope', 'DM Sans', sans-serif;
   font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-align: center;
 }
 .reward small {
+  display: block;
+  width: 100%;
   margin-top: 0.2rem;
   font-size: 0.62rem;
   font-weight: 700;
+  line-height: 1;
+  text-align: center;
 }
 .errand-card-content > h3 {
   margin: 0.75rem 4.5rem 1rem 0;
@@ -1583,12 +1593,55 @@ a.button-secondary:hover {
   font-size: 0.88rem;
   font-weight: 600;
   text-decoration: none;
-  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    box-shadow 180ms ease;
 }
 .errand-tab svg {
   width: 1rem;
   height: 1rem;
   stroke-width: 1.9;
+}
+.courier-page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 2.5rem;
+}
+.courier-page-heading .page-intro {
+  display: block;
+  margin: 0;
+}
+.courier-page-heading .errand-tabs {
+  margin: 0;
+}
+.courier-page-heading .page-intro p:last-child {
+  margin-bottom: 0;
+}
+.courier-page-heading .page-intro h1 {
+  font-size: clamp(2.6rem, 5vw, 4rem);
+}
+.tab-content-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.tab-content-heading h2,
+.tab-content-heading p {
+  margin: 0;
+}
+.tab-content-heading h2 {
+  font-family: 'Manrope', 'DM Sans', sans-serif;
+  font-size: clamp(1.35rem, 2.5vw, 2rem);
+  letter-spacing: -0.035em;
+}
+.tab-content-heading p {
+  margin-top: 0.35rem;
+  color: var(--muted);
 }
 .errand-tab:hover {
   background: var(--action-soft);
@@ -1626,6 +1679,12 @@ a.button-secondary:hover {
 }
 
 @media (max-width: 48rem) {
+  .courier-page-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
   .errand-tabs {
     display: flex;
     width: 100%;
@@ -2124,7 +2183,6 @@ a.button-secondary svg {
 }
 
 .errand-under-review {
-  border-left: 4px solid var(--action);
   background: var(--action-soft);
 }
 .review-badge {
@@ -2141,4 +2199,384 @@ a.button-secondary svg {
 }
 .actions[hidden] {
   display: none;
+}
+
+/* Upgrade (3): focused requester creation and history surfaces. */
+.create-errand-page {
+  width: min(100%, 76rem);
+  margin: 0 auto;
+}
+.create-errand-form {
+  gap: 1.5rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  border: 1px solid var(--line);
+  border-radius: 1.6rem;
+  background: var(--surface);
+  box-shadow: 0 20px 60px rgb(23 38 65 / 8%);
+}
+.create-form-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.create-form-heading h1,
+.create-form-heading p {
+  margin: 0;
+}
+.create-form-heading h1 {
+  color: var(--ink);
+  font-family: 'Manrope', 'DM Sans', sans-serif;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  letter-spacing: -0.05em;
+  line-height: 1.05;
+}
+.create-form-heading p:last-child {
+  max-width: 42rem;
+  margin-top: 0.75rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.create-form-heading img {
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+}
+.create-errand-form .errand-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.35rem 1.5rem;
+}
+.create-errand-form .errand-fields > :first-child,
+.create-errand-form .errand-fields > :last-child {
+  grid-column: 1 / -1;
+}
+.create-errand-form .form-field {
+  align-content: start;
+  gap: 0.55rem;
+}
+.create-errand-form .form-field label {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+.create-errand-form .form-field input,
+.create-errand-form .form-field select,
+.create-errand-form .form-field textarea {
+  min-height: 3.25rem;
+  padding: 0.8rem 1rem;
+  border-radius: 0.75rem;
+  background: #fbfaf8;
+}
+.create-errand-form .form-field textarea {
+  min-height: 8rem;
+}
+.create-credit-summary {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.7fr) minmax(14rem, 1fr) minmax(
+      16rem,
+      1fr
+    );
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--canvas);
+}
+.create-credit-summary h2,
+.create-credit-summary p {
+  margin: 0;
+}
+.create-credit-summary h2 {
+  font-size: 1.05rem;
+}
+.create-credit-summary .balance-tiles {
+  margin: 0;
+  padding: 0.85rem 1rem;
+}
+.create-credit-summary .balance-tiles strong {
+  font-size: 1.1rem;
+}
+.create-credit-summary .facts {
+  gap: 0.35rem 1.25rem;
+  font-size: 0.8rem;
+}
+.create-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+.create-form-actions .button-secondary,
+.create-form-actions button {
+  min-height: 3rem;
+  padding-inline: 1.25rem;
+  border-radius: 0.75rem;
+}
+.create-form-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.create-form-actions button svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.requester-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-bottom: 2.5rem;
+}
+.requester-page-heading .page-intro {
+  display: block;
+  margin: 0;
+}
+.requester-page-heading .page-intro h1 {
+  font-size: clamp(2.6rem, 5vw, 4rem);
+}
+.create-errand-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 3.25rem;
+  padding: 0 1.5rem;
+  border-radius: 0.85rem;
+  background: var(--blue);
+  box-shadow: 0 14px 28px rgb(80 104 179 / 20%);
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+}
+.create-errand-link:hover {
+  background: var(--action);
+}
+.create-errand-link svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.requester-history-panel {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+.requester-history-heading {
+  padding: 1.75rem 2rem;
+  border-bottom: 1px solid var(--line);
+}
+.requester-history-heading h2,
+.requester-history-heading p {
+  margin: 0;
+}
+.requester-history-heading h2 {
+  margin-top: 0.35rem;
+  font-family: 'Manrope', 'DM Sans', sans-serif;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  letter-spacing: -0.04em;
+}
+.requester-history-content {
+  padding: 0 2rem;
+}
+.requester-history-content .my-errands-section {
+  gap: 0;
+  margin: 0;
+}
+.requester-history-content .my-errands-section + .my-errands-section {
+  border-top: 1px solid var(--line);
+}
+.requester-history-content .my-errands-section-head {
+  justify-content: flex-end;
+  padding: 1rem 0 0;
+}
+.errand-history-list {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  margin: 0;
+}
+.errand-card-history {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  min-height: 0;
+  padding: 1.25rem 0;
+  overflow: visible;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+.errand-history-list > .errand-card-history:last-child {
+  border-bottom: 0;
+}
+.errand-card-history:hover {
+  box-shadow: none;
+  transform: none;
+}
+.errand-card-history .errand-card-visual {
+  width: 3.25rem;
+  height: 3.25rem;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0.9rem;
+  place-items: center;
+}
+.errand-card-history .errand-card-visual::after,
+.errand-card-history .errand-card-visual > span:last-child {
+  display: none;
+}
+.errand-card-history .errand-card-visual-icon {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+}
+.errand-card-history .errand-card-visual-icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.errand-card-history .errand-card-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(8rem, auto) 4.5rem;
+  grid-template-areas:
+    'title status reward'
+    'meta status reward'
+    'notice notice notice'
+    'links links links';
+  align-items: center;
+  gap: 0.25rem 1.25rem;
+  padding: 0;
+}
+.errand-card-history .errand-card-head {
+  display: contents;
+}
+.errand-card-history .errand-card-content > h3 {
+  grid-area: title;
+  margin: 0;
+  font-size: 1rem;
+}
+.errand-card-history .errand-card-meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  font-size: 0.78rem;
+}
+.errand-card-history .route-line,
+.errand-card-history .errand-timing {
+  margin: 0;
+}
+.errand-card-history .badge,
+.errand-card-history .review-badge {
+  grid-area: status;
+  justify-self: end;
+}
+.errand-card-history .reward {
+  position: static;
+  grid-area: reward;
+  width: auto;
+  height: auto;
+  justify-self: end;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+}
+.errand-card-history .reward strong {
+  font-size: 1rem;
+}
+.errand-card-history .reward strong::after {
+  content: ' cr';
+}
+.errand-card-history .reward small {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+.errand-card-history .errand-card-notice {
+  grid-area: notice;
+}
+.errand-card-history .errand-card-foot {
+  grid-area: links;
+  margin: 0;
+  padding-top: 0.35rem;
+  border: 0;
+}
+.errand-card-history .errand-card-links {
+  justify-content: flex-start;
+}
+.errand-card-history .errand-view-link {
+  margin-left: 0;
+}
+
+@media (max-width: 48rem) {
+  .create-errand-form .errand-fields,
+  .create-credit-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .create-errand-form .errand-fields > * {
+    grid-column: 1;
+  }
+  .requester-page-heading {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+  .create-errand-link {
+    width: 100%;
+  }
+  .requester-history-heading,
+  .requester-history-content {
+    padding-inline: 1.25rem;
+  }
+  .errand-card-history .errand-card-content {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'title reward'
+      'meta meta'
+      'status status'
+      'notice notice'
+      'links links';
+  }
+  .errand-card-history .badge {
+    justify-self: start;
+    margin-top: 0.4rem;
+  }
+  .errand-card-history .review-badge {
+    justify-self: start;
+    margin-top: 0.4rem;
+  }
+}
+
+@media (max-width: 36rem) {
+  .create-form-heading img {
+    display: none;
+  }
+  .create-form-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+  .create-form-actions .button-secondary,
+  .create-form-actions button {
+    justify-content: center;
+    width: 100%;
+  }
+  .errand-card-history {
+    align-items: start;
+  }
+  .errand-card-history .errand-card-visual {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
 }

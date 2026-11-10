@@ -30,6 +30,8 @@ describe('BrowsePage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Collect my printed notes' })).toBeInTheDocument()
     expect(screen.getByText('Courier activity')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Campus errands' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Open campus requests' })).toBeInTheDocument()
     expect(screen.getByLabelText('18 credits reward')).toBeInTheDocument()
     expect(screen.getByText('Campus errand')).toBeInTheDocument()
     expect(screen.getByText('Printers@PCCommons', { selector: '.route-line span' }).parentElement).toHaveTextContent(

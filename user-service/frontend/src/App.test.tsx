@@ -25,6 +25,11 @@ const fillLogin = async () => {
   return user
 }
 
+const renderProfile = () => {
+  window.history.replaceState(null, '', '/?view=profile')
+  return render(<App />)
+}
+
 test('presents the upgraded signed-out account journey and live supplier handoff', async () => {
   render(<App />)
   const user = userEvent.setup()
@@ -70,25 +75,17 @@ test('signs in successfully and stores the browser session', async () => {
 
   expect(fetch).toHaveBeenCalledWith('/api/users/login', expect.objectContaining({ method: 'POST' }))
   expect(fetch).toHaveBeenCalledWith('/api/credits/me', expect.objectContaining({ method: 'POST' }))
-  await screen.findByRole('heading', { name: 'Profile' })
-  expect(await screen.findByText('Persisted Alice')).toBeInTheDocument()
-  expect(fetch).toHaveBeenLastCalledWith('/api/users/me', expect.objectContaining({ method: 'GET' }))
-  expect(screen.getByText('alice@u.nus.edu')).toBeInTheDocument()
-  expect(screen.queryByText('ACTIVE')).not.toBeInTheDocument()
-  expect(screen.queryByText('Account status')).not.toBeInTheDocument()
-  expect(screen.queryByText('Member since')).not.toBeInTheDocument()
-  expect(screen.getByText('Account access')).toBeInTheDocument()
-  expect(screen.getByText('User')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Your campus. A thousand small favours.' })).toBeInTheDocument()
+  await waitFor(() => expect(fetch).toHaveBeenLastCalledWith('/api/users/me', expect.objectContaining({ method: 'GET' })))
   expect(JSON.parse(sessionStorage.getItem('foc.user-session') ?? '{}')).toMatchObject({ accessToken: 'signed.jwt' })
   expect(sessionStorage.getItem('foc.login-failures:alice@u.nus.edu')).toBeNull()
-  expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
-  expect(screen.getByRole('link', { name: /View my credits/ })).toHaveAttribute('href', '/credits')
+  expect(screen.queryByRole('heading', { name: 'Profile' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Explore Friend on Campus' })).not.toBeInTheDocument()
   expect(screen.getByRole('navigation', { name: 'Main navigation' })).toHaveTextContent('Credits')
-  expect(screen.queryByRole('link', { name: /Manage suppliers/ })).not.toBeInTheDocument()
   expect(screen.queryByRole('switch', { name: 'Admin mode' })).not.toBeInTheDocument()
 })
 
-test('keeps Profile open after a public Supplier return destination was requested', async () => {
+test('keeps Home open after a public Supplier return destination was requested', async () => {
   window.history.replaceState(null, '', '/?returnTo=%2Fsuppliers')
   vi.stubGlobal('fetch', vi.fn()
     .mockResolvedValueOnce({ ok: true, json: async () => ({
@@ -105,8 +102,9 @@ test('keeps Profile open after a public Supplier return destination was requeste
 
   await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
 
-  expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
+  expect(await screen.findByRole('heading', { name: 'Your campus. A thousand small favours.' })).toBeInTheDocument()
+  await user.click(screen.getByLabelText('Open account menu for Alice'))
+  expect(screen.getByRole('link', { name: 'Profile' })).toHaveAttribute('href', '/?view=profile')
   expect(navigateTo).not.toHaveBeenCalled()
 })
 
@@ -170,13 +168,14 @@ test('uses the Requester and Courier selector to replace a session token', async
 
   expect(screen.getByRole('heading', { name: 'Your campus. A thousand small favours.' })).toBeInTheDocument()
   expect(screen.getByRole('img', { name: /connects students who need a hand/i })).toBeInTheDocument()
+  expect(screen.queryByText('NUS email verified')).not.toBeInTheDocument()
+  expect(screen.queryByText('Campus-only handoffs')).not.toBeInTheDocument()
+  expect(screen.queryByText('Credit rewards')).not.toBeInTheDocument()
   const shortcuts = screen.getByRole('navigation', { name: 'Campus shortcuts' })
   expect(within(shortcuts).getByRole('link', { name: /Post a campus request/ })).toHaveAttribute('href', '/errands/new')
   expect(within(shortcuts).getByRole('link', { name: /Browse open requests/ })).toHaveAttribute('href', '/errands/browse')
   expect(within(shortcuts).getByRole('link', { name: /Find campus suppliers/ })).toHaveAttribute('href', '/suppliers')
   expect(within(shortcuts).getByRole('link', { name: /Check your credits/ })).toHaveAttribute('href', '/credits')
-  expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
   expect(screen.getByRole('link', { name: /Request help/ })).toHaveAttribute('href', '/errands/new')
   expect(screen.getByRole('link', { name: /Run an errand/ })).toHaveAttribute('href', '/errands/browse')
   expect(screen.queryByText('Requesting help')).not.toBeInTheDocument()
@@ -236,7 +235,7 @@ test('opens the dashboard after the administrator selects Admin mode', async () 
 
   await waitFor(() => expect(accountMenu).not.toHaveAttribute('open'))
 
-  expect(screen.getByRole('heading', { name: 'Profile' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Keep FoC running smoothly.' })).toBeInTheDocument()
   expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
     .getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin')
   expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
@@ -247,11 +246,7 @@ test('opens the dashboard after the administrator selects Admin mode', async () 
     .queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute('href', '/?view=users')
   expect(screen.getByRole('button', { name: 'Switch to User' })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
-  expect(screen.queryByRole('link', { name: /View my credits/ })).not.toBeInTheDocument()
-  const accountAccess = screen.getByText('Account access').parentElement
-  expect(accountAccess).not.toBeNull()
-  expect(within(accountAccess!).getByText('Admin')).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Profile' })).not.toBeInTheDocument()
   expect(navigateTo).toHaveBeenCalledWith('/admin')
 })
 
@@ -291,7 +286,7 @@ test('shows an accessible error when the live profile cannot be loaded', async (
       }),
     })
     .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({ detail: 'Unavailable' }) }))
-  render(<App />)
+  renderProfile()
   const user = await fillLogin()
 
   await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
@@ -312,7 +307,7 @@ test('reloads the live profile when restoring a browser session', async () => {
     }),
   }))
 
-  render(<App />)
+  renderProfile()
 
   expect(await screen.findByText('Persisted Alice')).toBeInTheDocument()
   const [, options] = vi.mocked(fetch).mock.calls[0]
@@ -334,7 +329,7 @@ test('updates the displayed username from the live profile screen', async () => 
       userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'New name',
       role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
     }) }))
-  render(<App />)
+  renderProfile()
   const user = userEvent.setup()
 
   await screen.findByRole('button', { name: 'Edit username' })
@@ -366,7 +361,7 @@ test('shows duplicate username feedback from the live profile screen', async () 
       role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
     }) })
     .mockResolvedValueOnce({ ok: false, status: 409, json: async () => ({ detail: 'username is already taken' }) }))
-  render(<App />)
+  renderProfile()
   const user = userEvent.setup()
 
   await user.click(await screen.findByRole('button', { name: 'Edit username' }))
@@ -387,7 +382,7 @@ test('does not submit an invalid username from the profile screen', async () => 
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
     role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
   }) }))
-  render(<App />)
+  renderProfile()
   const user = userEvent.setup()
 
   await user.click(await screen.findByRole('button', { name: 'Edit username' }))
@@ -410,7 +405,7 @@ test('changes a password from Profile then signs out the browser session', async
       role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
     }) })
     .mockResolvedValueOnce({ ok: true, status: 204 }))
-  render(<App />)
+  renderProfile()
   const user = userEvent.setup()
 
   await user.click(await screen.findByRole('button', { name: 'Change' }))
@@ -434,7 +429,7 @@ test('uses a compact masked password card and clears its draft when cancelled', 
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
     role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
   }) }))
-  render(<App />)
+  renderProfile()
   const user = userEvent.setup()
 
   expect(await screen.findByLabelText('Password is set')).toHaveTextContent('••••••••')
@@ -472,6 +467,7 @@ test('signs out with only the profile email retained and focuses the empty passw
   expect(screen.getByLabelText('Password')).toHaveFocus()
   expect(sessionStorage.getItem('foc.user-session')).toBeNull()
   expect(sessionStorage.getItem('foc.ui-mode')).toBeNull()
+  expect(navigateTo).toHaveBeenCalledWith('/')
 })
 
 test('keeps the password-change form open when the current password is incorrect', async () => {
@@ -485,7 +481,7 @@ test('keeps the password-change form open when the current password is incorrect
       role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
     }) })
     .mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ detail: 'Current password is incorrect' }) }))
-  render(<App />)
+  renderProfile()
   const user = userEvent.setup()
 
   await user.click(await screen.findByRole('button', { name: 'Change' }))
@@ -508,7 +504,7 @@ test('validates a sufficiently long replacement password before calling the API'
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
     role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
   }) }))
-  render(<App />)
+  renderProfile()
   const user = userEvent.setup()
 
   await user.click(await screen.findByRole('button', { name: 'Change' }))
@@ -529,7 +525,7 @@ test('does not submit a Profile password replacement matching the current passwo
     userId: 'c3e8d15c-0bb4-443f-989e-b6fda9f38993', email: 'alice@u.nus.edu', username: 'Alice',
     role: 'USER', status: 'ACTIVE', createdAt: '2030-01-01T00:00:00Z',
   }) }))
-  render(<App />)
+  renderProfile()
   const user = userEvent.setup()
   const password = 'current-password-with-15-chars'
 

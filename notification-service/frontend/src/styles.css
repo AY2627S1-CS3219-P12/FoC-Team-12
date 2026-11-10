@@ -125,7 +125,6 @@ button:disabled {
   font-weight: 600;
   text-decoration: none;
 }
-.main-nav a svg,
 .header-actions > a:not(.notification-bell) svg {
   width: 1rem;
   height: 1rem;
@@ -890,25 +889,6 @@ button:hover:not(:disabled),
   transition:
     transform 180ms ease,
     box-shadow 180ms ease;
-}
-.notification-item::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 0.3rem;
-  background: var(--line);
-  content: "";
-}
-.notification-errand::before {
-  background: var(--blue);
-}
-.notification-credit::before {
-  background: var(--gold);
-}
-.notification-attention::before {
-  background: var(--mauve);
-}
-.notification-complete::before {
-  background: #69a779;
 }
 .notification-item:hover {
   box-shadow: var(--shadow);

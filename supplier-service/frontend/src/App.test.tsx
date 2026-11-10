@@ -158,6 +158,11 @@ describe('Public supplier directory', () => {
     expect(
       screen.getByRole('heading', { name: 'Campus suppliers' }),
     ).toBeInTheDocument()
+    expect(
+      screen.queryByText(
+        'Find active food, coffee, printing, and shopping locations across campus.',
+      ),
+    ).not.toBeInTheDocument()
     expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
     const supplierCard = screen
       .getByRole('heading', { name: "Anna's x Soup Union" })

@@ -32,11 +32,16 @@ describe('AppRoutes', () => {
         <AppRoutes />
       </MemoryRouter>,
     )
-    expect(screen.getByRole('heading', { name: 'Sign in to see errands' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Sign in to see errands' }),
+    ).toBeInTheDocument()
   })
 
   function renderAt(path: string) {
-    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise(() => {})),
+    )
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter initialEntries={[path]}>
@@ -49,26 +54,36 @@ describe('AppRoutes', () => {
   it("sends /errands to each role's own screen", () => {
     signIn('COURIER')
     renderAt('/errands')
-    expect(screen.getByRole('heading', { name: 'Run an errand' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Campus errands' }),
+    ).toBeInTheDocument()
   })
 
   it('sends a requester to Request help', () => {
     signIn('REQUESTER')
     renderAt('/errands')
-    expect(screen.getByRole('heading', { name: 'Request a hand' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Create a campus errand' }),
+    ).toBeInTheDocument()
   })
 
   it("keeps each role off the other role's screen", () => {
     signIn('REQUESTER')
     renderAt('/errands/browse')
-    expect(screen.getByRole('heading', { name: 'Request a hand' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Run an errand' })).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Create a campus errand' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'Campus errands' }),
+    ).not.toBeInTheDocument()
   })
 
   it('moves to the new role’s screen when the header toggle switches role', () => {
     signIn('REQUESTER')
     renderAt('/errands/new')
-    expect(screen.getByRole('heading', { name: 'Request a hand' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Create a campus errand' }),
+    ).toBeInTheDocument()
 
     act(() => {
       saveSession({
@@ -82,6 +97,8 @@ describe('AppRoutes', () => {
       })
     })
 
-    expect(screen.getByRole('heading', { name: 'Run an errand' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Campus errands' }),
+    ).toBeInTheDocument()
   })
 })

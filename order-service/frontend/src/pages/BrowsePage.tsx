@@ -92,19 +92,24 @@ export function BrowsePage() {
   const page = pool.data
   return (
     <>
-      <div className="page-intro">
-        <div>
+      <div className="courier-page-heading">
+        <div className="page-intro">
           <p className="eyebrow">Courier activity</p>
-          <h1>Run an errand</h1>
-          <p>Choose an open request that fits your route across campus.</p>
+          <h1>Campus errands</h1>
+        </div>
+        <ErrandTabs />
+      </div>
+      <div className="tab-content-heading">
+        <div>
+          <h2>Open campus requests</h2>
+          <p>Choose an errand that fits your route.</p>
         </div>
       </div>
-      <ErrandTabs />
       <div className="two-column">
         <section aria-labelledby="results-heading">
-          <h2 className="visually-hidden" id="results-heading">
+          <h3 className="visually-hidden" id="results-heading">
             Open errands
-          </h2>
+          </h3>
           {pool.isPending && <ErrandListSkeleton label="Loading errands…" />}
           {pool.isError && (
             <div className="notice notice-error" role="alert">

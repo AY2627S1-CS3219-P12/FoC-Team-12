@@ -9,8 +9,8 @@ The frames were shared as screenshots, so node IDs are not recorded yet.
 | Errand details | `/errands/:orderId` (viewer is not a participant) | Accept with confirmation |
 | Courier active order ("You're the courier") | `/errands/:orderId` (viewer is the courier) | Pick up, deliver, withdraw |
 | Requester active order ("Have you received…") | `/errands/:orderId` (viewer is the requester) | Confirm receipt, cancel |
-| My errands (no frame; uses the same cards) | `/errands/mine` | F9: Active and Past errands for the header role (Requester: posted; Courier: running and delivered) |
-| Create errand ("Request a hand") | `/errands/new` | Post an errand; "Your credits" card |
+| My errands | `/errands/mine` | F9: Requester history rows; Courier Active and Past cards |
+| Create errand ("Create a campus errand") | `/errands/new` | Full-width request form with an inline credit check |
 | Edit errand (no frame; reuses the Request a hand form) | `/errands/:orderId/edit` | Requester edits an OPEN errand (T4/T5) |
 
 ## Visual language
@@ -24,10 +24,14 @@ component states and accessibility checks; it is not repeated here. Order-specif
   or Find errands on an empty Active list, Clear filters when filters hide every open errand, and
   Try again when an errand fails to load.
 - Routes and links use Lucide icons (pickup and drop-off pins, arrows) instead of text symbols.
-- Browse and My errands use one responsive card component for both roles. The latest supplied card
-  reference's image area is adapted to a category-neutral Lucide location surface because Order
-  does not own an image or category field; the UI never assigns a made-up photo or category to an
-  errand. Reward, state, route, deadline and available actions remain API-backed.
+- Browse and Courier history use the responsive discovery card. Requester history uses the same
+  API-backed card content in compact rows, keeping reward, state, route, deadline, detail and repost
+  actions. The latest supplied image areas are adapted to a category-neutral Lucide location
+  surface because Order does not own an image or category field; the UI never assigns a made-up
+  photo or category to an errand. Cards use one neutral outline rather than a coloured edge accent.
+- Create errand follows the supplied full-width form panel. The real location pickers, numeric
+  reward, credit availability, retry and reservation states remain in the panel; the reference's
+  category field is omitted because Order has no category contract.
 
 ## Adaptations to the API
 
@@ -75,10 +79,12 @@ The backend contract wins over example data in Figma:
   naming it. Only empty fields are filled, and only from the caller's own errand; anything else
   opens an empty form saying it couldn't be copied. Posting creates a new errand through the usual
   credit check and reservation wait; the original is unchanged.
-- **Requester/Courier tabs** follow the session role switch in the header, because the API
-  authorises actions by the session role. A Requester sees **Request help · My errands**, a Courier
-  **Run errands · My errands**, as one contained segmented control with Lucide supporting icons and
-  a filled current state.
+- **Requester/Courier navigation** follows the session role switch in the header, because the API
+  authorises actions by the session role. Requester My errands uses a prominent **Create new
+  errand** action while the create panel provides **Cancel** back to history. A Courier sees
+  **Open requests · Past errands** as one contained segmented control with a filled current state.
+  The Courier tabs keep the existing `/errands/browse` and `/errands/mine` routes and omit reference
+  counts because each route loads its own authoritative paginated result.
   Opening the other role's screen, or switching role while on one, goes to the current role's own
   screen (`/errands/new` for Requester, `/errands/browse` for Courier).
 - **An errand page follows the header role too.** Requester mode shows only the user's own errands;

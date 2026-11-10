@@ -33,15 +33,21 @@ All signed-in service pages use the same shell and order:
    page. Header rules for `1rem` navigation icons must exclude the bell.
 5. Account menu with profile, permitted administration actions and sign out.
 
+Every account menu links Profile to `/?view=profile`. Personal details, username editing and
+password replacement live on that dedicated view and are not duplicated on Home. Sign out clears
+the shared browser session and UI mode before returning to `/`, so it behaves consistently from
+every service shell.
+
 The bell is the same `NotificationBell.tsx` and `useUnreadCount.ts` copied into every frontend's
 `src/components/`; Notification Service owns them and the copies must stay identical. It polls only
 the unread count, about every 30 seconds while the tab is visible, keeps the last count when a poll
 fails rather than showing `0`, and stops when the session ends.
 
-The active route uses text colour plus a 3 px underline. Navigation items use Lucide outline icons
-with accessible text; icons are supporting cues, not replacements for labels. Desktop headers are
-`4.5rem` high with an `80rem` maximum content width. At narrow widths the navigation becomes a
-horizontal, keyboard-accessible row rather than wrapping or dropping destinations.
+The active route uses text colour plus a 3 px underline. Primary navigation uses concise text labels
+without supporting icons; the notification bell remains an icon control with an accessible name.
+Desktop headers are `4.5rem` high with an `80rem` maximum content width. At narrow widths the
+navigation becomes a horizontal, keyboard-accessible row rather than wrapping or dropping
+destinations.
 
 ### Role selector contract
 
@@ -172,7 +178,8 @@ Do not copy this document into service folders. Link to it so there is one maint
 
 ## Completion checklist
 
-- Shared header order, sizing, typography, icons and active state remain consistent across routes.
+- Shared header order, sizing, typography, text-only primary navigation and active state remain
+  consistent across routes.
 - Successful role selection replaces both role and JWT; failure preserves both.
 - Account menus and navigation behave consistently across services and close when expected.
 - No UI-only permission is treated as authorization; protected APIs still enforce access.
