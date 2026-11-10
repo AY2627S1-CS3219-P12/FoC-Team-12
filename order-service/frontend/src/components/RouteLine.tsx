@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, MapPin } from 'lucide-react'
 import type { Order } from '../api/orderApi'
 import { locationName } from '../utils/orderFormatting'
 
@@ -6,6 +6,7 @@ import { locationName } from '../utils/orderFormatting'
 export function RouteLine({ order }: { order: Order }) {
   return (
     <p className="route-line">
+      <MapPin aria-hidden="true" className="route-pin" />
       <span>{locationName(order.pickupLocationName)}</span>
       <ArrowRight aria-hidden="true" />
       <span className="visually-hidden"> to </span>

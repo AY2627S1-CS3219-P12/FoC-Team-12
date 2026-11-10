@@ -35,6 +35,7 @@ describe('MyErrandsPage', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
+    expect(screen.getByText('Requester activity')).toBeInTheDocument()
     expect(await within(section('Active')).findByRole('heading', { name: 'Get my lunch' })).toBeInTheDocument()
     expect(within(section('Active')).getByRole('heading', { name: 'Return my book' })).toBeInTheDocument()
     expect(within(section('Active')).getByRole('link', { name: 'View Get my lunch' })).toHaveAttribute('href', '/errands/a')
@@ -80,6 +81,7 @@ describe('MyErrandsPage', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
+    expect(screen.getByText('Courier activity')).toBeInTheDocument()
     expect(await within(section('Active')).findByRole('heading', { name: 'Carry my laptop' })).toBeInTheDocument()
     expect(await within(section('Past')).findByRole('heading', { name: 'Bring my parcel' })).toBeInTheDocument()
     // A courier's past list has only completed deliveries, so there is nothing to filter.

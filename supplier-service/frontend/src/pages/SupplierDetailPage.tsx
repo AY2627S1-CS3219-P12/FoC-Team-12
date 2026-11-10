@@ -1,13 +1,5 @@
 import { useState } from 'react'
-import {
-  ArrowLeft,
-  Building2,
-  Clock3,
-  Compass,
-  MapPin,
-  Store,
-  Tag,
-} from 'lucide-react'
+import { ArrowLeft, Building2, Clock3, Compass, MapPin, Tag } from 'lucide-react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import placeholderArtwork from '../assets/supplier-location-placeholder.svg'
 import {
@@ -21,6 +13,7 @@ import {
   formatOperatingHours,
   isUuid,
 } from '../utils/supplierFormatting'
+import { supplierPresentation } from '../utils/supplierPresentation'
 import styles from './SupplierDetailPage.module.css'
 
 interface ReturnLocationState {
@@ -134,6 +127,7 @@ export function SupplierDetailPage() {
 
   const supplier = supplierQuery.data
   const imageUrl = displayImageUrl(supplier.imageUrl)
+  const { Icon, tone } = supplierPresentation(supplier.type)
 
   return (
     <article className={styles.page}>
@@ -147,11 +141,15 @@ export function SupplierDetailPage() {
       )}
       <div className={styles.detailLayout}>
         <div className={styles.content}>
-          <header className={styles.heading}>
-            <span className={styles.headingIcon} aria-hidden="true">
-              <Store />
+          <header className={`${styles.heading} ${styles[tone]}`}>
+            <span
+              className={`${styles.headingIcon} ${styles[tone]}`}
+              aria-hidden="true"
+            >
+              <Icon />
             </span>
             <div className={styles.headingCopy}>
+              <span className={styles.eyebrow}>Campus supplier</span>
               <span className={styles.badge}>{supplier.type}</span>
               <h1>{supplier.name}</h1>
               <p>
