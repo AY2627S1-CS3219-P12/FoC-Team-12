@@ -23,12 +23,14 @@ export function CaseParticipants({
   actorId,
   evidence,
   names = {},
+  closing = false,
 }: {
   detail: Detail
   summary: Summary
   actorId: string
   evidence: Timeline | null
   names?: Record<string, string>
+  closing?: boolean
 }) {
   const [selection, setSelection] = useState<ParticipantSelection>()
   const [tool, setTool] = useState<Tool>()
@@ -68,10 +70,11 @@ export function CaseParticipants({
   }
   const labels = Object.fromEntries(ids.map((id) => [id, label(id)]))
   const eligibleIds = evidence ? ids : reporters
+  const caseClosing = closing || !!detail.closure
   const assigned =
     summary.state === 'UNDER_REVIEW' &&
     summary.reviewerId === actorId &&
-    !detail.closure
+    !caseClosing
   function open(userId: string, next: Tool, trigger: HTMLButtonElement) {
     opener.current = trigger
     setSelection((previous) => ({
@@ -258,7 +261,7 @@ export function CaseParticipants({
               summary={summary}
               actorId={actorId}
               participantIds={eligibleIds}
-              closing={!!detail.closure}
+              closing={caseClosing}
               selection={tool === 'chat' ? selection : undefined}
               participantLabels={labels}
               onParticipantChange={setChatTarget}
@@ -270,7 +273,7 @@ export function CaseParticipants({
               actorId={actorId}
               participantIds={eligibleIds}
               initialActions={detail.actions}
-              closing={!!detail.closure}
+              closing={caseClosing}
               selection={tool === 'credit' ? selection : undefined}
               participantLabels={labels}
               onPendingTargetChange={setPendingCredit}
@@ -284,7 +287,7 @@ export function CaseParticipants({
               actorId={actorId}
               participantIds={eligibleIds}
               initialActions={detail.actions}
-              closing={!!detail.closure}
+              closing={caseClosing}
               selection={tool === 'ban' ? selection : undefined}
               participantLabels={labels}
               onPendingTargetChange={setPendingBan}

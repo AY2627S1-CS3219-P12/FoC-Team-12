@@ -174,7 +174,9 @@ export function CaseConversations({
             ? 'Assign this case to yourself before starting a conversation.'
             : summary.state === 'RESOLVED'
               ? 'This case is closed. Existing conversations are read-only.'
-              : 'Only the assigned reviewer can start a conversation.'}{' '}
+              : closing
+                ? 'This case is closing. Existing conversations are read-only.'
+                : 'Only the assigned reviewer can start a conversation.'}{' '}
           Select a participant to view an existing conversation.
         </p>
       )}

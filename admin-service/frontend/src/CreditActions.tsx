@@ -681,9 +681,13 @@ export function CreditActions({
             </form>
           ) : (
             <p>
-              {ban
-                ? 'Only the assigned reviewer can ban participants on this case.'
-                : 'Only the assigned reviewer can adjust credits on this case.'}
+              {summary.state === 'RESOLVED'
+                ? 'This case is closed. Actions are read-only.'
+                : closing
+                  ? 'This case is closing. Actions are read-only until the outcome is confirmed.'
+                  : ban
+                    ? 'Only the assigned reviewer can ban participants on this case.'
+                    : 'Only the assigned reviewer can adjust credits on this case.'}
             </p>
           )}
         </>

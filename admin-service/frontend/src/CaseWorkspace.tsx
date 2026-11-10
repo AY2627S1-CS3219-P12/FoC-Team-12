@@ -19,6 +19,7 @@ import { CaseParticipants } from './CaseParticipants'
 import { useParticipantNames } from './useParticipantNames'
 import { formatSingaporeTime } from './time'
 import { ResolutionPanel } from './ResolutionPanel'
+import { readPendingClosure } from './closureState'
 import { ParticipantConversationStatus } from './CaseConversations'
 import {
   CaseError,
@@ -1079,10 +1080,13 @@ function CaseDetail({ id, actor }: { id: string; actor: string }) {
         This case link is invalid. Return to the case queue and try again.
       </p>
     )
-  return <DetailData id={id} actor={actor} />
+  return <DetailData key={`${actor}.${id}`} id={id} actor={actor} />
 }
 function DetailData({ id, actor }: { id: string; actor: string }) {
   const state = useRemote<Detail>('cases/' + id, true)
+  const [closureLocked, setClosureLocked] = useState(
+    () => !!readPendingClosure(actor, id),
+  )
   const [evidence, setEvidence] = useState<Timeline | null>(null)
   const participantNames = useParticipantNames([
     ...(state.data?.statements.map((s) => s.reporterId) || []),
@@ -1174,6 +1178,12 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           </>
         ) : null}
       </section>
+      {closureLocked && !state.data.closure && value.state !== 'RESOLVED' && (
+        <p role="status" className="evidence-notice">
+          Case closure is in progress. Participant actions and conversations are
+          read-only until the outcome is confirmed.
+        </p>
+      )}
       <CaseParticipants
         key={`${actor}.${id}`}
         detail={state.data}
@@ -1181,6 +1191,7 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         actorId={actor}
         evidence={evidence}
         names={participantNames}
+        closing={closureLocked}
       />
       <EvidencePanel
         key={id}
@@ -1197,6 +1208,7 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         resolution={state.data.resolution}
         closure={state.data.closure}
         refresh={state.retry}
+        onClosingChange={setClosureLocked}
       />
     </>
   )

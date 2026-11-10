@@ -1,23 +1,18 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   CaseError,
   caseErrorMessage,
-  isUuid,
   request,
   type AdminAction,
   type Summary,
   type Detail,
 } from './cases'
 
-type Submission = {
-  key: string
-  body: {
-    resolution: string
-    creditDisposition?: string
-    expectedRevision: number
-    rejectedActionExplanations: { operationId: string; explanation: string }[]
-  }
-}
+import {
+  readPendingClosure,
+  type ClosureSubmission as Submission,
+} from './closureState'
+
 export function ResolutionPanel({
   summary,
   actor,
@@ -25,6 +20,7 @@ export function ResolutionPanel({
   resolution,
   closure,
   refresh,
+  onClosingChange,
 }: {
   summary: Summary
   actor: string
@@ -32,6 +28,7 @@ export function ResolutionPanel({
   resolution?: string | null
   closure?: Detail['closure']
   refresh: () => void
+  onClosingChange?: (closing: boolean) => void
 }) {
   const storage = `foc.resolve-pending.${actor}.${summary.caseId}`
   const [pending, setPending] = useState<Submission | null>(() => {
@@ -45,20 +42,7 @@ export function ResolutionPanel({
           rejectedActionExplanations: closure.explanations,
         },
       }
-    try {
-      const p = JSON.parse(
-        sessionStorage.getItem(storage) || 'null',
-      ) as Submission | null
-      return p &&
-        isUuid(p.key) &&
-        typeof p.body.resolution === 'string' &&
-        Number.isSafeInteger(p.body.expectedRevision) &&
-        Array.isArray(p.body.rejectedActionExplanations)
-        ? p
-        : null
-    } catch {
-      return null
-    }
+    return readPendingClosure(actor, summary.caseId)
   })
   const [disposition, setDisposition] = useState(
     pending?.body.creditDisposition || 'KEEP_EXISTING',
@@ -76,6 +60,9 @@ export function ResolutionPanel({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  useEffect(() => {
+    onClosingChange?.(busy || !!pending || done || !!closure)
+  }, [busy, pending, done, closure, onClosingChange])
   const guard = useRef(false)
   const heading = useRef<HTMLHeadingElement>(null)
   const rejected = actions?.filter((a) => a.status === 'REJECTED') || []
@@ -113,6 +100,7 @@ export function ResolutionPanel({
       return
     }
     setPending(operation)
+    onClosingChange?.(true)
     guard.current = true
     setBusy(true)
     setError('')
