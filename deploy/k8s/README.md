@@ -1,6 +1,8 @@
 # Local Kubernetes (Minikube)
 
-For the current Admin integration completion, four selected Deployment files instead use local
+The current local Kafka dispute preview is recorded in [Admin readiness](../../admin-service/INTEGRATION_READINESS.md#kafka-replacement--10-november-2026). Its selected deployment files pin locally built images based on `8a986a27` plus the approved Kafka changes. Build/load those exact tags before applying elsewhere; the registry table below is historical. The gateway tunnel remains `http://127.0.0.1:8089`. Follow [Kafka runtime reconciliation](../../admin-service/k8s/README.md#current-kafka-preview); keep existing credentials and PVCs.
+
+For the historical Admin integration completion, four selected Deployment files used local
 `foc-{user,chat,credit}-service:local-61c7062-completion-20261109-v2` and
 `foc-admin-service:local-61c7062-completion-20261109-v3` builds from this worktree. Order is back
 on its published image (table below), which already contains that build's Order changes.

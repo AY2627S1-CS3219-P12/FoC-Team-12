@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: user-service
-          image: foc-user-service:local-61c7062-completion-20261109-v2
+          image: foc-user-service:local-8a986a27-20261110
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081

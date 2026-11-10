@@ -16,7 +16,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: supplier-service
-          image: arkanian4/foc-supplier-service:sha-17ab15420ed3c2d3cbea9e91aff2ecabb924798d-r42496677595-1
+          image: foc-supplier-service:local-8a986a27-kafka-20261110-v1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

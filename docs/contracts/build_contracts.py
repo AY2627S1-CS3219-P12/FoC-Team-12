@@ -141,7 +141,6 @@ endpoint('/internal/chat/orders/{orderId}/report-eligibility','get','chat','Elig
 endpoint('/internal/chat/cases/{caseId}/timeline','get','chat','Timeline',internal=True,actor=True,params=cursor)
 endpoint('/internal/chat/cases/{caseId}/conversations','post','chat','Conversation',obj({'participantUserId':UUID}),internal=True,actor=True,idem=True)
 endpoint('/internal/chat/cases/{caseId}/conversations','get','chat','Conversation',internal=True,actor=True,params=[param('participantUserId',schema=UUID,required=True)])
-endpoint('/internal/chat/cases/{caseId}/closure','post','chat','ClosureAcknowledgement',obj({'operationId':UUID}),internal=True,actor=True)
 endpoint('/internal/users/admin-operations/{operationId}','get','user','OwnerOutcome',internal=True)
 endpoint('/internal/credits/admin-operations/{operationId}','get','credits','OwnerOutcome',internal=True)
 endpoint('/internal/users/{userId}/authorization','get','user','CurrentAuthorization',internal=True)
@@ -174,7 +173,7 @@ endpoint('/api/notifications/me','get','notification','NotificationPage',params=
 endpoint('/api/notifications/me/{id}/read','patch','notification','Notification')
 endpoint('/api/notifications/me/unread-count','get','notification','UnreadCount')
 S['CaseSummary'] = obj({'caseId':UUID,'orderId':UUID,'state':enum('OPEN','UNDER_REVIEW','RESOLVED'),
-    'reviewerId':nullable(UUID),'revision':INT,'createdAt':TIME})
+    'reviewerId':nullable(UUID),'revision':INT,'createdAt':TIME,'reviewStatus':enum('LEGACY','PREPARING','READY','REJECTED')})
 S['Statement'] = obj({'reporterId':UUID,'description':TEXT,'submittedAt':TIME})
 S['Action'] = obj({'operationId':UUID,'caseId':UUID,'targetUserId':UUID,
     'type':enum('CREDIT_ADJUSTMENT','BAN'),'amount':nullable({'type':'integer'}),
@@ -186,13 +185,14 @@ S['ClosurePreparation'] = obj({'operationId':UUID,'resolution':TEXT,'revision':I
     'explanations':array(obj({'operationId':UUID,'explanation':TEXT}))})
 S['CaseDetail']['properties']['closure'] = nullable(ref('ClosurePreparation'))
 S['ConversationReferences'] = array(ref('Conversation'))
-S['ParticipantReport'] = obj({'case':ref('CaseSummary'),'ownStatement':nullable(ref('Statement'))})
+S['ReportPreparation']=obj({'operationId':UUID,'status':enum('PENDING','READY','REJECTED'),'failureCode':nullable(TEXT)})
+S['ParticipantReport'] = obj({'case':ref('CaseSummary'),'ownStatement':nullable(ref('Statement')),'preparation':nullable(ref('ReportPreparation'))})
 S['CasePage'] = obj({'content':array(ref('CaseSummary')),'page':INT,'size':INT,'totalElements':INT,'totalPages':INT})
-endpoint('/api/admin/reports','post','admin','ParticipantReport',obj({'orderId':UUID,'description':TEXT}),code=201,idem=True)
+endpoint('/api/admin/reports','post','admin','ParticipantReport',obj({'orderId':UUID,'description':TEXT}),code=202,idem=True)
 endpoint('/api/admin/reports/{caseId}','get','admin','ParticipantReport')
 S['ReportContext'] = {'oneOf':[
-    obj({'orderId':UUID,'status':enum('OWN_REPORT','CASE_PARTICIPANT'),'caseId':UUID,'state':enum('OPEN','UNDER_REVIEW','RESOLVED')}),
-    obj({'orderId':UUID,'status':enum('ELIGIBLE','INELIGIBLE'),'caseId':{'type':'null'},'state':{'type':'null'}})]}
+    obj({'orderId':UUID,'status':enum('OWN_REPORT','CASE_PARTICIPANT','PREPARING_REVIEW'),'caseId':UUID,'state':enum('OPEN','UNDER_REVIEW','RESOLVED')}),
+    obj({'orderId':UUID,'status':enum('PREPARATION_AVAILABLE'),'caseId':{'type':'null'},'state':{'type':'null'}})]}
 endpoint('/api/admin/orders/{orderId}/report-context','get','admin','ReportContext')
 endpoint('/api/admin/cases','get','admin','CasePage',params=[param('status',schema=enum('OPEN','UNDER_REVIEW','RESOLVED')),
     param('query',schema=UUID),param('page',schema={**INT,'default':0}),param('size',schema={'type':'integer','minimum':1,'maximum':100,'default':20})])
@@ -207,7 +207,7 @@ endpoint('/api/admin/cases/{caseId}/actions','post','admin','Action',{'oneOf':[
     obj({'type':{'const':'BAN'},'targetUserId':UUID,'reason':TEXT})]},code=202,idem=True)
 endpoint('/api/admin/cases/{caseId}/actions/{operationId}','get','admin','Action')
 endpoint('/api/admin/cases/{caseId}/resolve','post','admin','CaseDetail',obj({'resolution':TEXT,'expectedRevision':INT,
-    'rejectedActionExplanations':{'type':'array','maxItems':1000,'items':obj({'operationId':UUID,'explanation':TEXT})}}, ['resolution','expectedRevision']),idem=True)
+    'rejectedActionExplanations':{'type':'array','maxItems':1000,'items':obj({'operationId':UUID,'explanation':TEXT})}}, ['resolution','expectedRevision']),code=202,idem=True)
 
 # Dispute contracts approved in the report-view continuation; existing lifecycle states are retained.
 DISPOSITION=enum('RETURN_TO_REQUESTER','PAY_COURIER','KEEP_EXISTING')
@@ -216,11 +216,15 @@ api['paths']['/api/admin/cases/{caseId}/resolve']['post']['requestBody']['conten
 S['OrderReview']=obj({'orderId':UUID,'caseId':UUID,'requesterId':UUID,'courierId':nullable(UUID),'state':S['OrderSnapshot']['properties']['status'],'creditStatus':nullable(enum('RESERVED','RELEASED','SETTLED','COMPENSATED')),'resolved':{'type':'boolean'},'participants':array(UUID)})
 S['DisputeCreditReceipt']=obj({'operationId':UUID,'caseId':UUID,'orderId':UUID,'disposition':DISPOSITION,'reservationStatus':enum('ABSENT','RELEASED','SETTLED','COMPENSATED'),'complete':{'const':True}})
 S['ErrandReviewAcknowledgement']=obj({'orderId':UUID,'caseId':UUID,'readOnly':{'const':True}})
-endpoint('/internal/orders/{orderId}/review','post','orders','OrderReview',obj({'caseId':UUID}),internal=True,actor=True)
-endpoint('/internal/orders/{orderId}/review','get','orders','OrderReview',params=[param('caseId',schema=UUID,required=True)],internal=True,actor=True)
-endpoint('/internal/orders/{orderId}/dispute-resolution','post','orders','OrderReview',obj({'caseId':UUID,'operationId':UUID,'disposition':DISPOSITION}),internal=True,actor=True)
-endpoint('/internal/credits/orders/{orderId}/dispute-resolution','post','credits','DisputeCreditReceipt',obj({'caseId':UUID,'operationId':UUID,'requesterId':UUID,'courierId':nullable(UUID),'disposition':DISPOSITION}),internal=True,actor=True)
-endpoint('/internal/chat/orders/{orderId}/review','post','chat','ErrandReviewAcknowledgement',obj({'caseId':UUID}),internal=True,actor=True)
+# Accepted preparations are not completed business operations. Original retries can return completion.
+for path,completed in [('/api/admin/reports','201'),('/api/admin/cases/{caseId}/resolve','200')]:
+    op=api['paths'][path]['post']
+    op['responses'][completed]=copy.deepcopy(op['responses']['202'])
+    op['responses']['202']['description']='Durably queued; owner confirmations pending'
+    op['responses'][completed]['description']='Original operation completed'
+claim=api['paths']['/api/admin/cases/{caseId}/claim']['post']
+claim['responses']['202']=copy.deepcopy(claim['responses']['200'])
+claim['responses']['202']['description']='Legacy review preparation queued; reviewer is not assigned yet'
 S['ImageBytes']={'type':'string','format':'binary'}
 for path,owner,internal in [('/internal/chat/cases/{caseId}/messages/{messageId}/attachment','chat',True),('/api/admin/cases/{caseId}/messages/{messageId}/attachment','admin',False)]:
     endpoint(path,'get',owner,'ImageBytes',internal=internal,actor=internal)
@@ -316,8 +320,13 @@ for path, methods in api['paths'].items():
         if 'requestBody' in op: item['requestBody']=sample(op['requestBody']['content']['application/json']['schema'])
         if path == '/api/admin/cases/{caseId}/resolve':
             item['requestBody']['rejectedActionExplanations'] = []
-            item['body']['case']['state'] = 'RESOLVED'
+            item['body']['case']['state'] = 'UNDER_REVIEW'
+            item['body']['case']['reviewStatus'] = 'READY'
             item['body']['actions'] = []
+        if path == '/api/admin/reports' and method == 'post':
+            item['body']['ownStatement']=None
+            item['body']['preparation']['status']='PENDING'
+            item['body']['case'].update(state='OPEN',reviewStatus='PREPARING',reviewerId=None,revision=0)
         if path == '/api/chat/quick-replies':
             item['body']['content'] = [
                 {'key':'ON_MY_WAY','language':'en','text':"I'm on my way."},
@@ -342,3 +351,23 @@ for http_only in ['OwnerOutcome','ClosureAcknowledgement','ConversationReference
 write('chat-websocket.schema.json',json.loads(json.dumps(websocket).replace('#/components/schemas/','#/$defs/')))
 write('websocket.examples.json',[sample(branch) for branch in websocket['oneOf']])
 print(f'Generated {len(api["paths"])} HTTP paths, {len(variants)} new event variants and examples.')
+
+# Separate dispute envelope: actor identity, never a bearer credential or private statement text.
+dispute_types={
+ 'PrepareReview':('admin-service','admin.dispute.commands',obj({'intent':enum('REPORT','LEGACY')})),
+ 'PrepareResolution':('admin-service','admin.dispute.commands',obj({'disposition':DISPOSITION})),
+ 'OrderReviewFrozen':('order-service','order.dispute.events',S['OrderReview']),
+ 'ErrandReviewPrepared':('chat-service','chat.dispute.events',obj({'readOnly':{'const':True},'orderConfirmationId':UUID})),
+ 'CaseClosurePrepared':('chat-service','chat.dispute.events',obj({'readOnly':{'const':True}})),
+ 'SettleDisputeCredits':('order-service','order.dispute.commands',obj({'requesterId':UUID,'courierId':nullable(UUID),'disposition':DISPOSITION})),
+ 'DisputeCreditsSettled':('credit-service','credit.dispute.events',obj({**S['DisputeCreditReceipt']['properties'],'requesterId':UUID,'courierId':nullable(UUID)})),
+ 'OrderDisputeFinalized':('order-service','order.dispute.events',obj({**S['OrderReview']['properties'],'disposition':DISPOSITION,'creditConfirmationId':UUID})),
+}
+dispute_variants=[]
+for kind,(producer,topic,data) in dispute_types.items():
+    schema=obj({'eventId':UUID,'eventVersion':{'const':1},'type':{'const':kind},'producer':{'const':producer},'operationId':UUID,'caseId':UUID,'orderId':UUID,'actorId':UUID,'actorRole':enum('ADMIN','REQUESTER','COURIER'),'occurredAt':TIME,'data':copy.deepcopy(data)})
+    if kind not in ('PrepareReview','OrderReviewFrozen','ErrandReviewPrepared'):schema['properties']['actorRole']={'const':'ADMIN'}
+    if kind=='OrderDisputeFinalized':schema['properties']['data']['properties']['resolved']={'const':True}
+    schema['title']=kind;schema['x-topic']=topic;dispute_variants.append(schema)
+write('dispute.schema.json',{'$schema':'https://json-schema.org/draft/2020-12/schema','title':'FoC durable dispute coordination v1','oneOf':dispute_variants})
+write('dispute.examples.json',[{'topic':v['x-topic'],'key':sample(v)['orderId'],'message':sample(v)} for v in dispute_variants])

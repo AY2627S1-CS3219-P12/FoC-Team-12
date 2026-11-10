@@ -168,3 +168,5 @@ projectedSequence. Producers must not guess a consumer's progress.
 4. Chat evidence/auth integration unblocks Admin report/review; Kafka owner adapters unblock actions.
 5. Run consumer-driven tests against real producers, real-broker retries and actual gateway/TLS
    configuration. Schema validation alone cannot certify cross-service functionality.
+
+The [Kafka dispute contract](../integration/dispute-kafka-contract.md) supersedes the synchronous dispute write endpoints. `dispute.schema.json` and `dispute.examples.json` describe the separate credential-free coordination envelope. The generator includes 202 preparations and the validator checks these schemas and removal of the obsolete HTTP routes.

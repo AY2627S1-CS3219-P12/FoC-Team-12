@@ -37,7 +37,6 @@ services:
       ADMIN_DB_PASSWORD: ${ADMIN_DB_PASSWORD:?ADMIN_DB_PASSWORD must be set}
       ADMIN_USER_URL: http://user-service:8081
       ADMIN_USER_JWKS: http://user-service:8081/.well-known/jwks.json
-      ADMIN_ORDER_URL: ${ADMIN_ORDER_URL:-http://order-service:8082}
       ADMIN_CHAT_URL: ${ADMIN_CHAT_URL:-http://chat-service:8085}
       ADMIN_SERVICE_KEY_ID: ${ADMIN_SERVICE_KEY_ID:-admin-service-1}
       ADMIN_SERVICE_PRIVATE_KEY: ${ADMIN_SERVICE_PRIVATE_KEY:?ADMIN_SERVICE_PRIVATE_KEY must be set}
@@ -230,7 +229,6 @@ services:
       DB_NAME: ${ORDER_DB_NAME:?ORDER_DB_NAME must be set}
       DB_USER: ${ORDER_DB_USER:?ORDER_DB_USER must be set}
       DB_PASSWORD: ${ORDER_DB_PASSWORD:?ORDER_DB_PASSWORD must be set}
-      ORDER_CREDIT_URL: ${ORDER_CREDIT_URL:-http://credit-service:8083}
       ORDER_USER_URL: http://user-service:8081
       ORDER_SERVICE_KEY_ID: ${ORDER_SERVICE_KEY_ID:-order-service-1}
       ORDER_SERVICE_PRIVATE_KEY: ${ORDER_SERVICE_PRIVATE_KEY:-}

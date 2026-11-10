@@ -22,7 +22,7 @@ spec:
       containers:
         - name: admin-service
           # Local integration build; load into foc-local before applying this manifest.
-          image: foc-admin-service:local-61c7062-completion-20261109-v3
+          image: foc-admin-service:local-8a986a27-kafka-20261110-v2
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

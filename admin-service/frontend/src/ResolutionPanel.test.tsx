@@ -66,10 +66,8 @@ it('recovers a prepared resolution from the server after browser retry storage i
     />,
   )
   expect(screen.getByLabelText('Internal resolution reason')).toBeDisabled()
-  expect(screen.getByRole('status')).toHaveTextContent(
-    'This case is still closing',
-  )
-  fireEvent.click(screen.getByRole('button', { name: 'Resume case closure' }))
+  expect(screen.getByRole('status')).toHaveTextContent('Closure is preparing')
+  fireEvent.click(screen.getByRole('button', { name: 'Check case closure' }))
   await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
   expect(fetcher.mock.calls[0]![1].headers['Idempotency-Key']).toBe(operationId)
   expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toEqual({
@@ -190,7 +188,7 @@ it('retains exact request identity across unavailable Chat or a lost response', 
   )
   fireEvent.click(
     await screen.findByRole('button', {
-      name: 'Resume case closure',
+      name: 'Check case closure',
     }),
   )
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
@@ -223,5 +221,46 @@ it('keeps other reviewers read-only and displays the immutable final reason', ()
   expect(screen.getByText('Final immutable decision')).toBeVisible()
   expect(
     screen.queryByRole('button', { name: 'Review case closure' }),
+  ).not.toBeInTheDocument()
+})
+
+it('keeps a durable accepted closure pending until owner confirmations arrive', async () => {
+  const operationId = '50000000-0000-4000-8000-000000000002'
+  const closure = {
+    operationId,
+    resolution: 'Prepared decision',
+    revision: 3,
+    explanations: [],
+  }
+  const refresh = vi.fn()
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        status: 202,
+        json: async () => ({ case: summary, closure }),
+      }),
+  )
+  render(
+    <ResolutionPanel
+      summary={summary}
+      actor={actor}
+      actions={[]}
+      closure={closure}
+      refresh={refresh}
+    />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Check case closure' }))
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce())
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'waiting for chat, errand and credit confirmations',
+  )
+  expect(
+    screen.queryByText(
+      'Case closed. The decision is final and conversations are read-only.',
+    ),
   ).not.toBeInTheDocument()
 })

@@ -518,3 +518,50 @@ it('removes protected queue data when a later live administrator check denies ac
   ).toBeVisible()
   expect(screen.queryByText('Case ' + id)).not.toBeInTheDocument()
 })
+
+it('shows saved preparation without claiming the report or freeze has completed', async () => {
+  window.history.replaceState({}, '', '/admin/reports/' + id)
+  session()
+  mockServiceFetch(
+    vi.fn().mockResolvedValue(
+      response({
+        case: { ...summary, reviewStatus: 'PREPARING' },
+        ownStatement: null,
+        preparation: { operationId: id, status: 'PENDING' },
+      }),
+    ),
+  )
+  render(<App />)
+  expect(
+    await screen.findByText(/The errand pauses when Order processes it/),
+  ).toBeVisible()
+  expect(screen.getByText('Preparing review')).toBeVisible()
+  expect(screen.queryByText('Report submitted')).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: 'Add your statement' }),
+  ).not.toBeInTheDocument()
+})
+
+it('allows a preparation form without claiming synchronous Chat eligibility', async () => {
+  window.history.replaceState({}, '', '/admin/reports/new?orderId=' + order)
+  session()
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        response({
+          orderId: order,
+          status: 'PREPARATION_AVAILABLE',
+          caseId: null,
+          state: null,
+        }),
+      ),
+  )
+  render(<App />)
+  expect(await screen.findByLabelText('What happened?')).toBeVisible()
+  expect(
+    screen.queryByText('Reporting is not available'),
+  ).not.toBeInTheDocument()
+  expect(screen.queryByText('Report submitted')).not.toBeInTheDocument()
+})

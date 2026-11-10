@@ -1726,6 +1726,15 @@
         "createdAt": {
           "type": "string",
           "format": "date-time"
+        },
+        "reviewStatus": {
+          "type": "string",
+          "enum": [
+            "LEGACY",
+            "PREPARING",
+            "READY",
+            "REJECTED"
+          ]
         }
       },
       "required": [
@@ -1734,7 +1743,8 @@
         "state",
         "reviewerId",
         "revision",
-        "createdAt"
+        "createdAt",
+        "reviewStatus"
       ],
       "additionalProperties": false
     },
@@ -1954,6 +1964,41 @@
       ],
       "additionalProperties": false
     },
+    "ReportPreparation": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "PENDING",
+            "READY",
+            "REJECTED"
+          ]
+        },
+        "failureCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "operationId",
+        "status",
+        "failureCode"
+      ],
+      "additionalProperties": false
+    },
     "ParticipantReport": {
       "type": "object",
       "properties": {
@@ -1969,11 +2014,22 @@
               "type": "null"
             }
           ]
+        },
+        "preparation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReportPreparation"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "case",
-        "ownStatement"
+        "ownStatement",
+        "preparation"
       ],
       "additionalProperties": false
     },

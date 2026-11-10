@@ -152,6 +152,8 @@ Meet WCAG AA contrast for text and controls. Never communicate status using colo
 
 ## Disputed errands
 
+A saved report first shows **Preparing review** until Order confirms its freeze and Chat confirms its barrier. Explain that the errand pauses when Order processes the request; actions committed before that boundary remain valid. Pending preparation is not a submitted/accepted report. Poll private status without inventing completion. Closure likewise shows pending owner confirmations and becomes final only when the backend records all required outcomes.
+
 Order review metadata places errands in a separate **Under review** section with a text badge, a distinct border, and the lifecycle stage where progress paused. The detail notice explains the report and permits the other party to add a statement. Normal errand actions and errand-chat sending are unavailable; private admin follow-up remains available until closure. Finished reviews appear in Past with **Resolved after review**; their detail heading shows the review outcome without marking unperformed delivery milestones as done. Admin shows original messages and protected images chronologically with other evidence, and labels statement authors **Reporter**. Verified parties retain admin contact/actions even without a statement. These displays follow producer authorization and never generate issue summaries.
 
 ## Responsive and accessible delivery

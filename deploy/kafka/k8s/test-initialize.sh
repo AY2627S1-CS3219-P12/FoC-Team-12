@@ -15,7 +15,7 @@ if [ "${TEST_FAIL_ALWAYS:-false}" = true ]; then exit 1; fi
 if [ ! -e "$TEST_WORK/failed-once" ]; then touch "$TEST_WORK/failed-once"; exit 1; fi
 mkdir "$TEST_WORK/active" || { echo 'Unexpected concurrent CLI with parallelism=1' >&2; exit 1; }
 trap 'rmdir "$TEST_WORK/active"' EXIT
-printf '%s\n' "$0" >> "$TEST_WORK/calls"
+printf '%s %s\n' "$0" "$*" >> "$TEST_WORK/calls"
 sleep .01
 MOCK
 chmod +x "$work/cli"
@@ -25,6 +25,13 @@ bash /opt/foc-kafka/initialize.sh > "$work/log" 2>&1
 grep -q 'retry 1/3' "$work/log"
 grep -q 'Kafka topics and ACLs are initialized' "$work/log"
 test "$(wc -l < "$work/calls")" -gt 40
+for topic in admin.dispute.commands order.dispute.commands order.dispute.events chat.dispute.events credit.dispute.events; do
+  grep -q -- "--topic $topic" "$TEST_WORK/calls"
+done
+for group in admin-service-disputes order-service-disputes chat-service-disputes credit-service-disputes; do
+  grep -q -- "--group $group" "$TEST_WORK/calls"
+done
+grep -q -- '--allow-principal User:admin_service --operation Write --operation Describe --topic admin.dispute.commands' "$TEST_WORK/calls"
 export TEST_FAIL_ALWAYS=true
 if bash /opt/foc-kafka/initialize.sh > "$work/failure-log" 2>&1; then echo 'Failure was incorrectly accepted' >&2; exit 1; fi
 if KAFKA_INIT_PARALLELISM=0 bash /opt/foc-kafka/initialize.sh > /dev/null 2>&1; then exit 1; fi

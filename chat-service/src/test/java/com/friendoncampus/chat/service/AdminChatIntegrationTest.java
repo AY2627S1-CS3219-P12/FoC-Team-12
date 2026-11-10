@@ -107,10 +107,10 @@ class AdminChatIntegrationTest {
         try{
             var writer=pool.submit(()->new TransactionTemplate(manager).execute(s->{db.queryForObject("SELECT id FROM chat_conversations WHERE id=? FOR UPDATE",UUID.class,conversation);locked.countDown();try{assertTrue(release.await(10,TimeUnit.SECONDS));}catch(InterruptedException ex){throw new IllegalStateException(ex);}return chats.sendText(conversation,reviewer,UUID.randomUUID(),"TEXT","in flight",null);}));
             assertTrue(locked.await(5,TimeUnit.SECONDS));
-            var barrier=pool.submit(()->admin.prepareClosure(caseId,operation,actor(reviewer,"ADMIN")));
+            var barrier=pool.submit(()->admin.drainClosure(caseId,operation));
             assertThrows(TimeoutException.class,()->barrier.get(200,TimeUnit.MILLISECONDS));release.countDown();assertNotNull(writer.get(10,TimeUnit.SECONDS));
             assertEquals(true,barrier.get(10,TimeUnit.SECONDS).get("readOnly"));
-            assertEquals(true,admin.prepareClosure(caseId,operation,actor(reviewer,"ADMIN")).get("readOnly"));
+            assertEquals(true,admin.drainClosure(caseId,operation).get("readOnly"));
             assertThrows(ChatConflictException.class,()->chats.sendText(conversation,reviewer,UUID.randomUUID(),"TEXT","late",null));
             assertEquals(1,db.queryForObject("SELECT count(*) FROM chat_messages",Integer.class));
         }finally{release.countDown();pool.shutdownNow();}
@@ -156,10 +156,10 @@ class AdminChatIntegrationTest {
         UUID errand=UUID.randomUUID();
         db.update("INSERT INTO chat_conversations(id,conversation_type,order_id,status,next_sequence,created_at,updated_at) VALUES (?,'ERRAND',?,'ACTIVE',1,?,?)",errand,order,at,at);
         db.update("INSERT INTO chat_participants(conversation_id,user_id,relationship,can_write,valid_from) VALUES (?,?,'REQUESTER',true,?)",errand,participant,at);
-        assertEquals(true,admin.prepareErrandReview(order,caseId,actor(participant,"REQUESTER")).get("readOnly"));
+        assertEquals(true,admin.applyReviewBarrier(order,caseId).get("readOnly"));
         assertThrows(ChatConflictException.class,()->chats.sendText(errand,participant,UUID.randomUUID(),"TEXT","blocked",null));
         UUID privateChat=open();assertNotNull(chats.sendText(privateChat,reviewer,UUID.randomUUID(),"TEXT","TEST ONLY admin follow-up",null));
-        assertEquals(true,admin.prepareErrandReview(order,caseId,actor(participant,"REQUESTER")).get("readOnly"));
+        assertEquals(true,admin.applyReviewBarrier(order,caseId).get("readOnly"));
     }
     @Test void snapshotsRemainStableAcrossNewFactsAndEmptyConfirmedCreditBaselineIsComplete(){
         UUID courier=UUID.randomUUID();var first=orderRecord(UUID.randomUUID(),1,null,null,"CREATE");var second=orderRecord(UUID.randomUUID(),2,courier,null,"ACCEPT");producerPages(List.of(first,second));

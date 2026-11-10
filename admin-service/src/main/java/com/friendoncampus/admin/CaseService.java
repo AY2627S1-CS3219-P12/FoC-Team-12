@@ -23,8 +23,8 @@ import static com.friendoncampus.admin.CaseViews.*;
 @Service
 public class CaseService {
     private final JdbcTemplate db;
-    private DisputeOrderClient reviewOrders;
-    @org.springframework.beans.factory.annotation.Autowired public void reviewOrders(DisputeOrderClient client){this.reviewOrders=client;}
+    private com.friendoncampus.admin.dispute.DisputeBus disputes;
+    @org.springframework.beans.factory.annotation.Autowired public void disputes(com.friendoncampus.admin.dispute.DisputeBus bus){this.disputes=bus;}
     private final UserEligibilityClient users;
     private final ChatEligibilityClient chat;
     private final ChatConversationClient conversations;
@@ -32,7 +32,7 @@ public class CaseService {
     private final ReviewerIndependenceService independence;
     private final TransactionTemplate transaction;
     private final JsonMapper json = JsonMapper.builder().build();
-    private static final String CASE_COLUMNS = "id, order_id, state, reviewer_id, revision, created_at, correlation_id, source_sequence";
+    private static final String CASE_COLUMNS = "id, order_id, state, reviewer_id, revision, created_at, correlation_id, source_sequence, review_status";
 
     public CaseService(JdbcTemplate db, UserEligibilityClient users, ChatEligibilityClient chat, ChatConversationClient conversations, CreditActionService creditActions, PlatformTransactionManager manager, ReviewerIndependenceService independence) {
         this.db = db; this.users = users; this.chat = chat;
@@ -44,65 +44,53 @@ public class CaseService {
     }
 
     public Mutation report(Jwt jwt, UUID key, UUID orderId, String description) {
-        UUID actor = requireParticipant(jwt);
-        String text = description == null ? "" : description.strip();
-        if (orderId == null || text.isEmpty() || text.length() > 2000) throw invalid("An errand UUID and an issue of 1–2000 characters are required.");
-        String route = "/api/admin/reports";
-        String hash = hash(List.of(orderId.toString(), text));
-        Mutation replay = receipt(key, actor, route, hash);
-        if (replay != null) return replay;
-        // All remote checks finish before opening a mutation transaction or acquiring locks.
-        var eligibility = chat.check(orderId, actor, jwt.getTokenValue());
-        if (!eligibility.complete()) throw unavailable("Reporting eligibility evidence is incomplete. Please try again later.");
-        if (!eligibility.eligible()) return mutate(key, actor, route, hash, () -> problem(403, "You are not eligible to report this errand.", route));
-        var existingCase=db.queryForList("SELECT id,state,closure_operation_id FROM admin_cases WHERE order_id=?",orderId);
-        if(!existingCase.isEmpty()){
-            var c=existingCase.get(0);UUID id=(UUID)c.get("id");
-            if("RESOLVED".equals(c.get("state"))||c.get("closure_operation_id")!=null||hasStatement(id,actor))
-                return mutate(key,actor,route,hash,()->problem(409,"This case is closed, closing, or already contains your statement.",route));
-        }
-        UUID preparedCaseId=db.query("SELECT id FROM admin_cases WHERE order_id=?",r->r.next()?r.getObject(1,UUID.class):UUID.nameUUIDFromBytes(("foc-dispute:"+orderId).getBytes(StandardCharsets.UTF_8)),orderId);
-        db.update("INSERT INTO admin_report_preparations(operation_id,actor_id,order_id,case_id,request_hash,description) VALUES (?,?,?,?,?,?) ON CONFLICT DO NOTHING",key,actor,orderId,preparedCaseId,hash,text);
-        var prepared=db.queryForMap("SELECT * FROM admin_report_preparations WHERE operation_id=?",key);
-        if(!actor.equals(prepared.get("actor_id"))||!orderId.equals(prepared.get("order_id"))||!hash.equals(prepared.get("request_hash")))throw new ResponseStatusException(HttpStatus.CONFLICT,"Resume the original report request.");
-        var review=reviewOrders.freeze(orderId,preparedCaseId,jwt.getTokenValue());
-        conversations.prepareErrandReview(orderId,preparedCaseId,jwt.getTokenValue());
-        requireParticipant(jwt);
-        return mutate(key, actor, route, hash, () -> {
-            lock("order:" + orderId);
-            List<CaseRow> rows = db.query("SELECT " + CASE_COLUMNS + " FROM admin_cases WHERE order_id=? FOR UPDATE", this::caseRow, orderId);
-            boolean opened = rows.isEmpty();
-            Instant now = Instant.now();
-            UUID caseId;
-            if (opened) {
-                caseId = preparedCaseId;
-                db.update("INSERT INTO admin_cases(id,order_id,state,revision,created_at,correlation_id,source_sequence) VALUES (?,?,'OPEN',1,?,?,1)",
-                        caseId, orderId, timestamp(now), UUID.randomUUID());
-            } else {
-                CaseRow existing = rows.get(0);
-                caseId = existing.summary.caseId();
-                if (existing.summary.state() == AdminCase.State.RESOLVED) return problem(409, "This case is resolved and no longer accepts reports.", route);
-                if(closure(caseId)!=null)return problem(409,"Resolution preparation is pending; this case no longer accepts reports.",route);
-                if (hasStatement(caseId, actor)) return problem(409, "You have already submitted a statement for this errand.", route);
-                db.update("UPDATE admin_cases SET revision=revision+1 WHERE id=?", caseId);
-            }
-            for(var member:review.path("participants"))db.update("INSERT INTO admin_case_participants(case_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING",caseId,UUID.fromString(member.asText()));
-            db.update("INSERT INTO admin_case_participants(case_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING", caseId, actor);
-            db.update("INSERT INTO admin_statements(case_id,reporter_id,description,submitted_at,eligibility_revision) VALUES (?,?,?,?,?)",
-                    caseId, actor, text, timestamp(now), eligibility.evidenceRevision());
-            CaseRow saved = row(caseId);
-            audit(saved, actor, opened ? "CASE_OPENED" : "STATEMENT_ADDED", now);
-            if (opened) event(saved, actor, jwt.getClaimAsString("role"), "CaseOpened", "reporterId", actor, now);
-            return result(201, new ParticipantReport(saved.summary, statement(caseId, actor)));
+        UUID actor=requireParticipant(jwt);
+        String text=description==null?"":description.strip();
+        if(key==null||orderId==null||text.isEmpty()||text.length()>2000)throw invalid("An errand UUID and an issue of 1–2000 characters are required.");
+        String route="/api/admin/reports",hash=hash(List.of(orderId.toString(),text));
+        return mutate(key,actor,route,hash,()->{
+            lock("order:"+orderId);
+            var rows=db.query("SELECT "+CASE_COLUMNS+" FROM admin_cases WHERE order_id=? FOR UPDATE",this::caseRow,orderId);
+            UUID caseId=rows.isEmpty()?UUID.nameUUIDFromBytes(("foc-dispute:"+orderId).getBytes(StandardCharsets.UTF_8)):rows.get(0).summary.caseId();
+            if(!rows.isEmpty()&&isMember(caseId,actor)&&(rows.get(0).summary.state()==AdminCase.State.RESOLVED||closure(caseId)!=null||hasStatement(caseId,actor)))return problem(409,"This case is closed, closing, or already contains your statement.",route);
+            if(Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_report_preparations WHERE case_id=? AND actor_id=? AND status='PENDING')",Boolean.class,caseId,actor)))return problem(409,"Resume your pending report before sending another.",route);
+            if(rows.isEmpty())db.update("INSERT INTO admin_cases(id,order_id,state,revision,source_sequence,created_at,correlation_id,review_status) VALUES (?,?,'OPEN',0,0,?,?,'PREPARING')",caseId,orderId,timestamp(Instant.now()),UUID.randomUUID());
+            db.update("INSERT INTO admin_report_preparations(operation_id,actor_id,order_id,case_id,request_hash,description,actor_role) VALUES (?,?,?,?,?,?,?)",key,actor,orderId,caseId,hash,text,jwt.getClaimAsString("role"));
+            var m=new com.friendoncampus.admin.dispute.DisputeBus.Message(key,1,"PrepareReview","admin-service",key,caseId,orderId,actor,jwt.getClaimAsString("role"),Instant.now(),json.valueToTree(Map.of("intent","REPORT")));
+            disputes.remember(m,"REQUEST");disputes.emit("admin.dispute.commands","PrepareReview",m,m.data(),true);
+            return result(202,new ParticipantReport(new Summary(caseId,orderId,AdminCase.State.OPEN,null,0,Instant.now(),"PREPARING"),null,new Preparation(key,"PENDING",null)));
         });
     }
 
+    // Owner confirmations and this local receipt/event commit in the inbox worker transaction.
+    public void completeReport(com.friendoncampus.admin.dispute.DisputeBus.Message m) {
+        lock("order:"+m.orderId());
+        var c=row(m.caseId());
+        if(c.summary.state()==AdminCase.State.RESOLVED||closure(m.caseId())!=null)throw invalid("Case is already closing.");
+        var preparation=db.queryForMap("SELECT * FROM admin_report_preparations WHERE operation_id=? FOR UPDATE",m.operationId());
+        if("READY".equals(preparation.get("status")))return;
+        if(hasStatement(m.caseId(),m.actorId()))throw invalid("Statement already exists.");
+        var participants=m.data().path("participants");
+        boolean member=false;for(var person:participants){UUID id=UUID.fromString(person.asText());member|=id.equals(m.actorId());db.update("INSERT INTO admin_case_participants(case_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING",m.caseId(),id);}
+        if(!member)throw invalid("Reporter was not confirmed by Order.");
+        boolean opened=c.sourceSequence==0;Instant now=Instant.now();
+        db.update("UPDATE admin_cases SET review_status='READY',revision=revision+1,source_sequence=source_sequence+? WHERE id=?",opened?1:0,m.caseId());
+        db.update("INSERT INTO admin_statements(case_id,reporter_id,description,submitted_at,eligibility_revision) VALUES (?,?,?,?,?)",m.caseId(),m.actorId(),preparation.get("description"),timestamp(now),"ORDER_CONFIRMATION:"+m.eventId());
+        var saved=row(m.caseId());audit(saved,m.actorId(),opened?"CASE_OPENED":"STATEMENT_ADDED",now);
+        if(opened)event(saved,m.actorId(),m.actorRole(),"CaseOpened","reporterId",m.actorId(),now);
+        db.update("UPDATE admin_report_preparations SET status='READY' WHERE operation_id=?",m.operationId());
+        db.update("UPDATE admin_mutation_receipts SET response_status=201,response_body=? WHERE idempotency_key=?",json.writeValueAsString(new ParticipantReport(saved.summary,statement(m.caseId(),m.actorId()))),m.operationId());
+    }
     public Mutation claim(Jwt jwt, UUID key, UUID caseId, long expectedRevision) {
         UUID actor = requireAdmin(jwt);
         if (expectedRevision < 0) throw invalid("Revision must be non-negative.");
         var initial = row(caseId).summary;
-        reviewOrders.freeze(initial.orderId(),caseId,jwt.getTokenValue());
-        conversations.prepareErrandReview(initial.orderId(),caseId,jwt.getTokenValue());
+        if(!"READY".equals(initial.reviewStatus()))return mutate(key,actor,"/api/admin/cases/"+caseId+"/claim",hash(List.of(expectedRevision)),()->{
+            db.update("UPDATE admin_cases SET review_status='PREPARING' WHERE id=? AND review_status<>'READY'",caseId);
+            var m=new com.friendoncampus.admin.dispute.DisputeBus.Message(key,1,"PrepareReview","admin-service",key,caseId,initial.orderId(),actor,"ADMIN",Instant.now(),json.valueToTree(Map.of("intent","LEGACY")));
+            disputes.remember(m,"REQUEST");disputes.emit("admin.dispute.commands","PrepareReview",m,m.data(),true);
+            return result(202,row(caseId).summary);
+        });
         independence.verify(jwt, caseId, initial.orderId());
         requireAdmin(jwt);
         String route = "/api/admin/cases/" + caseId + "/claim";
@@ -126,10 +114,16 @@ public class CaseService {
     public ParticipantReport reportStatus(Jwt jwt, UUID caseId) {
         UUID actor = requireParticipant(jwt);
         // Durable verified case membership grants private status, even before a statement.
-        if (!isMember(caseId, actor)) throw hidden();
-        return new ParticipantReport(row(caseId).summary, hasStatement(caseId, actor) ? statement(caseId, actor) : null);
+        if (!isMember(caseId, actor)) {
+            var pending=preparation(caseId,actor);if(pending==null)throw hidden();
+            var saved=db.queryForMap("SELECT order_id,created_at FROM admin_report_preparations WHERE operation_id=?",pending.operationId());
+            var safe=new Summary(caseId,(UUID)saved.get("order_id"),AdminCase.State.OPEN,null,0,db.queryForObject("SELECT created_at FROM admin_report_preparations WHERE operation_id=?",OffsetDateTime.class,pending.operationId()).toInstant(),"PREPARING");
+            return new ParticipantReport(safe,null,pending);
+        }
+        return new ParticipantReport(row(caseId).summary, hasStatement(caseId, actor) ? statement(caseId, actor) : null,preparation(caseId,actor));
     }
 
+    private Preparation preparation(UUID id,UUID actor){return db.query("SELECT operation_id,status,failure_code FROM admin_report_preparations WHERE case_id=? AND actor_id=? ORDER BY created_at DESC LIMIT 1",r->r.next()?new Preparation(r.getObject(1,UUID.class),r.getString(2),r.getString(3)):null,id,actor);}
     public record ReportContext(UUID orderId,String status,UUID caseId,AdminCase.State state) { }
     public ReportContext reportContext(Jwt jwt,UUID orderId) {
         UUID actor=requireParticipant(jwt);
@@ -140,19 +134,11 @@ public class CaseService {
         var membership=db.query("SELECT c.id,c.state FROM admin_cases c JOIN admin_case_participants p ON p.case_id=c.id WHERE c.order_id=? AND p.user_id=?",
             (r,n)->new ReportContext(orderId,"CASE_PARTICIPANT",r.getObject("id",UUID.class),AdminCase.State.valueOf(r.getString("state"))),orderId,actor);
         if(!membership.isEmpty())return membership.get(0); // Already verified membership survives evidence outages.
-        var eligibility=chat.check(orderId,actor,jwt.getTokenValue());
-        requireParticipant(jwt); // Do not disclose a remote decision after account revocation.
-        if(!eligibility.complete())throw unavailable("Reporting eligibility could not be verified. This is not confirmation that no report exists. Please retry.");
-        boolean closed=Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_cases WHERE order_id=? AND state='RESOLVED')",Boolean.class,orderId));
-        if (eligibility.eligible()) {
-            var existing = db.queryForList("SELECT id,state FROM admin_cases WHERE order_id=?",orderId);
-            if (!existing.isEmpty()) {
-                UUID caseId=(UUID)existing.get(0).get("id");
-                db.update("INSERT INTO admin_case_participants(case_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING",caseId,actor);
-                return new ReportContext(orderId,"CASE_PARTICIPANT",caseId,AdminCase.State.valueOf((String)existing.get(0).get("state")));
-            }
-        }
-        return new ReportContext(orderId,eligibility.eligible()&&!closed?"ELIGIBLE":"INELIGIBLE",null,null);
+        var pending=db.query("SELECT case_id FROM admin_report_preparations WHERE order_id=? AND actor_id=? AND status='PENDING'",r->r.next()?new ReportContext(orderId,"PREPARING_REVIEW",r.getObject(1,UUID.class),AdminCase.State.OPEN):null,orderId,actor);
+        if(pending!=null)return pending;
+        // This permits saving a request, not access to an errand or an eligibility decision.
+        // Order verifies membership when it consumes the command; no remote write/read is needed here.
+        return new ReportContext(orderId,"PREPARATION_AVAILABLE",null,null);
     }
 
     public Page queue(Jwt jwt, AdminCase.State state, UUID query, int page, int size) {
@@ -321,7 +307,7 @@ public class CaseService {
     }
     private CaseRow caseRow(ResultSet r, int n) throws SQLException {
         return new CaseRow(new Summary(r.getObject("id", UUID.class), r.getObject("order_id", UUID.class), AdminCase.State.valueOf(r.getString("state")),
-                r.getObject("reviewer_id", UUID.class), r.getLong("revision"), r.getObject("created_at", OffsetDateTime.class).toInstant()),
+                r.getObject("reviewer_id", UUID.class), r.getLong("revision"), r.getObject("created_at", OffsetDateTime.class).toInstant(),r.getString("review_status")),
                 r.getObject("correlation_id", UUID.class), r.getLong("source_sequence"));
     }
     private Statement statement(UUID c, UUID actor) {

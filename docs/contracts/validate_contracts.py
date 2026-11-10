@@ -109,3 +109,23 @@ assert not validator.is_valid(zero),'Zero correction accepted'
 fraction=copy.deepcopy(examples[0]['event']); fraction['data']['amount']=1.5
 assert not validator.is_valid(fraction),'Fractional correction accepted'
 print(f'PASS: OpenAPI; {len(ops)} HTTP operations/request-response fixtures; {len(examples)} event fixtures; negative event tests; WebSocket examples; local references; OrderAction alignment.')
+
+dispute=read('dispute.schema.json')
+Draft202012Validator.check_schema(dispute)
+dispute_validator=Draft202012Validator(dispute,format_checker=FormatChecker())
+for fixture in read('dispute.examples.json'):
+    message=fixture['message'];dispute_validator.validate(message)
+    branch=next(v for v in dispute['oneOf'] if v['title']==message['type'])
+    assert branch['x-topic']==fixture['topic'] and fixture['key']==message['orderId']
+    for mutate in ('version','credential','producer','actor'):
+        bad=copy.deepcopy(message)
+        if mutate=='version':bad['eventVersion']=99
+        elif mutate=='credential':bad['data']['actorToken']='TEST ONLY FORBIDDEN CREDENTIAL'
+        elif mutate=='producer':bad['producer']='unknown-service'
+        else:bad['actorId']='not-a-uuid'
+        assert not dispute_validator.is_valid(bad),f'Invalid dispute {mutate} accepted'
+for path in ['/internal/orders/{orderId}/review','/internal/orders/{orderId}/dispute-resolution','/internal/credits/orders/{orderId}/dispute-resolution','/internal/chat/orders/{orderId}/review','/internal/chat/cases/{caseId}/closure']:
+    assert path not in api['paths'],'Obsolete synchronous dispute write retained'
+assert '202' in api['paths']['/api/admin/reports']['post']['responses']
+assert '202' in api['paths']['/api/admin/cases/{caseId}/resolve']['post']['responses']
+print('PASS: dispute owner/topic schemas, no credentials, identity/version negatives, pending responses and removed HTTP writes.')

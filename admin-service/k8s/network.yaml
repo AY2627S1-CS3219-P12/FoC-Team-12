@@ -26,13 +26,6 @@ spec:
     - to:
         - podSelector:
             matchLabels:
-              app: order-service
-      ports:
-        - protocol: TCP
-          port: 8082
-    - to:
-        - podSelector:
-            matchLabels:
               app: admin-db
       ports:
         - protocol: TCP

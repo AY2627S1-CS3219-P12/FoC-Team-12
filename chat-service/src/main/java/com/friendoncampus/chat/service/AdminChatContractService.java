@@ -138,9 +138,7 @@ public class AdminChatContractService {
                 "readOnly",!"ACTIVE".equals(status)||!access.path("canWriteConversation").asBoolean());
     }
     @Transactional
-    public Map<String,Object> prepareClosure(UUID caseId,UUID operation,Jwt actor) {
-        requireAdmin(actor);var access=internal.caseAccess(caseId,UUID.fromString(actor.getSubject()),null);
-        if(!access.path("canReadEvidence").asBoolean()||!operation.toString().equals(access.path("closureOperationId").asText()))throw hidden();
+    public Map<String,Object> drainClosure(UUID caseId,UUID operation) {
         lockCase(caseId);
         var prior=db.sql("SELECT operation_id FROM chat_case_closures WHERE case_id=:caseId").param("caseId",caseId).query(UUID.class).optional();
         if(prior.isPresent()&&!operation.equals(prior.get()))throw new ChatConflictException("Different closure operation");
@@ -155,13 +153,7 @@ public class AdminChatContractService {
     private boolean closureExists(UUID caseId){return db.sql("SELECT count(*) FROM chat_case_closures WHERE case_id=:id").param("id",caseId).query(Integer.class).single()>0;}
 
     @Transactional
-    public Map<String,Object> prepareErrandReview(UUID orderId,UUID caseId,Jwt actor){
-        var pages=internal.orderEvidence(orderId);
-        var rows=new ArrayList<JsonNode>();for(var page:pages)for(var row:page.path("records"))rows.add(row);
-        var latest=rows.stream().max(Comparator.comparingLong(r->r.path("sourceSequence").asLong())).orElseThrow(AdminChatContractService::hidden);
-        if(!caseId.toString().equals(latest.path("data").path("snapshot").path("reviewCaseId").asText()))throw new ChatConflictException("Order review is not confirmed");
-        UUID actorId=UUID.fromString(actor.getSubject());
-        if(!"ADMIN".equals(actor.getClaimAsString("role")) && rows.stream().noneMatch(r->{var d=r.path("data");return actorId.toString().equals(d.path("requesterId").asText())||actorId.toString().equals(d.path("courierId").asText())||actorId.toString().equals(d.path("previousCourierId").asText());}))throw hidden();
+    public Map<String,Object> applyReviewBarrier(UUID orderId,UUID caseId){
         db.sql("INSERT INTO chat_errand_reviews(order_id,case_id) VALUES(:orderId,:caseId) ON CONFLICT(order_id) DO NOTHING").param("orderId",orderId).param("caseId",caseId).update();
         UUID original=db.sql("SELECT case_id FROM chat_errand_reviews WHERE order_id=:orderId").param("orderId",orderId).query(UUID.class).single();if(!caseId.equals(original))throw new ChatConflictException("Another case owns this review");
         db.sql("UPDATE chat_conversations SET status='READ_ONLY',locked_at=COALESCE(locked_at,:at),updated_at=:at WHERE order_id=:orderId AND conversation_type='ERRAND'").param("orderId",orderId).param("at",OffsetDateTime.now(clock)).update();

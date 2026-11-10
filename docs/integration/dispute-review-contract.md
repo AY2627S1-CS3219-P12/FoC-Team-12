@@ -1,5 +1,7 @@
 # Report freeze and dispute finalization
 
+> The synchronous dispute write protocol below is superseded by [Kafka dispute coordination](dispute-kafka-contract.md). Applied migrations, domain freeze rules, original evidence and unrelated APIs remain.
+
 Approved in the report-view UX continuation on 10 November 2026. This task is the shared editor; Darryl (Admin/User), XueTing (Order) and Eldridge (Chat/Credit) review their boundaries before merge and rollout. This extends the Chat/Admin contract without transferring database ownership.
 
 ## Ownership and state

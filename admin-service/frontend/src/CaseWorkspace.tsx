@@ -202,7 +202,7 @@ function Arrow({ direction = 'forward' }: { direction?: 'forward' | 'back' }) {
   )
 }
 
-function useRemote<T>(path: string) {
+function useRemote<T>(path: string, poll = false) {
   const [response, setResponse] = useState<{
     path: string
     data?: T
@@ -227,6 +227,13 @@ function useRemote<T>(path: string) {
       clearTimeout(timeout)
     }
   }, [path, attempt])
+  useEffect(() => {
+    if (!poll) return
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setAttempt((n) => n + 1)
+    }, 3000)
+    return () => clearInterval(timer)
+  }, [poll, path])
   return {
     data: response?.path === path ? response.data : undefined,
     error: response?.path === path ? response.error || '' : '',
@@ -277,7 +284,13 @@ function SummaryCard({
         <div>
           <dt>Status</dt>
           <dd>
-            <span className="role-chip">{status[value.state]}</span>
+            <span className="role-chip">
+              {value.reviewStatus === 'PREPARING'
+                ? 'Preparing review'
+                : value.reviewStatus === 'REJECTED'
+                  ? 'Review preparation blocked'
+                  : status[value.state]}
+            </span>
           </dd>
         </div>
         {participant && (
@@ -424,7 +437,8 @@ function ReportEntryContext({
       </p>
     )
   if (
-    context.data.status === 'OWN_REPORT' &&
+    (context.data.status === 'OWN_REPORT' ||
+      context.data.status === 'PREPARING_REVIEW') &&
     context.data.caseId &&
     isUuid(context.data.caseId)
   )
@@ -452,6 +466,7 @@ function ReportEntryContext({
     )
   if (
     context.data.status !== 'ELIGIBLE' &&
+    context.data.status !== 'PREPARATION_AVAILABLE' &&
     context.data.status !== 'CASE_PARTICIPANT'
   )
     return (
@@ -492,6 +507,8 @@ function ReportForm({ actor, orderId }: { actor: string; orderId: string }) {
         </a>
       </section>
     )
+  if (mutation.result?.preparation?.status === 'PENDING')
+    return <ReportStatusData id={mutation.result.case.caseId} />
   if (mutation.result)
     return (
       <section className="case-panel" role="status">
@@ -514,7 +531,8 @@ function ReportForm({ actor, orderId }: { actor: string; orderId: string }) {
       <h2>Describe the issue</h2>
       <p>
         Describe what happened and when. You can submit one report for this
-        errand, visible only to you and authorized admins.
+        errand, visible only to you and authorized admins. Your involvement is
+        checked while review is prepared.
       </p>
       <form
         className="case-form"
@@ -576,7 +594,7 @@ function ReportStatus({ id }: { id: string }) {
   return <ReportStatusData id={id} />
 }
 function ReportStatusData({ id }: { id: string }) {
-  const state = useRemote<Report>('reports/' + id)
+  const state = useRemote<Report>('reports/' + id, true)
   if (!state.data) return <Feedback {...state} loading="Loading your report…" />
   return (
     <section className="case-panel">
@@ -592,7 +610,18 @@ function ReportStatusData({ id }: { id: string }) {
         </p>
       )}
       <SummaryCard value={state.data.case} participant />
-      {state.data.ownStatement ? (
+      {state.data.preparation?.status === 'PENDING' ? (
+        <p role="status">
+          Preparing review. Your request is saved. The errand pauses when Order
+          processes it; we will confirm here after the errand and chat are
+          ready.
+        </p>
+      ) : state.data.preparation?.status === 'REJECTED' ? (
+        <p role="alert">
+          Review preparation was rejected. Refresh to check the case before
+          sending another request.
+        </p>
+      ) : state.data.ownStatement ? (
         <>
           <h3>Your statement</h3>
           <p className="statement-text">
@@ -619,12 +648,15 @@ function ReportStatusData({ id }: { id: string }) {
         </div>
       )}
       <button onClick={state.retry}>Refresh status</button>
-      <ParticipantConversationStatus
-        summary={state.data.case}
-        actorId={
-          state.data.ownStatement?.reporterId || readSession()?.userId || ''
-        }
-      />
+      {state.data.preparation?.status !== 'PENDING' &&
+        state.data.preparation?.status !== 'REJECTED' && (
+          <ParticipantConversationStatus
+            summary={state.data.case}
+            actorId={
+              state.data.ownStatement?.reporterId || readSession()?.userId || ''
+            }
+          />
+        )}
     </section>
   )
 }
@@ -894,7 +926,7 @@ function CaseDetail({ id, actor }: { id: string; actor: string }) {
   return <DetailData id={id} actor={actor} />
 }
 function DetailData({ id, actor }: { id: string; actor: string }) {
-  const state = useRemote<Detail>('cases/' + id)
+  const state = useRemote<Detail>('cases/' + id, true)
   const [evidence, setEvidence] = useState<Timeline | null>(null)
   const participantNames = useParticipantNames([
     ...(state.data?.statements.map((s) => s.reporterId) || []),
@@ -936,11 +968,19 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
             {mutation.error}
           </p>
         )}
-        {mutation.result && <p role="status">Case assigned to you.</p>}
+        {mutation.result?.reviewerId === actor && (
+          <p role="status">Case assigned to you.</p>
+        )}
+        {value.reviewStatus === 'PREPARING' && (
+          <p role="status">
+            Preparing review. Assignment will be available after the errand and
+            chat confirmations arrive.
+          </p>
+        )}
         {value.state === 'OPEN' || mutation.pending ? (
           <>
             <button
-              disabled={mutation.busy}
+              disabled={mutation.busy || value.reviewStatus === 'PREPARING'}
               onClick={() => {
                 if (
                   evidence &&
@@ -964,7 +1004,11 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
                 ? 'Assigning…'
                 : mutation.pending
                   ? 'Retry assignment'
-                  : 'Assign to me'}
+                  : value.reviewStatus === 'PREPARING'
+                    ? 'Preparing review…'
+                    : value.reviewStatus === 'LEGACY'
+                      ? 'Prepare review'
+                      : 'Assign to me'}
             </button>
             {mutation.pending && (
               <p role="status">

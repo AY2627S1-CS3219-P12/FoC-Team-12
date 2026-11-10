@@ -260,3 +260,7 @@ configuration fails closed even when administrative Kafka consumers are disabled
 ## Dispute review workflow
 
 See the [approved report freeze and finalization contract](../docs/integration/dispute-review-contract.md) for service ownership, retry barriers, timeline message/image evidence, credit dispositions and rollout requirements. Existing lifecycle and case states are retained.
+
+## Asynchronous dispute coordination
+
+Dispute writes use the [versioned Kafka contract](../docs/integration/dispute-kafka-contract.md). Reports and decisions remain pending until committed owner confirmations; HTTP timeouts are never success. Existing current-account and evidence read authorization remains enforced locally.

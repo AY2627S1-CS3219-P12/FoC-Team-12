@@ -464,124 +464,6 @@
         }
       }
     },
-    "/internal/chat/cases/{caseId}/closure": {
-      "post": {
-        "operationId": "chat_post__internal_chat_cases_caseId_closure",
-        "tags": [
-          "chat"
-        ],
-        "x-owner": "chat-service",
-        "security": [
-          {
-            "serviceBearer": [],
-            "actorToken": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "caseId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClosureAcknowledgement"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "operationId": {
-                    "type": "string",
-                    "format": "uuid"
-                  }
-                },
-                "required": [
-                  "operationId"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      }
-    },
     "/internal/users/admin-operations/{operationId}": {
       "get": {
         "operationId": "user_get__internal_users_admin_operations_operationId",
@@ -3182,8 +3064,8 @@
           }
         ],
         "responses": {
-          "201": {
-            "description": "Successful result",
+          "202": {
+            "description": "Durably queued; owner confirmations pending",
             "content": {
               "application/json": {
                 "schema": {
@@ -3248,6 +3130,16 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Original operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParticipantReport"
                 }
               }
             }
@@ -3802,6 +3694,16 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Legacy review preparation queued; reviewer is not assigned yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseSummary"
                 }
               }
             }
@@ -4574,8 +4476,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful result",
+          "202": {
+            "description": "Durably queued; owner confirmations pending",
             "content": {
               "application/json": {
                 "schema": {
@@ -4643,6 +4545,16 @@
                 }
               }
             }
+          },
+          "200": {
+            "description": "Original operation completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetail"
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -4696,628 +4608,6 @@
                 "required": [
                   "resolution",
                   "expectedRevision"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/orders/{orderId}/review": {
-      "post": {
-        "operationId": "orders_post__internal_orders_orderId_review",
-        "tags": [
-          "orders"
-        ],
-        "x-owner": "order-service",
-        "security": [
-          {
-            "serviceBearer": [],
-            "actorToken": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrderReview"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "caseId": {
-                    "type": "string",
-                    "format": "uuid"
-                  }
-                },
-                "required": [
-                  "caseId"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      },
-      "get": {
-        "operationId": "orders_get__internal_orders_orderId_review",
-        "tags": [
-          "orders"
-        ],
-        "x-owner": "order-service",
-        "security": [
-          {
-            "serviceBearer": [],
-            "actorToken": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "caseId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrderReview"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/orders/{orderId}/dispute-resolution": {
-      "post": {
-        "operationId": "orders_post__internal_orders_orderId_dispute_resolution",
-        "tags": [
-          "orders"
-        ],
-        "x-owner": "order-service",
-        "security": [
-          {
-            "serviceBearer": [],
-            "actorToken": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OrderReview"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "caseId": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "operationId": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "disposition": {
-                    "type": "string",
-                    "enum": [
-                      "RETURN_TO_REQUESTER",
-                      "PAY_COURIER",
-                      "KEEP_EXISTING"
-                    ]
-                  }
-                },
-                "required": [
-                  "caseId",
-                  "operationId",
-                  "disposition"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/credits/orders/{orderId}/dispute-resolution": {
-      "post": {
-        "operationId": "credits_post__internal_credits_orders_orderId_dispute_resolution",
-        "tags": [
-          "credits"
-        ],
-        "x-owner": "credit-service",
-        "security": [
-          {
-            "serviceBearer": [],
-            "actorToken": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DisputeCreditReceipt"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "caseId": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "operationId": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "requesterId": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "courierId": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "format": "uuid"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "disposition": {
-                    "type": "string",
-                    "enum": [
-                      "RETURN_TO_REQUESTER",
-                      "PAY_COURIER",
-                      "KEEP_EXISTING"
-                    ]
-                  }
-                },
-                "required": [
-                  "caseId",
-                  "operationId",
-                  "requesterId",
-                  "courierId",
-                  "disposition"
-                ],
-                "additionalProperties": false
-              }
-            }
-          }
-        }
-      }
-    },
-    "/internal/chat/orders/{orderId}/review": {
-      "post": {
-        "operationId": "chat_post__internal_chat_orders_orderId_review",
-        "tags": [
-          "chat"
-        ],
-        "x-owner": "chat-service",
-        "security": [
-          {
-            "serviceBearer": [],
-            "actorToken": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "orderId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrandReviewAcknowledgement"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Problem Details; see contract semantics",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "caseId": {
-                    "type": "string",
-                    "format": "uuid"
-                  }
-                },
-                "required": [
-                  "caseId"
                 ],
                 "additionalProperties": false
               }
@@ -7308,6 +6598,15 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": [
+              "LEGACY",
+              "PREPARING",
+              "READY",
+              "REJECTED"
+            ]
           }
         },
         "required": [
@@ -7316,7 +6615,8 @@
           "state",
           "reviewerId",
           "revision",
-          "createdAt"
+          "createdAt",
+          "reviewStatus"
         ],
         "additionalProperties": false
       },
@@ -7542,6 +6842,41 @@
           "$ref": "#/components/schemas/Conversation"
         }
       },
+      "ReportPreparation": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "READY",
+              "REJECTED"
+            ]
+          },
+          "failureCode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "operationId",
+          "status",
+          "failureCode"
+        ],
+        "additionalProperties": false
+      },
       "ParticipantReport": {
         "type": "object",
         "properties": {
@@ -7557,11 +6892,22 @@
                 "type": "null"
               }
             ]
+          },
+          "preparation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReportPreparation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "case",
-          "ownStatement"
+          "ownStatement",
+          "preparation"
         ],
         "additionalProperties": false
       },
@@ -7613,7 +6959,8 @@
                 "type": "string",
                 "enum": [
                   "OWN_REPORT",
-                  "CASE_PARTICIPANT"
+                  "CASE_PARTICIPANT",
+                  "PREPARING_REVIEW"
                 ]
               },
               "caseId": {
@@ -7647,8 +6994,7 @@
               "status": {
                 "type": "string",
                 "enum": [
-                  "ELIGIBLE",
-                  "INELIGIBLE"
+                  "PREPARATION_AVAILABLE"
                 ]
               },
               "caseId": {

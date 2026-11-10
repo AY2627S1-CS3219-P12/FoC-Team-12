@@ -188,10 +188,8 @@ chat_trusted_keys=$(jq -cn --arg admin "$admin_public" \
 chat_caller_trusted_keys=$(jq -cn --arg chat "$chat_public" \
   '{"chat-staging-1":{"subject":"chat-service","publicKey":$chat}}')
 
-order_trusted_keys=$(jq -cn --argjson chat "$chat_caller_trusted_keys" --arg admin "$admin_public" \
-  '$chat + {"admin-staging-1":{"subject":"admin-service","publicKey":$admin}}')
-credit_trusted_keys=$(jq -cn --argjson chat "$chat_caller_trusted_keys" --arg order "$order_public" --arg kid "$order_kid" \
-  '$chat + {($kid):{"subject":"order-service","publicKey":$order}}')
+order_trusted_keys=$chat_caller_trusted_keys
+credit_trusted_keys=$chat_caller_trusted_keys
 
 jq -n --arg db "$user_db" --arg jwt "$jwt_key" --arg trust "$user_trusted_keys" \
   --arg email "${ADMIN_BOOTSTRAP_EMAIL:-}" --arg username "${ADMIN_BOOTSTRAP_USERNAME:-}" \

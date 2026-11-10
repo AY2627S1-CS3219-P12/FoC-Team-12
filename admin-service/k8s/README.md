@@ -1,5 +1,22 @@
 # Admin on local Minikube
 
+## Current Kafka preview
+
+The [Kafka replacement evidence](../INTEGRATION_READINESS.md#kafka-replacement--10-november-2026) supersedes the historical image/readiness notes below. Use the `foc-local` profile/namespace and preserve existing data and keys. Local pins match that evidence; they are not registry releases.
+
+After building/loading the selected images, reconcile the reviewed runtime and initialize only the existing broker metadata:
+
+```powershell
+pwsh -File admin-service/k8s/Reconcile-KafkaDisputes.ps1 -Apply
+pwsh -File deploy/kafka/k8s/Apply-LocalKafka.ps1 -Profile foc-local -Namespace foc-local -InitializeOnly
+```
+
+The helper retains existing identities and User authorization pins, adds a missing Order identity only when safe, and removes only exact current pins used exclusively by the deleted HTTP writes. Restart the affected applications to load changed environment values; follow the existing bounded rollout commands. Never replace PVCs or rotate existing keys. For another local cluster, build each service with its Dockerfile using its pinned tag and run `minikube -p foc-local image load <image>` before applying.
+
+Manual acceptance: sign in as a local participant, create an errand and report it; distinguish Preparing review from acceptance. Sign in separately as an independent admin, wait for READY and assign it. Resolve with the confirmed reserved-credit disposition and wait for owner confirmations. Retry the original operation after uncertainty. Existing private conversations remain read-only after closure.
+
+## Historical completion notes
+
 The current completion iteration is recorded in
 [integration readiness](../INTEGRATION_READINESS.md#integration-completion--9-november-2026).
 Its verified local User/Chat/Credit/Order images use `local-61c7062-completion-20261109-v2`;
