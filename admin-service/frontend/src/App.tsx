@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  ArrowUpRight,
+  ArrowRight,
   LoaderCircle,
   LockKeyhole,
   MapPinned,
@@ -11,14 +11,15 @@ import {
 } from 'lucide-react'
 import { AccessError, checkAccess, readSession } from './access'
 import { AdminShell } from './components/AdminShell'
-import { CaseQueue, CaseWorkspace } from './CaseWorkspace'
+import { AdminDashboardOverview, CaseWorkspace } from './CaseWorkspace'
 
 type State = 'loading' | 'signin' | 'denied' | 'unavailable' | 'ready'
 const signIn = '/?returnTo=%2Fadmin'
 
 export function App() {
   return window.location.pathname.startsWith('/admin/reports') ||
-    /^\/admin\/cases\/[^/]+/.test(window.location.pathname) ? (
+    window.location.pathname === '/admin/cases' ||
+    window.location.pathname.startsWith('/admin/cases/') ? (
     <CaseWorkspace />
   ) : (
     <Dashboard />
@@ -97,13 +98,13 @@ function Dashboard() {
   }
   return (
     <AdminShell administratorAccess={state === 'ready'}>
-      <div className="page-intro">
+      <div className="page-intro admin-dashboard-intro">
         <div>
           <p className="eyebrow">Administration</p>
-          <h1>Admin dashboard</h1>
+          <h1>Keep campus running smoothly.</h1>
           <p>
-            Review reported issues, assign yourself a case, and follow up with
-            participants.
+            Review community safety, manage access, and keep campus locations
+            accurate.
           </p>
         </div>
         {state === 'ready' && (
@@ -172,15 +173,11 @@ function Dashboard() {
       )}
       {state === 'ready' && (
         <>
-          <CaseQueue key={token} actor={userId!} />
+          <AdminDashboardOverview key={token} actor={userId!} />
           <section className="admin-tools" aria-labelledby="admin-tools-title">
-            <div className="admin-tools-heading">
-              <div>
-                <p className="eyebrow">Platform controls</p>
-                <h2 id="admin-tools-title">Administration tools</h2>
-              </div>
-              <p>Manage access and campus reference data.</p>
-            </div>
+            <h2 className="visually-hidden" id="admin-tools-title">
+              Administration tools
+            </h2>
             <nav className="service-grid" aria-label="Administration tools">
               <a className="service-card admin-card" href="/?view=users">
                 <span className="admin-tool-icon" aria-hidden="true">
@@ -191,7 +188,8 @@ function Dashboard() {
                   <p>Manage accounts, admin roles, bans, and reactivation.</p>
                 </div>
                 <span className="service-action">
-                  Open account management <ArrowUpRight aria-hidden="true" />
+                  <span className="visually-hidden">Open user management</span>
+                  <ArrowRight aria-hidden="true" />
                 </span>
               </a>
               <a className="service-card admin-card" href="/admin/suppliers">
@@ -206,7 +204,10 @@ function Dashboard() {
                   <p>Manage the campus locations used by your community.</p>
                 </div>
                 <span className="service-action">
-                  Open supplier management <ArrowUpRight aria-hidden="true" />
+                  <span className="visually-hidden">
+                    Open supplier management
+                  </span>
+                  <ArrowRight aria-hidden="true" />
                 </span>
               </a>
             </nav>

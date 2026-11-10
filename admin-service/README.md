@@ -218,11 +218,12 @@ only in a disposable stack, confirm rows stay pending, restore the broker and co
 delivery before later case sequences. A repeated original record after uncertain database commit
 is valid at-least-once recovery. Do not stop the regular broker to perform this check.
 
-`/admin` opens the live report queue first; account/supplier tools follow below it.
-Open reports are selected by default. Status filters, exact case/errand ID search and page
-are retained in the URL and in the case-detail return link. The UI-only `status=ALL` marker
-represents the API's absent status filter; it is not sent to the API. `/admin/cases` remains
-a compatible queue entry. `/admin/cases/{caseId}` has one styled return link to the queue.
+`/admin` opens a live overview with case totals supplied by the Admin case-list API, the first two
+open cases and account/supplier tools. It does not invent cross-service supplier or member totals.
+`/admin/cases` opens the full live report queue with Open selected by default. Status filters, exact
+case/errand ID search and page are retained in the URL and in the case-detail return link. The
+UI-only `status=ALL` marker represents the API's absent status filter; it is not sent to the API.
+`/admin/cases/{caseId}` has one styled return link to the queue.
 Background eligibility rechecks preserve the current filters and page while successful;
 denial/unavailability removes protected content. Every API request still authorizes locally.
 

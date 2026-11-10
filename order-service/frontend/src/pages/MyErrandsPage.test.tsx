@@ -155,6 +155,9 @@ describe('MyErrandsPage', () => {
       'page',
     )
     expect(
+      screen.getByRole('heading', { name: 'Past errands you ran' }),
+    ).toBeInTheDocument()
+    expect(
       await within(section('Active')).findByRole('heading', {
         name: 'Carry my laptop',
       }),
@@ -164,6 +167,8 @@ describe('MyErrandsPage', () => {
         name: 'Bring my parcel',
       }),
     ).toBeInTheDocument()
+    expect(within(section('Past')).getByText('+18')).toBeInTheDocument()
+    expect(within(section('Past')).getByText('Earned')).toBeInTheDocument()
     // A courier's past list has only completed deliveries, so there is nothing to filter.
     expect(
       within(section('Past')).queryByRole('button', { name: 'Completed' }),
@@ -288,11 +293,16 @@ describe('MyErrandsPage', () => {
     vi.stubGlobal('fetch', stubFetch(() => ({ body: page([]) })).fetchMock)
     renderPage()
 
-    expect(
-      await within(section('Active')).findByRole('link', {
-        name: 'Find errands',
-      }),
-    ).toHaveAttribute('href', '/errands/browse')
+    await screen.findByRole('heading', { name: 'Past errands you ran' })
+    expect(screen.getByRole('link', { name: 'Open requests' })).toHaveAttribute(
+      'href',
+      '/errands/browse',
+    )
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('region', { name: /^Active/ }),
+      ).not.toBeInTheDocument(),
+    )
   })
 })
 

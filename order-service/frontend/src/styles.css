@@ -1234,14 +1234,6 @@ button:hover:not(:disabled),
     radial-gradient(circle at 86% 10%, rgb(255 255 255 / 75%), transparent 30%),
     #f5e8eb;
 }
-.errand-card-visual > span:last-child {
-  position: relative;
-  z-index: 1;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
 .errand-card-visual-icon {
   position: relative;
   z-index: 1;
@@ -2429,8 +2421,7 @@ a.button-secondary svg {
   border-radius: 0.9rem;
   place-items: center;
 }
-.errand-card-history .errand-card-visual::after,
-.errand-card-history .errand-card-visual > span:last-child {
+.errand-card-history .errand-card-visual::after {
   display: none;
 }
 .errand-card-history .errand-card-visual-icon {
@@ -2519,6 +2510,73 @@ a.button-secondary svg {
 .errand-card-history .errand-view-link {
   margin-left: 0;
 }
+.courier-history-panel {
+  gap: 0;
+  overflow: hidden;
+  margin-bottom: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+.courier-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.75rem 2rem;
+  border-bottom: 1px solid var(--line);
+}
+.courier-history-heading h2,
+.courier-history-heading p {
+  margin: 0;
+}
+.courier-history-heading h2 {
+  margin-top: 0.35rem;
+  font-family: 'Manrope', 'DM Sans', sans-serif;
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+.courier-history-heading > span {
+  flex: 0 0 auto;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  background: var(--canvas);
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.courier-history-panel > .errand-history-list {
+  padding: 0 2rem;
+}
+.courier-history-panel .errand-card-history {
+  padding-block: 1.4rem;
+}
+.courier-history-panel .errand-card-history .errand-card-meta {
+  display: contents;
+}
+.courier-history-panel .errand-card-history .route-line {
+  grid-area: meta;
+}
+.courier-history-panel .errand-card-history .errand-timing {
+  grid-area: status;
+  align-self: start;
+  justify-self: end;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.courier-history-panel .errand-card-history .errand-timing svg {
+  display: none;
+}
+.courier-history-panel .errand-card-history .badge,
+.courier-history-panel .errand-card-history .review-badge {
+  align-self: end;
+  margin-top: 1.65rem;
+}
+.courier-history-panel .errand-card-history .reward-earned strong {
+  color: var(--blue);
+}
 
 @media (max-width: 48rem) {
   .create-errand-form .errand-fields,
@@ -2537,7 +2595,9 @@ a.button-secondary svg {
     width: 100%;
   }
   .requester-history-heading,
-  .requester-history-content {
+  .requester-history-content,
+  .courier-history-heading,
+  .courier-history-panel > .errand-history-list {
     padding-inline: 1.25rem;
   }
   .errand-card-history .errand-card-content {
@@ -2556,6 +2616,20 @@ a.button-secondary svg {
   .errand-card-history .review-badge {
     justify-self: start;
     margin-top: 0.4rem;
+  }
+  .courier-history-panel .errand-card-history .errand-timing,
+  .courier-history-panel .errand-card-history .badge,
+  .courier-history-panel .errand-card-history .review-badge {
+    grid-area: status;
+    justify-self: start;
+  }
+  .courier-history-panel .errand-card-history .errand-timing {
+    align-self: start;
+  }
+  .courier-history-panel .errand-card-history .badge,
+  .courier-history-panel .errand-card-history .review-badge {
+    align-self: end;
+    margin-top: 1.65rem;
   }
 }
 
@@ -2579,4 +2653,26 @@ a.button-secondary svg {
     width: 2.75rem;
     height: 2.75rem;
   }
+  .courier-history-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* Shared shell layering and unread badge contract. */
+.site-header {
+  position: relative;
+  z-index: 100;
+  overflow: visible;
+}
+.account-menu {
+  z-index: 110;
+}
+.account-menu-items {
+  z-index: 120;
+  pointer-events: auto;
+}
+.notification-badge {
+  background: #df9b93;
+  color: #172641;
 }

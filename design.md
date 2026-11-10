@@ -30,14 +30,16 @@ All signed-in service pages use the same shell and order:
 4. Notification bell in participant modes only: a Lucide `Bell` linking to `/notifications`, with
    the unread count as a small badge (`9+` above nine) and in its accessible name
    ("Notifications, 3 unread"). It is hidden in Admin mode, `2.75rem` square with a `1.25rem`
-   icon, centred, and marked current on the Notifications page. Header rules for `1rem` navigation
-   icons must exclude the bell.
+   icon, centred, and marked current on the Notifications page. Its badge uses coral `#df9b93`
+   with navy `#172641` text in every frontend. Header rules for `1rem` navigation icons must
+   exclude the bell.
 5. Account menu with profile, permitted administration actions and sign out.
 
 Every account menu links Profile to `/?view=profile`. Personal details, username editing and
 password replacement live on that dedicated view and are not duplicated on Home. Sign out clears
 the shared browser session and UI mode before returning to `/`, so it behaves consistently from
-every service shell.
+every service shell. The header establishes a stacking layer above page artwork and cards, and the
+open account menu remains pointer-interactive above that layer on every route.
 
 The bell is the same `NotificationBell.tsx` and `useUnreadCount.ts` copied into every frontend's
 `src/components/`; Notification Service owns them and the copies must stay identical. It polls only
@@ -135,10 +137,11 @@ Meet WCAG AA contrast for text and controls. Never communicate status using colo
 - **Notifications:** render event-backed rows newest first with an icon, plain-language category,
   timestamp, unread text and available actions. Colour accents distinguish errand, credit,
   completion and attention categories but never replace their text labels.
-- **Admin:** present the protected case queue as the dashboard's primary work area, followed by
-  platform tools. Filters, assignment, evidence, participant statements, private follow-up and
-  resolution remain visually distinct decision areas. Do not manufacture dashboard metrics when
-  the Admin API does not provide them.
+- **Admin:** present a protected overview with Admin-API-backed case counts and a short open-case
+  priority queue, followed by platform tools. The full queue remains the primary review work area
+  and keeps filters, assignment, evidence, participant statements, private follow-up and resolution
+  visually distinct. Never manufacture supplier, member or case metrics that the Admin API does
+  not provide.
 
 ## Key journeys
 
