@@ -18,6 +18,7 @@ import com.friendoncampus.order.repository.ProcessedEventRepository;
                 "app.kafka.enabled=false"
 })
 class OrderServiceApplicationTests {
+    @MockitoBean com.friendoncampus.order.dispute.DisputeBus disputeBus;
 
     @MockitoBean
     private OrderRepository orderRepository;

@@ -19,6 +19,7 @@ import com.friendoncampus.credit.repository.CreditEventStreamVersionRepository;
                 + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
 })
 class CreditServiceApplicationTests {
+    @MockitoBean com.friendoncampus.credit.dispute.DisputeBus disputeBus;
 
     @MockitoBean CreditAccountRepository accounts;
     @MockitoBean CreditReservationRepository reservations;
