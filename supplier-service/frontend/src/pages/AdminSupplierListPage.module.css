@@ -1,6 +1,8 @@
 .page {
   display: grid;
   gap: var(--foc-space-24);
+  width: min(100%, 82rem);
+  margin: 0 auto;
 }
 
 .heading {
@@ -15,7 +17,10 @@
 
 .heading h1 {
   margin-top: var(--foc-space-4);
-  font-size: var(--foc-text-mobile-title);
+  font-family: 'Manrope', 'DM Sans', sans-serif;
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  letter-spacing: -0.05em;
+  line-height: 1.05;
 }
 
 .heading > div > p:last-child {
@@ -25,7 +30,7 @@
 }
 
 .eyebrow {
-  color: var(--foc-action);
+  color: var(--foc-blue);
   font-size: var(--foc-text-caption);
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -38,11 +43,28 @@
   justify-content: center;
   min-height: 2.75rem;
   padding: 0 var(--foc-space-16);
-  border-radius: var(--foc-radius-8);
+  gap: var(--foc-space-8);
+  border-radius: 0.75rem;
   color: white;
   background: var(--foc-action);
   font-weight: 600;
   text-decoration: none;
+  box-shadow: 0 8px 20px rgb(23 38 65 / 16%);
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.addLink svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.addLink:hover {
+  background: var(--foc-blue);
+  box-shadow: 0 12px 26px rgb(23 38 65 / 20%);
+  transform: translateY(-1px);
 }
 
 .successNotice {
@@ -66,8 +88,9 @@
   gap: var(--foc-space-16);
   padding: var(--foc-space-16);
   border: 1px solid var(--foc-line);
-  border-radius: var(--foc-radius-12);
+  border-radius: 1.25rem;
   background: var(--foc-surface);
+  box-shadow: var(--foc-shadow-soft);
 }
 
 .searchField {
@@ -98,8 +121,9 @@
   display: none;
   overflow-x: auto;
   border: 1px solid var(--foc-line);
-  border-radius: var(--foc-radius-12);
+  border-radius: 1.25rem;
   background: var(--foc-surface);
+  box-shadow: var(--foc-shadow-soft);
 }
 
 .tableFrame table {
@@ -128,18 +152,37 @@
   border-bottom: 0;
 }
 
+.tableFrame tbody tr {
+  transition: background 180ms ease;
+}
+
+.tableFrame tbody tr:hover {
+  background: #f8f9fd;
+}
+
 .mobileList {
   display: grid;
   gap: var(--foc-space-16);
 }
 
 .mobileCard {
+  position: relative;
   display: grid;
   gap: var(--foc-space-16);
   padding: var(--foc-space-16);
   border: 1px solid var(--foc-line);
-  border-radius: var(--foc-radius-12);
+  overflow: hidden;
+  border-radius: 1.1rem;
   background: var(--foc-surface);
+  box-shadow: var(--foc-shadow-soft);
+}
+
+.mobileCard::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 0.35rem;
+  background: var(--foc-blue);
+  content: '';
 }
 
 .cardHeading {
@@ -194,8 +237,8 @@
 }
 
 .activeBadge {
-  color: var(--foc-action);
-  background: var(--foc-action-soft);
+  color: #44615a;
+  background: #edf5f1;
 }
 
 .inactiveBadge {
@@ -223,10 +266,32 @@
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
+  gap: 0.35rem;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease;
+}
+
+.actions svg {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.actions a:hover,
+.actions button:hover {
+  border-color: var(--foc-blue);
+  background: #f0f2fb;
+  color: var(--foc-blue);
 }
 
 .actions .deleteAction {
   color: var(--foc-danger);
+}
+
+.actions .deleteAction:hover {
+  border-color: #e8c5bf;
+  background: var(--foc-danger-soft);
 }
 
 .visuallyHidden {
@@ -248,7 +313,7 @@
   }
 
   .heading h1 {
-    font-size: var(--foc-text-title);
+    font-size: clamp(2.4rem, 5vw, 3.25rem);
   }
 
   .filters {
@@ -266,6 +331,15 @@
 
   .mobileList {
     display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .addLink,
+  .tableFrame tbody tr,
+  .actions a,
+  .actions button {
+    transition: none;
   }
 }
 

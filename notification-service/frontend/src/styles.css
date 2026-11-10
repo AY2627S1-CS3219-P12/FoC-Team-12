@@ -16,6 +16,7 @@
   --line: #e8e6e1;
   --reserved: #a36f76;
   --danger: #a2372b;
+  --focus: #5068b3;
   --warning-soft: #fff3dc;
   --blue: #5068b3;
   --mauve: #a36f76;
@@ -44,6 +45,10 @@ input {
 a {
   color: inherit;
 }
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
 button,
 .sign-in-link {
   min-height: 2.75rem;
@@ -62,9 +67,9 @@ button,
 }
 button:hover:not(:disabled),
 .sign-in-link:hover {
-  border-color: #194f3d;
-  background: #194f3d;
-  box-shadow: 0 4px 12px rgb(35 101 78 / 18%);
+  border-color: #5068b3;
+  background: #5068b3;
+  box-shadow: 0 5px 16px rgb(23 38 65 / 18%);
 }
 button:disabled {
   cursor: not-allowed;
@@ -391,7 +396,7 @@ button:disabled {
   background: var(--surface);
   color: var(--ink);
 }
-/* The shared button hover paints dark green; outline buttons keep readable text instead. */
+/* Outline buttons keep readable text against the shared brand hover. */
 .button-secondary:hover:not(:disabled),
 a.button-secondary:hover {
   border-color: var(--action);

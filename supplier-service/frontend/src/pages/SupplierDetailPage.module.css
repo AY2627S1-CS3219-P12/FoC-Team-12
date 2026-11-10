@@ -1,6 +1,8 @@
 .page {
   display: grid;
   gap: var(--foc-space-24);
+  width: min(100%, 72rem);
+  margin: 0 auto;
 }
 
 .backLink {
@@ -13,14 +15,19 @@
   font-size: var(--foc-text-small);
   font-weight: 600;
   text-decoration: none;
+  transition:
+    color 180ms ease,
+    transform 180ms ease;
 }
 
-.backLink img {
-  transform: rotate(180deg);
+.backLink svg {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
-.backLink:hover span {
-  text-decoration: underline;
+.backLink:hover {
+  color: var(--foc-blue);
+  transform: translateX(-2px);
 }
 
 .detailLayout {
@@ -33,18 +40,43 @@
   align-content: start;
   gap: var(--foc-space-24);
   min-width: 0;
-  padding: var(--foc-space-24);
   border: 1px solid var(--foc-line);
-  border-radius: var(--foc-radius-12);
+  border-radius: 1.5rem;
   background: var(--foc-surface);
+  box-shadow: var(--foc-shadow-soft);
+  overflow: hidden;
 }
 
 .heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--foc-space-16);
+  padding: var(--foc-space-24);
+  border-bottom: 1px solid var(--foc-line);
+  background: linear-gradient(135deg, #fff 55%, #f0f2fb);
+}
+
+.headingIcon {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 1rem;
+  background: #fbecea;
+  color: #a05f59;
+  place-items: center;
+}
+
+.headingIcon svg {
+  width: 1.55rem;
+  height: 1.55rem;
+}
+
+.headingCopy {
   display: grid;
   justify-items: start;
   gap: var(--foc-space-8);
-  padding-bottom: var(--foc-space-24);
-  border-bottom: 1px solid var(--foc-line);
+  min-width: 0;
 }
 
 .heading h1,
@@ -53,14 +85,25 @@
 }
 
 .heading h1 {
+  font-family: 'Manrope', 'DM Sans', sans-serif;
   color: var(--foc-ink);
-  font-size: clamp(var(--foc-text-mobile-title), 7vw, var(--foc-text-title));
-  line-height: 1.25;
+  font-size: clamp(2rem, 7vw, 3.25rem);
+  letter-spacing: -0.05em;
+  line-height: 1.05;
 }
 
 .heading p {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--foc-space-8);
   color: var(--foc-muted);
   line-height: 1.5;
+}
+
+.heading p svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--foc-blue);
 }
 
 .badge {
@@ -69,27 +112,42 @@
   min-height: 1.75rem;
   padding: 0 var(--foc-space-12);
   border-radius: var(--foc-radius-pill);
-  color: var(--foc-action);
-  background: var(--foc-action-soft);
+  color: var(--foc-blue);
+  background: #f0f2fb;
   font-size: var(--foc-text-caption);
   font-weight: 600;
 }
 
 .details {
   display: grid;
-  gap: var(--foc-space-24);
+  gap: var(--foc-space-12);
   margin: 0;
+  padding: var(--foc-space-24);
 }
 
 .details div {
   display: grid;
   gap: var(--foc-space-4);
+  min-width: 0;
+  padding: var(--foc-space-16);
+  border: 1px solid var(--foc-line);
+  border-radius: 1rem;
+  background: #faf9f7;
 }
 
 .details dt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--foc-space-8);
   color: var(--foc-muted);
   font-size: var(--foc-text-small);
   font-weight: 600;
+}
+
+.details dt svg {
+  width: 1rem;
+  height: 1rem;
+  color: var(--foc-blue);
 }
 
 .details dd {
@@ -104,8 +162,9 @@
   min-height: 15rem;
   overflow: hidden;
   border: 1px solid var(--foc-line);
-  border-radius: var(--foc-radius-12);
+  border-radius: 1.5rem;
   background: var(--foc-action-soft);
+  box-shadow: var(--foc-shadow-soft);
 }
 
 .imagePlaceholder {
@@ -176,6 +235,7 @@
   border: 1px solid var(--foc-line);
   border-radius: var(--foc-radius-12);
   background: var(--foc-surface);
+  box-shadow: var(--foc-shadow-soft);
 }
 
 .detailSkeleton span {
@@ -192,7 +252,8 @@
 }
 
 @media (min-width: 48rem) {
-  .content {
+  .heading,
+  .details {
     padding: var(--foc-space-32);
   }
 
@@ -209,7 +270,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .supplierImage {
+  .supplierImage,
+  .backLink {
     transition: none;
   }
 }

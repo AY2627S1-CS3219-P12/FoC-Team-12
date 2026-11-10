@@ -1,5 +1,5 @@
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import arrowIcon from '../assets/foc-arrow.svg'
 import type { Supplier } from '../api/supplierQueries'
 import {
   formatBuilding,
@@ -43,7 +43,7 @@ export function SupplierCard({ supplier, returnTo }: SupplierCardProps) {
         to={`/suppliers/${supplier.id}`}
       >
         <span>View details</span>
-        <img alt="" height="20" src={arrowIcon} width="20" />
+        <ArrowRight aria-hidden="true" />
       </Link>
     </article>
   )
