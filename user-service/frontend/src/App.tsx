@@ -31,6 +31,7 @@ import {
 import { OtpInput } from './OtpInput'
 import { AdminUserManagement } from './AdminUserManagement'
 import { NotificationBell } from './components/NotificationBell'
+import { NotificationPush } from './components/NotificationPush'
 import { navigateTo } from './navigation'
 import bagIcon from './assets/foc-bag.svg'
 
@@ -849,6 +850,7 @@ export function App() {
           </nav>
         </div>
       </header>
+      <NotificationPush role={session.role} />
       {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
       {adminUsersPage
         ? <main className="admin-users-main"><AdminUserManagement currentUserId={session.userId} /></main>

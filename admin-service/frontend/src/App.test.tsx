@@ -13,6 +13,7 @@ import { navigateTo } from './navigation'
 vi.mock('./components/NotificationBell', () => ({
   NotificationBell: () => null,
 }))
+vi.mock('./components/NotificationPush', () => ({ NotificationPush: () => null }))
 vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 function mockFetch(fetcher: (url: string, options?: RequestInit) => unknown) {
   vi.stubGlobal('fetch', (url: string, options?: RequestInit) =>

@@ -9,6 +9,7 @@ import {
 } from '../auth/session'
 import { navigateTo, signInPath } from '../navigation'
 import { NotificationBell } from './NotificationBell'
+import { NotificationPush } from './NotificationPush'
 import bagIcon from '../assets/foc-bag.svg'
 
 export function OrderShell({ children }: { children: ReactNode }) {
@@ -165,6 +166,7 @@ export function OrderShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
+      <NotificationPush role={session?.role} />
       {workspaceError && (
         <p className="workspace-error" role="alert">
           {workspaceError}

@@ -8,6 +8,7 @@ import {
   type WorkspaceRole,
 } from '../auth/session'
 import { NotificationBell } from './NotificationBell'
+import { NotificationPush } from './NotificationPush'
 import { navigateTo } from '../navigation'
 
 import bagIcon from '../assets/foc-bag.svg'
@@ -199,6 +200,7 @@ export function AdminShell({
           </nav>
         </div>
       </header>
+      <NotificationPush role={session?.role} />
       {workspaceError && (
         <p className="workspace-error" role="alert">
           {workspaceError}

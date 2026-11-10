@@ -46,6 +46,14 @@ The bell is the same `NotificationBell.tsx` and `useUnreadCount.ts` copied into 
 the unread count, about every 30 seconds while the tab is visible, keeps the last count when a poll
 fails rather than showing `0`, and stops when the session ends.
 
+Participant pages also mount the Notification-owned `NotificationPush.tsx` and stylesheet. It
+polls the cursor-based push feed while the page is visible and shows up to three top-right cards.
+Errand lifecycle and private chat-message cards dismiss automatically after five seconds, may be
+dismissed manually, and open the relevant errand or chat when selected. They are never rendered in
+Admin mode. Chat-message cards are transient only: they do not appear in the bell list or its
+unread count; lifecycle notifications remain persistent in both places. Push payloads contain only
+the existing privacy-minimal notification message and order link, never private chat content.
+
 The active route uses text colour plus a 3 px underline. Primary navigation uses concise text labels
 without supporting icons; the notification bell remains an icon control with an accessible name.
 Desktop headers are `4.5rem` high with an `80rem` maximum content width. At narrow widths the

@@ -4,6 +4,7 @@ import { saveSession } from '../auth/session'
 import { NotificationShell } from './NotificationShell'
 
 vi.mock('./NotificationBell', () => ({ NotificationBell: () => null }))
+vi.mock('./NotificationPush', () => ({ NotificationPush: () => null }))
 
 afterEach(() => sessionStorage.clear())
 

@@ -15,6 +15,7 @@ vi.mock('../navigation', () => ({
 vi.mock('./NotificationBell', () => ({
   NotificationBell: () => <span data-testid="notification-bell" />,
 }))
+vi.mock('./NotificationPush', () => ({ NotificationPush: () => null }))
 
 describe('OrderShell', () => {
   afterEach(() => {

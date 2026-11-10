@@ -6,6 +6,7 @@ import bagIcon from '../assets/foc-bag.svg'
 import { navigateTo } from '../navigation'
 import styles from './AppShell.module.css'
 import { NotificationBell } from './NotificationBell'
+import { NotificationPush } from './NotificationPush'
 
 export function AppShell() {
   const accountMenuRef = useRef<HTMLDetailsElement>(null)
@@ -159,6 +160,7 @@ export function AppShell() {
           </nav>
         </div>
       </header>
+      <NotificationPush role={session?.role} />
       {workspaceError && (
         <p className={styles.workspaceError} role="alert">
           {workspaceError}

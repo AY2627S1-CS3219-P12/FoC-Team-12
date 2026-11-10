@@ -10,6 +10,7 @@ import { navigateTo } from './navigation'
 vi.mock('./components/NotificationBell', () => ({
   NotificationBell: () => <span data-testid="notification-bell" />,
 }))
+vi.mock('./components/NotificationPush', () => ({ NotificationPush: () => null }))
 
 vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 

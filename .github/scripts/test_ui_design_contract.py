@@ -42,6 +42,7 @@ SELECTORS = {
 # must stay identical; Notification Service owns them.
 BELL_SOURCES = ("NotificationBell.tsx", "useUnreadCount.ts", "NotificationBell.test.tsx")
 BELL_FRONTENDS = ("user", "supplier", "order", "credit", "admin", "notification")
+PUSH_SOURCES = ("NotificationPush.tsx", "NotificationPush.css")
 BELL_STYLES = {
     "user": (ROOT / "user-service/frontend/src/styles.css", ".notification-bell"),
     "supplier": (ROOT / "supplier-service/frontend/src/components/AppShell.module.css", ".notificationBell"),
@@ -263,6 +264,19 @@ class SharedNotificationBellTest(unittest.TestCase):
                 with self.subTest(service=service, source=source):
                     copy = ROOT / f"{service}-service/frontend/src/components" / source
                     self.assertEqual(reference, copy.read_text(), f"{service} {source} differs")
+
+    def test_every_frontend_has_the_same_participant_push_component(self):
+        for source in PUSH_SOURCES:
+            reference = (ROOT / "notification-service/frontend/src/components" / source).read_text()
+            for service in BELL_FRONTENDS:
+                with self.subTest(service=service, source=source):
+                    copy = ROOT / f"{service}-service/frontend/src/components" / source
+                    self.assertEqual(reference, copy.read_text(), f"{service} {source} differs")
+
+    def test_every_shell_passes_its_current_role_to_push_notifications(self):
+        for service, path in PRIMARY_NAV_SOURCES.items():
+            with self.subTest(service=service):
+                self.assertRegex(path.read_text(), r'<NotificationPush role=\{session\??\.role\} />')
 
     def test_every_frontend_gives_the_bell_the_same_control_size(self):
         for service, (path, selector) in BELL_STYLES.items():

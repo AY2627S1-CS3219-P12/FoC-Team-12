@@ -1,5 +1,11 @@
 # Notification Service
 
+The participant UI has two notification channels. Errand lifecycle records remain in the durable
+bell inbox and also produce five-second in-app push cards. Private chat-message records produce
+only push cards and are excluded from the bell list and unread count. `GET
+/api/notifications/me/push` uses a server-time cursor so every frontend can poll without replaying
+old cards after navigation; Admin mode does not mount the push surface.
+
 > Turns committed Order, Credit, and Chat events into private, durable in-app notifications.
 
 Notification Service is a Java 17 Spring Boot service with a React frontend. It consumes
