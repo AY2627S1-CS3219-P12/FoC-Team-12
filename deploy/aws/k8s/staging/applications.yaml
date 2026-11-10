@@ -2,12 +2,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: gateway, namespace: foc-staging }
 spec:
-  replicas: 1
+  replicas: 2
   strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }
   selector: { matchLabels: { app: gateway } }
   template:
     metadata: { labels: { app: gateway } }
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: gateway } }
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: gateway } }
       automountServiceAccountToken: false
       containers:
         - name: gateway
@@ -38,12 +47,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: user-service, namespace: foc-staging }
 spec:
-  replicas: 1
+  replicas: 2
   strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: user-service } }
   template:
     metadata: { labels: { app: user-service } }
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: user-service } }
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: user-service } }
       automountServiceAccountToken: false
       containers:
         - name: user-service
@@ -89,12 +107,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: supplier-service, namespace: foc-staging }
 spec:
-  replicas: 1
+  replicas: 2
   strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: supplier-service } }
   template:
     metadata: { labels: { app: supplier-service } }
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: supplier-service } }
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: supplier-service } }
       automountServiceAccountToken: false
       containers:
         - name: supplier-service
@@ -131,12 +158,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: order-service, namespace: foc-staging }
 spec:
-  replicas: 1
+  replicas: 2
   strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: order-service } }
   template:
     metadata: { labels: { app: order-service } }
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: order-service } }
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: order-service } }
       automountServiceAccountToken: false
       containers:
         - name: order-service
@@ -183,12 +219,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: credit-service, namespace: foc-staging }
 spec:
-  replicas: 1
+  replicas: 2
   strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: credit-service } }
   template:
     metadata: { labels: { app: credit-service } }
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: credit-service } }
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: credit-service } }
       automountServiceAccountToken: false
       containers:
         - name: credit-service
@@ -234,12 +279,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: admin-service, namespace: foc-staging }
 spec:
-  replicas: 1
+  replicas: 2
   strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: admin-service } }
   template:
     metadata: { labels: { app: admin-service } }
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: admin-service } }
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: admin-service } }
       automountServiceAccountToken: false
       containers:
         - name: admin-service
@@ -289,12 +343,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: chat-service, namespace: foc-staging }
 spec:
-  replicas: 1
+  replicas: 2
   strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: chat-service } }
   template:
     metadata: { labels: { app: chat-service } }
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: chat-service } }
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: chat-service } }
       serviceAccountName: chat-service
       automountServiceAccountToken: true
       containers:
@@ -356,12 +419,21 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: notification-service, namespace: foc-staging }
 spec:
-  replicas: 1
+  replicas: 2
   strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } }
   selector: { matchLabels: { app: notification-service } }
   template:
     metadata: { labels: { app: notification-service } }
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: notification-service } }
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector: { matchLabels: { app: notification-service } }
       automountServiceAccountToken: false
       containers:
         - name: notification-service
