@@ -117,3 +117,9 @@ resource "aws_ssm_parameter" "chat_service_role_arn" {
   type  = "String"
   value = aws_iam_role.chat_service.arn
 }
+
+resource "aws_ssm_parameter" "supplier_service_role_arn" {
+  name  = "/foc/${var.environment}/supplier-service-role-arn"
+  type  = "String"
+  value = aws_iam_role.supplier_service.arn
+}

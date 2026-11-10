@@ -21,6 +21,7 @@ const activeSupplier = {
   openingTime: '08:00:00',
   closingTime: '18:00:00',
   imageUrl: 'https://example.com/cafe.jpg',
+  imageSource: 'EXTERNAL_URL',
   status: 'ACTIVE',
   version: 0,
   createdAt: '2026-09-23T00:00:00Z',
@@ -33,6 +34,7 @@ const inactiveSupplier = {
   name: 'Former Shop',
   type: 'Shopping',
   imageUrl: null,
+  imageSource: null,
   status: 'INACTIVE',
   version: 1,
 }
@@ -128,7 +130,10 @@ function renderRoute(route: string) {
 }
 
 describe('Administrative supplier management', () => {
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllGlobals()
+  })
 
   it('renders active and inactive records and synchronises filters with the URL', async () => {
     const get = mockReads()
@@ -222,6 +227,52 @@ describe('Administrative supplier management', () => {
     expect(post).not.toHaveBeenCalled()
   })
 
+  it('creates a supplier and uploads a selected image to the protected endpoint', async () => {
+    mockReads()
+    const created = {
+      ...activeSupplier,
+      imageUrl: null,
+      imageSource: null,
+      version: 0,
+    }
+    vi.spyOn(supplierApi, 'POST').mockResolvedValue(successfulResult(created))
+    const fetch = vi.fn().mockResolvedValue(
+      response({
+        ...created,
+        imageUrl: `/api/suppliers/${supplierId}/image?v=1`,
+        imageSource: 'UPLOAD',
+        version: 1,
+      }),
+    )
+    vi.stubGlobal('fetch', fetch)
+    const user = userEvent.setup()
+    renderRoute('/admin/suppliers/new')
+
+    await user.type(screen.getByLabelText('Name'), 'Campus Coffee')
+    await user.type(screen.getByLabelText('Category'), 'Food/Coffee')
+    await user.type(screen.getByLabelText('Building'), 'COM3')
+    await user.type(screen.getByLabelText('Latitude'), '1.2948')
+    await user.type(screen.getByLabelText('Longitude'), '103.7716')
+    await user.click(screen.getByLabelText('Upload from device'))
+    const file = new File(
+      [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
+      'campus.png',
+      { type: 'image/png' },
+    )
+    await user.upload(screen.getByLabelText('Choose image file'), file)
+    await user.click(screen.getByRole('button', { name: 'Create supplier' }))
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce())
+    const request = fetch.mock.calls[0]?.[0] as Request
+    expect(request.method).toBe('PUT')
+    expect(request.url).toContain(
+      `/api/admin/suppliers/${supplierId}/image?version=0`,
+    )
+    expect(request.headers.get('Authorization')).toBe('Bearer admin.jwt')
+    expect(request.body).not.toBeNull()
+    expect(await screen.findByText(/created successfully/i)).toBeInTheDocument()
+  })
+
   it('maps backend field errors without discarding entered form data', async () => {
     mockReads()
     vi.spyOn(supplierApi, 'POST').mockResolvedValue(
@@ -255,6 +306,17 @@ describe('Administrative supplier management', () => {
       successfulResult({
         ...activeSupplier,
         name: 'Updated Coffee',
+        imageUrl: null,
+        imageSource: null,
+        version: 1,
+      }),
+    )
+    const removeImage = vi.spyOn(supplierApi, 'DELETE').mockResolvedValue(
+      successfulResult({
+        ...activeSupplier,
+        name: 'Updated Coffee',
+        imageUrl: null,
+        imageSource: null,
         version: 1,
       }),
     )
@@ -265,7 +327,7 @@ describe('Administrative supplier management', () => {
     await user.clear(name)
     await user.type(name, ' Updated Coffee ')
     await user.clear(screen.getByLabelText('Floor'))
-    await user.clear(screen.getByLabelText('Image URL'))
+    await user.click(screen.getByLabelText('No photo'))
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(put).toHaveBeenCalledOnce())
@@ -279,6 +341,13 @@ describe('Administrative supplier management', () => {
       },
     })
     expect(put.mock.calls[0]?.[1]).not.toHaveProperty('body.status')
+    await waitFor(() => expect(removeImage).toHaveBeenCalledOnce())
+    expect(removeImage.mock.calls[0]?.[1]).toMatchObject({
+      params: {
+        path: { id: supplierId },
+        query: { version: 1 },
+      },
+    })
   })
 
   it('shows a friendly missing state for an unavailable edit record', async () => {

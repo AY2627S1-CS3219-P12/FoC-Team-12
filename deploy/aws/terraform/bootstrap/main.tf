@@ -198,7 +198,7 @@ data "aws_iam_policy_document" "infra" {
   }
 
   statement {
-    sid = "ChatAttachmentBucket"
+    sid = "PrivateMediaBuckets"
     actions = [
       "s3:CreateBucket",
       "s3:DeleteBucket",
@@ -214,12 +214,13 @@ data "aws_iam_policy_document" "infra" {
       "s3:PutEncryptionConfiguration"
     ]
     resources = [
-      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
+      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}",
+      "arn:aws:s3:::foc-team-12-supplier-images-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
     ]
   }
 
   statement {
-    sid = "ChatAttachmentObjectsForTeardown"
+    sid = "PrivateMediaObjectsForTeardown"
     actions = [
       "s3:AbortMultipartUpload",
       "s3:DeleteObject",
@@ -228,7 +229,8 @@ data "aws_iam_policy_document" "infra" {
       "s3:ListMultipartUploadParts"
     ]
     resources = [
-      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}/*"
+      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}/*",
+      "arn:aws:s3:::foc-team-12-supplier-images-${data.aws_caller_identity.current.account_id}-${var.aws_region}/*"
     ]
   }
 

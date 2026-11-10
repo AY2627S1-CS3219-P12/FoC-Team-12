@@ -83,6 +83,8 @@ class SupplierSecurityTest {
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/suppliers/metadata"))
                 .andExpect(status().isOk());
+        mockMvc.perform(get("/api/suppliers/{id}/image", SUPPLIER_ID))
+                .andExpect(status().isNotFound());
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk());
         mockMvc.perform(get("/swagger-ui/index.html"))
@@ -147,6 +149,13 @@ class SupplierSecurityTest {
         mockMvc.perform(delete("/api/suppliers/{id}", SUPPLIER_ID)
                         .header("Authorization", "Bearer admin-token"))
                 .andExpect(status().isBadRequest());
+        mockMvc.perform(delete("/api/admin/suppliers/{id}/image", SUPPLIER_ID)
+                        .header("Authorization", "Bearer admin-token"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/admin/suppliers/{id}/image", SUPPLIER_ID)
+                        .header("Authorization", "Bearer admin-token")
+                        .contentType(MediaType.MULTIPART_FORM_DATA))
+                .andExpect(status().isBadRequest());
     }
 
     private static List<RequestBuilder> protectedRequests() {
@@ -156,7 +165,10 @@ class SupplierSecurityTest {
                 post("/api/suppliers").contentType(MediaType.APPLICATION_JSON),
                 put("/api/suppliers/{id}", SUPPLIER_ID).contentType(MediaType.APPLICATION_JSON),
                 patch("/api/suppliers/{id}/status", SUPPLIER_ID).contentType(MediaType.APPLICATION_JSON),
-                delete("/api/suppliers/{id}", SUPPLIER_ID));
+                delete("/api/suppliers/{id}", SUPPLIER_ID),
+                put("/api/admin/suppliers/{id}/image", SUPPLIER_ID)
+                        .contentType(MediaType.MULTIPART_FORM_DATA),
+                delete("/api/admin/suppliers/{id}/image", SUPPLIER_ID));
     }
 
     private static RequestBuilder withBearer(RequestBuilder request, String token) {

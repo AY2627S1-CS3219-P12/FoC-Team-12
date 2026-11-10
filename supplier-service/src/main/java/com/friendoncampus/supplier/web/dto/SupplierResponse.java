@@ -31,8 +31,10 @@ public record SupplierResponse(
         LocalTime openingTime,
         @Schema(description = "Local closing time", type = "string", format = "time", example = "18:00", nullable = true)
         LocalTime closingTime,
-        @Schema(description = "Absolute HTTP or HTTPS image URL", format = "uri", nullable = true)
+        @Schema(description = "External HTTP(S) image URL or Supplier API path for an uploaded image", nullable = true)
         String imageUrl,
+        @Schema(description = "Image origin. UPLOAD is served by Supplier Service from private object storage.", allowableValues = {"EXTERNAL_URL", "UPLOAD"}, nullable = true)
+        SupplierImageSource imageSource,
         @Schema(description = "Current visibility status", example = "ACTIVE", allowableValues = {"ACTIVE", "INACTIVE"})
         SupplierStatus status,
         @Schema(description = "Optimistic-lock version", format = "int64", example = "0", minimum = "0", accessMode = Schema.AccessMode.READ_ONLY)
@@ -54,10 +56,25 @@ public record SupplierResponse(
                 supplier.getLongitude(),
                 supplier.getOpeningTime(),
                 supplier.getClosingTime(),
-                supplier.getImageUrl(),
+                resolvedImageUrl(supplier),
+                imageSource(supplier),
                 supplier.getStatus(),
                 supplier.getVersion(),
                 supplier.getCreatedAt(),
                 supplier.getUpdatedAt());
+    }
+
+    private static String resolvedImageUrl(Supplier supplier) {
+        if (supplier.hasUploadedImage()) {
+            return "/api/suppliers/" + supplier.getId() + "/image?v=" + supplier.getVersion();
+        }
+        return supplier.getImageUrl();
+    }
+
+    private static SupplierImageSource imageSource(Supplier supplier) {
+        if (supplier.hasUploadedImage()) {
+            return SupplierImageSource.UPLOAD;
+        }
+        return supplier.getImageUrl() == null ? null : SupplierImageSource.EXTERNAL_URL;
     }
 }

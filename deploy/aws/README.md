@@ -23,6 +23,7 @@ Browser
 User / Order / Credit / Admin / Chat / Notification <-> Amazon MSK (3 brokers / 3 AZs)
 Chat <-> RabbitMQ StatefulSet on encrypted EBS
 Chat -> private S3 attachment bucket through EKS IRSA
+Supplier -> private S3 image bucket through EKS IRSA
 External Secrets Operator     <-> AWS Secrets Manager through EKS IRSA
 Pods and EKS control plane    -> CloudWatch logs, metrics, dashboard and alarms
 ```
@@ -141,9 +142,10 @@ use short-lived OIDC sessions instead of stored AWS credentials.
      foc-team-12-chat-attachments-070096877754-ap-southeast-1
    ```
 
-   Reapply the bootstrap stack first when introducing this bucket to an existing environment so
-   the scoped infrastructure role receives the new S3 permissions. This creates chargeable
-   resources.
+   Reapply the bootstrap stack first when introducing the Chat attachment or Supplier image bucket
+   to an existing environment so the scoped infrastructure role receives the new S3 permissions.
+   The Supplier bucket is created by Terraform and must not be created manually. These resources
+   can incur storage and request charges.
 
    The MSK plan adds a third public/application/database subnet and one provisioned broker in each
    of three Availability Zones. The existing EKS control plane remains on its original two-AZ
@@ -394,6 +396,9 @@ syntax and internal consistency, not OIDC trust, AWS quotas, service health or t
 - Chat attachments are private and encrypted in S3. Chat streams authorized downloads through its
   API, and its Pod receives short-lived AWS credentials through EKS Pod Identity; no AWS access
   key is stored in Kubernetes or GitHub.
+- Supplier images are private and encrypted in a separate S3 bucket. Supplier Service validates
+  uploads and streams public image responses through its API; its Pod receives narrowly scoped,
+  short-lived credentials through IRSA, and browsers never receive S3 credentials or object URLs.
 - The EKS API remains public for GitHub-hosted runners; a production platform should use private
   runners/network access and make it private-only.
 - Compose and Minikube intentionally retain local `SASL_PLAINTEXT`; AWS staging uses

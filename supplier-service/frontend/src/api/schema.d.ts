@@ -32,6 +32,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/admin/suppliers/{id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload or replace a supplier image
+         * @description Stores a validated JPEG, PNG, or WebP image up to 5 MB in private object storage. Replaces any external URL or previous upload. Requires the latest Supplier version and an ADMIN access token.
+         */
+        put: operations["uploadSupplierImage"];
+        post?: never;
+        /**
+         * Remove a supplier image
+         * @description Clears either an external image URL or an uploaded image. Requires the latest Supplier version and an ADMIN access token.
+         */
+        delete: operations["removeSupplierImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/suppliers": {
         parameters: {
             query?: never;
@@ -74,6 +98,26 @@ export interface paths {
          * @description Activates or deactivates a supplier without resending its details. Use the latest version to prevent lost updates. Requires an ADMIN access token.
          */
         patch: operations["changeSupplierStatus"];
+        trace?: never;
+    };
+    "/api/suppliers/{id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get an uploaded supplier image
+         * @description Streams an uploaded JPEG, PNG, or WebP image from private object storage. External image URLs are returned directly in the Supplier representation instead.
+         */
+        get: operations["getSupplierImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/suppliers/metadata": {
@@ -261,11 +305,13 @@ export interface components {
              * @example 18:00
              */
             closingTime?: string | null;
-            /**
-             * Format: uri
-             * @description Absolute HTTP or HTTPS image URL
-             */
+            /** @description External HTTP(S) image URL or Supplier API path for an uploaded image */
             imageUrl?: string | null;
+            /**
+             * @description Image origin. UPLOAD is served by Supplier Service from private object storage.
+             * @enum {string|null}
+             */
+            imageSource?: "EXTERNAL_URL" | "UPLOAD" | null;
             /**
              * @description Current visibility status
              * @example ACTIVE
@@ -409,6 +455,38 @@ export interface components {
             /** @example Administrator access is required */
             detail?: string;
             /** @example /api/admin/suppliers */
+            instance?: string;
+        };
+        /** @description Problem Details response for an invalid image upload */
+        InvalidSupplierImageProblem: {
+            /** @example about:blank */
+            type?: string;
+            /** @example Invalid supplier image */
+            title?: string;
+            /**
+             * Format: int32
+             * @example 400
+             */
+            status?: number;
+            /** @example Image must be a JPEG, PNG, or WebP file */
+            detail?: string;
+            /** @example /api/admin/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa/image */
+            instance?: string;
+        };
+        /** @description Problem Details response when private image storage is unavailable */
+        SupplierImageUnavailableProblem: {
+            /** @example about:blank */
+            type?: string;
+            /** @example Supplier image unavailable */
+            title?: string;
+            /**
+             * Format: int32
+             * @example 503
+             */
+            status?: number;
+            /** @example The supplier image is temporarily unavailable */
+            detail?: string;
+            /** @example /api/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa/image */
             instance?: string;
         };
         /** @description Details used to create a supplier */
@@ -744,6 +822,129 @@ export interface operations {
             };
         };
     };
+    uploadSupplierImage: {
+        parameters: {
+            query: {
+                /** @description Version from the latest supplier response */
+                version: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description JPEG, PNG, or WebP image up to 5 MB
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Image uploaded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SupplierResponse"];
+                };
+            };
+            /** @description Missing version or invalid image */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["InvalidSupplierImageProblem"];
+                };
+            };
+            /** @description Supplier not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["SupplierNotFoundProblem"];
+                };
+            };
+            /** @description Requested version is stale */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["SupplierUpdateConflictProblem"];
+                };
+            };
+            /** @description Image storage is unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["SupplierImageUnavailableProblem"];
+                };
+            };
+        };
+    };
+    removeSupplierImage: {
+        parameters: {
+            query: {
+                /** @description Version from the latest supplier response */
+                version: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Image removed, or unchanged when no image exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SupplierResponse"];
+                };
+            };
+            /** @description Missing or invalid version */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["InvalidRequestProblem"];
+                };
+            };
+            /** @description Supplier not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["SupplierNotFoundProblem"];
+                };
+            };
+            /** @description Requested version is stale */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["SupplierUpdateConflictProblem"];
+                };
+            };
+        };
+    };
     listSuppliers: {
         parameters: {
             query?: {
@@ -928,6 +1129,47 @@ export interface operations {
                 };
                 content: {
                     "application/problem+json": components["schemas"]["SupplierUpdateConflictProblem"];
+                };
+            };
+        };
+    };
+    getSupplierImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Supplier UUID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Uploaded supplier image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/*": string;
+                };
+            };
+            /** @description Supplier or uploaded image not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["SupplierNotFoundProblem"];
+                };
+            };
+            /** @description Image storage is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["SupplierImageUnavailableProblem"];
                 };
             };
         };

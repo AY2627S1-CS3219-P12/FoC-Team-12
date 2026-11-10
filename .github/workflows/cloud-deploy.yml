@@ -142,9 +142,13 @@ jobs:
             export "${key^^}_IMAGE=$image"
           done
           CHAT_S3_BUCKET="foc-team-12-chat-attachments-${account_id}-${AWS_REGION}"
-          export CHAT_S3_BUCKET
-          env | grep -E '^(GATEWAY|USER|SUPPLIER|ORDER|CREDIT|ADMIN|CHAT|NOTIFICATION)_IMAGE=' >> "$GITHUB_ENV"
-          echo "CHAT_S3_BUCKET=$CHAT_S3_BUCKET" >> "$GITHUB_ENV"
+          SUPPLIER_S3_BUCKET="foc-team-12-supplier-images-${account_id}-${AWS_REGION}"
+          export CHAT_S3_BUCKET SUPPLIER_S3_BUCKET
+          {
+            env | grep -E '^(GATEWAY|USER|SUPPLIER|ORDER|CREDIT|ADMIN|CHAT|NOTIFICATION)_IMAGE='
+            echo "CHAT_S3_BUCKET=$CHAT_S3_BUCKET"
+            echo "SUPPLIER_S3_BUCKET=$SUPPLIER_S3_BUCKET"
+          } >> "$GITHUB_ENV"
       - name: Deploy and smoke-test with rollback on failure
         if: steps.runtime.outputs.ready == 'true'
         run: |
@@ -153,9 +157,10 @@ jobs:
           ALB_SECURITY_GROUP_ID=$(aws ssm get-parameter --name /foc/staging/alb-security-group-id --query Parameter.Value --output text)
           EXTERNAL_SECRETS_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/external-secrets-role-arn --query Parameter.Value --output text)
           CHAT_SERVICE_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/chat-service-role-arn --query Parameter.Value --output text)
+          SUPPLIER_SERVICE_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/supplier-service-role-arn --query Parameter.Value --output text)
           MSK_BOOTSTRAP_SERVERS=$(aws ssm get-parameter --name /foc/staging/msk-bootstrap-brokers --query Parameter.Value --output text)
           PUBLIC_URL=$(aws ssm get-parameter --name /foc/staging/public-url --query Parameter.Value --output text)
-          export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID EXTERNAL_SECRETS_ROLE_ARN CHAT_SERVICE_ROLE_ARN MSK_BOOTSTRAP_SERVERS PUBLIC_URL
+          export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID EXTERNAL_SECRETS_ROLE_ARN CHAT_SERVICE_ROLE_ARN SUPPLIER_SERVICE_ROLE_ARN MSK_BOOTSTRAP_SERVERS PUBLIC_URL
           if deploy/aws/scripts/deploy-platform.sh && deploy/aws/scripts/smoke-test.sh; then
             exit 0
           fi

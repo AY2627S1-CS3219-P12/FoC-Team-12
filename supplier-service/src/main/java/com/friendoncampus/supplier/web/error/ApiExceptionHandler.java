@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,9 +17,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import com.friendoncampus.supplier.service.InvalidSupplierQueryException;
+import com.friendoncampus.supplier.service.InvalidSupplierImageException;
+import com.friendoncampus.supplier.service.SupplierImageNotFoundException;
 import com.friendoncampus.supplier.service.SupplierNotFoundException;
 import com.friendoncampus.supplier.service.SupplierUpdateConflictException;
 import com.friendoncampus.supplier.service.SupplierVersionLookup;
+import com.friendoncampus.supplier.storage.SupplierImageStorageException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -82,6 +86,35 @@ public class ApiExceptionHandler {
                 HttpStatus.BAD_REQUEST,
                 exception.getMessage());
         problem.setTitle("Invalid supplier query");
+        return problem;
+    }
+
+    @ExceptionHandler({InvalidSupplierImageException.class, MaxUploadSizeExceededException.class})
+    public ProblemDetail handleInvalidSupplierImage(Exception exception) {
+        String detail = exception instanceof MaxUploadSizeExceededException
+                ? "Image must be 5 MB or smaller"
+                : exception.getMessage();
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
+        problem.setTitle("Invalid supplier image");
+        return problem;
+    }
+
+    @ExceptionHandler(SupplierImageNotFoundException.class)
+    public ProblemDetail handleSupplierImageNotFound(SupplierImageNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND,
+                exception.getMessage());
+        problem.setTitle("Supplier image not found");
+        problem.setProperty("supplierId", exception.getSupplierId());
+        return problem;
+    }
+
+    @ExceptionHandler(SupplierImageStorageException.class)
+    public ProblemDetail handleSupplierImageStorage(SupplierImageStorageException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "The supplier image is temporarily unavailable");
+        problem.setTitle("Supplier image unavailable");
         return problem;
     }
 

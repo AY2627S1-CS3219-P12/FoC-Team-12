@@ -32,12 +32,14 @@ import com.friendoncampus.supplier.repository.SupplierRepository;
 class SupplierServiceTest {
 
     private SupplierRepository supplierRepository;
+    private SupplierImageCleanup imageCleanup;
     private SupplierService supplierService;
 
     @BeforeEach
     void setUp() {
         supplierRepository = mock(SupplierRepository.class);
-        supplierService = new SupplierService(supplierRepository);
+        imageCleanup = mock(SupplierImageCleanup.class);
+        supplierService = new SupplierService(supplierRepository, imageCleanup);
     }
 
     @Test
