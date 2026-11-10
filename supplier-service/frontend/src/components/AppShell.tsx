@@ -44,18 +44,31 @@ export function AppShell() {
     <div className={styles.app}>
       <header className={styles.header}>
         <div className={styles.headerContent}>
-          <a className={styles.brand} href="/">
+          <a
+            className={styles.brand}
+            href={session?.role === 'ADMIN' ? '/admin' : '/'}
+          >
             <img alt="" height="24" src={bagIcon} width="24" />
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className={styles.serviceNav}>
-            <a href="/">Home</a>
-            {session?.role !== 'ADMIN' && <a href={errandsPath}>Errands</a>}
-            <Link aria-current="page" to={locationsPath}>
-              Suppliers
-            </Link>
-            {session?.role !== 'ADMIN' && <a href="/credits">Credits</a>}
-            {session?.role === 'ADMIN' && <a href="/admin">Admin</a>}
+            {session?.role === 'ADMIN' ? (
+              <>
+                <a href="/admin">Admin</a>
+                <Link aria-current="page" to={locationsPath}>
+                  Suppliers
+                </Link>
+              </>
+            ) : (
+              <>
+                <a href="/">Home</a>
+                <a href={errandsPath}>Errands</a>
+                <Link aria-current="page" to={locationsPath}>
+                  Suppliers
+                </Link>
+                <a href="/credits">Credits</a>
+              </>
+            )}
           </nav>
           <nav aria-label="Account and workspace" className={styles.actions}>
             {session && session.role !== 'ADMIN' && (

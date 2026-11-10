@@ -23,7 +23,12 @@ it('omits participant destinations from the header in Admin mode', () => {
 
   const nav = screen.getByRole('navigation', { name: 'Main navigation' })
   expect(within(nav).getAllByRole('link').map((link) => link.textContent))
-    .toEqual(['Home', 'Suppliers', 'Admin'])
+    .toEqual(['Admin', 'Suppliers'])
+  expect(within(nav).queryByRole('link', { name: 'Home' })).not.toBeInTheDocument()
   expect(within(nav).queryByRole('link', { name: 'Errands' })).not.toBeInTheDocument()
   expect(within(nav).queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Friend on Campus' })).toHaveAttribute(
+    'href',
+    '/admin',
+  )
 })

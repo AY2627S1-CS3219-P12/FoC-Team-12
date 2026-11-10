@@ -23,9 +23,10 @@ FoC should feel like one campus application, not a collection of service dashboa
 
 All signed-in service pages use the same shell and order:
 
-1. Friend on Campus brand, linking to `/`.
-2. Participant modes show `Home`, `Errands`, `Suppliers`, `Credits`. Admin mode shows only
-   `Home`, `Suppliers`, `Admin`; participant Errands and Credits destinations are omitted.
+1. Friend on Campus brand, linking to `/admin` in Admin mode and `/` otherwise.
+2. Participant modes show `Home`, `Errands`, `Suppliers`, `Credits`. Admin mode uses `Admin` as
+   its home destination and shows only `Admin`, `Suppliers`; `Home`, participant Errands and
+   Credits destinations are omitted.
 3. Requester/Courier selector for participant modes.
 4. Notification bell in participant modes only: a Lucide `Bell` linking to `/notifications`, with
    the unread count as a small badge (`9+` above nine) and in its accessible name
@@ -76,9 +77,10 @@ The Requester/Courier selector is one control shared by every frontend:
 Changing role calls the User Service session-role endpoint. Only a valid replacement response may
 replace the stored JWT and selected role. While pending, both choices are disabled. On failure,
 keep the previous JWT and role, show an actionable error and leave backend authorization
-authoritative. A successful account-menu switch to Admin opens `/admin`; switching back to User
-opens `/`. This prevents participant-only pages from remaining visible under an Admin session. A
-role switch must not alter balances, orders, profiles or other domain data.
+authoritative. A successful account-menu switch to Admin opens `/admin`; an existing Admin session
+visiting bare `/` also opens `/admin`. Switching back to User opens `/`. This prevents
+participant-only pages from remaining visible under an Admin session. A role switch must not alter
+balances, orders, profiles or other domain data.
 
 ## Foundations
 
