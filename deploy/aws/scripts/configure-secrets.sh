@@ -57,7 +57,8 @@ merge_file() {
   printf 'Initialized %s.\n' "$name"
 }
 sync_scram_secret() {
-  local name=$1 username=$2 password=$3 file="$tmp/scram-${username}.json"
+  local name=$1 username=$2 password=$3
+  local file="$tmp/scram-${username}.json"
   local current="$tmp/scram-${username}-current.json"
   jq -n --arg username "$username" --arg password "$password" \
     '{username:$username,password:$password}' > "$file"
