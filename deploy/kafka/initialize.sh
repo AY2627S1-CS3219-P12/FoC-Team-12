@@ -11,6 +11,16 @@ if ! [[ "$parallelism" =~ ^[1-7]$ ]]; then
 fi
 
 bootstrap_servers=${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+replication_factor=${KAFKA_REPLICATION_FACTOR:-1}
+min_insync_replicas=${KAFKA_MIN_INSYNC_REPLICAS:-1}
+if ! [[ "$replication_factor" =~ ^[1-9][0-9]*$ && "$min_insync_replicas" =~ ^[1-9][0-9]*$ ]]; then
+  echo 'KAFKA_REPLICATION_FACTOR and KAFKA_MIN_INSYNC_REPLICAS must be positive integers' >&2
+  exit 1
+fi
+if (( min_insync_replicas > replication_factor )); then
+  echo 'KAFKA_MIN_INSYNC_REPLICAS cannot exceed KAFKA_REPLICATION_FACTOR' >&2
+  exit 1
+fi
 admin_properties=/tmp/foc-kafka-admin.properties
 write_client_properties "$admin_properties" foc_admin "$KAFKA_ADMIN_PASSWORD"
 
@@ -39,15 +49,16 @@ create_topic() {
     --create --if-not-exists \
     --topic "$topic" \
     --partitions "$partitions" \
-    --replication-factor 1 \
+    --replication-factor "$replication_factor" \
     --config cleanup.policy=delete \
+    --config "min.insync.replicas=$min_insync_replicas" \
     --config "retention.ms=$retention_ms"
 
   init_command kafka-configs.sh \
     --bootstrap-server "$bootstrap_servers" \
     --command-config "$admin_properties" \
     --alter --entity-type topics --entity-name "$topic" \
-    --add-config "cleanup.policy=delete,retention.ms=$retention_ms"
+    --add-config "cleanup.policy=delete,min.insync.replicas=$min_insync_replicas,retention.ms=$retention_ms"
 }
 
 add_acl() {
@@ -98,6 +109,13 @@ for topic in user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.
   limit_jobs
 done
 wait_all "${pids[@]}"
+
+# The administrator must remain able to reconcile topics and ACLs after MSK is switched from its
+# one-time bootstrap configuration to allow.everyone.if.no.acl.found=false.
+add_acl foc_admin --operation All --cluster
+add_acl foc_admin --operation All --topic '*'
+add_acl foc_admin --operation All --group '*'
+add_acl foc_admin --operation All --transactional-id '*'
 
 # User Service publishes activation facts.
 {

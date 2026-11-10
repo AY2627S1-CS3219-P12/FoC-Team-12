@@ -39,7 +39,11 @@ class UserEventConfigurationTest {
     }
 
     private UserEventSettings settings(String protocol, String username, String password) {
-        return new UserEventSettings(true, "kafka:9092", protocol, "PLAIN", username, password,
+        return settings(protocol, "PLAIN", username, password);
+    }
+
+    private UserEventSettings settings(String protocol, String mechanism, String username, String password) {
+        return new UserEventSettings(true, "kafka:9092", protocol, mechanism, username, password,
                 5000, 10000, 10);
     }
 
@@ -59,6 +63,15 @@ class UserEventConfigurationTest {
                 .containsEntry("security.protocol", "SASL_SSL");
     }
 
+    @Test void supportsMskScramSha512WithoutChangingLocalPlainDefaults() {
+        var properties = UserEventConfiguration.producerProperties(
+                settings("SASL_SSL", "SCRAM-SHA-512", "user_service", "secret"));
+        assertThat(properties).containsEntry(SaslConfigs.SASL_MECHANISM, "SCRAM-SHA-512");
+        assertThat(properties.get(SaslConfigs.SASL_JAAS_CONFIG).toString())
+                .startsWith("org.apache.kafka.common.security.scram.ScramLoginModule required")
+                .contains("username=\"user_service\"");
+    }
+
     @Test void failsClosedForMissingOrMultilineCredentialsAndUnsupportedProtocols() {
         for (String password : new String[]{"", "secret\ninjected", "secret\rvalue"}) {
             assertThatThrownBy(() -> UserEventConfiguration.producerProperties(
@@ -67,6 +80,9 @@ class UserEventConfigurationTest {
                     .hasMessageNotContaining(password.isEmpty() ? "password=" : password);
         }
         assertThatThrownBy(() -> UserEventConfiguration.producerProperties(settings("invalid", "u", "p")))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> UserEventConfiguration.producerProperties(
+                settings("SASL_SSL", "unsupported", "u", "p")))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

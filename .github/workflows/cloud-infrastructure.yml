@@ -78,6 +78,18 @@ jobs:
             kafka-broker-secrets kafka-ui-secrets; do
             aws secretsmanager get-secret-value --secret-id "foc/staging/$name" --query VersionId --output text >/dev/null
           done
+          for principal in foc_admin user_service order_service credit_service admin_service chat_service \
+            notification_service kafka_ui; do
+            secret=$(aws secretsmanager get-secret-value \
+              --secret-id "AmazonMSK_foc-staging_$principal" --query SecretString --output text)
+            if ! jq -e '
+                (.username | type == "string" and length > 0) and
+                (.password | type == "string" and length > 0)
+              ' <<< "$secret" >/dev/null; then
+              echo "::error::MSK SCRAM identity $principal is missing. Re-run deploy/aws/scripts/configure-secrets.sh after apply-core."
+              exit 1
+            fi
+          done
           user_secret=$(aws secretsmanager get-secret-value \
             --secret-id foc/staging/user-service-secrets --query SecretString --output text)
           if jq -e 'has("ADMIN_BOOTSTRAP_EMAIL") or has("ADMIN_BOOTSTRAP_USERNAME") or has("ADMIN_BOOTSTRAP_PASSWORD")' \
@@ -100,6 +112,9 @@ jobs:
               exit 1
             fi
           done
+      - name: Associate Amazon MSK SCRAM identities
+        if: inputs.operation == 'provision-runtime'
+        run: deploy/aws/scripts/prepare-msk.sh associate
       - name: Validate CloudFront edge prerequisites
         if: inputs.operation == 'provision-runtime' || inputs.operation == 'apply-edge'
         run: |
@@ -152,8 +167,14 @@ jobs:
           ALB_SECURITY_GROUP_ID=$(aws ssm get-parameter --name /foc/staging/alb-security-group-id --query Parameter.Value --output text)
           EXTERNAL_SECRETS_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/external-secrets-role-arn --query Parameter.Value --output text)
           CHAT_SERVICE_ROLE_ARN=$(aws ssm get-parameter --name /foc/staging/chat-service-role-arn --query Parameter.Value --output text)
-          export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID EXTERNAL_SECRETS_ROLE_ARN CHAT_SERVICE_ROLE_ARN
+          MSK_BOOTSTRAP_SERVERS=$(aws ssm get-parameter --name /foc/staging/msk-bootstrap-brokers --query Parameter.Value --output text)
+          export RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID EXTERNAL_SECRETS_ROLE_ARN CHAT_SERVICE_ROLE_ARN MSK_BOOTSTRAP_SERVERS
           deploy/aws/scripts/deploy-platform.sh
+      - name: Lock down and verify Amazon MSK
+        if: inputs.operation == 'provision-runtime'
+        run: |
+          deploy/aws/scripts/prepare-msk.sh lockdown
+          deploy/aws/scripts/prepare-msk.sh mark-ready
       - name: Resolve private ALB
         if: inputs.operation == 'provision-runtime' || inputs.operation == 'apply-edge'
         id: alb

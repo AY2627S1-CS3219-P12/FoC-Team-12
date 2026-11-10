@@ -25,14 +25,26 @@ write_client_properties() {
   local password=$3
   local escaped_username
   local escaped_password
+  local security_protocol=${KAFKA_SECURITY_PROTOCOL:-SASL_PLAINTEXT}
+  local sasl_mechanism=${KAFKA_SASL_MECHANISM:-PLAIN}
+  local login_module
+
+  case "$sasl_mechanism" in
+    PLAIN) login_module=org.apache.kafka.common.security.plain.PlainLoginModule ;;
+    SCRAM-SHA-512) login_module=org.apache.kafka.common.security.scram.ScramLoginModule ;;
+    *)
+      echo "Unsupported Kafka SASL mechanism: $sasl_mechanism" >&2
+      return 1
+      ;;
+  esac
 
   escaped_username=$(jaas_escape "$username")
   escaped_password=$(jaas_escape "$password")
   umask 077
   cat > "$path" <<EOF
-security.protocol=SASL_PLAINTEXT
-sasl.mechanism=PLAIN
-sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="$escaped_username" password="$escaped_password";
+security.protocol=$security_protocol
+sasl.mechanism=$sasl_mechanism
+sasl.jaas.config=$login_module required username="$escaped_username" password="$escaped_password";
 EOF
 }
 

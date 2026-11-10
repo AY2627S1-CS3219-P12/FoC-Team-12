@@ -62,9 +62,9 @@ spec:
             - { name: USER_SERVICE_TRUSTED_KEYS, valueFrom: { secretKeyRef: { name: user-service-secrets, key: USER_SERVICE_TRUSTED_KEYS } } }
             - { name: USER_EVENTS_PUBLISHER_ENABLED, value: "true" }
             - { name: USER_ADMIN_COMMANDS_ENABLED, value: "true" }
-            - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
-            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_PLAINTEXT }
-            - { name: KAFKA_SASL_MECHANISM, value: PLAIN }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: KAFKA_BOOTSTRAP_SERVERS } } }
+            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_SSL }
+            - { name: KAFKA_SASL_MECHANISM, value: SCRAM-SHA-512 }
             - { name: KAFKA_USERNAME, value: user_service }
             - { name: KAFKA_PASSWORD, valueFrom: { secretKeyRef: { name: user-kafka-client, key: KAFKA_PASSWORD } } }
             - { name: MAIL_PROVIDER, value: sendgrid }
@@ -160,12 +160,13 @@ spec:
             - { name: ORDER_JWT_AUDIENCE, value: friend-on-campus-api }
             - { name: ORDER_SERVICE_TRUSTED_KEYS, valueFrom: { secretKeyRef: { name: order-service-secrets, key: ORDER_SERVICE_TRUSTED_KEYS } } }
             - { name: ORDER_KAFKA_ENABLED, value: "true" }
-            - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
-            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_PLAINTEXT }
-            - { name: KAFKA_SASL_MECHANISM, value: PLAIN }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: KAFKA_BOOTSTRAP_SERVERS } } }
+            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_SSL }
+            - { name: KAFKA_SASL_MECHANISM, value: SCRAM-SHA-512 }
             - { name: KAFKA_USERNAME, value: order_service }
             - { name: ORDER_LIFECYCLE_EVENTS_ENABLED, value: "true" }
             - { name: KAFKA_PASSWORD, valueFrom: { secretKeyRef: { name: order-kafka-client, key: KAFKA_PASSWORD } } }
+            - { name: SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG, value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(KAFKA_USERNAME)" password="$(KAFKA_PASSWORD)";' }
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70.0" }
           startupProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 60 }
           readinessProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 10, timeoutSeconds: 3 }
@@ -210,11 +211,12 @@ spec:
             - { name: CREDIT_JWT_AUDIENCE, value: friend-on-campus-api }
             - { name: CREDIT_SERVICE_TRUSTED_KEYS, valueFrom: { secretKeyRef: { name: credit-service-secrets, key: CREDIT_SERVICE_TRUSTED_KEYS } } }
             - { name: KAFKA_ENABLED, value: "true" }
-            - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
-            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_PLAINTEXT }
-            - { name: KAFKA_SASL_MECHANISM, value: PLAIN }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: KAFKA_BOOTSTRAP_SERVERS } } }
+            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_SSL }
+            - { name: KAFKA_SASL_MECHANISM, value: SCRAM-SHA-512 }
             - { name: KAFKA_USERNAME, value: credit_service }
             - { name: KAFKA_PASSWORD, valueFrom: { secretKeyRef: { name: credit-kafka-client, key: KAFKA_PASSWORD } } }
+            - { name: SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG, value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(KAFKA_USERNAME)" password="$(KAFKA_PASSWORD)";' }
             - { name: KAFKA_CONSUMER_GROUP, value: credit-service }
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70.0" }
           startupProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 60 }
@@ -256,9 +258,9 @@ spec:
             - { name: ADMIN_ORDER_URL, value: "http://order-service:8082" }
             - { name: ADMIN_CHAT_URL, value: "http://chat-service:8085" }
             - { name: ADMIN_KAFKA_ENABLED, value: "true" }
-            - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
-            - { name: SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL, value: SASL_PLAINTEXT }
-            - { name: SPRING_KAFKA_PROPERTIES_SASL_MECHANISM, value: PLAIN }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: KAFKA_BOOTSTRAP_SERVERS } } }
+            - { name: SPRING_KAFKA_PROPERTIES_SECURITY_PROTOCOL, value: SASL_SSL }
+            - { name: SPRING_KAFKA_PROPERTIES_SASL_MECHANISM, value: SCRAM-SHA-512 }
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70.0 -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1" }
           envFrom:
             - secretRef: { name: admin-service-secrets }
@@ -319,11 +321,12 @@ spec:
             - { name: CHAT_ORDER_URL, value: "http://order-service:8082" }
             - { name: CHAT_CREDIT_URL, value: "http://credit-service:8083" }
             - { name: CHAT_KAFKA_ENABLED, value: "true" }
-            - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
-            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_PLAINTEXT }
-            - { name: KAFKA_SASL_MECHANISM, value: PLAIN }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: KAFKA_BOOTSTRAP_SERVERS } } }
+            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_SSL }
+            - { name: KAFKA_SASL_MECHANISM, value: SCRAM-SHA-512 }
             - { name: KAFKA_USERNAME, value: chat_service }
             - { name: KAFKA_PASSWORD, valueFrom: { secretKeyRef: { name: chat-kafka-client, key: KAFKA_PASSWORD } } }
+            - { name: SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG, value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(KAFKA_USERNAME)" password="$(KAFKA_PASSWORD)";' }
             - { name: CHAT_RABBIT_ENABLED, value: "true" }
             - { name: RABBITMQ_HOST, value: rabbitmq }
             - { name: RABBITMQ_PORT, value: "5672" }
@@ -377,11 +380,12 @@ spec:
             - { name: NOTIFICATION_JWT_ISSUER, value: friend-on-campus-user-service }
             - { name: NOTIFICATION_JWT_AUDIENCE, value: friend-on-campus-api }
             - { name: NOTIFICATION_KAFKA_ENABLED, value: "true" }
-            - { name: KAFKA_BOOTSTRAP_SERVERS, value: "kafka:9092" }
-            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_PLAINTEXT }
-            - { name: KAFKA_SASL_MECHANISM, value: PLAIN }
+            - { name: KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: KAFKA_BOOTSTRAP_SERVERS } } }
+            - { name: KAFKA_SECURITY_PROTOCOL, value: SASL_SSL }
+            - { name: KAFKA_SASL_MECHANISM, value: SCRAM-SHA-512 }
             - { name: KAFKA_USERNAME, value: notification_service }
             - { name: KAFKA_PASSWORD, valueFrom: { secretKeyRef: { name: notification-kafka-client, key: KAFKA_PASSWORD } } }
+            - { name: SPRING_KAFKA_PROPERTIES_SASL_JAAS_CONFIG, value: 'org.apache.kafka.common.security.scram.ScramLoginModule required username="$(KAFKA_USERNAME)" password="$(KAFKA_PASSWORD)";' }
             - { name: JAVA_TOOL_OPTIONS, value: "-XX:MaxRAMPercentage=70.0 -XX:ActiveProcessorCount=2 -XX:TieredStopAtLevel=1" }
           startupProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 120 }
           readinessProbe: { httpGet: { path: /actuator/health, port: http }, periodSeconds: 10, timeoutSeconds: 3 }
