@@ -110,7 +110,6 @@ export function MyErrandsPage() {
       </div>
       <ErrandSection
         empty="No errands are under review."
-        hideWhenEmpty
         key={`${kind}-review`}
         kind={kind}
         status="review"
