@@ -1,34 +1,58 @@
 # Notification Service
 
-Owned by **XueTing**. See [`AGENTS.md`](AGENTS.md) for the coding boundary and
-[`../TASK_SPLIT.md`](../TASK_SPLIT.md) for team responsibilities. The design, iteration plan and
-the planned shared changes are in [`DESIGN.md`](DESIGN.md). Shared proposed wire shapes
-and fixtures: [contract package](../docs/contracts/README.md). Source: D3 presentation slides 2-5,
-D1 N2H3.
+> Turns committed Order, Credit, and Chat events into private, durable in-app notifications.
 
-Spring Boot service (Java 17) that turns other services' Kafka events into per-user notifications
-and owns the notification database. Runs on port `8086`. **Status:** the read API, read marking
-with the unread count and the `credit.events` consumer are built and tested, and the service runs
-in Compose behind the gateway with its own Kafka identity and a CI job. Order lifecycle
-notifications, the UI and Kubernetes are not yet. The latest Kubernetes default-deny policies do not yet allow Notification
-traffic; its deployment iteration must add Gateway ingress and DB/User-JWKS/Kafka egress plus
-matching destination ingress (see the contract package's deployment matrix). Its broker ACLs
-already exist.
+Notification Service is a Java 17 Spring Boot service with a React frontend. It consumes
+producer-owned Kafka events, stores recipient-scoped notifications in its private PostgreSQL
+database, and serves the notification page and unread badge. It runs on port `8086` and is exposed
+through the gateway under `/api/notifications/**` and `/notifications`.
 
-## Purpose and boundary
+## Responsibilities and boundaries
 
-Provide private, durable in-app notifications about successful Order/Credit outcomes. Consume
-events, store one intended notification per recipient/business outcome, and serve that user's
-history. Do not change orders, calculate credits, send verification emails, store chats or inspect
-other databases. No email/push/SMS delivery, Admin-case notifications or translation in this scope.
-In-app only means there is no external provider to fail, so there is no channel fallback: the
-stored notification waits until the user next opens the app ([DESIGN.md](DESIGN.md#fallback)).
+- **Notification owns** event mapping, inbox deduplication, reminder scheduling, retention,
+  notification persistence, the retrieval API, and the notifications UI.
+- **Order, Credit, and Chat own source facts.** Notification reacts only to committed events and
+  never changes an order, calculates a balance, or reads a private conversation.
+- **User owns identity.** Every API recipient is the verified JWT `sub`; no caller can select
+  another user's inbox.
+- **No direct service reads.** Notification does not call another service or inspect another
+  service's database.
+- **In-app delivery only.** Email, push, SMS, verification messages, Chat content, translation,
+  and Admin-case policy are outside this service's scope.
 
-Browser -> Gateway -> Notification HTTP API. Order/Credit -> Kafka -> Notification private
-PostgreSQL database. A notification confirms a committed source fact, not an attempted action.
-It must not imply that credits were released before Credit confirms its operation.
+A notification confirms a committed source fact, not an attempted action. In-app notifications
+wait durably until the recipient next opens FoC; there is no external delivery fallback. See
+[DESIGN.md](DESIGN.md#fallback) for the approved rationale.
 
-## Authentication
+Owner: **XueTing**. See [AGENTS.md](AGENTS.md) for service invariants and
+[TASK_SPLIT.md](../TASK_SPLIT.md) for team ownership.
+
+## Documentation map
+
+| Document | Purpose |
+| --- | --- |
+| [DESIGN.md](DESIGN.md) | Notification decisions, iteration plan, and acceptance rules |
+| [Contract package](../docs/contracts/README.md) | Shared schemas, examples, and validation commands |
+| [Event communication blueprint](../docs/integration/event-communication-blueprint.md) | Event envelopes, retries, and recovery ownership |
+| [Kubernetes guide](k8s/README.md) | Local cluster deployment and network policy |
+
+## Quick start
+
+Prepare the root `.env` from `.env.example`, including the Notification database and Kafka
+credentials, then start the service and gateway from the repository root:
+
+```bash
+docker compose up -d --build notification-service gateway
+```
+
+Open the UI at <http://localhost:8088/notifications>. For service tests, ensure Docker is running
+and run `./mvnw test` from `notification-service/`. See
+[Running with Docker Compose](#running-with-docker-compose) and [Verification](#verification) for
+details.
+
+## HTTP API
+
+### Authentication
 
 All endpoints except `/actuator/health` and the OpenAPI docs require a `Bearer` JWT issued by the
 **User Service**, verified exactly as Order Service does (see the
@@ -50,7 +74,7 @@ valid `exp`/`nbf`, a supported `role` and a UUID `sub`.
 | `app.security.jwt.issuer` | `NOTIFICATION_JWT_ISSUER` | `friend-on-campus-user-service` |
 | `app.security.jwt.audience` | `NOTIFICATION_JWT_AUDIENCE` | `friend-on-campus-api` |
 
-## List my notifications
+### List my notifications
 
 `GET /api/notifications/me?page=&size=` (shared contract operation
 `notification_get__api_notifications_me` in [n2h.openapi.json](../docs/contracts/n2h.openapi.json))
@@ -106,7 +130,7 @@ type and template values, so wording can change without rewriting past notificat
 "Credit didn't confirm your credits in time" (`CREDIT_RESERVATION_TIMEOUT`), or "the credits
 couldn't be reserved" for any other code; free text is never shown.
 
-## Mark one read
+### Mark one read
 
 `PATCH /api/notifications/me/{id}/read` (shared contract operation
 `notification_patch__api_notifications_me_id_read`), no request body.
@@ -120,14 +144,14 @@ couldn't be reserved" for any other code; free text is never shown.
 
 There is no mark-all-read or mark-unread operation.
 
-## Unread count
+### Unread count
 
 `GET /api/notifications/me/unread-count` (shared contract operation
 `notification_get__api_notifications_me_unread_count`, schema `UnreadCount`) returns `200` with
 `{"unreadCount": 3}`: the caller's notifications with no `readAt`, for the bell badge. Served by
 the partial index `ix_notifications_recipient_unread`.
 
-## Errors
+### Errors
 
 All errors are RFC-7807 `application/problem+json`.
 
@@ -139,7 +163,7 @@ All errors are RFC-7807 `application/problem+json`.
 | — | 401 | Missing or invalid bearer token (`WWW-Authenticate: Bearer`) |
 | — | 403 | Any method or path outside this API |
 
-## Notifications page and header bell
+## Frontend
 
 The UI lives in `frontend/` (React, Vite, TypeScript, React Query), is packaged into the jar like
 the other services' UIs, and is served at `/notifications` with assets under
@@ -163,9 +187,15 @@ call it makes does.
   failure the wait doubles up to 5 minutes and the last count stays. A 401 or sign-out stops it.
 
 Build and test the UI from `frontend/` with `npm ci`, `npm run lint`, `npm run typecheck`,
-`npm test` and `npm run build`. `npm run dev` serves it on port 5178 against a local service.
+`npm test` and `npm run build`. `npm run dev` serves it on port `5178` against a local service.
 
-## Notifications from Credit events
+## Event consumers
+
+All consumers use the dedicated `notification-service` consumer group. Every event is validated
+against its producer-owned contract, recorded in the inbox, mapped at most once per business
+outcome, and acknowledged only after the database transaction commits.
+
+### Credit events
 
 The service consumes `credit.events` as group `notification-service`, using the shared
 [event communication blueprint](../docs/integration/event-communication-blueprint.md) envelope.
@@ -216,7 +246,7 @@ apart from Order's dead letters on the same topic. A valid unhandled fact is ack
 | `spring.kafka.properties.sasl.mechanism` | `KAFKA_SASL_MECHANISM` | `PLAIN` |
 | Kafka username / password | `KAFKA_USERNAME` / `KAFKA_PASSWORD` | `notification_service` / empty |
 
-## Notifications from Order lifecycle events
+### Order lifecycle events
 
 The service consumes `order.lifecycle.events` as group `notification-service`: one `OrderTransitioned`
 per committed Order transition, in the shared shape
@@ -263,7 +293,7 @@ snapshot. Credit outcomes are separate: a courier gets both `ORDER_COMPLETED` an
 other failure is retried three times with backoff first. Dead letters keep the original key and
 name the `notification-service` group.
 
-## Notifications from Chat messages
+### Chat messages
 
 Notification consumes `ChatMessageSent` from `chat.events` in the same independent
 `notification-service` group. Chat supplies the recipient from its current private conversation
@@ -366,7 +396,7 @@ double-counting each other. Each run logs one line with the three counts and its
 | Batch size (1–10000) | `NOTIFICATION_RETENTION_BATCH_SIZE` | `500` |
 | Interval | `NOTIFICATION_RETENTION_INTERVAL_MS` | `3600000` (one hour; the first run is a minute after startup) |
 
-## NFRs and acceptance
+## Non-functional requirements and acceptance
 
 D3 NF1: at least 99% valid retrieval success over a 30-minute normal-load run; separately classify
 unrelated auth/gateway/dependency failures and retain observable outcomes. D3 NF2: for a user with
@@ -374,15 +404,18 @@ up to 100 stored notifications, P95 retrieval <=2 seconds, measured request rece
 data, not event-processing time. Agree/record normal-load concurrency and hardware before testing;
 these slides do not specify them. Do not invent a 2,000-user commitment.
 
-Automated (built so far): each Credit mapping and message, unrelated-recipient denial, redelivery,
-same operation under a new event ID, `EVENT_ID_CONFLICT`, invalid schema -> DLT, paging limits,
-token contract and role access, idempotent and concurrent read marking, and the unread count. Still to add with later iterations: Order mapping fixtures,
-repeated acceptance cycles, out-of-order delivery, concurrent consumption, DB restart, safe reason
-rendering and no credentials in logs. Manual real-broker (after the shared wiring):
-create/accept/withdraw/pickup/deliver/complete, rejected reservation, expiry, cancellation
-compensation, independent two-user notification histories, consumer outage/replay.
+Automated coverage includes Credit and Order mappings, safe reason rendering, redelivery and
+business-operation deduplication, `EVENT_ID_CONFLICT`, invalid event delivery to DLTs, sequence-gap
+handling, pickup reminders, retention, paging limits, recipient isolation, JWT/role access,
+idempotent and concurrent read marking, the unread count, and SPA routing. PostgreSQL and Kafka
+integration tests use the real Flyway migrations through Testcontainers.
 
-## Run with Docker Compose
+Manual real-broker acceptance covers the complete create/accept/withdraw/pickup/deliver/complete
+journey, rejected reservations, expiry, cancellation compensation, independent two-user inboxes,
+and consumer outage/replay. Record the hardware and normal-load concurrency with any NF1/NF2
+result; the requirements do not imply an unapproved user-volume commitment.
+
+## Running with Docker Compose
 
 Notification Service and its private database (`notification-db`, host port `127.0.0.1:5437`) are
 part of the root `compose.yaml`. Put `NOTIFICATION_DB_NAME`, `NOTIFICATION_DB_USER`,
@@ -399,7 +432,7 @@ Service's JWKS inside the Compose network and consumes `credit.events` as Kafka 
 `notification_service`, group `notification-service`. The gateway does not wait for it, so
 `/api/notifications/**` returns a gateway error until it is up.
 
-## Run locally
+## Running locally
 
 To run it outside Compose, use your own PostgreSQL database:
 
@@ -411,7 +444,7 @@ NOTIFICATION_KAFKA_ENABLED=false ./mvnw spring-boot:run
 To consume the Compose broker from the host instead, set `KAFKA_BOOTSTRAP_SERVERS=localhost:29092`,
 `KAFKA_PASSWORD` to `KAFKA_NOTIFICATION_SERVICE_PASSWORD` and leave `NOTIFICATION_KAFKA_ENABLED` on.
 
-## Build and test
+## Verification
 
 ```bash
 ./mvnw test          # unit, web and security tests, plus PostgreSQL and Kafka integration tests
@@ -421,10 +454,10 @@ To consume the Compose broker from the host instead, set `KAFKA_BOOTSTRAP_SERVER
 The integration tests start a throwaway PostgreSQL and Kafka with Testcontainers, so **Docker must
 be running**. They apply the real Flyway migration.
 
-## Handoffs
+## Ownership and handoffs
 
-XueTing owns the consumer, inbox and mapping, and Notification's Kafka (identity, ACLs, topics, DLTs,
-broker credentials), Kubernetes and Compose/CI wiring, checked with `compose_env_check`. XueTing also
-implements Order lifecycle producer coverage in Order. Eldridge approves Credit payloads; no
-financial changes belong here. Darryl edits the shared contract package. Existing Admin case
-notifications remain deferred.
+XueTing owns the consumers, inbox and mapping, and Notification's Kafka identity, ACLs, topics,
+DLTs, broker credentials, Kubernetes, and Compose/CI wiring, checked with `compose_env_check`.
+XueTing also implements Order lifecycle producer coverage in Order. Eldridge approves Credit and
+Chat payloads; no financial or conversation-storage changes belong here. Darryl edits the shared
+contract package. Existing Admin case notifications remain deferred.
