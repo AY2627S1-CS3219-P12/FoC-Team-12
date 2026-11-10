@@ -462,10 +462,15 @@ After two generic failures for the same email in one browser session, the fronte
 to wait 30 seconds or reset the password. This is a browser-only usability aid, not a security control,
 and is shown for unknown emails too so it does not reveal whether an account exists.
 
-After login, the profile shows persisted email, username, and the current effective role. A user can
-change their username or password from this screen; password changes require the current password and
-sign the browser session out after success. Role assignments, account status, and creation time remain
-protected API data; account status and creation time are not shown in the everyday profile UI.
+After login, the signed-in Home follows the shared editorial design with a task-led hero, real links
+for requesting or running errands, and responsive shortcuts to Errands, Suppliers and Credits. The
+reference design's example activity counts, search results and stock errand imagery are deliberately
+not reproduced because User Service does not own authoritative data for them. The existing local brand
+artwork provides the visual hero instead. The profile remains on Home and shows persisted email,
+username, and the current effective role. A user can change their username or password from this
+screen; password changes require the current password and sign the browser session out after success.
+Role assignments, account status, and creation time remain protected API data; account status and
+creation time are not shown in the everyday profile UI.
 
 Every new login starts as Requester. The persistent Profile and Supplier headers use an accessible
 **Acting as** segmented selector with `Requester` and `Courier` choices; selecting Courier exchanges

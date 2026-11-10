@@ -159,6 +159,13 @@ describe('Public supplier directory', () => {
       screen.getByRole('heading', { name: 'Campus suppliers' }),
     ).toBeInTheDocument()
     expect(await screen.findByText("Anna's x Soup Union")).toBeInTheDocument()
+    const supplierCard = screen
+      .getByRole('heading', { name: "Anna's x Soup Union" })
+      .closest('article')!
+    expect(within(supplierCard).getByText('Food')).toBeInTheDocument()
+    expect(
+      within(supplierCard).getByRole('link', { name: 'View details' }),
+    ).toHaveAttribute('href', `/suppliers/${supplierId}`)
     expect(screen.getByText('Central Library · Floor 1')).toBeInTheDocument()
     expect(screen.getByText('Next to NUS Co-op')).toBeInTheDocument()
     expect(screen.getByText(/9:00 am–6:00 pm/i)).toBeInTheDocument()
@@ -343,6 +350,7 @@ describe('Public supplier details', () => {
     expect(
       await screen.findByRole('heading', { name: "Anna's x Soup Union" }),
     ).toBeInTheDocument()
+    expect(screen.getByText('Campus supplier')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute(
       'aria-pressed',
       'true',

@@ -1,10 +1,11 @@
+import { ArrowRight, Clock3, MapPin } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import arrowIcon from '../assets/foc-arrow.svg'
 import type { Supplier } from '../api/supplierQueries'
 import {
   formatBuilding,
   formatOperatingHours,
 } from '../utils/supplierFormatting'
+import { supplierPresentation } from '../utils/supplierPresentation'
 import styles from './DirectoryComponents.module.css'
 
 interface SupplierCardProps {
@@ -13,28 +14,43 @@ interface SupplierCardProps {
 }
 
 export function SupplierCard({ supplier, returnTo }: SupplierCardProps) {
+  const { Icon, tone } = supplierPresentation(supplier.type)
+
   return (
-    <article className={styles.card}>
+    <article className={`${styles.card} ${styles[tone]}`}>
+      <div className={styles.cardTop}>
+        <span aria-hidden="true" className={styles.cardIcon}>
+          <Icon />
+        </span>
+        <span className={styles.badge}>{supplier.type ?? 'Campus location'}</span>
+      </div>
       <div className={styles.cardHeading}>
         <h2>{supplier.name}</h2>
-        <span className={styles.badge}>{supplier.type}</span>
+        {supplier.locationDescription && (
+          <p className={styles.cardDescription}>
+            {supplier.locationDescription}
+          </p>
+        )}
       </div>
       <dl className={styles.cardDetails}>
-        <div>
-          <dt>Location</dt>
-          <dd>{formatBuilding(supplier.building, supplier.floor)}</dd>
-        </div>
-        {supplier.locationDescription && (
+        <div className={styles.metaRow}>
+          <MapPin aria-hidden="true" />
           <div>
-            <dt>Directions</dt>
-            <dd>{supplier.locationDescription}</dd>
+            <dt>Location</dt>
+            <dd>{formatBuilding(supplier.building, supplier.floor)}</dd>
           </div>
-        )}
-        <div>
-          <dt>Operating hours</dt>
-          <dd>
-            {formatOperatingHours(supplier.openingTime, supplier.closingTime)}
-          </dd>
+        </div>
+        <div className={styles.metaRow}>
+          <Clock3 aria-hidden="true" />
+          <div>
+            <dt>Operating hours</dt>
+            <dd>
+              {formatOperatingHours(
+                supplier.openingTime,
+                supplier.closingTime,
+              )}
+            </dd>
+          </div>
         </div>
       </dl>
       <Link
@@ -43,7 +59,7 @@ export function SupplierCard({ supplier, returnTo }: SupplierCardProps) {
         to={`/suppliers/${supplier.id}`}
       >
         <span>View details</span>
-        <img alt="" height="20" src={arrowIcon} width="20" />
+        <ArrowRight aria-hidden="true" />
       </Link>
     </article>
   )

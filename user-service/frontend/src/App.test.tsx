@@ -25,6 +25,26 @@ const fillLogin = async () => {
   return user
 }
 
+test('presents the upgraded signed-out account journey and live supplier handoff', async () => {
+  render(<App />)
+  const user = userEvent.setup()
+
+  expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+  expect(screen.getByLabelText('Email')).toHaveAttribute('placeholder', 'e1234567@u.nus.edu')
+  expect(screen.getByLabelText('Password')).toHaveAttribute('placeholder', 'Enter your password')
+  expect(screen.getByText('Only NUS student emails can join.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Browse campus suppliers/ })).toHaveAttribute('href', '/suppliers')
+
+  await user.click(screen.getByRole('button', { name: 'Create account' }))
+
+  expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument()
+  const progress = screen.getByRole('list', { name: 'Account creation progress' })
+  expect(within(progress).getByText('Account')).toBeInTheDocument()
+  expect(within(progress).getByText('Verify email')).toBeInTheDocument()
+  expect(screen.getByText('Use 15–64 characters.')).toBeInTheDocument()
+  expect(screen.getByLabelText('Username')).toHaveAttribute('placeholder', 'Choose a username')
+})
+
 test('signs in successfully and stores the browser session', async () => {
   sessionStorage.setItem('foc.login-failures:alice@u.nus.edu', '2')
   vi.stubGlobal('fetch', vi.fn()
@@ -148,6 +168,13 @@ test('uses the Requester and Courier selector to replace a session token', async
   render(<App />)
   const user = userEvent.setup()
 
+  expect(screen.getByRole('heading', { name: 'Your campus. A thousand small favours.' })).toBeInTheDocument()
+  expect(screen.getByRole('img', { name: /connects students who need a hand/i })).toBeInTheDocument()
+  const shortcuts = screen.getByRole('navigation', { name: 'Campus shortcuts' })
+  expect(within(shortcuts).getByRole('link', { name: /Post a campus request/ })).toHaveAttribute('href', '/errands/new')
+  expect(within(shortcuts).getByRole('link', { name: /Browse open requests/ })).toHaveAttribute('href', '/errands/browse')
+  expect(within(shortcuts).getByRole('link', { name: /Find campus suppliers/ })).toHaveAttribute('href', '/suppliers')
+  expect(within(shortcuts).getByRole('link', { name: /Check your credits/ })).toHaveAttribute('href', '/credits')
   expect(await screen.findByRole('heading', { name: 'Profile' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Browse suppliers/ })).toHaveAttribute('href', '/suppliers')
   expect(screen.getByRole('link', { name: /Request help/ })).toHaveAttribute('href', '/errands/new')
@@ -221,6 +248,7 @@ test('opens the dashboard after the administrator selects Admin mode', async () 
   expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute('href', '/?view=users')
   expect(screen.getByRole('button', { name: 'Switch to User' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
+  expect(screen.queryByRole('link', { name: /View my credits/ })).not.toBeInTheDocument()
   const accountAccess = screen.getByText('Account access').parentElement
   expect(accountAccess).not.toBeNull()
   expect(within(accountAccess!).getByText('Admin')).toBeInTheDocument()

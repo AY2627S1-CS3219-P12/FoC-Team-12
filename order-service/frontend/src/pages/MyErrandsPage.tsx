@@ -1,21 +1,14 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { ArrowRight, ClipboardList, RotateCcw } from 'lucide-react'
+import { ClipboardList } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { fetchMyOrders, type Order, type OrderState } from '../api/orderApi'
+import { fetchMyOrders, type OrderState } from '../api/orderApi'
+import { ErrandCard } from '../components/ErrandCard'
 import { ErrandTabs } from '../components/ErrandTabs'
-import { RouteLine } from '../components/RouteLine'
 import { ErrandListSkeleton } from '../components/Skeleton'
-import { StateBadge } from '../components/StateBadge'
 import { StatePanel } from '../components/StatePanel'
 import { useSessionRole } from '../hooks/useSessionRole'
-import {
-  credits,
-  formatDeadline,
-  REPOSTABLE_STATES,
-  repostPath,
-  stateLabel,
-} from '../utils/orderFormatting'
+import { formatDeadline, stateLabel } from '../utils/orderFormatting'
 
 type Kind = 'requested' | 'delivered'
 type Status = 'active' | 'past' | 'review'
@@ -47,13 +40,17 @@ const LISTS: {
 /** F9: the caller's errands for the current role, in progress and finished. */
 export function MyErrandsPage() {
   // The header role switch picks the list: Requester sees errands they posted, Courier errands they run.
-  const kind: Kind = useSessionRole() === 'COURIER' ? 'delivered' : 'requested'
+  const role = useSessionRole()
+  const kind: Kind = role === 'COURIER' ? 'delivered' : 'requested'
   const current = LISTS.find((item) => item.value === kind)!
 
   return (
     <>
       <div className="page-intro">
         <div>
+          <p className="eyebrow">
+            {role === 'COURIER' ? 'Courier activity' : 'Requester activity'}
+          </p>
           <h1>My errands</h1>
           <p>
             {kind === 'requested'
@@ -183,7 +180,12 @@ function ErrandSection({
                 canRepost={kind === 'requested'}
                 key={order.id}
                 order={order}
-                status={status}
+                showPendingReward={status === 'active'}
+                timingLabel={
+                  status !== 'past'
+                    ? `Pick up by ${formatDeadline(order.pickupDeadline)}`
+                    : `Finished ${formatDeadline(order.stateChangedAt)}`
+                }
               />
             ))}
           </ul>
@@ -213,72 +215,5 @@ function ErrandSection({
         </>
       )}
     </section>
-  )
-}
-
-function ErrandCard({
-  order,
-  status,
-  canRepost,
-}: {
-  order: Order
-  status: Status
-  canRepost: boolean
-}) {
-  return (
-    <li
-      className={`card errand-card${order.reviewCaseId && !order.reviewResolved ? ' errand-under-review' : ''}`}
-    >
-      <div className="errand-card-head">
-        <h3>{order.title}</h3>
-        <span className="reward">{order.creditReward} cr</span>
-      </div>
-      <RouteLine order={order} />
-      {order.reviewCaseId && !order.reviewResolved && (
-        <p className="subtle">
-          Paused at: {stateLabel(order.state)} · Errand actions are paused
-          during review.
-        </p>
-      )}
-      <p>
-        {status !== 'past'
-          ? `Pick up by ${formatDeadline(order.pickupDeadline)}`
-          : `Finished ${formatDeadline(order.stateChangedAt)}`}
-      </p>
-      {status === 'active' && order.pendingCreditReward !== null && (
-        <p className="subtle">
-          Reward change to {credits(order.pendingCreditReward)} pending
-        </p>
-      )}
-      <div className="errand-card-foot">
-        {order.reviewCaseId ? (
-          <span className="review-badge">
-            {order.reviewResolved ? 'Resolved after review' : 'Under review'}
-          </span>
-        ) : (
-          <StateBadge state={order.state} />
-        )}
-        <div className="errand-card-links">
-          {canRepost &&
-            (!order.reviewCaseId || order.reviewResolved) &&
-            REPOSTABLE_STATES.includes(order.state) && (
-              <Link
-                aria-label={`Post ${order.title} again`}
-                className="text-link"
-                to={repostPath(order.id)}
-              >
-                <RotateCcw aria-hidden="true" /> Post again
-              </Link>
-            )}
-          <Link
-            aria-label={`View ${order.title}`}
-            className="text-link"
-            to={`/errands/${order.id}`}
-          >
-            View <ArrowRight aria-hidden="true" />
-          </Link>
-        </div>
-      </div>
-    </li>
   )
 }

@@ -135,6 +135,63 @@ class SharedTypefaceTest(unittest.TestCase):
                 )
 
 
+# design.md "Colour" and "Responsive and accessible delivery": every keyboard focus ring uses
+# the shared blue, and interactive hover states must not fall back to the retired green palette.
+FOCUS_STYLES = {
+    "user": (
+        ROOT / "user-service/frontend/src/styles.css",
+        ROOT / "user-service/frontend/src/styles.css",
+        "--foc-focus",
+    ),
+    "supplier": (
+        ROOT / "supplier-service/frontend/src/styles/tokens.css",
+        ROOT / "supplier-service/frontend/src/styles/global.css",
+        "--foc-focus",
+    ),
+    "order": (
+        ROOT / "order-service/frontend/src/styles.css",
+        ROOT / "order-service/frontend/src/styles.css",
+        "--focus",
+    ),
+    "credit": (
+        ROOT / "credit-service/frontend/src/styles.css",
+        ROOT / "credit-service/frontend/src/styles.css",
+        "--focus",
+    ),
+    "admin": (
+        ROOT / "admin-service/frontend/src/styles.css",
+        ROOT / "admin-service/frontend/src/styles.css",
+        "--focus",
+    ),
+    "notification": (
+        ROOT / "notification-service/frontend/src/styles.css",
+        ROOT / "notification-service/frontend/src/styles.css",
+        "--focus",
+    ),
+}
+
+
+class SharedInteractionDesignTest(unittest.TestCase):
+    def test_every_frontend_uses_the_shared_keyboard_focus_colour(self):
+        for service, (tokens_path, focus_path, variable) in FOCUS_STYLES.items():
+            with self.subTest(service=service):
+                tokens = declarations(tokens_path.read_text(), ":root")
+                self.assertEqual("#5068b3", tokens.get(variable))
+                focus = declarations(focus_path.read_text(), ":focus-visible")
+                self.assertEqual(f"3px solid var({variable})", focus.get("outline"))
+
+    def test_retired_green_hover_colour_is_not_used(self):
+        paths = {path for path, _, _ in FOCUS_STYLES.values()}
+        paths.update(path for _, path, _ in FOCUS_STYLES.values())
+        paths.add(
+            ROOT
+            / "supplier-service/frontend/src/components/ConfirmationDialog.module.css"
+        )
+        for path in paths:
+            with self.subTest(path=path.relative_to(ROOT)):
+                self.assertNotIn("#194f3d", path.read_text().lower())
+
+
 class SharedNotificationBellTest(unittest.TestCase):
     def test_every_frontend_has_the_same_bell(self):
         for source in BELL_SOURCES:

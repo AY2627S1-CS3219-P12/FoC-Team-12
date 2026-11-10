@@ -57,6 +57,7 @@ describe('MyErrandsPage', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
+    expect(screen.getByText('Requester activity')).toBeInTheDocument()
     expect(
       await within(section('Active')).findByRole('heading', {
         name: 'Get my lunch',
@@ -139,6 +140,7 @@ describe('MyErrandsPage', () => {
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
+    expect(screen.getByText('Courier activity')).toBeInTheDocument()
     expect(
       await within(section('Active')).findByRole('heading', {
         name: 'Carry my laptop',

@@ -1,4 +1,11 @@
 import { useEffect, useState } from 'react'
+import {
+  ArrowLeft,
+  ArrowRight,
+  ClipboardList,
+  RefreshCw,
+  Search,
+} from 'lucide-react'
 import { AdminShell } from './components/AdminShell'
 import { readSession } from './auth/session'
 import { AccessError, checkAccess } from './access'
@@ -188,23 +195,10 @@ function Workspace({ session }: { session: ReturnType<typeof readSession> }) {
 }
 
 function Arrow({ direction = 'forward' }: { direction?: 'forward' | 'back' }) {
-  return (
-    <svg
-      className="ui-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      aria-hidden="true"
-    >
-      <path
-        d={
-          direction === 'back'
-            ? 'M19 12H5m6 6-6-6 6-6'
-            : 'M5 12h14m-6-6 6 6-6 6'
-        }
-      />
-    </svg>
+  return direction === 'back' ? (
+    <ArrowLeft aria-hidden="true" className="ui-icon" />
+  ) : (
+    <ArrowRight aria-hidden="true" className="ui-icon" />
   )
 }
 
@@ -703,16 +697,7 @@ export function CaseQueue({ actor }: { actor: string }) {
           onClick={state.retry}
           type="button"
         >
-          <svg
-            className="ui-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            aria-hidden="true"
-          >
-            <path d="M20 7v5h-5M4 17v-5h5M5.5 8a7 7 0 0 1 11.8-2L20 9M4 15l2.7 3A7 7 0 0 0 18.5 16" />
-          </svg>
+          <RefreshCw aria-hidden="true" className="ui-icon" />
           Refresh
         </button>
       </div>
@@ -749,17 +734,7 @@ export function CaseQueue({ actor }: { actor: string }) {
             placeholder="Enter a case or errand ID"
           />
           <button type="submit">
-            <svg
-              className="ui-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              aria-hidden="true"
-            >
-              <circle cx="10.5" cy="10.5" r="6.5" />
-              <path d="m16 16 5 5" />
-            </svg>
+            <Search aria-hidden="true" className="ui-icon" />
             Search
           </button>
           {filters.query && (
@@ -796,15 +771,7 @@ export function CaseQueue({ actor }: { actor: string }) {
             {state.data.content.length === 0 ? (
               <div className="queue-state">
                 <span className="empty-queue-icon" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    className="ui-icon"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                  >
-                    <path d="M8 5h-2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 3h6v4H9zM8 12h8M8 16h5" />
-                  </svg>
+                  <ClipboardList aria-hidden="true" className="ui-icon" />
                 </span>
                 <h3>
                   {emptyOpen ? 'No open cases' : 'No cases match these filters'}

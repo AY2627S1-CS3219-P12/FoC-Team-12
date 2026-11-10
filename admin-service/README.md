@@ -20,10 +20,10 @@ record Chat/transport owner sign-off or deploy the shared drafts.
 ## Case review layout
 
 The case workspace groups each statement and its private chat, credit correction and ban controls
-under the reporting account's card. Requester/courier labels come from the existing errand evidence;
+under each verified participant's card. Requester/courier labels come from the existing errand evidence;
 when evidence is unavailable, reporting-account labels and account references remain explicit.
-Historical courier assignments are retained. Accounts without a report are visible in the evidence
-but do not gain case-action eligibility.
+Historical courier assignments are retained. Verified participants can receive reviewer actions
+and private follow-up even before submitting their own statement.
 Errand descriptions and participant statements are displayed verbatim from their API fields.
 The dashboard does not generate, summarize or rephrase case content and has no LLM dependency.
 
@@ -396,7 +396,7 @@ attachment metadata `{id,contentType,filename,size}`. Admin's internal initiatio
 the documented `{conversationId,caseId,orderId,participantUserId,readOnly}` shape.
 
 `GET /api/admin/cases/{caseId}/conversations` returns Admin's confirmed references to a current
-active ADMIN. `GET /api/admin/reports/{caseId}/conversations` returns at most the current reporting
+active ADMIN. `GET /api/admin/reports/{caseId}/conversations` returns at most the current verified
 participant's own reference in REQUESTER/COURIER mode. Both return arrays, use `Cache-Control:
 no-store`, check current User eligibility and read only Admin's database. Missing/unauthorized
 cases are 404; User outage is 503. An empty array means no locally confirmed reference, not proof

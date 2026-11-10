@@ -10,12 +10,15 @@ import {
   EyeOff,
   HandHeart,
   House,
+  KeyRound,
+  MailCheck,
   MapPin,
   PackageCheck,
   Search,
   ShieldCheck,
   Sparkles,
   Store,
+  UserPlus,
 } from 'lucide-react'
 
 import { ApiError, api, type UserProfile } from './api/client'
@@ -57,7 +60,8 @@ function PasswordInput({
 }) {
   const [visible, setVisible] = useState(false)
   return <span className="password-control">
-    <input ref={inputRef} type={visible ? 'text' : 'password'} autoComplete={autoComplete} autoFocus={autoFocus} value={value}
+    <input ref={inputRef} type={visible ? 'text' : 'password'} autoComplete={autoComplete} autoFocus={autoFocus}
+      placeholder={autoComplete === 'current-password' ? 'Enter your password' : autoComplete === 'new-password' ? '15–64 characters' : undefined} value={value}
       onChange={event => onChange(event.target.value)} onKeyDown={onKeyDown} disabled={disabled} aria-invalid={invalid} />
     <button type="button" className="password-toggle" aria-label={visible ? 'Hide password' : 'Show password'}
       aria-pressed={visible} onClick={() => setVisible(current => !current)} disabled={disabled}>
@@ -767,37 +771,89 @@ export function App() {
       {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
       {adminUsersPage
         ? <main className="admin-users-main"><AdminUserManagement currentUserId={session.userId} /></main>
-        : <main className="profile-main"><section className="dashboard-page" aria-labelledby="dashboard-title">
-      <header className="dashboard-hero">
+        : <main className="profile-main"><section className={`dashboard-page ${adminMode ? 'admin-home' : 'participant-home'}`} aria-labelledby="dashboard-title">
+      {adminMode ? <header className="dashboard-hero">
         <div>
-          <p className="eyebrow">{adminMode ? 'Administration' : 'Your campus dashboard'}</p>
-          <h1 id="dashboard-title">{adminMode ? 'Keep FoC running smoothly.' : <>Good to see you, <span>{session.username}</span>.</>}</h1>
-          <p className="intro">{adminMode
-            ? 'Manage the people and places that keep Friend on Campus useful and safe.'
-            : 'What would make your day a little easier?'}</p>
+          <p className="eyebrow">Administration</p>
+          <h1 id="dashboard-title">Keep FoC running smoothly.</h1>
+          <p className="intro">Manage the people and places that keep Friend on Campus useful and safe.</p>
         </div>
-      </header>
+      </header> : <>
+        <header className="campus-home-hero">
+          <div className="campus-home-copy">
+            <p className="campus-home-kicker"><Sparkles aria-hidden="true" /> Made for your campus day</p>
+            <h1 id="dashboard-title">Your campus.<br /><span>A thousand</span> small favours.</h1>
+            <p className="campus-home-lede">Get everyday campus errands done by students already heading your way. Simple, trusted and made for the rhythm of university life.</p>
+            <nav className="campus-home-actions" aria-label="Start on Friend on Campus">
+              <a className="campus-home-primary" href="/errands/new" onClick={event => {
+                if (session.role === 'REQUESTER') return
+                event.preventDefault()
+                void selectWorkspaceRole('REQUESTER').then(changed => { if (changed) navigateTo('/errands/new') })
+              }}>
+                Request help <ArrowRight aria-hidden="true" />
+              </a>
+              <a className="campus-home-secondary" href="/errands/browse" onClick={event => {
+                if (session.role === 'COURIER') return
+                event.preventDefault()
+                void selectWorkspaceRole('COURIER').then(changed => { if (changed) navigateTo('/errands/browse') })
+              }}>
+                Run an errand <ArrowUpRight aria-hidden="true" />
+              </a>
+            </nav>
+            <div className="campus-home-trust" aria-label="Friend on Campus safeguards">
+              <span><CheckCircle2 aria-hidden="true" /> NUS email verified</span>
+              <span><MapPin aria-hidden="true" /> Campus-only handoffs</span>
+              <span><Coins aria-hidden="true" /> Credit rewards</span>
+            </div>
+          </div>
+          <div className="campus-home-visual" role="img" aria-label="Friend on Campus connects students who need a hand with students already heading their way">
+            <span className="campus-home-orbit campus-home-orbit-one" aria-hidden="true" />
+            <span className="campus-home-orbit campus-home-orbit-two" aria-hidden="true" />
+            <div className="campus-home-brand-art" aria-hidden="true"><img alt="" src={bagIcon} /></div>
+            <div className="campus-home-float campus-home-float-request" aria-hidden="true">
+              <span className="campus-home-float-icon coral"><HandHeart /></span>
+              <span><strong>Need a hand?</strong><small>Post a pickup or delivery</small></span>
+            </div>
+            <div className="campus-home-float campus-home-float-courier" aria-hidden="true">
+              <span className="campus-home-float-icon blue"><PackageCheck /></span>
+              <span><strong>Free to help?</strong><small>Find an errand along your route</small></span>
+            </div>
+          </div>
+        </header>
 
-      {!adminMode && <nav className="dashboard-actions" aria-label="Start an errand">
-        <a className="dashboard-action dashboard-action-request" href="/errands/new" onClick={event => {
-          if (session.role === 'REQUESTER') return
-          event.preventDefault()
-          void selectWorkspaceRole('REQUESTER').then(changed => { if (changed) navigateTo('/errands/new') })
-        }}>
-          <span className="dashboard-action-icon"><HandHeart aria-hidden="true" /></span>
-          <span><small>I need a hand</small><strong>Request help</strong><em>Post a pickup or delivery and choose the credit reward.</em></span>
-          <ArrowUpRight aria-hidden="true" />
-        </a>
-        <a className="dashboard-action dashboard-action-courier" href="/errands/browse" onClick={event => {
-          if (session.role === 'COURIER') return
-          event.preventDefault()
-          void selectWorkspaceRole('COURIER').then(changed => { if (changed) navigateTo('/errands/browse') })
-        }}>
-          <span className="dashboard-action-icon"><PackageCheck aria-hidden="true" /></span>
-          <span><small>I have time to help</small><strong>Run an errand</strong><em>Find an open request nearby and earn credits.</em></span>
-          <ArrowUpRight aria-hidden="true" />
-        </a>
-      </nav>}
+        <section className="campus-home-shortcuts" aria-labelledby="shortcut-title">
+          <div className="campus-home-section-heading">
+            <div><p className="eyebrow">Find your shortcut</p><h2 id="shortcut-title">What would make today easier?</h2></div>
+            <p>Move quickly between the everyday campus tasks that Friend on Campus supports.</p>
+          </div>
+          <nav className="campus-home-shortcut-grid" aria-label="Campus shortcuts">
+            <a className="campus-home-shortcut coral" href="/errands/new" onClick={event => {
+              if (session.role === 'REQUESTER') return
+              event.preventDefault()
+              void selectWorkspaceRole('REQUESTER').then(changed => { if (changed) navigateTo('/errands/new') })
+            }}>
+              <span className="campus-home-shortcut-icon"><HandHeart aria-hidden="true" /></span><span className="campus-home-shortcut-index">01</span>
+              <span className="campus-home-shortcut-copy"><strong>Post a campus request</strong><small>Ask for a pickup or delivery.</small></span><span className="campus-home-shortcut-arrow"><ArrowRight aria-hidden="true" /></span>
+            </a>
+            <a className="campus-home-shortcut blue" href="/errands/browse" onClick={event => {
+              if (session.role === 'COURIER') return
+              event.preventDefault()
+              void selectWorkspaceRole('COURIER').then(changed => { if (changed) navigateTo('/errands/browse') })
+            }}>
+              <span className="campus-home-shortcut-icon"><PackageCheck aria-hidden="true" /></span><span className="campus-home-shortcut-index">02</span>
+              <span className="campus-home-shortcut-copy"><strong>Browse open requests</strong><small>Help along a route you already take.</small></span><span className="campus-home-shortcut-arrow"><ArrowRight aria-hidden="true" /></span>
+            </a>
+            <a className="campus-home-shortcut gold" href="/suppliers">
+              <span className="campus-home-shortcut-icon"><Store aria-hidden="true" /></span><span className="campus-home-shortcut-index">03</span>
+              <span className="campus-home-shortcut-copy"><strong>Find campus suppliers</strong><small>Locate food, printing and essentials.</small></span><span className="campus-home-shortcut-arrow"><ArrowRight aria-hidden="true" /></span>
+            </a>
+            <a className="campus-home-shortcut mauve" href="/credits">
+              <span className="campus-home-shortcut-icon"><Coins aria-hidden="true" /></span><span className="campus-home-shortcut-index">04</span>
+              <span className="campus-home-shortcut-copy"><strong>Check your credits</strong><small>Review balance and transaction history.</small></span><span className="campus-home-shortcut-arrow"><ArrowRight aria-hidden="true" /></span>
+            </a>
+          </nav>
+        </section>
+      </>}
 
       <div className="dashboard-content">
         <section className="dashboard-explore" aria-labelledby="explore-title">
@@ -807,7 +863,7 @@ export function App() {
             {!adminMode && <a className="service-card" href="/suppliers"><Store aria-hidden="true" /><strong>Browse suppliers</strong><span>Find food, coffee, printing and shopping across campus.</span><ArrowRight aria-hidden="true" /></a>}
             {adminMode && <a className="service-card admin-card" href="/admin/suppliers"><Store aria-hidden="true" /><strong>Manage suppliers</strong><span>Create, update, activate or remove campus locations.</span><ArrowRight aria-hidden="true" /></a>}
             {adminMode && <a className="service-card admin-card" href="/?view=users"><ShieldCheck aria-hidden="true" /><strong>Manage users</strong><span>Manage roles, account access and account status.</span><ArrowRight aria-hidden="true" /></a>}
-            <a className="service-card" href="/credits"><Coins aria-hidden="true" /><strong>View my credits</strong><span>See available credits, reservations and transaction history.</span><ArrowRight aria-hidden="true" /></a>
+            {!adminMode && <a className="service-card" href="/credits"><Coins aria-hidden="true" /><strong>View my credits</strong><span>See available credits, reservations and transaction history.</span><ArrowRight aria-hidden="true" /></a>}
           </nav>
         </section>
 
@@ -931,30 +987,30 @@ export function App() {
       <li className={view === 'email-verification' ? 'current' : ''}><span>2</span>Verify email</li>
     </ol>}
 
-    {view === 'login' && <form onSubmit={login} noValidate aria-busy={busy} aria-label="Sign in form">
-      <h1 id="account-title">Sign in</h1>
-      <p className="intro">Use your NUS student email to continue.</p>
-      <label>Email<input ref={loginEmailRef} type="email" autoComplete="email" value={loginEmail} onChange={event => setLoginEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, loginPasswordRef)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
+    {view === 'login' && <form className="auth-form" onSubmit={login} noValidate aria-busy={busy} aria-label="Sign in form">
+      <div className="auth-form-heading"><div><p className="auth-form-kicker">Welcome back</p><h1 id="account-title">Sign in</h1>
+      <p className="intro">Use your NUS student email to continue.</p></div></div>
+      <label>Email<input ref={loginEmailRef} type="email" autoComplete="email" placeholder="e1234567@u.nus.edu" required value={loginEmail} onChange={event => setLoginEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, loginPasswordRef)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
       <label>Password<PasswordInput value={loginPassword} onChange={setLoginPassword} inputRef={loginPasswordRef} disabled={busy} invalid={loginState === 'error'} autoComplete="current-password" /></label>
-      <button disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
+      <button className="auth-submit" disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
       <button type="button" className="text-button" onClick={openPasswordReset}>Forgot password?</button>
       <a className="guest-link" href="/suppliers">Browse suppliers without signing in <ArrowRight aria-hidden="true" /></a>
       {loginMessage && <p role={loginState === 'error' ? 'alert' : 'status'} className={loginState === 'error' ? 'error' : 'success'}>{loginMessage}</p>}
     </form>}
 
-    {view === 'register' && <form onSubmit={register} noValidate aria-busy={busy} aria-label="Create account form">
-      <h1 id="account-title">Create your account</h1>
-      <p className="intro">Use your NUS student email to join the campus community.</p>
-      <label>Email<input ref={registrationEmailRef} type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationUsernameRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
-      <label>Username<input ref={registrationUsernameRef} value={username} maxLength={20} onChange={event => setUsername(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationPasswordRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
-      <label>Password<PasswordInput value={password} onChange={setPassword} inputRef={registrationPasswordRef} disabled={busy} invalid={registrationState === 'error'} autoComplete="new-password" /></label>
-      <button disabled={busy}>{registrationState === 'loading' ? 'Creating account…' : 'Create account'}</button>
+    {view === 'register' && <form className="auth-form" onSubmit={register} noValidate aria-busy={busy} aria-label="Create account form">
+      <div className="auth-form-heading"><span className="auth-view-icon auth-view-icon-coral" aria-hidden="true"><UserPlus /></span><div><p className="auth-form-kicker">Join the community</p><h1 id="account-title">Create your account</h1>
+      <p className="intro">Use your NUS student email to join the campus community.</p></div></div>
+      <label>Email<input ref={registrationEmailRef} type="email" autoComplete="email" placeholder="e1234567@u.nus.edu" required value={email} onChange={event => setEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationUsernameRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
+      <label>Username<input ref={registrationUsernameRef} autoComplete="username" placeholder="Choose a username" required value={username} maxLength={20} onChange={event => setUsername(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationPasswordRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label><small className="auth-field-hint">Up to 20 characters.</small>
+      <label>Password<PasswordInput value={password} onChange={setPassword} inputRef={registrationPasswordRef} disabled={busy} invalid={registrationState === 'error'} autoComplete="new-password" /></label><small className="auth-field-hint">Use 15–64 characters.</small>
+      <button className="auth-submit" disabled={busy}>{registrationState === 'loading' ? 'Creating account…' : 'Create account'}</button>
       {registrationMessage && <p role={registrationState === 'error' ? 'alert' : 'status'} className={registrationState}>{registrationMessage}</p>}
     </form>}
 
-    {view === 'email-verification' && <form onSubmit={event => { event.preventDefault(); void verifyEmail() }} noValidate aria-busy={busy} aria-label="Verify email form">
-      <h1 id="account-title">Verify your email</h1>
-      <p className="intro">Enter the six-digit code we sent to your NUS email.</p>
+    {view === 'email-verification' && <form className="auth-form auth-verification-form" onSubmit={event => { event.preventDefault(); void verifyEmail() }} noValidate aria-busy={busy} aria-label="Verify email form">
+      <div className="auth-form-heading"><span className="auth-view-icon" aria-hidden="true"><MailCheck /></span><div><p className="auth-form-kicker">One last step</p><h1 id="account-title">Verify your email</h1>
+      <p className="intro">Enter the six-digit code we sent to your NUS email.</p></div></div>
       <p className="verification-email">Verification code sent to <strong>{verificationEmail}</strong>.</p>
       <label>Verification code<OtpInput value={verificationDigits} onChange={setVerificationDigits} onComplete={code => { void verifyEmail(code) }} focusFirst={verificationFocusVersion} disabled={busy} invalid={verificationState === 'error'} /></label>
       {verificationMessage && <p role={verificationState === 'error' ? 'alert' : 'status'} className={verificationState}>{verificationMessage}</p>}
@@ -966,18 +1022,18 @@ export function App() {
       <button type="button" className="text-button" onClick={() => show('login')}>Back to sign in</button>
     </form>}
 
-    {view === 'reset-request' && <form onSubmit={requestPasswordReset} noValidate aria-busy={busy} aria-label="Request password reset form">
-      <h1 id="account-title">Reset your password</h1>
-      <p className="intro">Enter your email and we’ll send you a reset code.</p>
-      <label>Email<input type="email" autoFocus autoComplete="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} disabled={busy} aria-invalid={resetRequestState === 'error'} /></label>
-      <button disabled={busy}>{resetRequestState === 'loading' ? 'Sending…' : 'Send reset code'}</button>
+    {view === 'reset-request' && <form className="auth-form" onSubmit={requestPasswordReset} noValidate aria-busy={busy} aria-label="Request password reset form">
+      <div className="auth-form-heading"><span className="auth-view-icon auth-view-icon-gold" aria-hidden="true"><KeyRound /></span><div><p className="auth-form-kicker">Account recovery</p><h1 id="account-title">Reset your password</h1>
+      <p className="intro">Enter your email and we’ll send you a reset code.</p></div></div>
+      <label>Email<input type="email" autoFocus autoComplete="email" placeholder="e1234567@u.nus.edu" required value={resetEmail} onChange={event => setResetEmail(event.target.value)} disabled={busy} aria-invalid={resetRequestState === 'error'} /></label>
+      <button className="auth-submit" disabled={busy}>{resetRequestState === 'loading' ? 'Sending…' : 'Send reset code'}</button>
       {resetRequestMessage && <p role={resetRequestState === 'error' ? 'alert' : 'status'} className={resetRequestState}>{resetRequestMessage}</p>}
       <button type="button" className="text-button" onClick={returnFromPasswordResetToSignIn}>Back to sign in</button>
     </form>}
 
-    {view === 'reset-verification' && <form onSubmit={event => { event.preventDefault(); void verifyPasswordReset() }} noValidate aria-busy={busy} aria-label="Verify password reset code form">
-      <h1 id="account-title">Verify reset code</h1>
-      <p className="intro">Enter the six-digit code already sent to your email.</p>
+    {view === 'reset-verification' && <form className="auth-form auth-verification-form" onSubmit={event => { event.preventDefault(); void verifyPasswordReset() }} noValidate aria-busy={busy} aria-label="Verify password reset code form">
+      <div className="auth-form-heading"><span className="auth-view-icon auth-view-icon-gold" aria-hidden="true"><KeyRound /></span><div><p className="auth-form-kicker">Account recovery</p><h1 id="account-title">Verify reset code</h1>
+      <p className="intro">Enter the six-digit code already sent to your email.</p></div></div>
       <p className="verification-email">Reset code for <strong>{resetEmail}</strong>.</p>
       <label>Reset code<OtpInput value={resetDigits} onChange={setResetDigits} onComplete={code => { void verifyPasswordReset(code) }} focusFirst={resetFocusVersion} disabled={busy} invalid={resetVerificationState === 'error'} /></label>
       {resetVerificationMessage && <p role={resetVerificationState === 'error' ? 'alert' : 'status'} className={resetVerificationState}>{resetVerificationMessage}</p>}
@@ -986,17 +1042,18 @@ export function App() {
       <button type="button" className="text-button" onClick={returnFromPasswordResetToSignIn}>Back to sign in</button>
     </form>}
 
-    {view === 'reset-confirmation' && <form onSubmit={confirmPasswordReset} noValidate aria-busy={busy} aria-label="Confirm password reset form">
-      <h1 id="account-title">Choose a new password</h1>
-      <p className="intro">Choose a new password for <strong>{resetEmail}</strong>.</p>
+    {view === 'reset-confirmation' && <form className="auth-form" onSubmit={confirmPasswordReset} noValidate aria-busy={busy} aria-label="Confirm password reset form">
+      <div className="auth-form-heading"><span className="auth-view-icon auth-view-icon-gold" aria-hidden="true"><KeyRound /></span><div><p className="auth-form-kicker">Secure your account</p><h1 id="account-title">Choose a new password</h1>
+      <p className="intro">Choose a new password for <strong>{resetEmail}</strong>.</p></div></div>
       <label>New password<PasswordInput value={newPassword} onChange={setNewPassword} inputRef={newPasswordRef} onKeyDown={event => focusOnEnter(event, confirmPasswordRef)} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
       <label>Confirm new password<PasswordInput value={confirmPassword} onChange={setConfirmPassword} inputRef={confirmPasswordRef} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
-      <button disabled={busy}>{resetConfirmationState === 'loading' ? 'Updating…' : 'Update password'}</button>
+      <small className="auth-field-hint">Use 15–64 characters and choose a password you have not used before.</small>
+      <button className="auth-submit" disabled={busy}>{resetConfirmationState === 'loading' ? 'Updating…' : 'Update password'}</button>
       {resetConfirmationMessage && <p role={resetConfirmationState === 'error' ? 'alert' : 'status'} className={resetConfirmationState}>{resetConfirmationMessage}</p>}
       <button type="button" className="text-button" onClick={returnFromPasswordResetToSignIn}>Back to sign in</button>
     </form>}
-    {view === 'reset-complete' && <div aria-labelledby="account-title">
-      <h1 id="account-title">Password updated</h1>
+    {view === 'reset-complete' && <div className="auth-complete" aria-labelledby="account-title">
+      <span className="auth-view-icon auth-view-icon-success" aria-hidden="true"><CheckCircle2 /></span><p className="auth-form-kicker">All set</p><h1 id="account-title">Password updated</h1>
       <p role="status" className="success">Your password has been updated. You can now sign in.</p>
       <button type="button" onClick={() => show('login')}>Sign in</button>
     </div>}
@@ -1011,6 +1068,10 @@ export function App() {
         <li><span>02</span><div><PackageCheck aria-hidden="true" /><h3>A student accepts</h3><p>A student nearby picks up your errand.</p></div></li>
         <li><span>03</span><div><CheckCircle2 aria-hidden="true" /><h3>Confirm the handoff</h3><p>Confirm you got it, and your courier gets paid.</p></div></li>
       </ol>
+    </section>
+    <section className="public-directory" aria-labelledby="directory-title">
+      <div><p className="eyebrow">Browse before joining</p><h2 id="directory-title">Useful places across campus</h2><p>Explore the live campus supplier directory before you create an account.</p></div>
+      <a href="/suppliers">Browse campus suppliers <ArrowUpRight aria-hidden="true" /></a>
     </section>
   </main>
 }

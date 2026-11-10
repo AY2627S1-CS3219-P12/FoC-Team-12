@@ -46,7 +46,7 @@ describe('chat lifecycle activity', () => {
       createdAt: '2026-11-08T04:30:00Z',
     }
 
-    const { container } = render(<MessageBubble message={message} mine={false} />)
+    const { container } = render(<MessageBubble message={message} mine={false} preferredLanguage="en" />)
 
     expect(screen.getByText('Courier marked the errand as picked up.')).toBeInTheDocument()
     expect(container.querySelector('.system-message')).toBeInTheDocument()
@@ -60,11 +60,43 @@ describe('chat lifecycle activity', () => {
     })
 
     const user = (await import('@testing-library/user-event')).default.setup()
-    render(<MessageBubble message={message} mine={false} />)
+    render(<MessageBubble message={message} mine={false} preferredLanguage="zh" />)
     expect(screen.getByText('我正在路上。')).toBeInTheDocument()
     expect(screen.queryByText('I am on my way.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Other participant')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button',{name:'View original'}))
     expect(screen.getByText('I am on my way.')).toBeInTheDocument()
+  })
+
+  test('selecting the original language restores the original without using the toggle', () => {
+    const message: ChatMessage = textMessage({
+      translation: { messageId:'10000000-0000-4000-8000-000000000002',sourceLanguage:'en',targetLanguage:'zh',status:'READY',text:'我正在路上。' },
+    })
+
+    render(<MessageBubble message={message} mine={false} preferredLanguage="en" />)
+
+    expect(screen.getByText('I am on my way.')).toBeInTheDocument()
+    expect(screen.queryByText('我正在路上。')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button',{name:'View original'})).not.toBeInTheDocument()
+  })
+
+  test('does not show a cached translation for a different selected language', () => {
+    const message: ChatMessage = textMessage({
+      translation: { messageId:'10000000-0000-4000-8000-000000000002',sourceLanguage:'en',targetLanguage:'zh',status:'READY',text:'我正在路上。' },
+    })
+
+    render(<MessageBubble message={message} mine={false} preferredLanguage="ms" />)
+
+    expect(screen.getByText('I am on my way.')).toBeInTheDocument()
+    expect(screen.queryByText('我正在路上。')).not.toBeInTheDocument()
+  })
+
+  test('omits participant labels from both sides of the conversation', () => {
+    const { rerender } = render(<MessageBubble message={textMessage()} mine={false} preferredLanguage="en" />)
+    expect(screen.queryByText('Other participant')).not.toBeInTheDocument()
+
+    rerender(<MessageBubble message={textMessage()} mine preferredLanguage="en" />)
+    expect(screen.queryByText('You')).not.toBeInTheDocument()
   })
 
   test('keeps live translation updates and preserves them across history refreshes', () => {

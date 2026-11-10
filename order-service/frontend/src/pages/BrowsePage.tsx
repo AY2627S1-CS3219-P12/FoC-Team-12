@@ -1,12 +1,10 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
-import { ArrowRight, SearchX } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { SearchX } from 'lucide-react'
 import { fetchOpenPool, type PoolQuery, type PoolSort } from '../api/orderApi'
+import { ErrandCard } from '../components/ErrandCard'
 import { ErrandTabs } from '../components/ErrandTabs'
-import { RouteLine } from '../components/RouteLine'
 import { ErrandListSkeleton } from '../components/Skeleton'
-import { StateBadge } from '../components/StateBadge'
 import { StatePanel } from '../components/StatePanel'
 import { formatDeadline } from '../utils/orderFormatting'
 
@@ -96,8 +94,9 @@ export function BrowsePage() {
     <>
       <div className="page-intro">
         <div>
+          <p className="eyebrow">Courier activity</p>
           <h1>Run an errand</h1>
-          <p>Find a campus errand that fits your trip.</p>
+          <p>Choose an open request that fits your route across campus.</p>
         </div>
       </div>
       <ErrandTabs />
@@ -137,24 +136,11 @@ export function BrowsePage() {
               </p>
               <ul className="errand-list">
                 {page.items.map((order) => (
-                  <li className="card errand-card" key={order.id}>
-                    <div className="errand-card-head">
-                      <h3>{order.title}</h3>
-                      <span className="reward">{order.creditReward} cr</span>
-                    </div>
-                    <RouteLine order={order} />
-                    <p>Pick up by {formatDeadline(order.pickupDeadline)}</p>
-                    <div className="errand-card-foot">
-                      <StateBadge state={order.state} />
-                      <Link
-                        aria-label={`View ${order.title}`}
-                        className="text-link"
-                        to={`/errands/${order.id}`}
-                      >
-                        View <ArrowRight aria-hidden="true" />
-                      </Link>
-                    </div>
-                  </li>
+                  <ErrandCard
+                    key={order.id}
+                    order={order}
+                    timingLabel={`Pick up by ${formatDeadline(order.pickupDeadline)}`}
+                  />
                 ))}
               </ul>
               {page.totalPages > 1 && (

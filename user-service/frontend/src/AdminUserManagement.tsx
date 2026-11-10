@@ -1,7 +1,15 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
+import {
+  Ban,
+  LockKeyhole,
+  RotateCcw,
+  Search,
+  ShieldCheck,
+  ShieldMinus,
+  ShieldPlus,
+} from 'lucide-react'
 
 import { ApiError, api, type AdminAccount, type AdminAccountPage } from './api/client'
-import { AccountIcon } from './AccountIcon'
 
 type Props = {
   currentUserId: string
@@ -116,7 +124,7 @@ export function AdminUserManagement({ currentUserId }: Props) {
       <label htmlFor="admin-user-query">Search by email or username</label>
       <span>
         <input id="admin-user-query" value={queryDraft} onChange={event => setQueryDraft(event.target.value)} />
-        <button disabled={loading}><AccountIcon name="search" />Search</button>
+        <button disabled={loading}><Search aria-hidden="true" className="account-icon" />Search</button>
       </span>
     </form>
 
@@ -143,25 +151,25 @@ export function AdminUserManagement({ currentUserId }: Props) {
           </div>
           <div className="admin-user-roles" aria-label={`Roles for ${account.username}`}>
             {account.roles.map(role => <span className={role === 'ADMIN' ? 'administrator-role' : 'participant-role'} key={role}>
-              {role === 'ADMIN' && <AccountIcon name="shield" />}
+              {role === 'ADMIN' && <ShieldCheck aria-hidden="true" className="account-icon" />}
               {role === 'ADMIN' ? 'Administrator' : role === 'REQUESTER' ? 'Requester' : 'Courier'}
             </span>)}
           </div>
           <div className="admin-user-actions">
             {isSelf
-              ? <div className="admin-self-label"><AccountIcon name="lock" /><div><strong>Current account</strong><span>Your own access is protected.</span></div></div>
+              ? <div className="admin-self-label"><LockKeyhole aria-hidden="true" className="account-icon" /><div><strong>Current account</strong><span>Your own access is protected.</span></div></div>
               : <>
                 <div className="admin-action-group">
                 <button type="button" className={`admin-account-action ${isAdmin ? 'access-remove' : 'access-grant'}`} disabled={changing || account.status !== 'ACTIVE'}
                   onClick={() => { void changeAdministrator(account, !isAdmin) }}>
-                  <AccountIcon name={isAdmin ? 'shield-minus' : 'shield-plus'} />
+                  {isAdmin ? <ShieldMinus aria-hidden="true" className="account-icon" /> : <ShieldPlus aria-hidden="true" className="account-icon" />}
                   {changing ? 'Updating…' : isAdmin ? 'Remove Admin' : 'Promote to Admin'}
                 </button>
                 </div>
                 <div className="admin-action-group">
                 <button type="button" className={`admin-account-action ${account.status === 'BANNED' ? 'account-restore' : 'account-ban'}`} disabled={changing || account.status === 'UNVERIFIED'}
                   onClick={(event) => { if (account.status === 'BANNED') { restoreButton.current = event.currentTarget; setRestoreReason(''); setRestore(account) } else void changeStatus(account, 'BANNED') }}>
-                  <AccountIcon name={account.status === 'BANNED' ? 'restore' : 'ban'} />
+                  {account.status === 'BANNED' ? <RotateCcw aria-hidden="true" className="account-icon" /> : <Ban aria-hidden="true" className="account-icon" />}
                   {account.status === 'BANNED' ? 'Reactivate' : 'Ban account'}
                 </button>
                 </div>
