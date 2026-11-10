@@ -12,7 +12,7 @@ public final class CaseViews {
         @com.fasterxml.jackson.annotation.JsonProperty("case")
         public Summary caseSummary() { return caseSummary; }
     }
-    public record Closure(UUID operationId,String resolution,long revision,List<ResolutionService.Explanation> explanations) { }
+    public record Closure(UUID operationId,String resolution,long revision,List<ResolutionService.Explanation> explanations,String creditDisposition) { }
     public record Detail(Summary caseSummary, List<Statement> statements, List<CreditActionService.Action> actions, String resolution,Closure closure) {
         public Detail(Summary summary,List<Statement> statements,List<CreditActionService.Action> actions,String resolution){this(summary,statements,actions,resolution,null);}
         @com.fasterxml.jackson.annotation.JsonProperty("case")

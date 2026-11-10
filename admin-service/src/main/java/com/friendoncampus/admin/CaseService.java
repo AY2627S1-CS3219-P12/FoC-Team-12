@@ -23,6 +23,8 @@ import static com.friendoncampus.admin.CaseViews.*;
 @Service
 public class CaseService {
     private final JdbcTemplate db;
+    private DisputeOrderClient reviewOrders;
+    @org.springframework.beans.factory.annotation.Autowired public void reviewOrders(DisputeOrderClient client){this.reviewOrders=client;}
     private final UserEligibilityClient users;
     private final ChatEligibilityClient chat;
     private final ChatConversationClient conversations;
@@ -53,6 +55,19 @@ public class CaseService {
         var eligibility = chat.check(orderId, actor, jwt.getTokenValue());
         if (!eligibility.complete()) throw unavailable("Reporting eligibility evidence is incomplete. Please try again later.");
         if (!eligibility.eligible()) return mutate(key, actor, route, hash, () -> problem(403, "You are not eligible to report this errand.", route));
+        var existingCase=db.queryForList("SELECT id,state,closure_operation_id FROM admin_cases WHERE order_id=?",orderId);
+        if(!existingCase.isEmpty()){
+            var c=existingCase.get(0);UUID id=(UUID)c.get("id");
+            if("RESOLVED".equals(c.get("state"))||c.get("closure_operation_id")!=null||hasStatement(id,actor))
+                return mutate(key,actor,route,hash,()->problem(409,"This case is closed, closing, or already contains your statement.",route));
+        }
+        UUID preparedCaseId=db.query("SELECT id FROM admin_cases WHERE order_id=?",r->r.next()?r.getObject(1,UUID.class):UUID.nameUUIDFromBytes(("foc-dispute:"+orderId).getBytes(StandardCharsets.UTF_8)),orderId);
+        db.update("INSERT INTO admin_report_preparations(operation_id,actor_id,order_id,case_id,request_hash,description) VALUES (?,?,?,?,?,?) ON CONFLICT DO NOTHING",key,actor,orderId,preparedCaseId,hash,text);
+        var prepared=db.queryForMap("SELECT * FROM admin_report_preparations WHERE operation_id=?",key);
+        if(!actor.equals(prepared.get("actor_id"))||!orderId.equals(prepared.get("order_id"))||!hash.equals(prepared.get("request_hash")))throw new ResponseStatusException(HttpStatus.CONFLICT,"Resume the original report request.");
+        var review=reviewOrders.freeze(orderId,preparedCaseId,jwt.getTokenValue());
+        conversations.prepareErrandReview(orderId,preparedCaseId,jwt.getTokenValue());
+        requireParticipant(jwt);
         return mutate(key, actor, route, hash, () -> {
             lock("order:" + orderId);
             List<CaseRow> rows = db.query("SELECT " + CASE_COLUMNS + " FROM admin_cases WHERE order_id=? FOR UPDATE", this::caseRow, orderId);
@@ -60,7 +75,7 @@ public class CaseService {
             Instant now = Instant.now();
             UUID caseId;
             if (opened) {
-                caseId = UUID.randomUUID();
+                caseId = preparedCaseId;
                 db.update("INSERT INTO admin_cases(id,order_id,state,revision,created_at,correlation_id,source_sequence) VALUES (?,?,'OPEN',1,?,?,1)",
                         caseId, orderId, timestamp(now), UUID.randomUUID());
             } else {
@@ -71,6 +86,7 @@ public class CaseService {
                 if (hasStatement(caseId, actor)) return problem(409, "You have already submitted a statement for this errand.", route);
                 db.update("UPDATE admin_cases SET revision=revision+1 WHERE id=?", caseId);
             }
+            for(var member:review.path("participants"))db.update("INSERT INTO admin_case_participants(case_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING",caseId,UUID.fromString(member.asText()));
             db.update("INSERT INTO admin_case_participants(case_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING", caseId, actor);
             db.update("INSERT INTO admin_statements(case_id,reporter_id,description,submitted_at,eligibility_revision) VALUES (?,?,?,?,?)",
                     caseId, actor, text, timestamp(now), eligibility.evidenceRevision());
@@ -85,6 +101,8 @@ public class CaseService {
         UUID actor = requireAdmin(jwt);
         if (expectedRevision < 0) throw invalid("Revision must be non-negative.");
         var initial = row(caseId).summary;
+        reviewOrders.freeze(initial.orderId(),caseId,jwt.getTokenValue());
+        conversations.prepareErrandReview(initial.orderId(),caseId,jwt.getTokenValue());
         independence.verify(jwt, caseId, initial.orderId());
         requireAdmin(jwt);
         String route = "/api/admin/cases/" + caseId + "/claim";
@@ -107,22 +125,33 @@ public class CaseService {
 
     public ParticipantReport reportStatus(Jwt jwt, UUID caseId) {
         UUID actor = requireParticipant(jwt);
-        // Only an existing statement grants participant status access; no Chat outage is needed to read it.
-        if (!hasStatement(caseId, actor)) throw hidden();
-        return new ParticipantReport(row(caseId).summary, statement(caseId, actor));
+        // Durable verified case membership grants private status, even before a statement.
+        if (!isMember(caseId, actor)) throw hidden();
+        return new ParticipantReport(row(caseId).summary, hasStatement(caseId, actor) ? statement(caseId, actor) : null);
     }
 
     public record ReportContext(UUID orderId,String status,UUID caseId,AdminCase.State state) { }
     public ReportContext reportContext(Jwt jwt,UUID orderId) {
         UUID actor=requireParticipant(jwt);
-        // A statement is the local grant. Never reveal another participant's case through lookup.
+        // Return existing private statement status locally; verify other participants with Chat.
         var own=db.query("SELECT c.id,c.state FROM admin_cases c JOIN admin_statements s ON s.case_id=c.id WHERE c.order_id=? AND s.reporter_id=?",
             (r,n)->new ReportContext(orderId,"OWN_REPORT",r.getObject("id",UUID.class),AdminCase.State.valueOf(r.getString("state"))),orderId,actor);
         if(!own.isEmpty())return own.get(0); // Existing private status does not depend on Chat.
+        var membership=db.query("SELECT c.id,c.state FROM admin_cases c JOIN admin_case_participants p ON p.case_id=c.id WHERE c.order_id=? AND p.user_id=?",
+            (r,n)->new ReportContext(orderId,"CASE_PARTICIPANT",r.getObject("id",UUID.class),AdminCase.State.valueOf(r.getString("state"))),orderId,actor);
+        if(!membership.isEmpty())return membership.get(0); // Already verified membership survives evidence outages.
         var eligibility=chat.check(orderId,actor,jwt.getTokenValue());
         requireParticipant(jwt); // Do not disclose a remote decision after account revocation.
         if(!eligibility.complete())throw unavailable("Reporting eligibility could not be verified. This is not confirmation that no report exists. Please retry.");
         boolean closed=Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_cases WHERE order_id=? AND state='RESOLVED')",Boolean.class,orderId));
+        if (eligibility.eligible()) {
+            var existing = db.queryForList("SELECT id,state FROM admin_cases WHERE order_id=?",orderId);
+            if (!existing.isEmpty()) {
+                UUID caseId=(UUID)existing.get(0).get("id");
+                db.update("INSERT INTO admin_case_participants(case_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING",caseId,actor);
+                return new ReportContext(orderId,"CASE_PARTICIPANT",caseId,AdminCase.State.valueOf((String)existing.get(0).get("state")));
+            }
+        }
         return new ReportContext(orderId,eligibility.eligible()&&!closed?"ELIGIBLE":"INELIGIBLE",null,null);
     }
 
@@ -155,10 +184,10 @@ public class CaseService {
                 db.query("SELECT resolution FROM admin_case_decisions WHERE case_id=?",r->r.next()?r.getString(1):null,caseId),closure(caseId));
     }
     private Closure closure(UUID caseId){
-        return db.query("SELECT operation_id,resolution,case_revision,explanations FROM admin_resolution_preparations WHERE case_id=?",r->{
+        return db.query("SELECT operation_id,resolution,case_revision,explanations,credit_disposition FROM admin_resolution_preparations WHERE case_id=?",r->{
             if(!r.next())return null;List<ResolutionService.Explanation> explanations=new ArrayList<>();
             json.readTree(r.getString("explanations")).properties().forEach(e->explanations.add(new ResolutionService.Explanation(UUID.fromString(e.getKey()),e.getValue().asText())));
-            return new Closure(r.getObject("operation_id",UUID.class),r.getString("resolution"),r.getLong("case_revision"),explanations);
+            return new Closure(r.getObject("operation_id",UUID.class),r.getString("resolution"),r.getLong("case_revision"),explanations,r.getString("credit_disposition"));
         },caseId);
     }
     public Summary evidenceCase(Jwt jwt,UUID caseId) {
@@ -168,7 +197,7 @@ public class CaseService {
 
     public List<ChatConversationClient.Conversation> confirmedConversations(Jwt jwt, UUID caseId, boolean participantView) {
         UUID actor = participantView ? requireParticipant(jwt) : requireAdmin(jwt);
-        if (participantView && !hasStatement(caseId, actor)) throw hidden();
+        if (participantView && !isMember(caseId, actor)) throw hidden();
         var summary=row(caseId).summary;
         List<ChatConversationClient.Conversation> result=new ArrayList<>(db.query("""
                 SELECT r.conversation_id,r.participant_user_id,c.order_id,c.state,c.reviewer_id,c.closure_operation_id
@@ -180,7 +209,7 @@ public class CaseService {
                         r.getObject("closure_operation_id")!=null || !"UNDER_REVIEW".equals(r.getString("state")) || (!participantView && !actor.equals(r.getObject("reviewer_id",UUID.class)))),
                 participantView ? new Object[]{caseId,actor} : new Object[]{caseId}));
         // Missing local confirmation is recovered through Chat's authorized READ, never a creation POST.
-        var targets=participantView?List.of(actor):db.queryForList("SELECT reporter_id FROM admin_statements WHERE case_id=? ORDER BY reporter_id",UUID.class,caseId);
+        var targets=participantView?List.of(actor):db.queryForList("SELECT user_id FROM admin_case_participants WHERE case_id=? ORDER BY user_id",UUID.class,caseId);
         for(UUID target:targets)if(result.stream().noneMatch(r->target.equals(r.participantUserId())))
             conversations.find(caseId,summary.orderId(),target,jwt.getTokenValue()).ifPresent(result::add);
         if(participantView)requireParticipant(jwt);else requireAdmin(jwt);
@@ -190,9 +219,11 @@ public class CaseService {
     public Mutation openConversation(Jwt jwt, UUID key, UUID caseId, UUID participantId) {
         UUID actor = requireAdmin(jwt);
         if (participantId == null || key == null) throw invalid("A participant and Idempotency-Key UUID are required.");
-        var initial = conversationCase(actor, caseId, participantId);
+        var initial = row(caseId).summary;
+        if (!actor.equals(initial.reviewerId())) throw forbidden("Only the assigned reviewer can initiate a conversation.");
         independence.verify(jwt, caseId, initial.orderId());
         requireAdmin(jwt);
+        conversationCase(actor, caseId, participantId);
         String route = "/api/admin/cases/" + caseId + "/conversations";
         String fingerprint = hash(List.of(participantId.toString()));
         // Reserve global operation identity in a short transaction. 503 is provisional, not proof
@@ -231,8 +262,7 @@ public class CaseService {
         if (!actor.equals(summary.reviewerId())) throw forbidden("Only the assigned reviewer can initiate a conversation.");
         if (summary.state() != AdminCase.State.UNDER_REVIEW) throw new ResponseStatusException(HttpStatus.CONFLICT, "This case is not open for conversation initiation.");
         if(closure(caseId)!=null)throw new ResponseStatusException(HttpStatus.CONFLICT,"Resolution preparation is pending; no new conversations can be initiated.");
-        // Historical non-reporters are intentionally gated until owners agree callback membership.
-        if (!hasStatement(caseId, participantId)) throw hidden();
+        if (!isMember(caseId, participantId)) throw hidden();
         return summary;
     }
 
@@ -277,6 +307,9 @@ public class CaseService {
     private void lock(String identity) {
         // Database-scoped transaction locks serialize missing-row creation and receipt races across replicas.
         db.query("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", r -> null, identity);
+    }
+    private boolean isMember(UUID c, UUID actor) {
+        return Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_case_participants WHERE case_id=? AND user_id=?)", Boolean.class, c, actor));
     }
     private boolean hasStatement(UUID c, UUID actor) {
         return Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_statements WHERE case_id=? AND reporter_id=?)", Boolean.class, c, actor));

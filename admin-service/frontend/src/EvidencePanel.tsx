@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CaseError, request } from './cases'
+import { EvidenceImage } from './EvidenceImage'
 import { participantLabels } from './casePeople'
 import { formatSingaporeTime as date } from './time'
 import {
@@ -52,6 +53,22 @@ type Snapshot = {
   dropoffLocationName: string | null
 }
 type Data =
+  | {
+      kind: 'CHAT'
+      caseId: string
+      conversationId: string
+      conversationType: 'ERRAND' | 'CASE'
+      participantUserId: string | null
+      messageId: string
+      messageType: 'TEXT' | 'QUICK_REPLY' | 'IMAGE'
+      text: string | null
+      attachment: {
+        id: string
+        contentType: string
+        filename: string
+        size: number
+      } | null
+    }
   | {
       kind: 'ORDER'
       fromState: string | null
@@ -129,9 +146,12 @@ const categoryName = {
   ORDER: 'Errand',
   CREDIT: 'Credits',
   ADMIN: 'Case review',
+  CHAT: 'Chat',
 }
 function activityTitle(record: EvidenceRecord) {
   const orderActions: Record<string, string> = {
+    REVIEW_STARTED: 'Errand placed under review',
+    DISPUTE_RESOLVED: 'Errand resolved after review',
     SUBMIT: 'Errand submitted',
     OPEN: 'Errand opened',
     FAIL_RESERVATION: 'Credit reservation failed',
@@ -203,6 +223,27 @@ function EvidenceData({
   linkParticipants?: boolean
 }) {
   const data = record.data
+  if (data.kind === 'CHAT')
+    return (
+      <div className="evidence-data">
+        <p>
+          {data.conversationType === 'ERRAND'
+            ? 'Errand conversation'
+            : 'Private conversation with ' +
+              (data.participantUserId
+                ? participant(data.participantUserId)
+                : 'case participant')}
+        </p>
+        {data.text !== null && <p className="statement-text">{data.text}</p>}
+        {data.attachment && (
+          <EvidenceImage
+            caseId={data.caseId}
+            messageId={data.messageId}
+            filename={data.attachment.filename}
+          />
+        )}
+      </div>
+    )
   const debits =
     data.kind === 'CREDIT'
       ? data.ledgerEntries.filter(

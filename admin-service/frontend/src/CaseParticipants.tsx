@@ -67,6 +67,7 @@ export function CaseParticipants({
       : 'Account awaiting confirmation'
   }
   const labels = Object.fromEntries(ids.map((id) => [id, label(id)]))
+  const eligibleIds = evidence ? ids : reporters
   const assigned =
     summary.state === 'UNDER_REVIEW' &&
     summary.reviewerId === actorId &&
@@ -151,7 +152,7 @@ export function CaseParticipants({
                   <h3 id={`person-title-${id}`}>{label(id)}</h3>
                 </div>
                 {statement && (
-                  <span className="role-chip reporter-badge">Reported</span>
+                  <span className="role-chip reporter-badge">Reporter</span>
                 )}
               </header>
               <p className="person-reference">
@@ -184,7 +185,7 @@ export function CaseParticipants({
               >
                 <button
                   className="button-secondary"
-                  disabled={!statement}
+                  disabled={!eligibleIds.includes(id)}
                   aria-controls="participant-chat"
                   onClick={(event) => open(id, 'chat', event.currentTarget)}
                 >
@@ -192,7 +193,7 @@ export function CaseParticipants({
                 </button>
                 <button
                   className="button-secondary"
-                  disabled={!statement}
+                  disabled={!eligibleIds.includes(id)}
                   aria-controls="participant-credit"
                   onClick={(event) => open(id, 'credit', event.currentTarget)}
                 >
@@ -201,7 +202,7 @@ export function CaseParticipants({
                 </button>
                 <button
                   className="button-secondary person-ban"
-                  disabled={!statement}
+                  disabled={!eligibleIds.includes(id)}
                   aria-controls="participant-ban"
                   onClick={(event) => open(id, 'ban', event.currentTarget)}
                 >
@@ -209,12 +210,6 @@ export function CaseParticipants({
                   {assigned ? 'Ban account' : 'Ban history'}
                 </button>
               </div>
-              {!statement && (
-                <p className="evidence-meta">
-                  Case actions are available only for people who submitted a
-                  report.
-                </p>
-              )}
             </article>
           )
         })}
@@ -262,7 +257,7 @@ export function CaseParticipants({
             <CaseConversations
               summary={summary}
               actorId={actorId}
-              participantIds={reporters}
+              participantIds={eligibleIds}
               closing={!!detail.closure}
               selection={tool === 'chat' ? selection : undefined}
               participantLabels={labels}
@@ -273,7 +268,7 @@ export function CaseParticipants({
             <CreditActions
               summary={summary}
               actorId={actorId}
-              participantIds={reporters}
+              participantIds={eligibleIds}
               initialActions={detail.actions}
               closing={!!detail.closure}
               selection={tool === 'credit' ? selection : undefined}
@@ -287,7 +282,7 @@ export function CaseParticipants({
               kind="BAN"
               summary={summary}
               actorId={actorId}
-              participantIds={reporters}
+              participantIds={eligibleIds}
               initialActions={detail.actions}
               closing={!!detail.closure}
               selection={tool === 'ban' ? selection : undefined}

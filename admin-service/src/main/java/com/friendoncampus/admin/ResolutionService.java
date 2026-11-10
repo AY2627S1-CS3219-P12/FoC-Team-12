@@ -18,6 +18,8 @@ import tools.jackson.databind.json.JsonMapper;
 public class ResolutionService {
     public record Explanation(UUID operationId, String explanation) { }
     private final JdbcTemplate db;
+    private DisputeOrderClient reviewOrders;
+    @org.springframework.beans.factory.annotation.Autowired public void reviewOrders(DisputeOrderClient client){this.reviewOrders=client;}
     private final CaseService cases;
     private final TimelineService timeline;
     private final ChatConversationClient chat;
@@ -33,9 +35,13 @@ public class ResolutionService {
         tx=new TransactionTemplate(manager);tx.setTimeout(15);
     }
     public CaseViews.Mutation resolve(Jwt actor, UUID id, UUID key, String resolution, long revision, List<Explanation> explanations) {
+        return resolve(actor,id,key,resolution,revision,explanations,"KEEP_EXISTING");
+    }
+    public CaseViews.Mutation resolve(Jwt actor,UUID id,UUID key,String resolution,long revision,List<Explanation> explanations,String disposition){
         var initial=cases.evidenceCase(actor,id);
         UUID reviewer=UUID.fromString(actor.getSubject());
         String reason=resolution==null?"":resolution.strip();
+        if(disposition==null||!Set.of("RETURN_TO_REQUESTER","PAY_COURIER","KEEP_EXISTING").contains(disposition))throw error(400,"Choose the reserved-credit outcome.");
         if(key==null||revision<0||reason.isEmpty()||reason.length()>2000)throw error(400,"Provide a resolution of 1–2000 characters, a revision and a request key.");
         SortedMap<String,String> rejected=new TreeMap<>();
         if(explanations!=null)for(var e:explanations){
@@ -43,11 +49,16 @@ public class ResolutionService {
                 throw error(400,"Provide one nonblank explanation per rejected action, without duplicates.");
         }
         String route="/api/admin/cases/"+id+"/resolve";
-        String hash=CreditActionService.hash(json.writeValueAsString(List.of(reason,revision,rejected)));
+        String currentHash=CreditActionService.hash(json.writeValueAsString(List.of(reason,revision,rejected,disposition)));
+        String legacyHash=CreditActionService.hash(json.writeValueAsString(List.of(reason,revision,rejected)));
+        boolean legacy="KEEP_EXISTING".equals(disposition)&&Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_mutation_receipts WHERE idempotency_key=? AND actor_id=? AND route=? AND request_hash=?)",Boolean.class,key,reviewer,route,legacyHash));
+        final String hash=legacy?legacyHash:currentHash;
         var previous=receipt(key,reviewer,route,hash);
         if(previous!=null&&previous.status()!=503)return previous; // Completed replays never depend on Chat again.
         eligible(initial,reviewer,revision);
-        var evidence=timeline.read(actor,id,null,100); // Real producer read, never browser coverage.
+        if(previous==null){reviewOrders.freeze(initial.orderId(),id,actor.getTokenValue());chat.prepareErrandReview(initial.orderId(),id,actor.getTokenValue());}
+        if(previous==null)reviewOrders.validate(initial.orderId(),id,disposition,actor.getTokenValue());
+        final var evidence=timeline.read(actor,id,null,100); // Real producer read, never browser coverage.
         cases.evidenceCase(actor,id); // Recheck current User eligibility after remote work.
         independence.require(id,initial.orderId(),reviewer);
         boolean continueResolution=Boolean.TRUE.equals(tx.execute(s->{
@@ -67,7 +78,7 @@ public class ResolutionService {
                 if(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_mutation_receipts WHERE idempotency_key=?)",Boolean.class,key))throw error(409,"This request key belongs to a different request.");
                 validateActions(id,rejected.keySet());
                 validateEvidence(evidence,id,(UUID)c.get("order_id"),((Number)c.get("source_sequence")).longValue());
-                db.update("INSERT INTO admin_resolution_preparations(operation_id,case_id,actor_id,request_hash,resolution,case_revision,explanations) VALUES (?,?,?,?,?,?,?)",key,id,reviewer,hash,reason,revision,json.writeValueAsString(rejected));
+                db.update("INSERT INTO admin_resolution_preparations(operation_id,case_id,actor_id,request_hash,resolution,case_revision,explanations,credit_disposition) VALUES (?,?,?,?,?,?,?,?)",key,id,reviewer,hash,reason,revision,json.writeValueAsString(rejected),disposition);
                 db.update("UPDATE admin_cases SET closure_operation_id=? WHERE id=?",key,id);
                 db.update("INSERT INTO admin_mutation_receipts(idempotency_key,actor_id,route,request_hash,response_status,response_body) VALUES (?,?,?,?,503,?)",key,reviewer,route,hash,json.writeValueAsString(Map.of("detail","Resolution preparation is pending. Retry the same operation.")));
             }
@@ -75,6 +86,8 @@ public class ResolutionService {
         }));
         if(!continueResolution)return receipt(key,reviewer,route,hash);
         chat.prepareClosure(id,key,actor.getTokenValue()); // Remote drain acknowledgement, outside Admin locks.
+        reviewOrders.finish(initial.orderId(),id,key,disposition,actor.getTokenValue());
+        final var finalEvidence=timeline.read(actor,id,null,100);
         cases.evidenceCase(actor,id);
         return tx.execute(s->{
             db.execute("SET LOCAL lock_timeout='5s'");
@@ -92,10 +105,10 @@ public class ResolutionService {
                 if("REJECTED".equals(action.get("status")))required.add(action.get("operation_id").toString());
             }
             if(!required.equals(rejected.keySet()))throw error(400,"Explain every rejected action and only rejected actions before resolving.");
-            validateEvidence(evidence,id,(UUID)c.get("order_id"),((Number)c.get("source_sequence")).longValue());
+            validateEvidence(finalEvidence,id,(UUID)c.get("order_id"),((Number)c.get("source_sequence")).longValue());
             Instant now=Instant.now();long next=revision+1,sequence=((Number)c.get("source_sequence")).longValue()+1;
             db.update("INSERT INTO admin_case_decisions(case_id,reviewer_id,resolution,rejected_action_explanations,evidence_revision,evidence_coverage,resolved_at,case_revision) VALUES (?,?,?,?,?,?,?,?)",
-                id,reviewer,reason,json.writeValueAsString(rejected),evidence.path("evidenceRevision").asText(),json.writeValueAsString(evidence.path("coverage")),now.atOffset(ZoneOffset.UTC),next);
+                id,reviewer,reason,json.writeValueAsString(rejected),finalEvidence.path("evidenceRevision").asText(),json.writeValueAsString(finalEvidence.path("coverage")),now.atOffset(ZoneOffset.UTC),next);
             db.update("UPDATE admin_cases SET state='RESOLVED',revision=?,source_sequence=? WHERE id=?",next,sequence,id);
             db.update("INSERT INTO admin_case_audit(id,case_id,case_revision,actor_id,action,occurred_at) VALUES (?,?,?,?,'CASE_RESOLVED',?)",UUID.randomUUID(),id,next,reviewer,now.atOffset(ZoneOffset.UTC));
             UUID event=UUID.randomUUID();

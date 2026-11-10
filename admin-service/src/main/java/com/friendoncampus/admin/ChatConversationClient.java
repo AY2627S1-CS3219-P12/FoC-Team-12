@@ -60,6 +60,13 @@ public class ChatConversationClient {
             return Optional.of(new Conversation(UUID.fromString(data.path("conversationId").asText()),caseId,orderId,participantId,data.path("readOnly").asBoolean()));
         }catch(Exception ex){if(ex instanceof InterruptedException)Thread.currentThread().interrupt();throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Conversation recovery is unavailable. Retry the read.");}
     }
+    public void prepareErrandReview(UUID orderId,UUID caseId,String actorToken){
+        try{
+            var request=HttpRequest.newBuilder(base.resolve("/internal/chat/orders/"+orderId+"/review")).timeout(Duration.ofSeconds(8)).header("Authorization","Bearer "+tokens.issue("chat-service")).header("X-Actor-Token",actorToken).header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(Map.of("caseId",caseId)))).build();
+            var response=http.send(request,HttpResponse.BodyHandlers.ofString());var body=json.readTree(response.body());
+            if(response.statusCode()!=200||!orderId.toString().equals(body.path("orderId").asText())||!caseId.toString().equals(body.path("caseId").asText())||!body.path("readOnly").asBoolean())throw new IllegalStateException();
+        }catch(Exception ex){if(ex instanceof InterruptedException)Thread.currentThread().interrupt();throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"Errand chat review is unconfirmed. Retry the same report.");}
+    }
     public void prepareClosure(UUID caseId,UUID operation,String actorToken) {
         try {
             var request=HttpRequest.newBuilder(base.resolve("/internal/chat/cases/"+caseId+"/closure"))

@@ -27,7 +27,7 @@ but do not gain case-action eligibility.
 Errand descriptions and participant statements are displayed verbatim from their API fields.
 The dashboard does not generate, summarize or rephrase case content and has no LLM dependency.
 
-Cards sit side by side on desktop and stack on narrow screens. A `Reported` badge marks each
+Cards sit side by side on desktop and stack on narrow screens. A `Reporter` badge marks each
 reporting account; both may report. Selecting an action opens a compact panel in that person's
 column. Credit and ban histories show the selected account, with links back to its
 card; timeline credit changes also link to the affected people. An unconfirmed submission keeps its
@@ -261,8 +261,7 @@ No balances or ledger rows are read/written by Admin and there is no synthetic l
   with no-store. Current active administrators may read; case detail includes the same action list.
   Participant report/status never includes actions, internal reasons or financial outcomes.
 - Creation checks effective ADMIN mode/current active admin before its local transaction, then
-  locks the case and requires assigned reviewer, UNDER_REVIEW and a verified reporting participant.
-  Historical non-reporters remain gated by the existing historical membership ambiguity. There is
+  locks the case and requires assigned reviewer, UNDER_REVIEW and a verified errand participant, including a nonreporter confirmed by Order history. There is
   no arbitrary target UUID input in the GUI. No HTTP or broker call holds a case database lock.
 - Migration V5 stores action, immutable command payload, outcome inbox and private quarantine.
   One transaction commits operationId/eventId, case revision, audit, command outbox and original
@@ -340,7 +339,7 @@ restricted retention/access. Operators should investigate UNKNOWN age, delivery 
 
 ### GUI and verification boundary
 
-Case detail offers Add/Subtract, a whole-credit amount, reporting participant and mandatory reason,
+Case detail offers Add/Subtract, a whole-credit amount, verified participant and mandatory reason,
 then a separate confirmation. It shows status and SGT timestamps. An uncertain browser submission
 retains the exact key/body per actor/case in session storage, locks editing, and offers same-request
 retry. Accepted actions are polled every five seconds by operationId; polling never submits another
@@ -370,9 +369,7 @@ Credit, Order, User and shared infrastructure. It is not approval of proposed in
 `POST /api/admin/cases/{caseId}/conversations` consumes the existing documented Chat initiation
 shape: required UUID `Idempotency-Key`, body `{participantUserId}` and a Chat-owned `Conversation`
 response. Effective ADMIN mode, current active administrator eligibility, assigned reviewer and
-UNDER_REVIEW state are required. The target must currently be a reporting participant, including
-historical couriers who reported. Historical non-reporters are intentionally hidden until the
-producer membership/callback contract is agreed. Browser IDs never establish participation.
+UNDER_REVIEW state are required. The target must be a verified errand participant, including historical couriers and nonreporters confirmed through the approved dispute review contract. Browser IDs never establish participation.
 
 Admin delegates to `/internal/chat/cases/{caseId}/conversations` using separate service auth,
 the original User JWT and the same operation key/body. No database lock spans this call. A short
@@ -392,7 +389,7 @@ reference fails unavailable. 401/403/404/409 from Chat remain failures; malforme
 other responses are 503. Requests use two-second connect/three-second request bounds with no
 automatic retries, redirects, logging of credentials, or synthetic fallback. Responses are no-store.
 
-Assigned reviewers can select a reporting participant in case detail and initiate/open that
+Assigned reviewers can select a verified participant in case detail and initiate/open that
 private thread. Chat now has a runnable implementation. Admin adapts the actual public Chat
 metadata `{id,orderId,status,readOnly}`, message arrays paged by exclusive `after` sequence and
 attachment metadata `{id,contentType,filename,size}`. Admin's internal initiation response retains
@@ -404,7 +401,7 @@ participant's own reference in REQUESTER/COURIER mode. Both return arrays, use `
 no-store`, check current User eligibility and read only Admin's database. Missing/unauthorized
 cases are 404; User outage is 503. An empty array means no locally confirmed reference, not proof
 that Chat has no conversation. Reads create no receipt, event, audit, revision or Chat membership.
-Unknown historical non-reporters remain hidden under the current callback contract.
+Unknown account UUIDs remain hidden; verified historical nonreporters have their own case membership.
 
 After reload, participants recover their own confirmed thread automatically; administrators
 select a reporting participant to recover that reference without a creation POST. Other admins
@@ -435,7 +432,7 @@ non-downloadable attachment notice. WebSocket behavior requires separate produce
 Tests use explicitly test-only HTTP mocks; they cannot prove actual Chat persistence, access or
 delivery. Final verification must use Eldridge's producer through real routing/trust configuration.
 
-Manual checks when Chat is available: select each reporting participant as the assigned reviewer;
+Manual checks when Chat is available: select each verified participant as the assigned reviewer;
 verify isolated messages and safe same-key initiation/send retries; refresh/load multiple pages;
 revoke access/resolve during a request; confirm private history disappears on denial and replies
 disable on read-only. Check narrow mobile layout, keyboard selection/composer, and SGT timestamps.
@@ -780,3 +777,7 @@ and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing si
 configuration fails closed even when administrative Kafka consumers are disabled.
 
 Participant report pages use waiting-for-review, under-review and closed labels, with brief next-step guidance. Reviewer IDs and case revisions stay in the admin view. Displayed API diagnostics use concise recovery guidance while preserving the original errors for authorization and safe retries. Case assignment remains manual; no response-time or case-notification promise is implied.
+
+## Dispute review workflow
+
+See the [approved report freeze and finalization contract](../docs/integration/dispute-review-contract.md) for service ownership, retry barriers, timeline message/image evidence, credit dispositions and rollout requirements. Existing lifecycle and case states are retained.

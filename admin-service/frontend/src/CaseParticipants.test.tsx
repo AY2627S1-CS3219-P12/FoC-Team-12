@@ -174,9 +174,9 @@ it('marks each reporter and bounds tools to the selected account column using su
       names={{ [requester]: 'Mei', [courier]: 'Kai' }}
     />,
   )
-  expect(card('Courier [Kai]').getByText('Reported')).toBeVisible()
+  expect(card('Courier [Kai]').getByText('Reporter')).toBeVisible()
   expect(
-    card('Requester [Mei]').queryByText('Reported'),
+    card('Requester [Mei]').queryByText('Reporter'),
   ).not.toBeInTheDocument()
   expect(screen.queryByText(/\d reports?/)).not.toBeInTheDocument()
   fireEvent.click(
@@ -305,7 +305,7 @@ it('shows only the selected account history and keeps the card highlight in sync
   )
 })
 
-it('does not offer case actions for a non-reporter or bypass another reviewer', () => {
+it('offers verified non-reporters history and chat without bypassing another reviewer', () => {
   show({
     ...detail,
     case: { ...detail.case, reviewerId: requester },
@@ -313,13 +313,13 @@ it('does not offer case actions for a non-reporter or bypass another reviewer', 
   })
   expect(
     card('Courier 1').getByRole('button', { name: 'Private chat' }),
-  ).toBeDisabled()
+  ).toBeEnabled()
   expect(
     card('Courier 1').getByRole('button', { name: 'Credit history' }),
-  ).toBeDisabled()
+  ).toBeEnabled()
   expect(
     card('Courier 1').getByRole('button', { name: 'Ban history' }),
-  ).toBeDisabled()
+  ).toBeEnabled()
   fireEvent.click(
     card('Requester').getByRole('button', { name: 'Credit history' }),
   )
@@ -388,5 +388,5 @@ it('uses reporting-account labels when evidence is unavailable and preserves his
   expect(card('Courier 2').getByText(historical)).toBeVisible()
   expect(
     card('Courier 2').getByRole('button', { name: 'Ban account' }),
-  ).toBeDisabled()
+  ).toBeEnabled()
 })

@@ -13,6 +13,7 @@ type Submission = {
   key: string
   body: {
     resolution: string
+    creditDisposition?: string
     expectedRevision: number
     rejectedActionExplanations: { operationId: string; explanation: string }[]
   }
@@ -39,6 +40,7 @@ export function ResolutionPanel({
         key: closure.operationId,
         body: {
           resolution: closure.resolution,
+          creditDisposition: closure.creditDisposition || 'KEEP_EXISTING',
           expectedRevision: closure.revision,
           rejectedActionExplanations: closure.explanations,
         },
@@ -58,6 +60,9 @@ export function ResolutionPanel({
       return null
     }
   })
+  const [disposition, setDisposition] = useState(
+    pending?.body.creditDisposition || 'KEEP_EXISTING',
+  )
   const [reason, setReason] = useState(pending?.body.resolution || '')
   const [explanations, setExplanations] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -91,6 +96,7 @@ export function ResolutionPanel({
       key: crypto.randomUUID(),
       body: {
         resolution: reason.trim(),
+        creditDisposition: disposition,
         expectedRevision: summary.revision,
         rejectedActionExplanations: rejected.map((a) => ({
           operationId: a.operationId,
@@ -223,6 +229,29 @@ export function ResolutionPanel({
                 disabled={busy || !!pending || confirm}
                 onChange={(e) => setReason(e.target.value)}
               />
+              <label htmlFor="resolution-credit-disposition">
+                Reserved-credit outcome
+              </label>
+              <select
+                id="resolution-credit-disposition"
+                value={disposition}
+                disabled={busy || !!pending || confirm}
+                onChange={(e) => setDisposition(e.target.value)}
+              >
+                <option value="KEEP_EXISTING">
+                  Preserve an already confirmed credit outcome (no active hold)
+                </option>
+                <option value="RETURN_TO_REQUESTER">
+                  Return the remaining reservation to the requester
+                </option>
+                <option value="PAY_COURIER">
+                  Pay the remaining reservation to the assigned courier
+                </option>
+              </select>
+              <p className="muted">
+                The errand finishes only after Credit confirms this outcome.
+                Available-credit corrections are separate.
+              </p>
               {rejected.map((a, i) => (
                 <div key={a.operationId}>
                   <p>
@@ -263,6 +292,15 @@ export function ResolutionPanel({
                     Close permanently? No further reports, review actions, or
                     messages can be added; participants see only the closed
                     status, while your reason stays private to admins.
+                  </p>
+                  <p>
+                    This also finishes the errand. Reserved-credit outcome:{' '}
+                    {disposition === 'RETURN_TO_REQUESTER'
+                      ? 'return the reservation to the requester'
+                      : disposition === 'PAY_COURIER'
+                        ? 'pay the reservation to the assigned courier'
+                        : 'preserve the existing confirmed outcome'}
+                    .
                   </p>
                   <p className="statement-text">{reason.trim()}</p>
                   <button

@@ -485,3 +485,29 @@ it.each([
     screen.queryByText('History checked through the latest update'),
   ).not.toBeInTheDocument()
 })
+
+it('renders original participant messages in the activity timeline without rewriting', async () => {
+  const data = timeline()
+  data.records = [
+    {
+      ...record(),
+      source: 'chat-service',
+      stream: 'chat.messages',
+      action: 'MessageSent',
+      data: {
+        kind: 'CHAT',
+        caseId,
+        conversationId: orderId,
+        conversationType: 'ERRAND',
+        participantUserId: null,
+        messageId: caseId,
+        messageType: 'TEXT',
+        text: 'two bowls. one missing!!!',
+        attachment: null,
+      },
+    },
+  ]
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(data)))
+  render(<EvidencePanel caseId={caseId} orderId={orderId} />)
+  expect(await screen.findByText('two bowls. one missing!!!')).toBeVisible()
+})
