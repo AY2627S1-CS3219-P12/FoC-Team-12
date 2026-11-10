@@ -161,21 +161,21 @@ wait_checks() {
 }
 
 pids=()
-for topic in user.events order.events credit.events order.lifecycle.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
+for topic in user.events order.events credit.events order.lifecycle.events chat.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
   verify_topic "$topic" 3 604800000 &
   pids+=("$!")
 done
 wait_checks "${pids[@]}"
 pids=()
-for topic in user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT; do
+for topic in user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events.DLT chat.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT; do
   verify_topic "$topic" 1 2592000000 &
   pids+=("$!")
 done
 wait_checks "${pids[@]}"
 
 # Fetch exact-resource snapshots concurrently, then use the existing per-resource assertions.
-for topic_set in 'user.events order.events credit.events order.lifecycle.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events' \
-  'user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT'; do
+for topic_set in 'user.events order.events credit.events order.lifecycle.events chat.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events' \
+  'user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events.DLT chat.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT'; do
   pids=()
   for topic in $topic_set; do
     kafka_command kafka-acls.sh "${admin[@]}" --list --topic "$topic" > "$work_dir/topic-$topic.acl" &
@@ -210,13 +210,20 @@ verify_topic_acl credit_service WRITE order.events.DLT
 verify_cluster_acl order_service IDEMPOTENT_WRITE
 verify_cluster_acl credit_service IDEMPOTENT_WRITE
 verify_topic_acl order_service WRITE order.lifecycle.events
+verify_topic_acl chat_service WRITE chat.events
+verify_topic_acl chat_service READ order.lifecycle.events
+verify_group_acl chat_service READ chat-service-lifecycle
+verify_cluster_acl chat_service IDEMPOTENT_WRITE
 verify_topic_acl notification_service READ credit.events
 verify_topic_acl notification_service DESCRIBE credit.events
 verify_topic_acl notification_service READ order.lifecycle.events
 verify_topic_acl notification_service DESCRIBE order.lifecycle.events
+verify_topic_acl notification_service READ chat.events
+verify_topic_acl notification_service DESCRIBE chat.events
 verify_group_acl notification_service READ notification-service
 verify_topic_acl notification_service WRITE credit.events.DLT
 verify_topic_acl notification_service WRITE order.lifecycle.events.DLT
+verify_topic_acl notification_service WRITE chat.events.DLT
 verify_cluster_acl notification_service IDEMPOTENT_WRITE
 verify_topic_acl admin_service WRITE admin.user.commands
 verify_topic_acl admin_service WRITE user.admin.events.DLT
@@ -241,7 +248,7 @@ verify_group_acl credit_service READ credit-service-admin
 verify_topic_acl credit_service WRITE credit.admin.events
 verify_topic_acl credit_service WRITE admin.credit.commands.DLT
 
-for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events order.lifecycle.events.DLT admin.credit.commands credit.admin.events admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT admin.events; do
+for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events order.lifecycle.events.DLT chat.events chat.events.DLT admin.credit.commands credit.admin.events admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT admin.events; do
   verify_topic_acl kafka_ui READ "$topic"
   verify_topic_acl kafka_ui DESCRIBE "$topic"
   verify_topic_acl kafka_ui DESCRIBE_CONFIGS "$topic"

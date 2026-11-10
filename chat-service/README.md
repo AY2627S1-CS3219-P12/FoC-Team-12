@@ -149,8 +149,17 @@ actor, never the supplied body. Proposed limits: 1-4000 text characters; one JPE
 Server assigns sequence and commits message before responding/broadcasting. Unique
 (conversationId, senderUserId, clientMessageId); same content returns original message, different
 content returns 409. Exactly one stored message despite transport retries. Database is delivery
-truth; WebSocket reconnection fetches missing messages by sequence. Broadcast fan-out must work
-across replicas; proposed Redis pub/sub only signals delivery, never replaces durable history.
+truth; WebSocket reconnection fetches missing messages by sequence.
+
+Each user-authored errand message also writes a `ChatMessageSent` row to Chat's transactional
+outbox in the same database transaction. The relay publishes it to `chat.events`, keyed by
+conversation UUID, for Notification Service. The payload contains message/conversation/order,
+sender/recipient IDs and `TEXT`/`QUICK_REPLY`/`IMAGE` only; message text and attachment details
+never leave Chat. Client-message idempotency therefore creates at most one notification event.
+Lifecycle `SYSTEM` entries do not publish this event because their existing `OrderTransitioned`
+notifications already tell the affected user; emitting both would duplicate alerts.
+Broadcast fan-out works across replicas; RabbitMQ only signals delivery and never replaces durable
+history.
 
 WebSocket authenticates at connection and checks membership on subscribe/send. Do not put access
 tokens in URLs. Prefer an authenticated HTTP-issued single-use, short-lived WebSocket ticket;

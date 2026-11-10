@@ -11,6 +11,7 @@ import {
   CircleCheck,
   Coins,
   LogIn,
+  MessageCircle,
   PackageCheck,
 } from "lucide-react";
 import {
@@ -236,6 +237,9 @@ function NotificationRow({
 }
 
 function notificationPresentation(type: string) {
+  if (type === "CHAT_MESSAGE_RECEIVED") {
+    return { icon: MessageCircle, label: "Chat message", tone: "errand" };
+  }
   if (type.includes("CREDIT") || type.includes("REWARD")) {
     return { icon: Coins, label: "Credit activity", tone: "credit" };
   }
