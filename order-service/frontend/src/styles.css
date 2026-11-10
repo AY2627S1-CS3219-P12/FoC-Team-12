@@ -2385,8 +2385,15 @@ a.button-secondary svg {
   border-top: 1px solid var(--line);
 }
 .requester-history-content .my-errands-section-head {
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   padding: 1rem 0 0;
+}
+.requester-history-content .my-errands-section-head .section-title {
+  margin: 0;
+  font-size: 1.05rem;
 }
 .errand-history-list {
   grid-template-columns: minmax(0, 1fr);

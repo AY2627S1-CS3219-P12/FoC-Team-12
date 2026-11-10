@@ -575,6 +575,11 @@ lifecycle or credit-request wire format changes. See the
 
 ### Admin reporting entry
 
+Requester history shows visible Active and Past headings, with past-status filters in the Past
+section header. Requester and Courier lists omit Under review only after a successful response
+confirms no review errands. Loading and failed review requests remain visible; an unavailable
+response is never presented as an empty list. Actual review cases retain their separate section.
+
 The errand detail screen shows the reporting panel to its requester or assigned courier, not to
 couriers browsing an open errand. Acceptance enables the assigned courier's panel. It uses the
 Admin-owned `GET /api/admin/orders/{orderId}/report-context` endpoint through the gateway.
