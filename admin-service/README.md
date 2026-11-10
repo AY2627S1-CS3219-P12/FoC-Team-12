@@ -17,6 +17,49 @@ and durable credit-action tracking/Kafka adapters. See
 [integration drafts](../docs/contracts/README.md). Approval of this iteration does not
 record Chat/transport owner sign-off or deploy the shared drafts.
 
+## Case review layout
+
+The case workspace groups each statement and its private chat, credit correction and ban controls
+under the reporting account's card. Requester/courier labels come from the existing errand evidence;
+when evidence is unavailable, reporting-account labels and account references remain explicit.
+Historical courier assignments are retained. Accounts without a report are visible in the evidence
+but do not gain case-action eligibility.
+Errand descriptions and participant statements are displayed verbatim from their API fields.
+The dashboard does not generate, summarize or rephrase case content and has no LLM dependency.
+
+Cards sit side by side on desktop and stack on narrow screens. A `Reported` badge marks each
+reporting account; both may report. Selecting an action opens a compact panel in that person's
+column. Credit and ban histories show the selected account, with links back to its
+card; timeline credit changes also link to the affected people. An unconfirmed submission keeps its
+original account, request key and body, and a visible resume prompt remains above the cards even
+when its panel is closed. Confirmation cannot silently switch to another card's account.
+
+Errand facts, credit changes and chronological activity use labelled regions and Lucide SVG icons.
+Case identifiers, assignment periods and evidence diagnostics remain available in disclosures.
+Empty missing-activity summaries are hidden; real gaps and lag remain visible. Evidence references
+and assignment history stay collapsed. A credit-flow cue is shown only for an applied record with
+two distinct accounts whose combined available/reserved deltas are equal and opposite. It depicts
+recorded ledger movement; administrative corrections are not assumed to be transfers.
+
+Admin displays `Requester [username]` / `Courier [username]` using User-owned account summaries.
+Darryl approved choosing this bounded Admin/User refinement in the report-view UX continuation.
+Caller: Admin browser with the current administrator Bearer token. Producer: User's existing
+`GET /api/users/admin/accounts?query={uuid}&page=0&size=1`, extended to exact UUID matching.
+Consumer: participant cards, action labels and evidence timeline. Only a single matching returned
+UUID and valid username is accepted. Names are display-only and never determine permission or
+action targets. User rechecks current active administrator access; no database boundary changes.
+This is a read with no operation identity, side effects, deduplication or reconciliation obligation.
+The browser deduplicates IDs, aborts after six seconds/on unmount and keeps no persistent name
+cache. Missing, malformed, denied or unavailable lookups retain role/account-reference labels;
+reload retries the read. HTTP status remains the producer's diagnostic signal, with no new events
+or background recovery. Known errand participants are blocked locally from claiming with brief
+feedback; the backend independently enforces reviewer independence even without evidence loaded.
+
+Verify with the frontend test suite, lint, TypeScript/production build and the root UI design checks.
+Manual checks: compare two statements at desktop and 375px; use each card's controls and Tab/Enter;
+verify the selected account in confirmation, change the account selector, close/reopen a panel,
+resume an uncertain request, and check non-reporter, other-reviewer and evidence-outage states.
+
 ## Behavior and boundaries
 
 - Reviewer independence: an administrator who requested an errand or was ever assigned as its

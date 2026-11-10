@@ -3,6 +3,7 @@ package com.friendoncampus.user.service;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,10 @@ public class AdminLifecycleService {
     @Transactional(readOnly = true)
     public Page<User> list(UUID actorId, String query, Pageable pageable) {
         requireActiveAdmin(actorId);
+        if (query != null && query.trim().matches("(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
+            var match = users.findById(UUID.fromString(query.trim())).stream().toList();
+            return new PageImpl<>(pageable.getOffset() == 0 ? match : java.util.List.of(), pageable, match.size());
+        }
         return query == null || query.isBlank() ? users.findAll(pageable) : users.searchByEmailOrUsername(query.trim(), pageable);
     }
 

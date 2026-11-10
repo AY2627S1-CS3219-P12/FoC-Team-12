@@ -107,15 +107,15 @@ it('leads with readable activity and participants, keeping diagnostics collapsed
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(timeline())))
   render(<EvidencePanel caseId={caseId} orderId={orderId} />)
   expect(
-    await screen.findByText('History verified up to recorded checkpoints'),
+    await screen.findByText('History checked through the latest update'),
   ).toBeVisible()
   expect(
-    screen.getByText(/Very recent activity may not show yet/),
-  ).toBeVisible()
+    screen.queryByRole('heading', { name: /Missing activity/ }),
+  ).not.toBeInTheDocument()
   expect(screen.getByText('Courier assigned during this errand')).toBeVisible()
   expect(screen.getByText(/Assigned .*Unassigned/)).toBeVisible()
   expect(screen.getByRole('heading', { name: 'Case opened' })).toBeVisible()
-  expect(screen.getByText('Recorded actor: Courier 1')).toBeVisible()
+  expect(screen.getByText('By Courier 1')).toBeVisible()
   const event = screen
     .getByRole('heading', { name: 'Case opened' })
     .closest('article')!
@@ -136,9 +136,10 @@ it('leads with readable activity and participants, keeping diagnostics collapsed
       .getByText('Added to evidence')
       .nextElementSibling?.querySelector('time'),
   ).toHaveAttribute('datetime', at)
-  await user.click(screen.getByText('Coverage technical details'))
+  await user.click(screen.getByText('Evidence details'))
   expect(screen.getByText('revision-1')).toBeVisible()
   expect(screen.getByText('Campus lunch')).toBeVisible()
+  expect(screen.getByText('Historical order description')).toBeVisible()
 })
 it('does not equate an empty page and absent gaps with complete coverage', async () => {
   const data = timeline()
@@ -153,9 +154,53 @@ it('does not equate an empty page and absent gaps with complete coverage', async
   expect(screen.getByText(/empty page does not prove/)).toBeVisible()
   expect(screen.getByText(/No source checkpoints/)).not.toBeVisible()
   expect(
-    screen.queryByText('History verified up to recorded checkpoints'),
+    screen.queryByText('History checked through the latest update'),
   ).not.toBeInTheDocument()
 })
+
+it.each([true, false])(
+  'draws credit movement only when the recorded two-account deltas balance (%s)',
+  async (balanced) => {
+    const data = timeline()
+    const courier = '40000000-0000-4000-8000-000000000001'
+    data.participants.push({
+      userId: courier,
+      relationship: 'HISTORICAL_COURIER',
+      assignedAt: at,
+      unassignedAt: null,
+    })
+    data.records[0]!.data = {
+      kind: 'CREDIT',
+      operationId: caseId,
+      result: 'APPLIED',
+      reasonCode: null,
+      ledgerEntries: [
+        {
+          ledgerEntryId: caseId,
+          userId: actor,
+          availableDelta: 0,
+          reservedDelta: -15,
+          availableBalance: 85,
+          reservedBalance: 0,
+        },
+        {
+          ledgerEntryId: orderId,
+          userId: courier,
+          availableDelta: balanced ? 15 : 10,
+          reservedDelta: 0,
+          availableBalance: 115,
+          reservedBalance: 0,
+        },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(data)))
+    render(<EvidencePanel caseId={caseId} orderId={orderId} />)
+    await screen.findAllByText('Available credits')
+    const movement = screen.queryByLabelText('Recorded credit movement')
+    if (balanced) expect(movement).toHaveTextContent('15 credits')
+    else expect(movement).not.toBeInTheDocument()
+  },
+)
 it('uses consistent account labels across assignment periods and typed activity without inventing names', async () => {
   const data = timeline()
   const courier = '40000000-0000-4000-8000-000000000001'
@@ -215,7 +260,7 @@ it('uses consistent account labels across assignment periods and typed activity 
   expect(
     await screen.findByRole('heading', { name: 'Courier withdrew' }),
   ).toBeVisible()
-  expect(screen.getByText('Recorded actor: Courier 1')).toBeVisible()
+  expect(screen.getByText('By Courier 1')).toBeVisible()
   expect(
     screen.getByText('Courier: Unassigned · Previous courier: Courier 1'),
   ).toBeVisible()
@@ -227,9 +272,7 @@ it('uses consistent account labels across assignment periods and typed activity 
     screen.getByRole('heading', { name: 'Credits released' }),
   ).toBeVisible()
   expect(screen.getByText('Outcome: Applied')).toBeVisible()
-  expect(
-    screen.getByText(/Available: \+10 \(balance 20\).*Reserved: -10/),
-  ).toBeVisible()
+  expect(screen.getByText('Available credits')).toBeVisible()
   for (const id of [actor, courier, caseId, orderId]) {
     for (const element of screen.getAllByText(id, { exact: false })) {
       expect(element).not.toBeVisible()
@@ -245,10 +288,10 @@ it('keeps absent actors and accounts outside supplied history explicit', async (
   data.records.push(other)
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(data)))
   render(<EvidencePanel caseId={caseId} orderId={orderId} />)
-  expect(await screen.findByText('Actor not recorded')).toBeVisible()
+  expect(await screen.findByText('Person not recorded')).toBeVisible()
   expect(
     screen.getByText(
-      'Recorded actor: Account not identified in available participant history',
+      'By Account not identified in available participant history',
     ),
   ).toBeVisible()
   expect(
@@ -280,6 +323,27 @@ it('shows test-only markers from supplied fixtures and never substitutes them on
     screen.queryByRole('heading', { name: 'Case opened' }),
   ).not.toBeInTheDocument()
 })
+it('shares the validated participant snapshot with the cards and clears it when evidence is refreshed or denied', async () => {
+  const onSnapshot = vi.fn()
+  const data = timeline()
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce(response(data))
+      .mockResolvedValue(response({}, 403)),
+  )
+  render(
+    <EvidencePanel caseId={caseId} orderId={orderId} onSnapshot={onSnapshot} />,
+  )
+  await screen.findByText('Campus lunch')
+  expect(onSnapshot).toHaveBeenLastCalledWith(data)
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh evidence' }))
+  expect(onSnapshot).toHaveBeenLastCalledWith(null)
+  await screen.findByRole('alert')
+  expect(onSnapshot).toHaveBeenLastCalledWith(null)
+})
+
 it('shows known gaps and projection lag', async () => {
   const data = timeline()
   data.coverage.status = 'INCOMPLETE'
@@ -328,7 +392,7 @@ it('retries an unavailable page with the same cursor, preserving records and ded
   fireEvent.click(
     screen.getByRole('button', { name: 'Try loading evidence again' }),
   )
-  expect(await screen.findByText('2 loaded')).toBeVisible()
+  expect(await screen.findByText('2 events loaded')).toBeVisible()
   expect(fetcher.mock.calls[1]![0]).toBe(fetcher.mock.calls[2]![0])
   expect(fetcher.mock.calls[1]![0]).toContain('cursor=opaque%2B%2Fcursor')
   expect(screen.getAllByRole('heading', { name: 'Case opened' })).toHaveLength(
@@ -354,7 +418,7 @@ it('never merges a changed revision and restarts from the first page', async () 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Reload the timeline',
   )
-  expect(screen.getByText('1 loaded')).toBeVisible()
+  expect(screen.getByText('1 event loaded')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Reload timeline' }))
   await waitFor(() =>
     expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
@@ -416,8 +480,8 @@ it.each([
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Reload the timeline',
   )
-  expect(screen.getByText('1 loaded')).toBeVisible()
+  expect(screen.getByText('1 event loaded')).toBeVisible()
   expect(
-    screen.queryByText('History verified up to recorded checkpoints'),
+    screen.queryByText('History checked through the latest update'),
   ).not.toBeInTheDocument()
 })

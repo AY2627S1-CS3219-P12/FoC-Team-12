@@ -2,14 +2,12 @@ import { useEffect, useState } from 'react'
 import { AdminShell } from './components/AdminShell'
 import { readSession } from './auth/session'
 import { AccessError, checkAccess } from './access'
-import { EvidencePanel } from './EvidencePanel'
+import { EvidencePanel, type Timeline } from './EvidencePanel'
+import { CaseParticipants } from './CaseParticipants'
+import { useParticipantNames } from './useParticipantNames'
 import { formatSingaporeTime } from './time'
-import { CreditActions } from './CreditActions'
 import { ResolutionPanel } from './ResolutionPanel'
-import {
-  CaseConversations,
-  ParticipantConversationStatus,
-} from './CaseConversations'
+import { ParticipantConversationStatus } from './CaseConversations'
 import {
   CaseError,
   caseErrorMessage,
@@ -266,9 +264,11 @@ function Feedback({
 function SummaryCard({
   value,
   participant = false,
+  actor,
 }: {
   value: Summary
   participant?: boolean
+  actor?: string
 }) {
   const status = participant
     ? {
@@ -278,42 +278,69 @@ function SummaryCard({
       }
     : { OPEN: 'Open', UNDER_REVIEW: 'Under review', RESOLVED: 'Resolved' }
   return (
-    <dl className="case-facts">
-      <div>
-        <dt>Status</dt>
-        <dd>
-          <span className="role-chip">{status[value.state]}</span>
-        </dd>
-      </div>
-      <div>
-        <dt>Case ID</dt>
-        <dd>{value.caseId}</dd>
-      </div>
-      <div>
-        <dt>Errand ID</dt>
-        <dd>{value.orderId}</dd>
-      </div>
-      <div>
-        <dt>{participant ? 'Case admin' : 'Reviewer'}</dt>
-        <dd>
-          {participant
-            ? value.reviewerId
-              ? 'Assigned'
-              : 'Awaiting assignment'
-            : value.reviewerId || 'Unassigned'}
-        </dd>
-      </div>
-      {!participant && (
+    <>
+      <dl className="case-facts">
         <div>
-          <dt>Revision</dt>
-          <dd>{value.revision}</dd>
+          <dt>Status</dt>
+          <dd>
+            <span className="role-chip">{status[value.state]}</span>
+          </dd>
         </div>
+        {participant && (
+          <div>
+            <dt>Case ID</dt>
+            <dd>{value.caseId}</dd>
+          </div>
+        )}
+        {participant && (
+          <div>
+            <dt>Errand ID</dt>
+            <dd>{value.orderId}</dd>
+          </div>
+        )}
+        <div>
+          <dt>{participant ? 'Case admin' : 'Reviewer'}</dt>
+          <dd>
+            {participant
+              ? value.reviewerId
+                ? 'Assigned'
+                : 'Awaiting assignment'
+              : value.reviewerId
+                ? value.reviewerId === actor
+                  ? 'Assigned to you'
+                  : 'Another admin'
+                : 'Unassigned'}
+          </dd>
+        </div>
+        <div>
+          <dt>Case opened</dt>
+          <dd>{formatSingaporeTime(value.createdAt)}</dd>
+        </div>
+      </dl>
+      {!participant && (
+        <details className="evidence-technical">
+          <summary>Case references</summary>
+          <dl className="case-facts">
+            <div>
+              <dt>Case ID</dt>
+              <dd>{value.caseId}</dd>
+            </div>
+            <div>
+              <dt>Errand ID</dt>
+              <dd>{value.orderId}</dd>
+            </div>
+            <div>
+              <dt>Reviewer account ID</dt>
+              <dd>{value.reviewerId || 'Unassigned'}</dd>
+            </div>
+            <div>
+              <dt>Record version</dt>
+              <dd>{value.revision}</dd>
+            </div>
+          </dl>
+        </details>
       )}
-      <div>
-        <dt>Case opened</dt>
-        <dd>{formatSingaporeTime(value.createdAt)}</dd>
-      </div>
-    </dl>
+    </>
   )
 }
 
@@ -862,6 +889,23 @@ function CaseDetail({ id, actor }: { id: string; actor: string }) {
 }
 function DetailData({ id, actor }: { id: string; actor: string }) {
   const state = useRemote<Detail>('cases/' + id)
+  const [evidence, setEvidence] = useState<Timeline | null>(null)
+  const participantNames = useParticipantNames([
+    ...(state.data?.statements.map((s) => s.reporterId) || []),
+    ...(evidence
+      ? [
+          evidence.order.requesterId,
+          ...(evidence.order.courierId ? [evidence.order.courierId] : []),
+          ...evidence.participants.map((p) => p.userId),
+        ]
+      : []),
+  ])
+  const [claimNotice, setClaimNotice] = useState('')
+  useEffect(() => {
+    if (!claimNotice) return
+    const timer = window.setTimeout(() => setClaimNotice(''), 6000)
+    return () => clearTimeout(timer)
+  }, [claimNotice])
   const mutation = useMutation<Summary>('foc.claim-pending.' + actor + '.' + id)
   if (!state.data) return <Feedback {...state} />
   const value =
@@ -875,12 +919,12 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           <h2>Case details</h2>
           <button onClick={state.retry}>Refresh case</button>
         </div>
-        <SummaryCard value={value} />
-        <p>
-          You cannot review a case if you requested the errand or were ever its
-          courier. Another admin must review it, even if you did not submit a
-          report.
-        </p>
+        <SummaryCard value={value} actor={actor} />
+        {claimNotice && (
+          <p role="status" className="workspace-error">
+            {claimNotice}
+          </p>
+        )}
         {mutation.error && (
           <p role="alert" className="workspace-error">
             {mutation.error}
@@ -889,17 +933,26 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         {mutation.result && <p role="status">Case assigned to you.</p>}
         {value.state === 'OPEN' || mutation.pending ? (
           <>
-            <p>
-              Assign this case to yourself to review it. Another admin may take
-              it first.
-            </p>
             <button
               disabled={mutation.busy}
-              onClick={() =>
+              onClick={() => {
+                if (
+                  evidence &&
+                  (evidence.order.requesterId === actor ||
+                    evidence.order.courierId === actor ||
+                    evidence.participants.some(
+                      (person) => person.userId === actor,
+                    ))
+                ) {
+                  setClaimNotice(
+                    'You took part in this errand. Another admin must review it.',
+                  )
+                  return
+                }
                 void mutation.submit('cases/' + id + '/claim', {
                   expectedRevision: value.revision,
                 })
-              }
+              }}
             >
               {mutation.busy
                 ? 'Assigning…'
@@ -913,48 +966,23 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
               </p>
             )}
           </>
-        ) : (
-          <p>
-            {value.reviewerId === actor
-              ? 'You are the assigned reviewer.'
-              : 'Only the assigned reviewer can act on this case.'}
-          </p>
-        )}
+        ) : null}
       </section>
-      <section className="case-panel">
-        <h2>Participant statements</h2>
-        {state.data.statements.map((statement, index) => (
-          <article className="case-statement" key={statement.reporterId}>
-            <h3>Participant {index + 1}</h3>
-            <details className="evidence-technical">
-              <summary>Account details</summary>
-              <p>Account ID: {statement.reporterId}</p>
-            </details>
-            <p className="muted">
-              {formatSingaporeTime(statement.submittedAt)}
-            </p>
-            <p className="statement-text">{statement.description}</p>
-          </article>
-        ))}
-      </section>
-      <CreditActions
-        key={`credit.${actor}.${id}`}
-        closing={!!state.data.closure}
+      <CaseParticipants
+        key={`${actor}.${id}`}
+        detail={state.data}
         summary={value}
         actorId={actor}
-        participantIds={state.data.statements.map((s) => s.reporterId)}
-        initialActions={state.data.actions}
+        evidence={evidence}
+        names={participantNames}
       />
-      <CreditActions
-        key={`ban.${actor}.${id}`}
-        closing={!!state.data.closure}
-        kind="BAN"
-        summary={value}
-        actorId={actor}
-        participantIds={state.data.statements.map((s) => s.reporterId)}
-        initialActions={state.data.actions}
+      <EvidencePanel
+        key={id}
+        caseId={id}
+        orderId={value.orderId}
+        onSnapshot={setEvidence}
+        names={participantNames}
       />
-      <EvidencePanel key={id} caseId={id} orderId={value.orderId} />
       <ResolutionPanel
         key={`resolve.${actor}.${id}.${state.data.closure?.operationId || ''}`}
         summary={value}
@@ -963,13 +991,6 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         resolution={state.data.resolution}
         closure={state.data.closure}
         refresh={state.retry}
-      />
-      <CaseConversations
-        key={`${actor}.${id}`}
-        closing={!!state.data.closure}
-        summary={value}
-        actorId={actor}
-        participantIds={state.data.statements.map((s) => s.reporterId)}
       />
     </>
   )

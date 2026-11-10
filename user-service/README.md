@@ -364,7 +364,7 @@ rejected even if its JWT still contains the `ADMIN` role claim.
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/users/admin/accounts?query=&page=0&size=20` | Paged account summaries; `query` searches email or username. |
+| `GET /api/users/admin/accounts?query=&page=0&size=20` | Paged account summaries; `query` searches email/username, or matches one exact canonical account UUID (case-insensitive). |
 | `PATCH /api/users/admin/accounts/{id}/role` | Body `{"administrator":true}` grants, or `{"administrator":false}` removes, the additional `ADMIN` assignment for an active account. |
 | `PATCH /api/users/admin/accounts/{id}/status` | Body `{"status":"BANNED"}` bans an active account, or `{"status":"ACTIVE","reason":"Reviewed appeal"}` reactivates a banned account with mandatory reason/audit. |
 

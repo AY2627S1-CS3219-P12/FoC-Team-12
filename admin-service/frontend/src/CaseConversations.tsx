@@ -7,6 +7,8 @@ import {
   type Conversation,
 } from './conversations'
 import { ConversationThread } from './ConversationThread'
+import { MessageSquare } from 'lucide-react'
+import type { ParticipantSelection } from './casePeople'
 
 export function ParticipantConversationStatus({
   summary,
@@ -114,13 +116,28 @@ export function CaseConversations({
   actorId,
   participantIds,
   closing = false,
+  selection,
+  participantLabels = {},
+  onParticipantChange,
 }: {
   summary: Summary
   actorId: string
   participantIds: string[]
   closing?: boolean
+  selection?: ParticipantSelection
+  participantLabels?: Record<string, string>
+  onParticipantChange?: (target: string) => void
 }) {
   const [selected, setSelected] = useState('')
+  useEffect(() => {
+    onParticipantChange?.(selected)
+  }, [selected, onParticipantChange])
+  const [handledSelection, setHandledSelection] = useState<number>()
+  if (selection && handledSelection !== selection.request) {
+    setHandledSelection(selection.request)
+    if (selection && participantIds.includes(selection.userId))
+      setSelected(selection.userId)
+  }
   const saved = useConfirmed(summary, actorId, false)
   const reference = saved.references?.find(
     (r) => r.participantUserId === selected,
@@ -131,12 +148,26 @@ export function CaseConversations({
     summary.reviewerId === actorId
   return (
     <section className="case-panel" aria-labelledby="case-conversations-title">
-      <p className="eyebrow">Private follow-up</p>
-      <h2 id="case-conversations-title">Participant conversations</h2>
-      <p>
-        Select a participant who submitted a report to view or start a private
-        conversation.
-      </p>
+      {!selection && <p className="eyebrow">Private follow-up</p>}
+      <h2
+        id="case-conversations-title"
+        className={selection ? 'visually-hidden' : 'icon-heading'}
+      >
+        <MessageSquare aria-hidden="true" />
+        Participant conversations
+      </h2>
+      {selected && participantLabels[selected] && (
+        <p className="action-person">
+          Private conversation with{' '}
+          <a href={`#person-${selected}`}>{participantLabels[selected]}</a>
+        </p>
+      )}
+      {!selection && (
+        <p>
+          Select a participant who submitted a report to view or start a private
+          conversation.
+        </p>
+      )}
       {!assigned && (
         <p className="conversation-status">
           {summary.state === 'OPEN'
@@ -150,21 +181,24 @@ export function CaseConversations({
       <SavedStatus saved={saved} />
       {saved.references && (
         <>
-          <div
-            className="conversation-picker"
-            aria-label="Select a reporting participant"
-          >
-            {[...new Set(participantIds)].map((id, index) => (
-              <button
-                key={id}
-                className="button-secondary"
-                aria-pressed={id === selected}
-                onClick={() => setSelected(id)}
-              >
-                Participant {index + 1}
-              </button>
-            ))}
-          </div>
+          <details open={selection ? undefined : true}>
+            <summary>Change participant</summary>
+            <div
+              className="conversation-picker"
+              aria-label="Select a reporting participant"
+            >
+              {[...new Set(participantIds)].map((id, index) => (
+                <button
+                  key={id}
+                  className="button-secondary"
+                  aria-pressed={id === selected}
+                  onClick={() => setSelected(id)}
+                >
+                  {participantLabels[id] || `Participant ${index + 1}`}
+                </button>
+              ))}
+            </div>
+          </details>
           {!participantIds.length && (
             <p>
               No participants are available to contact. Only participants who

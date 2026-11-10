@@ -8,6 +8,8 @@ import {
   type Summary,
 } from './cases'
 import { formatSingaporeTime } from './time'
+import { Coins, ShieldBan } from 'lucide-react'
+import type { ParticipantSelection } from './casePeople'
 
 type Input = {
   type: 'CREDIT_ADJUSTMENT' | 'BAN'
@@ -72,6 +74,10 @@ export function CreditActions({
   initialActions = [],
   kind = 'CREDIT_ADJUSTMENT',
   closing = false,
+  selection,
+  participantLabels = {},
+  onPendingTargetChange,
+  onParticipantChange,
 }: {
   summary: Summary
   actorId: string
@@ -79,6 +85,10 @@ export function CreditActions({
   initialActions?: AdminAction[]
   kind?: 'CREDIT_ADJUSTMENT' | 'BAN'
   closing?: boolean
+  selection?: ParticipantSelection
+  participantLabels?: Record<string, string>
+  onPendingTargetChange?: (target: string | null) => void
+  onParticipantChange?: (target: string) => void
 }) {
   const ban = kind === 'BAN'
   const failure = useCallback((e: unknown) => actionFailure(e, ban), [ban])
@@ -140,6 +150,34 @@ export function CreditActions({
   const [pollError, setPollError] = useState('')
   const [denied, setDenied] = useState(false)
   const [refresh, setRefresh] = useState(0)
+  const [handledSelection, setHandledSelection] = useState<number>()
+  const confirmButton = useRef<HTMLButtonElement>(null)
+  const reviewButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (confirm) confirmButton.current?.focus()
+  }, [confirm])
+  useEffect(() => {
+    onParticipantChange?.(target)
+  }, [target, onParticipantChange])
+  useEffect(() => {
+    onPendingTargetChange?.(pending?.body.targetUserId || null)
+  }, [pending, onPendingTargetChange])
+  if (selection && handledSelection !== selection.request) {
+    setHandledSelection(selection.request)
+    if (
+      !pending &&
+      !busy &&
+      !confirm &&
+      participantIds.includes(selection.userId)
+    ) {
+      setTarget(selection.userId)
+    }
+  }
+  const participantName = (id: string) =>
+    participantLabels[id] ||
+    (participantIds.includes(id)
+      ? `Participant ${participantIds.indexOf(id) + 1}`
+      : 'Case participant')
   const guard = useRef(false)
   const active = useRef(true)
   const abort = useRef<AbortController | null>(null)
@@ -154,6 +192,10 @@ export function CreditActions({
     !denied &&
     !historyUnavailable
   const eligible = [...new Set(participantIds)]
+  const visibleActions =
+    selection && target
+      ? actions.filter((a) => a.targetUserId === target)
+      : actions
   const numeric = Number(amount)
   const valid =
     eligible.includes(target) &&
@@ -315,10 +357,20 @@ export function CreditActions({
     <section className="case-panel credit-actions" aria-labelledby={headingId}>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">
-            {ban ? 'Account safety' : 'Administrative correction'}
-          </p>
-          <h2 id={headingId}>
+          {!selection && (
+            <p className="eyebrow">
+              {ban ? 'Account safety' : 'Administrative correction'}
+            </p>
+          )}
+          <h2
+            id={headingId}
+            className={selection ? 'visually-hidden' : 'icon-heading'}
+          >
+            {ban ? (
+              <ShieldBan aria-hidden="true" />
+            ) : (
+              <Coins aria-hidden="true" />
+            )}
             {ban ? 'Account ban requests' : 'Credit corrections'}
           </h2>
         </div>
@@ -330,11 +382,28 @@ export function CreditActions({
           {ban ? 'Refresh ban status' : 'Refresh correction status'}
         </button>
       </div>
-      <p>
-        {ban
-          ? 'Ban a participant who reported this errand. You can’t ban yourself or the last admin.'
-          : 'Add or remove a participant’s available credits. It’s only done once it’s confirmed.'}
-      </p>
+      {target && participantLabels[target] && (
+        <p className="action-person">
+          Selected account:{' '}
+          <a href={`#person-${target}`}>{participantName(target)}</a>
+        </p>
+      )}
+      {selection &&
+        target &&
+        selection.userId !== target &&
+        (pending || busy || confirm) && (
+          <p role="status" className="evidence-lag">
+            Finish or cancel the current review before choosing another account.
+            An unconfirmed submission must be retried for its original account.
+          </p>
+        )}
+      {!selection && (
+        <p>
+          {ban
+            ? 'Ban a participant who reported this errand. You can’t ban yourself or the last admin.'
+            : 'Add or remove a participant’s available credits. It’s only done once it’s confirmed.'}
+        </p>
+      )}
       {error && (
         <p role="alert" className="workspace-error">
           {error}
@@ -361,9 +430,9 @@ export function CreditActions({
       )}
       {!denied && (
         <>
-          {actions.length ? (
+          {visibleActions.length ? (
             <ul className="credit-action-list">
-              {actions.map((a) => (
+              {visibleActions.map((a) => (
                 <li key={a.operationId}>
                   <div className="section-heading">
                     <h3>
@@ -387,9 +456,13 @@ export function CreditActions({
                   <p>{labels[a.status]}</p>
                   <p>
                     Participant:{' '}
-                    {eligible.includes(a.targetUserId)
-                      ? `Participant ${eligible.indexOf(a.targetUserId) + 1}`
-                      : 'Case participant'}
+                    {participantLabels[a.targetUserId] ? (
+                      <a href={`#person-${a.targetUserId}`}>
+                        {participantName(a.targetUserId)}
+                      </a>
+                    ) : (
+                      participantName(a.targetUserId)
+                    )}
                   </p>
                   <p className="statement-text">{a.reason}</p>
                   {a.reasonCode && (
@@ -441,9 +514,11 @@ export function CreditActions({
           ) : (
             !historyUnavailable && (
               <p>
-                {ban
-                  ? 'No ban requests recorded for this case.'
-                  : 'No credit corrections recorded for this case.'}
+                {selection && target
+                  ? `No ${ban ? 'ban requests' : 'credit corrections'} recorded for ${participantName(target)}.`
+                  : ban
+                    ? 'No ban requests recorded for this case.'
+                    : 'No credit corrections recorded for this case.'}
               </p>
             )
           )}
@@ -456,21 +531,27 @@ export function CreditActions({
                 else void submit()
               }}
             >
-              <label htmlFor={`${kind}-target`}>Participant</label>
-              <select
-                id={`${kind}-target`}
-                value={target}
-                disabled={busy || !!pending || confirm}
-                onChange={(e) => setTarget(e.target.value)}
-                required
+              <details
+                className="action-account-picker"
+                open={selection ? undefined : true}
               >
-                <option value="">Choose a reporting participant</option>
-                {eligible.map((id, index) => (
-                  <option key={id} value={id}>
-                    Participant {index + 1}
-                  </option>
-                ))}
-              </select>
+                <summary>Change participant</summary>
+                <label htmlFor={`${kind}-target`}>Participant</label>
+                <select
+                  id={`${kind}-target`}
+                  value={target}
+                  disabled={busy || !!pending || confirm}
+                  onChange={(e) => setTarget(e.target.value)}
+                  required
+                >
+                  <option value="">Choose a reporting participant</option>
+                  {eligible.map((id) => (
+                    <option key={id} value={id}>
+                      {participantName(id)}
+                    </option>
+                  ))}
+                </select>
+              </details>
               {!ban && (
                 <>
                   <fieldset
@@ -516,7 +597,7 @@ export function CreditActions({
               </label>
               <textarea
                 id={`${kind}-reason`}
-                rows={4}
+                rows={2}
                 required
                 maxLength={2000}
                 value={reason}
@@ -537,23 +618,15 @@ export function CreditActions({
                     ban ? 'Confirm account ban' : 'Confirm credit correction'
                   }
                 >
-                  <h3>
-                    Confirm{' '}
-                    {ban
-                      ? 'account ban'
-                      : direction === 'add'
-                        ? 'addition'
-                        : 'subtraction'}
-                  </h3>
                   <p>
                     {ban
-                      ? `Request a ban for Participant ${eligible.indexOf(target) + 1}? They won’t be able to sign in or do anything new.`
-                      : `${direction === 'add' ? 'Add' : 'Subtract'} ${numeric} credits ${direction === 'add' ? 'to' : 'from'} Participant ${eligible.indexOf(target) + 1}. This changes available credits independently of the errand reward.`}
+                      ? `Request a ban for ${participantName(target)}? Once applied, they won’t be able to sign in or do anything new.`
+                      : `${direction === 'add' ? 'Add' : 'Subtract'} ${numeric} credits ${direction === 'add' ? 'to' : 'from'} ${participantName(target)}. This changes available credits independently of the errand reward.`}
                   </p>
-                  <p className="statement-text">{reason.trim()}</p>
                   <div className="conversation-picker">
                     <button
                       type="button"
+                      ref={confirmButton}
                       className={ban ? 'button-danger' : undefined}
                       disabled={busy || !valid}
                       onClick={() => void submit()}
@@ -566,14 +639,22 @@ export function CreditActions({
                       type="button"
                       className="button-secondary"
                       disabled={busy}
-                      onClick={() => setConfirm(false)}
+                      onClick={() => {
+                        setConfirm(false)
+                        requestAnimationFrame(() =>
+                          reviewButton.current?.focus(),
+                        )
+                      }}
                     >
                       Back to editing
                     </button>
                   </div>
                 </div>
               ) : (
-                <button disabled={busy || (!pending && !valid)}>
+                <button
+                  ref={reviewButton}
+                  disabled={busy || (!pending && !valid)}
+                >
                   {busy
                     ? 'Submitting…'
                     : pending

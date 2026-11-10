@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { App } from './App'
 import { saveSession } from './auth/session'
@@ -387,6 +393,64 @@ it('claims using the displayed revision and explains conflicts without claiming 
   expect(JSON.parse(call[1].body)).toEqual({ expectedRevision: 1 })
   expect(screen.queryByText('Case assigned to you.')).not.toBeInTheDocument()
 })
+
+it('blocks a known historical courier from claiming and gives brief feedback without a claim request', async () => {
+  window.history.replaceState({}, '', '/admin/cases/' + id)
+  session('ADMIN')
+  const at = summary.createdAt
+  const fetcher = vi.fn().mockImplementation(async (url: string) => {
+    if (url.endsWith('/session'))
+      return response({ userId: actor, role: 'ADMIN' })
+    if (url.endsWith('/conversations')) return response([])
+    if (url.includes('/timeline'))
+      return response({
+        caseId: id,
+        orderId: order,
+        evidenceRevision: 'test-only',
+        order: {
+          orderId: order,
+          requesterId: id,
+          courierId: null,
+          status: 'COMPLETED',
+          title: 'Test-only errand',
+          description: 'Lunch',
+          creditReward: 5,
+          pickupDeadline: at,
+          pickupLocationId: id,
+          dropoffLocationId: id,
+          pickupLocationName: 'Canteen',
+          dropoffLocationName: 'Library',
+        },
+        participants: [
+          {
+            userId: actor,
+            relationship: 'HISTORICAL_COURIER',
+            assignedAt: at,
+            unassignedAt: at,
+          },
+        ],
+        records: [],
+        coverage: {
+          status: 'UNKNOWN',
+          asOf: at,
+          checkpoints: [],
+          blockingGaps: [],
+        },
+        nextCursor: null,
+      })
+    return response({ case: summary, statements: [], actions: [] })
+  })
+  mockServiceFetch(fetcher)
+  render(<App />)
+  await screen.findByText('Test-only errand')
+  fireEvent.click(screen.getByRole('button', { name: 'Assign to me' }))
+  expect(screen.getByRole('status')).toHaveTextContent(
+    'You took part in this errand. Another admin must review it.',
+  )
+  expect(fetcher.mock.calls.some((call) => call[0].endsWith('/claim'))).toBe(
+    false,
+  )
+})
 it.each([
   [
     403,
@@ -410,15 +474,21 @@ it.each([
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'Assign to me' }))
     expect(
-      await screen.findByText(
+      await within(
+        screen
+          .getByRole('heading', { name: 'Case details' })
+          .closest('section')!,
+      ).findByText(
         status === 503
           ? 'We couldn’t confirm you weren’t part of this errand. Refresh the evidence and try again.'
           : detail,
       ),
     ).toBeVisible()
     expect(
-      screen.getByText(/You cannot review a case if you requested the errand/),
-    ).toHaveTextContent('did not submit a report')
+      screen.queryByText(
+        /You cannot review a case if you requested the errand/,
+      ),
+    ).not.toBeInTheDocument()
     expect(screen.getByText('Open')).toBeVisible()
     expect(screen.queryByText('Case assigned to you.')).not.toBeInTheDocument()
   },

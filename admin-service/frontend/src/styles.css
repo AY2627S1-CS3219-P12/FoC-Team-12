@@ -1287,6 +1287,340 @@ button.button-danger:hover:not(:disabled) {
   background: #912018;
 }
 
+/* Case review: people first, with one account-specific action area at a time. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.reporter-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.credit-movement {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--line);
+}
+.credit-movement-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: var(--action);
+}
+.credit-movement svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.participant-tools-area {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--action);
+  border-radius: 0.875rem;
+  background: var(--action-soft);
+}
+.participant-tools-area[hidden] {
+  display: none;
+}
+.participant-tools-area .participant-tools-heading {
+  margin: 0 0 0.75rem;
+  padding: 0;
+  border: 0;
+  gap: 0.5rem;
+}
+.participant-tools-area .case-panel {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.participant-tools-area .action-person {
+  padding: 0;
+  border: 0;
+  margin: 0.5rem 0;
+}
+.participant-tools-area .section-heading {
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.participant-tools-area .section-heading button {
+  font-size: 0.8rem;
+}
+.participant-tools-area .credit-confirm {
+  padding: 0.75rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+}
+.participant-tools-area .credit-confirm p {
+  margin-top: 0;
+}
+.participant-tools-area .credit-confirm .conversation-picker {
+  gap: 0.5rem;
+}
+.action-account-picker label {
+  display: block;
+  margin-top: 0.5rem;
+}
+.action-account-picker select {
+  width: 100%;
+}
+@media (max-width: 700px) {
+  .participant-tools-area {
+    grid-column: 1 !important;
+  }
+}
+.case-people-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+.case-person {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.875rem;
+  background: var(--surface);
+  overflow-wrap: anywhere;
+  scroll-margin-top: 1.5rem;
+}
+.case-person-selected {
+  border-color: var(--action);
+  box-shadow: inset 0 0 0 1px var(--action);
+}
+.case-person-heading {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+.case-person h3,
+.case-person h4 {
+  margin: 0;
+}
+.case-person h3 {
+  font-size: 1.1rem;
+}
+.case-symbol {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  color: var(--action);
+  background: var(--action-soft);
+  border-radius: 0.75rem;
+}
+.case-symbol svg {
+  width: 1.4rem;
+  height: 1.4rem;
+  stroke-width: 1.8;
+}
+.person-reference {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+.person-reference code {
+  font-size: inherit;
+  overflow-wrap: anywhere;
+}
+.person-statement {
+  flex: 1;
+  padding: 1rem;
+  margin: 0.5rem 0 1rem;
+  background: var(--canvas);
+  border-radius: 0.6rem;
+}
+.person-statement h4,
+.icon-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.person-statement h4 {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.person-statement h4 svg,
+.icon-heading svg,
+.case-facts dt svg,
+.person-actions svg,
+.participant-tools-heading button svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: 0 0 auto;
+  stroke-width: 1.8;
+}
+.person-statement .statement-text {
+  line-height: 1.65;
+  margin: 0.75rem 0;
+}
+.person-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.person-actions button,
+.participant-tools-heading button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+}
+.person-actions .person-ban {
+  color: var(--danger);
+}
+.person-actions .button-secondary:hover:not(:disabled) {
+  color: white;
+}
+.person-actions .person-ban:hover:not(:disabled) {
+  color: var(--danger);
+  background: #f9ebe8;
+  border-color: var(--danger);
+}
+.case-person-empty {
+  background: var(--canvas);
+  gap: 0.75rem;
+}
+.participant-tools-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1.25rem;
+  margin-top: 1.5rem;
+}
+.participant-tools-heading h3 {
+  margin: 0;
+  scroll-margin-top: 1.5rem;
+}
+.participant-tools-heading h3 span {
+  color: var(--action);
+}
+.participant-review > div > .case-panel {
+  margin: 1rem 0 0;
+  padding: 1.25rem;
+  box-shadow: none;
+  background: var(--canvas);
+}
+.participant-review .credit-actions .case-form {
+  max-width: 38rem;
+}
+.action-person {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--action);
+  background: var(--action-soft);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.case-facts dt {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.evidence-panel .case-facts {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.evidence-panel .case-facts > div {
+  padding: 0.75rem;
+  background: var(--canvas);
+  border-radius: 0.5rem;
+}
+.evidence-panel .evidence-records {
+  max-width: 60rem;
+}
+.evidence-panel .evidence-records article {
+  background: var(--surface);
+}
+.evidence-panel .evidence-section > h4 {
+  font-size: 1.15rem;
+  margin: 1rem 0 0.5rem;
+}
+.evidence-notice p:last-child {
+  margin-bottom: 0;
+  font-size: 0.8rem;
+}
+.evidence-section > summary > svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  vertical-align: middle;
+  margin-right: 0.4rem;
+}
+.timeline-credit-people {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.timeline-credit-people > li {
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.85rem;
+}
+.timeline-credit-facts {
+  display: grid;
+  gap: 0.75rem;
+  margin-bottom: 0;
+}
+.timeline-credit-facts dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.timeline-credit-facts dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0;
+}
+.timeline-credit-facts dd span {
+  color: var(--muted);
+}
+@media (max-width: 700px) {
+  .case-people-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .timeline-credit-people {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .case-person {
+    padding: 1rem;
+  }
+  .evidence-panel .case-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .participant-review > div > .case-panel {
+    padding: 1rem;
+  }
+  .person-actions button {
+    flex: 1 1 auto;
+  }
+  .participant-review > .section-heading {
+    flex-wrap: wrap;
+  }
+}
+
 /* Notification bell: shared across every frontend's header; keep in step with notification-service. */
 .notification-bell {
   position: relative;
