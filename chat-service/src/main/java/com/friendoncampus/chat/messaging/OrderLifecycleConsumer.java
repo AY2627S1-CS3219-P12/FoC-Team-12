@@ -27,6 +27,8 @@ public class OrderLifecycleConsumer {
     private static final Set<String> TERMINAL =
             Set.of("COMPLETED", "CANCELLED", "EXPIRED", "RESERVATION_FAILED");
     private static final Map<String, String> ACTIVITY_TEXT = Map.ofEntries(
+            Map.entry("REVIEW_STARTED", "This errand is under review. Normal errand actions and chat are paused."),
+            Map.entry("DISPUTE_RESOLVED", "This errand was finished after dispute review."),
             Map.entry("ACCEPT", "Courier accepted the errand."),
             Map.entry("WITHDRAW", "Courier withdrew from the errand."),
             Map.entry("PICK_UP", "Courier marked the errand as picked up."),
@@ -118,7 +120,7 @@ public class OrderLifecycleConsumer {
                 withdraw(orderId, nullableUuid(data, "previousCourierId"), occurredAt);
             }
         }
-        if (TERMINAL.contains(toState)) lock(orderId, occurredAt);
+        if (TERMINAL.contains(toState) || "REVIEW_STARTED".equals(action) || "DISPUTE_RESOLVED".equals(action)) lock(orderId, occurredAt);
 
         db.sql("""
                 INSERT INTO chat_processed_events(event_id,order_id,source_sequence,payload_hash,processed_at)

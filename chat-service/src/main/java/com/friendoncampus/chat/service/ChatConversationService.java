@@ -56,7 +56,7 @@ public class ChatConversationService {
     public Conversation byOrder(UUID orderId, UUID actor) {
         return db.sql("""
                 SELECT c.id,c.order_id,c.status,EXISTS(SELECT 1 FROM chat_participants w
-                  WHERE w.conversation_id=c.id AND w.user_id=:actor AND w.can_write AND w.valid_until IS NULL) AS actor_can_write
+                  WHERE w.conversation_id=c.id AND w.user_id=:actor AND w.can_write AND w.valid_until IS NULL) AND NOT EXISTS(SELECT 1 FROM chat_errand_reviews review WHERE review.order_id=c.order_id AND c.conversation_type='ERRAND') AS actor_can_write
                 FROM chat_conversations c
                 WHERE c.order_id=:orderId AND c.conversation_type='ERRAND'
                 AND EXISTS (SELECT 1 FROM chat_participants p WHERE p.conversation_id=c.id AND p.user_id=:actor)
@@ -74,7 +74,7 @@ public class ChatConversationService {
                     rs.getString(3),!access.path("canWriteConversation").asBoolean()||!"ACTIVE".equals(rs.getString(3)))).single();
         return db.sql("""
                 SELECT c.id,c.order_id,c.status,EXISTS(SELECT 1 FROM chat_participants w
-                  WHERE w.conversation_id=c.id AND w.user_id=:actor AND w.can_write AND w.valid_until IS NULL) AS actor_can_write
+                  WHERE w.conversation_id=c.id AND w.user_id=:actor AND w.can_write AND w.valid_until IS NULL) AND NOT EXISTS(SELECT 1 FROM chat_errand_reviews review WHERE review.order_id=c.order_id AND c.conversation_type='ERRAND') AS actor_can_write
                 FROM chat_conversations c
                 WHERE c.id=:id AND EXISTS (SELECT 1 FROM chat_participants p WHERE p.conversation_id=c.id AND p.user_id=:actor)
                 """).param("id", id).param("actor", actor).query((rs,n) ->
@@ -261,6 +261,8 @@ public class ChatConversationService {
         db.sql("SELECT id FROM chat_conversations WHERE id=:id FOR UPDATE").param("id",id).query(UUID.class).optional().orElseThrow(ChatAccessException::new);
         int closed=db.sql("SELECT count(*) FROM chat_conversations c JOIN chat_case_closures x ON x.case_id=c.case_id WHERE c.id=:id")
                 .param("id",id).query(Integer.class).single();
+        int reviewed=db.sql("SELECT count(*) FROM chat_conversations c JOIN chat_errand_reviews r ON r.order_id=c.order_id WHERE c.id=:id AND c.conversation_type='ERRAND'").param("id",id).query(Integer.class).single();
+        if(reviewed!=0)throw new ChatConflictException("This errand is under review");
         if(closed!=0)throw new ChatConflictException("This conversation is read-only");
         int count=db.sql("SELECT count(*) FROM chat_participants p JOIN chat_conversations c ON c.id=p.conversation_id WHERE p.conversation_id=:id AND p.user_id=:actor AND p.can_write AND p.valid_until IS NULL AND c.status='ACTIVE'").param("id",id).param("actor",actor).query(Integer.class).single();
         if(count==0) throw new ChatConflictException("This conversation is read-only");

@@ -37,16 +37,17 @@ class AdminChatIntegrationTest {
     @Autowired Clock clock;
     @Autowired PlatformTransactionManager manager;
     @MockitoBean InternalServiceClient internal;
+    @MockitoBean com.friendoncampus.chat.authorization.CurrentAuthorization current;
     final JsonMapper json=JsonMapper.builder().build();
     UUID caseId,order,reviewer,participant,other;
     final OffsetDateTime at=OffsetDateTime.parse("2026-11-09T01:00:00.123456789Z");
-    Jwt actor(UUID id,String role){return Jwt.withTokenValue("TEST-ONLY").header("alg","RS256").subject(id.toString()).claim("role",role).build();}
+    Jwt actor(UUID id,String role){return Jwt.withTokenValue("TEST-ONLY").header("alg","RS256").subject(id.toString()).claim("role",role).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(600)).build();}
     JsonNode access(boolean write,UUID operation){
         var value=json.createObjectNode();value.put("caseId",caseId.toString());value.put("orderId",order.toString());value.put("state","UNDER_REVIEW");value.put("reviewerId",reviewer.toString());value.put("canReadEvidence",true);value.put("canReadConversation",true);value.put("canWriteConversation",write);
         if(operation!=null)value.put("closureOperationId",operation.toString());return value;
     }
     @BeforeEach void setup(){
-        db.execute("TRUNCATE chat_conversations,chat_evidence_records,chat_projection_checkpoints,chat_timeline_snapshots,chat_case_closures,chat_operation_evidence CASCADE");
+        db.execute("TRUNCATE chat_conversations,chat_evidence_records,chat_projection_checkpoints,chat_timeline_snapshots,chat_case_closures,chat_operation_evidence,chat_errand_reviews CASCADE");
         caseId=UUID.randomUUID();order=UUID.randomUUID();reviewer=UUID.randomUUID();participant=UUID.randomUUID();other=UUID.randomUUID();
         when(internal.userEligibility(any())).thenReturn(json.readTree("{\"active\":true,\"administrator\":true}"));
         when(internal.caseAccess(eq(caseId),any(),any())).thenReturn(access(true,null));
@@ -128,6 +129,37 @@ class AdminChatIntegrationTest {
         var data=new LinkedHashMap<String,Object>();data.put("kind","ADMIN");data.put("caseId",caseId);data.put("operationId",null);data.put("targetUserId",null);data.put("result",null);
         var record=new LinkedHashMap<String,Object>(Map.of("eventId",UUID.randomUUID(),"source","admin-service","stream","admin.events","sourceSequence",1,"orderId",order,"action","CaseOpened","actorUserId",participant,"occurredAt",at.toString(),"ingestedAt",at.toString(),"data",data));
         when(internal.adminEvidence(order,caseId)).thenReturn(List.of(page("admin-service","admin.events",caseId,List.of(json.valueToTree(record)),1)));
+    }
+    @Test void originalTextAndProtectedImagesJoinTimelineAndPinnedPagesExcludeLaterMessages(){
+        producerPages(List.of(orderRecord(UUID.randomUUID(),1,null,null,"CREATE")));
+        UUID conversation=open();String original="TEST ONLY: two bowls. One missing — exact original text.";
+        chats.sendText(conversation,reviewer,UUID.randomUUID(),"TEXT",original,null);
+        byte[] png=Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aVOsAAAAASUVORK5CYII=");
+        var attachment=chats.upload(conversation,reviewer,new org.springframework.mock.web.MockMultipartFile("image","original.png","image/png",png));
+        var image=chats.sendImage(conversation,reviewer,UUID.randomUUID(),attachment.id());
+        var first=admin.timeline(caseId,actor(reviewer,"ADMIN"),null,1);String cursor=(String)first.get("nextCursor");
+        chats.sendText(conversation,reviewer,UUID.randomUUID(),"TEXT","TEST ONLY later message",null);
+        var pinned=json.valueToTree(admin.timeline(caseId,actor(reviewer,"ADMIN"),cursor,100));
+        assertFalse(pinned.toString().contains("TEST ONLY later message"));
+        var fresh=json.valueToTree(admin.timeline(caseId,actor(reviewer,"ADMIN"),null,100));
+        var records=fresh.path("records");assertTrue(records.toString().contains(original));assertTrue(records.toString().contains("IMAGE"));
+        assertFalse(records.toString().contains("object_key"));assertFalse(records.toString().contains("storage_provider"));
+        assertArrayEquals(png,admin.evidenceAttachment(caseId,image.id(),actor(reviewer,"ADMIN")).content());
+        when(internal.caseAccess(caseId,other,null)).thenReturn(json.createObjectNode().put("canReadEvidence",false));
+        assertThrows(ResponseStatusException.class,()->admin.evidenceAttachment(caseId,image.id(),actor(other,"ADMIN")));
+        assertThrows(ResponseStatusException.class,()->admin.evidenceAttachment(caseId,UUID.randomUUID(),actor(reviewer,"ADMIN")));
+    }
+    @Test void errandReviewBarrierDoesNotLockPrivateCaseChat(){
+        var record=(tools.jackson.databind.node.ObjectNode)orderRecord(UUID.randomUUID(),1,null,null,"REVIEW_STARTED");
+        ((tools.jackson.databind.node.ObjectNode)record.path("data").path("snapshot")).put("reviewCaseId",caseId.toString());
+        producerPages(List.of(record));
+        UUID errand=UUID.randomUUID();
+        db.update("INSERT INTO chat_conversations(id,conversation_type,order_id,status,next_sequence,created_at,updated_at) VALUES (?,'ERRAND',?,'ACTIVE',1,?,?)",errand,order,at,at);
+        db.update("INSERT INTO chat_participants(conversation_id,user_id,relationship,can_write,valid_from) VALUES (?,?,'REQUESTER',true,?)",errand,participant,at);
+        assertEquals(true,admin.prepareErrandReview(order,caseId,actor(participant,"REQUESTER")).get("readOnly"));
+        assertThrows(ChatConflictException.class,()->chats.sendText(errand,participant,UUID.randomUUID(),"TEXT","blocked",null));
+        UUID privateChat=open();assertNotNull(chats.sendText(privateChat,reviewer,UUID.randomUUID(),"TEXT","TEST ONLY admin follow-up",null));
+        assertEquals(true,admin.prepareErrandReview(order,caseId,actor(participant,"REQUESTER")).get("readOnly"));
     }
     @Test void snapshotsRemainStableAcrossNewFactsAndEmptyConfirmedCreditBaselineIsComplete(){
         UUID courier=UUID.randomUUID();var first=orderRecord(UUID.randomUUID(),1,null,null,"CREATE");var second=orderRecord(UUID.randomUUID(),2,courier,null,"ACCEPT");producerPages(List.of(first,second));
