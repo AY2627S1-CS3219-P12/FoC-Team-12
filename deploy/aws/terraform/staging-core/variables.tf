@@ -21,6 +21,20 @@ variable "github_deploy_role_arn" {
   description = "OIDC deployment role from the bootstrap stack."
 }
 
+variable "kafbat_viewer_role_arn" {
+  type        = string
+  description = "Optional IAM role whose EKS sessions may privately port-forward to the staging Kafbat dashboard."
+  default     = ""
+
+  validation {
+    condition = var.kafbat_viewer_role_arn == "" || can(regex(
+      "^arn:aws:iam::[0-9]{12}:role/.+$",
+      var.kafbat_viewer_role_arn
+    ))
+    error_message = "kafbat_viewer_role_arn must be empty or an IAM role ARN."
+  }
+}
+
 variable "budget_email" {
   type        = string
   description = "Email address that receives AWS budget alerts."
