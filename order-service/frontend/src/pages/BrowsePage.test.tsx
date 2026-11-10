@@ -29,10 +29,13 @@ describe('BrowsePage', () => {
     renderPage()
 
     expect(await screen.findByRole('heading', { name: 'Collect my printed notes' })).toBeInTheDocument()
-    expect(screen.getByText('18 cr')).toBeInTheDocument()
+    expect(screen.getByText('Courier activity')).toBeInTheDocument()
+    expect(screen.getByLabelText('18 credits reward')).toBeInTheDocument()
+    expect(screen.getByText('Campus errand')).toBeInTheDocument()
     expect(screen.getByText('Printers@PCCommons', { selector: '.route-line span' }).parentElement).toHaveTextContent(
       'Printers@PCCommons to PGP Foyer',
     )
+    expect(screen.getByText(/Pick up by/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'View Collect my printed notes' })).toHaveAttribute(
       'href',
       '/errands/3f2a9c4e-6b1d-4e8f-a7c3-5d9e0b1f2a64',

@@ -559,13 +559,17 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  margin: 0;
 }
 .route-line svg {
   width: 0.9rem;
   height: 0.9rem;
   flex: 0 0 auto;
   color: var(--muted);
+}
+.route-line .route-pin {
+  color: var(--mauve);
 }
 .subtle {
   margin: 0.4rem 0 0;
@@ -911,43 +915,11 @@ dialog.confirm h2 {
 /* My errands */
 .errand-list {
   display: grid;
-  gap: 1rem;
-  margin: 0.75rem 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: 1.25rem;
+  margin: 1rem 0 0;
   padding: 0;
   list-style: none;
-}
-.errand-card p {
-  margin: 0.2rem 0;
-}
-.errand-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.errand-card-head h3 {
-  margin: 0;
-  color: var(--ink);
-  font-size: 1rem;
-}
-.reward {
-  color: var(--action);
-  font-weight: 700;
-  white-space: nowrap;
-}
-.errand-card-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-.errand-card-links {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem;
 }
 .filter-form {
   display: grid;
@@ -1207,31 +1179,184 @@ button:hover:not(:disabled),
 }
 .errand-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 23rem;
   overflow: hidden;
-  padding-top: 1.5rem;
+  padding: 0;
+  border-radius: 1.35rem;
   transition:
     transform 180ms ease,
     box-shadow 180ms ease;
 }
 .errand-card::before {
+  display: none;
+}
+.errand-card-visual {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  min-height: 8rem;
+  padding: 1.15rem;
+  overflow: hidden;
+  color: #3f579f;
+  background:
+    radial-gradient(circle at 86% 10%, rgb(255 255 255 / 75%), transparent 30%),
+    #e8edf9;
+}
+.errand-card-visual::after {
   position: absolute;
-  inset: 0 0 auto;
-  height: 0.35rem;
-  background: var(--blue);
+  top: -3.25rem;
+  right: -2.4rem;
+  width: 8rem;
+  height: 8rem;
+  border: 1.35rem solid rgb(255 255 255 / 38%);
+  border-radius: 50%;
   content: '';
 }
-.errand-card:nth-child(4n + 2)::before {
-  background: var(--coral);
+.errand-card:nth-child(4n + 2) .errand-card-visual {
+  color: #8d514b;
+  background:
+    radial-gradient(circle at 86% 10%, rgb(255 255 255 / 75%), transparent 30%),
+    #f8e7e4;
 }
-.errand-card:nth-child(4n + 3)::before {
+.errand-card:nth-child(4n + 3) .errand-card-visual {
+  color: #80601e;
+  background:
+    radial-gradient(circle at 86% 10%, rgb(255 255 255 / 75%), transparent 30%),
+    #fff3d4;
+}
+.errand-card:nth-child(4n) .errand-card-visual {
+  color: var(--mauve);
+  background:
+    radial-gradient(circle at 86% 10%, rgb(255 255 255 / 75%), transparent 30%),
+    #f5e8eb;
+}
+.errand-card-visual > span:last-child {
+  position: relative;
+  z-index: 1;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.errand-card-visual-icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 82%);
+  box-shadow: 0 7px 20px rgb(23 38 65 / 8%);
+  place-items: center;
+  transition: transform 180ms ease;
+}
+.errand-card-visual-icon svg {
+  width: 1.55rem;
+  height: 1.55rem;
+  stroke-width: 1.8;
+}
+.errand-card-content {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 1.75rem 1.25rem 1.2rem;
+}
+.errand-card-head {
+  display: flex;
+  align-items: center;
+  min-height: 1.75rem;
+}
+.reward {
+  position: absolute;
+  top: -2.4rem;
+  right: 1.15rem;
+  display: flex;
+  width: 4.7rem;
+  height: 4.7rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 4px solid var(--surface);
+  border-radius: 50%;
   background: var(--gold);
+  color: var(--action);
+  box-shadow: 0 8px 22px rgb(23 38 65 / 12%);
+  line-height: 1;
+  white-space: nowrap;
 }
-.errand-card:nth-child(4n)::before {
-  background: var(--mauve);
+.reward strong {
+  font-family: 'Manrope', 'DM Sans', sans-serif;
+  font-size: 1.15rem;
+}
+.reward small {
+  margin-top: 0.2rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+.errand-card-content > h3 {
+  margin: 0.75rem 4.5rem 1rem 0;
+  color: var(--ink);
+  font-family: 'Manrope', 'DM Sans', sans-serif;
+  font-size: 1.08rem;
+  letter-spacing: -0.025em;
+  line-height: 1.35;
+}
+.errand-card-meta {
+  display: grid;
+  gap: 0.7rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.errand-card-meta .route-line {
+  align-items: flex-start;
+  line-height: 1.45;
+}
+.errand-timing {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.errand-timing svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+  color: var(--mauve);
+}
+.errand-card .errand-card-notice {
+  margin-top: 0.85rem;
+  font-size: 0.75rem;
+}
+.errand-card-foot {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.errand-card-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.85rem;
+}
+.errand-view-link {
+  margin-left: auto;
 }
 .errand-card:hover {
   box-shadow: var(--shadow);
   transform: translateY(-2px);
+}
+.errand-card:hover .errand-card-visual-icon {
+  transform: translateY(-2px) rotate(-2deg);
 }
 .badge-open {
   background: #f0f2fb;
@@ -1437,31 +1562,91 @@ a.button-secondary:hover {
   }
 }
 .errand-tabs {
-  display: flex;
-  gap: 1.75rem;
-  margin-bottom: 1.25rem;
-  border-bottom: 1px solid var(--line);
+  display: inline-flex;
+  gap: 0.3rem;
+  width: fit-content;
+  margin-bottom: 1.75rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
 }
 .errand-tab {
   display: inline-flex;
   align-items: center;
   min-height: 2.75rem;
-  margin-bottom: -1px;
-  padding: 0 0.15rem;
-  border-bottom: 3px solid transparent;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  border-radius: 0.65rem;
   color: var(--muted);
+  font-size: 0.88rem;
   font-weight: 600;
   text-decoration: none;
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+.errand-tab svg {
+  width: 1rem;
+  height: 1rem;
+  stroke-width: 1.9;
 }
 .errand-tab:hover {
-  color: var(--ink);
+  background: var(--action-soft);
+  color: var(--blue);
 }
 .errand-tab[aria-current='page'] {
-  border-bottom-color: var(--action);
-  color: var(--action);
+  background: var(--action);
+  color: var(--surface);
+  box-shadow: 0 4px 12px rgb(23 38 65 / 16%);
 }
 .errand-tab:focus-visible {
-  border-radius: 0.25rem;
+  border-radius: 0.65rem;
+}
+
+.two-column > aside.card {
+  position: sticky;
+  top: 1.5rem;
+  border-radius: 1.2rem;
+}
+
+@media (min-width: 40rem) {
+  .errand-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 64rem) {
+  .errand-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .two-column .errand-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 48rem) {
+  .errand-tabs {
+    display: flex;
+    width: 100%;
+  }
+
+  .errand-tab {
+    flex: 1;
+    justify-content: center;
+    padding-inline: 0.65rem;
+  }
+
+  .two-column > aside.card {
+    position: static;
+  }
+}
+
+@media (max-width: 39.99rem) {
+  .errand-list,
+  .two-column .errand-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .errand-fields {
   display: grid;

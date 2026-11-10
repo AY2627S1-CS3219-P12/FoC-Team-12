@@ -47,6 +47,9 @@ Service workflow:
   and pagination because the real Supplier API supports those operations.
 - Cards become a responsive one-, two-, or three-column grid and include operating hours and
   directions when available.
+- The latest supplied card reference is adapted into category-tinted Lucide icon blocks, compact
+  metadata rows and one consistent detail action. Colours support the visible category text and
+  do not imply availability or other state.
 - A separate detail route shows coordinates and optional images; administrative version and
   timestamp fields stay hidden.
 - Unimplemented global navigation and the Admin route are not linked from the public shell.
@@ -56,6 +59,9 @@ Service workflow:
 - Supplier details use a local, Figma-aligned campus storefront illustration when a photo is
   missing, loading, or unavailable. This preserves the image layout without implying that a
   generic photograph depicts the real location.
+- Directory cards and the detail hero share the same category presentation. Real Supplier photos
+  remain confined to the detail route, with the existing local illustration as the fallback; no
+  stock or mock supplier imagery is introduced.
 
 ## Task 15 administration adaptations
 

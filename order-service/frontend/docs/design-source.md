@@ -24,6 +24,10 @@ component states and accessibility checks; it is not repeated here. Order-specif
   or Find errands on an empty Active list, Clear filters when filters hide every open errand, and
   Try again when an errand fails to load.
 - Routes and links use Lucide icons (pickup and drop-off pins, arrows) instead of text symbols.
+- Browse and My errands use one responsive card component for both roles. The latest supplied card
+  reference's image area is adapted to a category-neutral Lucide location surface because Order
+  does not own an image or category field; the UI never assigns a made-up photo or category to an
+  errand. Reward, state, route, deadline and available actions remain API-backed.
 
 ## Adaptations to the API
 
@@ -73,7 +77,8 @@ The backend contract wins over example data in Figma:
   credit check and reservation wait; the original is unchanged.
 - **Requester/Courier tabs** follow the session role switch in the header, because the API
   authorises actions by the session role. A Requester sees **Request help · My errands**, a Courier
-  **Run errands · My errands**, as side-by-side text tabs with an underline on the current one.
+  **Run errands · My errands**, as one contained segmented control with Lucide supporting icons and
+  a filled current state.
   Opening the other role's screen, or switching role while on one, goes to the current role's own
   screen (`/errands/new` for Requester, `/errands/browse` for Courier).
 - **An errand page follows the header role too.** Requester mode shows only the user's own errands;
