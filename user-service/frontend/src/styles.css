@@ -642,3 +642,9 @@ h1, h2, h3, .welcome-brand, .profile-brand { font-family: 'Manrope', 'DM Sans', 
 @media (prefers-reduced-motion: reduce) {
   .campus-home-actions a:hover, .campus-home-shortcut:hover { transform: none; }
 }
+
+/* Keep the shared header and its account menu above every page illustration. */
+.profile-app-header { position: relative; z-index: 100; overflow: visible; }
+.profile-account-menu { z-index: 110; }
+.profile-account-menu-items { z-index: 120; pointer-events: auto; }
+.notification-badge { background: #df9b93; color: #172641; }

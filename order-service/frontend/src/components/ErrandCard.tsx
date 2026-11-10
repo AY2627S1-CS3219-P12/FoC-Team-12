@@ -1,4 +1,10 @@
-import { ArrowRight, Clock3, MapPinned, RotateCcw } from 'lucide-react'
+import {
+  ArrowRight,
+  BriefcaseBusiness,
+  Clock3,
+  MapPinned,
+  RotateCcw,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Order } from '../api/orderApi'
 import {
@@ -32,9 +38,12 @@ export function ErrandCard({
     >
       <div aria-hidden="true" className="errand-card-visual">
         <span className="errand-card-visual-icon">
-          <MapPinned />
+          {layout === 'history' && !canRepost ? (
+            <BriefcaseBusiness />
+          ) : (
+            <MapPinned />
+          )}
         </span>
-        <span>Campus errand</span>
       </div>
       <div className="errand-card-content">
         <div className="errand-card-head">
@@ -50,10 +59,19 @@ export function ErrandCard({
           )}
           <span
             aria-label={`${credits(order.creditReward)} reward`}
-            className="reward"
+            className={`reward${layout === 'history' && !canRepost ? ' reward-earned' : ''}`}
           >
-            <strong>{order.creditReward}</strong>
-            <small>{layout === 'history' ? 'Reward' : 'credits'}</small>
+            <strong>
+              {layout === 'history' && !canRepost ? '+' : ''}
+              {order.creditReward}
+            </strong>
+            <small>
+              {layout === 'history'
+                ? canRepost
+                  ? 'Reward'
+                  : 'Earned'
+                : 'credits'}
+            </small>
           </span>
         </div>
         <h3>{order.title}</h3>

@@ -30,14 +30,16 @@ All signed-in service pages use the same shell and order:
 4. Notification bell in participant modes only: a Lucide `Bell` linking to `/notifications`, with
    the unread count as a small badge (`9+` above nine) and in its accessible name
    ("Notifications, 3 unread"). It is hidden in Admin mode, `2.75rem` square with a `1.25rem`
-   icon, centred, and marked current on the Notifications page. Header rules for `1rem` navigation
-   icons must exclude the bell.
+   icon, centred, and marked current on the Notifications page. Its badge uses coral `#df9b93`
+   with navy `#172641` text in every frontend. Header rules for `1rem` navigation icons must
+   exclude the bell.
 5. Account menu with profile, permitted administration actions and sign out.
 
 Every account menu links Profile to `/?view=profile`. Personal details, username editing and
 password replacement live on that dedicated view and are not duplicated on Home. Sign out clears
 the shared browser session and UI mode before returning to `/`, so it behaves consistently from
-every service shell.
+every service shell. The header establishes a stacking layer above page artwork and cards, and the
+open account menu remains pointer-interactive above that layer on every route.
 
 The bell is the same `NotificationBell.tsx` and `useUnreadCount.ts` copied into every frontend's
 `src/components/`; Notification Service owns them and the copies must stay identical. It polls only

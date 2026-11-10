@@ -374,3 +374,9 @@
   .brand img { width: 2.6rem; height: 2.6rem; }
   .main { width: min(calc(100% - 2rem), 82rem); }
 }
+
+/* Shared shell layering and unread badge contract. */
+.header { position: relative; z-index: 100; overflow: visible; }
+.userMenu { z-index: 110; }
+.userMenuItems { z-index: 120; pointer-events: auto; }
+.notificationBadge { background: #df9b93; color: #172641; }

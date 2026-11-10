@@ -2300,3 +2300,9 @@ button:hover:not(:disabled),
     grid-template-columns: 1fr;
   }
 }
+
+/* Shared shell layering and unread badge contract. */
+.site-header { position: relative; z-index: 100; overflow: visible; }
+.account-menu { z-index: 110; }
+.account-menu-items { z-index: 120; pointer-events: auto; }
+.notification-badge { background: #df9b93; color: #172641; }
