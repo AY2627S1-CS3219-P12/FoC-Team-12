@@ -38,7 +38,7 @@ cluster; commands explicitly select `foc-local`.
 
 All Deployments use versioned Docker Hub images under `arkanian4`, following section 2 of the
 course guide. Publishing uploads application images, not running containers, database data or
-Kubernetes Secrets. After [CI setup](../../.github/README.md), merged service changes are published
+Kubernetes Secrets. After [CI setup](../../.github/DEPLOYMENT.md), merged service changes are published
 automatically. Maintainers can still build/push initial or manual releases with:
 
 ```bash
@@ -75,7 +75,7 @@ files; a later successful CI run does not automatically select or deploy another
 ## Apply a CI-published service update
 
 CI can build/publish merged service changes automatically; see
-[CI setup and image naming](../../.github/README.md). One-time Docker Hub credentials must be
+[CI setup and image naming](../../.github/DEPLOYMENT.md). One-time Docker Hub credentials must be
 configured before publishing works. The `d3-*` images above remain initial releases; a new CI
 image does not automatically replace them in these Deployment files or your running cluster.
 

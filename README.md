@@ -118,7 +118,7 @@ For other environments, follow the dedicated guides:
 - [Local Minikube deployment](deploy/k8s/README.md)
 - [AWS staging deployment](deploy/aws/README.md)
 - [Kafka and local broker operations](deploy/kafka/README.md)
-- [CI image publishing and updates](.github/README.md)
+- [CI, image publishing, and deployment](.github/DEPLOYMENT.md)
 
 ## Repository layout
 
