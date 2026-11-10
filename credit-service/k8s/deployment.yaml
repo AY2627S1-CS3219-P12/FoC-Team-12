@@ -16,7 +16,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: credit-service
-          image: foc-credit-service:local-61c7062-completion-20261109-v2
+          image: foc-credit-service:local-8a986a27-kafka-20261110-v1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8083

@@ -47,6 +47,7 @@ import com.friendoncampus.credit.repository.CreditEventStreamVersionRepository;
 })
 @AutoConfigureMockMvc
 class CreditQuerySecurityTest {
+    @MockitoBean com.friendoncampus.credit.dispute.DisputeBus disputeBus;
     @org.springframework.test.context.bean.override.mockito.MockitoBean
     com.friendoncampus.credit.authorization.CurrentAuthorization currentAuthorization;
 

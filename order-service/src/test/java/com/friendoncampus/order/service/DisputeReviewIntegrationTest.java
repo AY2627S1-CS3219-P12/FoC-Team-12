@@ -23,12 +23,12 @@ import tools.jackson.databind.json.JsonMapper;
 class DisputeReviewIntegrationTest {
  @Container @ServiceConnection static final PostgreSQLContainer POSTGRES=new PostgreSQLContainer("postgres:17-alpine");
  @MockitoBean JwtDecoder jwt;
- @MockitoBean DisputeCreditClient credit;
  @Autowired OrderService orders;
  @Autowired DisputeReviewService reviews;
  @Autowired JdbcTemplate db;
  @Autowired OrderQueryService queries;
  final UUID requester=UUID.randomUUID(),courier=UUID.randomUUID();
+ DisputeReviewService.Review finish(UUID id,UUID caseId,UUID operation,String disposition,String creditStatus){reviews.prepare(id,caseId,operation,disposition,UUID.randomUUID());return reviews.complete(id,caseId,operation,disposition,creditStatus);}
  UUID accepted(){
   UUID id=orders.createOrder(new CreateOrderCommand(requester,"TEST ONLY","Original issue",UUID.randomUUID(),"A",UUID.randomUUID(),"B",2,OffsetDateTime.now(ZoneOffset.UTC).plusDays(1))).getId();
   orders.confirmReservation(id,UUID.randomUUID());orders.accept(id,courier);return id;
@@ -39,10 +39,8 @@ class DisputeReviewIntegrationTest {
   assertThat(reviews.freeze(id,caseId,requester,false).state()).isEqualTo("ACCEPTED");
   assertThatThrownBy(()->orders.pickUp(id,courier)).isInstanceOf(ResponseStatusException.class);
   assertThatThrownBy(()->orders.cancel(id,requester)).isInstanceOf(ResponseStatusException.class);
-  when(credit.settle(any(),eq(operation),eq("RETURN_TO_REQUESTER"),anyString())).thenReturn(JsonMapper.builder().build().readTree("{\"reservationStatus\":\"RELEASED\"}"));
-  assertThat(reviews.finish(id,caseId,operation,"RETURN_TO_REQUESTER","TEST ONLY").resolved()).isTrue();
-  assertThat(reviews.finish(id,caseId,operation,"RETURN_TO_REQUESTER","TEST ONLY").state()).isEqualTo("COMPLETED");
-  verify(credit,times(1)).settle(any(),eq(operation),anyString(),anyString());
+  assertThat(finish(id,caseId,operation,"RETURN_TO_REQUESTER","RELEASED").resolved()).isTrue();
+  assertThat(finish(id,caseId,operation,"RETURN_TO_REQUESTER","RELEASED").state()).isEqualTo("COMPLETED");
   assertThat(db.queryForObject("SELECT terminal_reason FROM orders WHERE id=?",String.class,id)).isEqualTo("DISPUTE_RESOLVED");
   assertThat(db.queryForObject("SELECT count(*) FROM order_transitions WHERE order_id=? AND action='DISPUTE_RESOLVED'",Integer.class,id)).isEqualTo(1);
   assertThat(db.queryForObject("SELECT count(*) FROM outbox_events WHERE aggregate_id=? AND event_type='OrderCompleted'",Integer.class,id)).isZero();
@@ -50,17 +48,15 @@ class DisputeReviewIntegrationTest {
  }
  @Test void failedCreditAcknowledgementLeavesErrandFrozenAndOriginalOperationResumable(){
   UUID id=accepted(),caseId=UUID.randomUUID(),operation=UUID.randomUUID();reviews.freeze(id,caseId,requester,false);
-  when(credit.settle(any(),any(),anyString(),anyString())).thenThrow(new IllegalStateException("TEST ONLY lost acknowledgement"));
-  assertThatThrownBy(()->reviews.finish(id,caseId,operation,"PAY_COURIER","TEST ONLY")).isInstanceOf(IllegalStateException.class);
+  reviews.prepare(id,caseId,operation,"PAY_COURIER",UUID.randomUUID());
   assertThat(reviews.read(id,caseId).resolved()).isFalse();
   assertThat(reviews.read(id,caseId).state()).isEqualTo("ACCEPTED");
-  assertThatThrownBy(()->reviews.finish(id,caseId,UUID.randomUUID(),"RETURN_TO_REQUESTER","TEST ONLY")).isInstanceOf(IllegalArgumentException.class);
+  assertThatThrownBy(()->reviews.prepare(id,caseId,UUID.randomUUID(),"RETURN_TO_REQUESTER",UUID.randomUUID())).isInstanceOf(IllegalArgumentException.class);
  }
  @Test void anUnassignedErrandCanFinishAfterReviewWithoutInventingACourier(){
   UUID id=orders.createOrder(new CreateOrderCommand(requester,"TEST ONLY","Before acceptance",UUID.randomUUID(),"A",UUID.randomUUID(),"B",2,OffsetDateTime.now(ZoneOffset.UTC).plusDays(1))).getId();
   orders.confirmReservation(id,UUID.randomUUID());UUID caseId=UUID.randomUUID(),operation=UUID.randomUUID();reviews.freeze(id,caseId,requester,false);
-  when(credit.settle(any(),eq(operation),eq("RETURN_TO_REQUESTER"),anyString())).thenReturn(JsonMapper.builder().build().readTree("{\"reservationStatus\":\"RELEASED\"}"));
-  assertThat(reviews.finish(id,caseId,operation,"RETURN_TO_REQUESTER","TEST ONLY").state()).isEqualTo("COMPLETED");
+  assertThat(finish(id,caseId,operation,"RETURN_TO_REQUESTER","RELEASED").state()).isEqualTo("COMPLETED");
   assertThat(orders.getOrder(id,requester).getCourierId()).isNull();
  }
  @Test void frozenOverdueErrandsCannotStarveTheExpiryBatch(){
@@ -75,8 +71,7 @@ class DisputeReviewIntegrationTest {
   UUID caseId=UUID.randomUUID(),operation=UUID.randomUUID();reviews.freeze(id,caseId,requester,false);
   assertThat(queries.findDelivered(courier,MyOrdersFilter.from("review",null),new OrderPaging(0,20)).getContent()).extracting(Order::getId).contains(id);
   assertThat(orders.getOrder(id,courier).getReviewCaseId()).isEqualTo(caseId);
-  when(credit.settle(any(),eq(operation),eq("KEEP_EXISTING"),anyString())).thenReturn(JsonMapper.builder().build().readTree("{\"reservationStatus\":\"RELEASED\"}"));
-  assertThat(reviews.finish(id,caseId,operation,"KEEP_EXISTING","TEST ONLY").state()).isEqualTo("CANCELLED");
+  assertThat(finish(id,caseId,operation,"KEEP_EXISTING","RELEASED").state()).isEqualTo("CANCELLED");
   assertThat(queries.findDelivered(courier,MyOrdersFilter.PAST,new OrderPaging(0,20)).getContent()).extracting(Order::getId).contains(id);
  }
  @Test void freezingAndPickupSerializeSoNoPickupCanCommitAfterTheFreezeAcknowledgement() throws Exception {

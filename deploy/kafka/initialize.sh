@@ -95,7 +95,7 @@ limit_jobs() {
 }
 
 pids=()
-for topic in user.events order.events credit.events order.lifecycle.events chat.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
+for topic in user.events order.events credit.events order.lifecycle.events chat.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events admin.dispute.commands order.dispute.commands order.dispute.events chat.dispute.events credit.dispute.events; do
   create_topic "$topic" 3 604800000 &
   pids+=("$!")
   limit_jobs
@@ -202,6 +202,22 @@ add_acl admin_service --operation Write --operation Describe --transactional-id 
 # Chat retains original case facts and owner outcomes in an independent read-committed inbox.
 add_acl chat_service --operation Read --operation Describe --topic admin.events --topic credit.admin.events --topic user.admin.events
 add_acl chat_service --operation Read --group chat-service-timeline
+
+# Durable dispute coordination: only the owning service may publish its commands/outcomes.
+add_acl admin_service --operation Write --operation Describe --topic admin.dispute.commands
+add_acl admin_service --operation Read --operation Describe --topic order.dispute.events --topic chat.dispute.events
+add_acl order_service --operation Read --operation Describe --topic admin.dispute.commands --topic chat.dispute.events --topic credit.dispute.events
+add_acl order_service --operation Write --operation Describe --topic order.dispute.commands --topic order.dispute.events
+add_acl chat_service --operation Read --operation Describe --topic admin.dispute.commands --topic order.dispute.events
+add_acl chat_service --operation Write --operation Describe --topic chat.dispute.events
+add_acl credit_service --operation Read --operation Describe --topic order.dispute.commands
+add_acl credit_service --operation Write --operation Describe --topic credit.dispute.events
+for pair in admin_service:admin-service order_service:order-service chat_service:chat-service credit_service:credit-service; do
+  add_acl "${pair%%:*}" --operation Read --group "${pair##*:}-disputes"
+  add_idempotent_write_acl "${pair%%:*}"
+done
+add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfigs --topic admin.dispute.commands --topic order.dispute.commands --topic order.dispute.events --topic chat.dispute.events --topic credit.dispute.events
+add_acl kafka_ui --operation Describe --group admin-service-disputes --group order-service-disputes --group chat-service-disputes --group credit-service-disputes
 
 # Kafka UI can inspect this local cluster but cannot mutate topics, data or business offsets.
 {

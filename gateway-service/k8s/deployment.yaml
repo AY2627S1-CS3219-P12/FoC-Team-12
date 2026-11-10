@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: gateway
-          image: arkanian4/foc-gateway-service:sha-ce035eee7ff4eda6972fa4554714051b6314b209-r42501172138-1
+          image: foc-gateway-service:local-8a986a27-kafka-20261110-v1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8088

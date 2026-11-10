@@ -3,8 +3,8 @@ import java.time.*;import java.util.*;
 import org.springframework.stereotype.Service;import org.springframework.transaction.PlatformTransactionManager;import org.springframework.transaction.support.TransactionTemplate;import org.springframework.http.HttpStatus;import org.springframework.web.server.ResponseStatusException;
 import com.friendoncampus.order.domain.*;import com.friendoncampus.order.repository.*;import com.friendoncampus.order.messaging.OrderEventRecorder;
 @Service public class DisputeReviewService {
- private final OrderRepository orders;private final OrderTransitionRepository transitions;private final OrderEventRecorder events;private final DisputeCreditClient credit;private final TransactionTemplate tx;private final Clock clock;
- public DisputeReviewService(OrderRepository orders,OrderTransitionRepository transitions,OrderEventRecorder events,DisputeCreditClient credit,PlatformTransactionManager manager,Clock clock){this.orders=orders;this.transitions=transitions;this.events=events;this.credit=credit;this.tx=new TransactionTemplate(manager);this.clock=clock;}
+ private final OrderRepository orders;private final OrderTransitionRepository transitions;private final OrderEventRecorder events;private final TransactionTemplate tx;private final Clock clock;
+ public DisputeReviewService(OrderRepository orders,OrderTransitionRepository transitions,OrderEventRecorder events,PlatformTransactionManager manager,Clock clock){this.orders=orders;this.transitions=transitions;this.events=events;this.tx=new TransactionTemplate(manager);this.clock=clock;}
  public record Review(UUID orderId,UUID caseId,UUID requesterId,UUID courierId,String state,String creditStatus,boolean resolved,List<UUID> participants){}
  public Review freeze(UUID orderId,UUID caseId,UUID actor,boolean administrator){
   return tx.execute(s->{var order=lock(orderId);var members=members(order);if(!administrator&&!members.contains(actor))throw error(404,"Errand not found");boolean fresh=order.getReviewCaseId()==null;order.freezeForReview(caseId);orders.saveAndFlush(order);
@@ -13,16 +13,17 @@ import com.friendoncampus.order.domain.*;import com.friendoncampus.order.reposit
   });
  }
  public Review read(UUID orderId,UUID caseId){return tx.execute(s->{var order=lock(orderId);if(!caseId.equals(order.getReviewCaseId()))throw error(404,"Review not found");return view(order,members(order));});}
- public Review finish(UUID orderId,UUID caseId,UUID operation,String disposition,String actorToken){
-  var prepared=tx.execute(s->{var order=lock(orderId);validateDisposition(order,disposition);order.prepareReviewResolution(caseId,operation,disposition);orders.saveAndFlush(order);return view(order,members(order));});
-  if(prepared.resolved())return prepared;
-  var result=credit.settle(prepared,operation,disposition,actorToken); // Never under an Order lock.
+ public Review prepare(UUID orderId,UUID caseId,UUID operation,String disposition,UUID reviewer){
+  return tx.execute(s->{var order=lock(orderId);if(!caseId.equals(order.getReviewCaseId()))throw error(409,"Review is not frozen");if(members(order).contains(reviewer))throw error(403,"An independent reviewer is required");validateDisposition(order,disposition);order.prepareReviewResolution(caseId,operation,disposition);orders.saveAndFlush(order);return view(order,members(order));});
+ }
+ public Review complete(UUID orderId,UUID caseId,UUID operation,String disposition,String reservationStatus){
+  if(!Set.of("ABSENT","ACTIVE","RELEASED","SETTLED","COMPENSATED").contains(reservationStatus))throw error(409,"Invalid credit confirmation");
+  if(("RETURN_TO_REQUESTER".equals(disposition)&&!"RELEASED".equals(reservationStatus))||("PAY_COURIER".equals(disposition)&&!"SETTLED".equals(reservationStatus))||("KEEP_EXISTING".equals(disposition)&&"ACTIVE".equals(reservationStatus)))throw error(409,"Credit disposition was not confirmed");
   return tx.execute(s->{var order=lock(orderId);order.prepareReviewResolution(caseId,operation,disposition);if(!order.isResolvedAfterReview()){
-   String status=result.path("reservationStatus").asText();if(!"ABSENT".equals(status))order.recordCreditStatus(CreditStatus.valueOf(status));
+   if(!"ABSENT".equals(reservationStatus))order.recordCreditStatus(CreditStatus.valueOf(reservationStatus));
    var transition=order.finishReview(OffsetDateTime.now(clock));orders.saveAndFlush(order);events.record(order,transition);
   }return view(order,members(order));});
- }
- private void validateDisposition(com.friendoncampus.order.domain.Order order,String disposition){
+ } private void validateDisposition(com.friendoncampus.order.domain.Order order,String disposition){
   if(disposition==null||!Set.of("RETURN_TO_REQUESTER","PAY_COURIER","KEEP_EXISTING").contains(disposition))throw error(400,"Choose a credit outcome");
   if(order.getReviewResolutionId()!=null)return;
   boolean held=order.getCreditStatus()==CreditStatus.RESERVED;

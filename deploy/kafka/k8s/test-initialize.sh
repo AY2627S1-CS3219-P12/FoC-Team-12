@@ -34,6 +34,13 @@ if grep -Eq -- '--operation Read( --operation [A-Za-z]+)* --group \*$' "$work/ca
   exit 1
 fi
 test "$(wc -l < "$work/calls")" -gt 40
+for topic in admin.dispute.commands order.dispute.commands order.dispute.events chat.dispute.events credit.dispute.events; do
+  grep -q -- "--topic $topic" "$TEST_WORK/calls"
+done
+for group in admin-service-disputes order-service-disputes chat-service-disputes credit-service-disputes; do
+  grep -q -- "--group $group" "$TEST_WORK/calls"
+done
+grep -q -- '--allow-principal User:admin_service --operation Write --operation Describe --topic admin.dispute.commands' "$TEST_WORK/calls"
 export TEST_FAIL_ALWAYS=true
 if bash /opt/foc-kafka/initialize.sh > "$work/failure-log" 2>&1; then echo 'Failure was incorrectly accepted' >&2; exit 1; fi
 if KAFKA_INIT_PARALLELISM=0 bash /opt/foc-kafka/initialize.sh > /dev/null 2>&1; then exit 1; fi

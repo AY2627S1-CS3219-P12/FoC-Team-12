@@ -7,16 +7,31 @@ export type Summary = {
   reviewerId: string | null
   revision: number
   createdAt: string
+  reviewStatus?: 'LEGACY' | 'PREPARING' | 'READY' | 'REJECTED'
 }
 export type Statement = {
   reporterId: string
   description: string
   submittedAt: string
 }
-export type Report = { case: Summary; ownStatement: Statement | null }
+export type Report = {
+  case: Summary
+  ownStatement: Statement | null
+  preparation?: {
+    operationId: string
+    status: 'PENDING' | 'READY' | 'REJECTED'
+    failureCode?: string | null
+  } | null
+}
 export type ReportContext = {
   orderId: string
-  status: 'OWN_REPORT' | 'ELIGIBLE' | 'INELIGIBLE' | 'CASE_PARTICIPANT'
+  status:
+    | 'OWN_REPORT'
+    | 'ELIGIBLE'
+    | 'INELIGIBLE'
+    | 'CASE_PARTICIPANT'
+    | 'PREPARING_REVIEW'
+    | 'PREPARATION_AVAILABLE'
   caseId: string | null
   state: Summary['state'] | null
 }

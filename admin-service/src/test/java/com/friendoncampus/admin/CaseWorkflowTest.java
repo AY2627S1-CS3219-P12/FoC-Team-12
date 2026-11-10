@@ -20,7 +20,7 @@ import org.testcontainers.junit.jupiter.*;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import tools.jackson.databind.json.JsonMapper;
 
-@SpringBootTest
+@SpringBootTest(properties="app.kafka.enabled=false")
 @Testcontainers(disabledWithoutDocker=true)
 class CaseWorkflowTest {
     @Container static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
@@ -140,7 +140,7 @@ class CaseWorkflowTest {
     }
     @Test void confirmedReferencesRecoverPrivatelyWithoutChatAndBecomeReadOnlyAfterClosure() {
         UUID id=reviewCase(), first=UUID.randomUUID(), second=UUID.randomUUID(), otherAdmin=UUID.randomUUID();
-        service.report(jwt(courier,"COURIER"),UUID.randomUUID(),order,"Historical courier statement");
+        reportAs(courier,"COURIER",UUID.randomUUID(),"Historical courier statement");
         when(conversations.open(eq(id),eq(order),eq(reporter),any(),anyString()))
                 .thenReturn(new ChatConversationClient.Conversation(first,id,order,reporter,false));
         when(conversations.open(eq(id),eq(order),eq(courier),any(),anyString()))
@@ -166,16 +166,16 @@ class CaseWorkflowTest {
         assertEquals(audit,count("admin_case_audit"));assertEquals(outbox,count("admin_case_outbox"));
         verifyNoInteractions(conversations,chat);
     }
-    @Test void ownReportLookupIsPrivateAndWorksWithoutChatButNewReportsFailClosed(){
+    @Test void ownReportLookupIsPrivateAndSavingAPreparationDoesNotClaimEligibility(){
         UUID id=reviewCase();reset(chat);
         when(chat.check(any(),any(),anyString())).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
         var own=service.reportContext(jwt(reporter,"REQUESTER"),order);
         assertEquals("OWN_REPORT",own.status());assertEquals(id,own.caseId());assertEquals(AdminCase.State.UNDER_REVIEW,own.state());
         verifyNoInteractions(chat);
         assertEquals("CASE_PARTICIPANT",service.reportContext(jwt(courier,"COURIER"),order).status());
-        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->service.reportContext(jwt(UUID.randomUUID(),"COURIER"),order)).getStatusCode());
+        assertEquals("PREPARATION_AVAILABLE",service.reportContext(jwt(UUID.randomUUID(),"COURIER"),order).status());
         doReturn(new ChatEligibilityClient.Eligibility(false,true,"context")).when(chat).check(any(),any(),anyString());
-        var other=service.reportContext(jwt(UUID.randomUUID(),"COURIER"),order);assertEquals("INELIGIBLE",other.status());assertNull(other.caseId());assertNull(other.state());
+        var other=service.reportContext(jwt(UUID.randomUUID(),"COURIER"),order);assertEquals("PREPARATION_AVAILABLE",other.status());assertNull(other.caseId());assertNull(other.state());
         when(chat.check(any(),any(),anyString())).thenReturn(new ChatEligibilityClient.Eligibility(true,true,"context"));
         assertEquals("CASE_PARTICIPANT",service.reportContext(jwt(courier,"COURIER"),order).status());
         db.update("UPDATE admin_cases SET state='RESOLVED' WHERE id=?",id);
@@ -186,23 +186,24 @@ class CaseWorkflowTest {
         when(users.find(reporter)).thenReturn(new UserEligibilityClient.Eligibility(reporter,false,false));
         assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.reportContext(jwt(reporter,"REQUESTER"),order)).getStatusCode());
     }
-    @Test void unconfirmedOrderFinalizationKeepsCasePendingAndResumesOriginalResolution(){
-        UUID id=reviewCase(),key=UUID.randomUUID();long revision=revision(id);
-        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"TEST ONLY unconfirmed Credit"))
-            .when(reviewOrders).finish(eq(order),eq(id),eq(key),eq("KEEP_EXISTING"),anyString());
-        assertThrows(ResponseStatusException.class,()->resolve(id,key,revision));
+    @Test void unconfirmedOwnerOutcomesKeepCasePendingAndOriginalResolutionCanResume(){
+        UUID id=reviewCase(),key=UUID.randomUUID();long version=revision(id);
+        assertEquals(202,resolutions.resolve(jwt(reviewer,"ADMIN"),id,key,"Reviewed all evidence; no further action required",version,List.of()).status());
         assertEquals("UNDER_REVIEW",db.queryForObject("SELECT state FROM admin_cases WHERE id=?",String.class,id));
-        assertEquals(0,count("admin_case_decisions"));assertNotNull(service.detail(jwt(reviewer,"ADMIN"),id).closure());
-        doNothing().when(reviewOrders).finish(eq(order),eq(id),eq(key),eq("KEEP_EXISTING"),anyString());
-        assertEquals(200,resolve(id,key,revision).status());assertEquals(1,count("admin_case_decisions"));
-        verify(reviewOrders,times(2)).finish(order,id,key,"KEEP_EXISTING","actor-jwt");
+        assertEquals(0,count("admin_case_decisions"));assertEquals(key,service.detail(jwt(reviewer,"ADMIN"),id).closure().operationId());
+        confirmResolution(key);assertEquals(200,resolve(id,key,version).status());assertEquals(1,count("admin_case_decisions"));
     }
-    @Test void unconfirmedFreezeNeverAcknowledgesAReportAndOriginalIntentCanResume(){
-        UUID key=UUID.randomUUID();doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE)).when(conversations).prepareErrandReview(any(),any(),anyString());
-        assertThrows(ResponseStatusException.class,()->report(reporter,key));
-        assertEquals(0,count("admin_cases"));assertEquals(0,count("admin_statements"));assertEquals(1,count("admin_report_preparations"));
-        doNothing().when(conversations).prepareErrandReview(any(),any(),anyString());
-        assertEquals(201,report(reporter,key).status());assertEquals(1,count("admin_statements"));
+    @Test void reportWaitsForBothOwnerConfirmationsAndOutOfOrderDuplicatesAreSafe(){
+        UUID key=UUID.randomUUID();var prepared=service.report(jwt(reporter,"REQUESTER"),key,order,"Pickup issue");
+        assertEquals(202,prepared.status());assertEquals(0,count("admin_statements"));assertEquals(0,count("admin_case_outbox"));
+        assertEquals("PREPARING_REVIEW",service.reportContext(jwt(reporter,"REQUESTER"),order).status());
+        var request=disputes.fact(key,"REQUEST").orElseThrow();var frozen=owner(request,"OrderReviewFrozen","order-service",Map.of("participants",List.of(reporter,courier)));
+        var ready=owner(request,"ErrandReviewPrepared","chat-service",Map.of("readOnly",true,"orderConfirmationId",frozen.eventId()));
+        deliverDispute(ready);assertEquals(0,count("admin_statements"));
+        deliverDispute(frozen);deliverDispute(frozen);deliverDispute(ready);
+        assertEquals(1,count("admin_statements"));assertEquals(1,count("admin_case_outbox"));
+        assertEquals(201,service.report(jwt(reporter,"REQUESTER"),key,order,"Pickup issue").status());
+        assertEquals("READY",service.reportStatus(jwt(reporter,"REQUESTER"),request.caseId()).caseSummary().reviewStatus());
     }
     @Test void verifiedNonreporterHasPrivateStatusAndReviewerActionsWithoutAStatement(){
         UUID id=reviewCase(),conversation=UUID.randomUUID();
@@ -214,26 +215,21 @@ class CaseWorkflowTest {
         assertEquals(1,service.confirmedConversations(jwt(courier,"COURIER"),id,true).size());
         assertThrows(ResponseStatusException.class,()->service.reportStatus(jwt(UUID.randomUUID(),"REQUESTER"),id));
     }
-    @Test void incompleteReportEligibilityIsNotTreatedAsNoReport(){
+    @Test void preparationAvailabilityDoesNotFabricateEligibilityOrAnAcceptedReport(){
         when(chat.check(any(),any(),anyString())).thenReturn(new ChatEligibilityClient.Eligibility(true,false,"incomplete"));
-        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->service.reportContext(jwt(reporter,"REQUESTER"),order)).getStatusCode());
+        assertEquals("PREPARATION_AVAILABLE",service.reportContext(jwt(reporter,"REQUESTER"),order).status());
+        verifyNoInteractions(chat);
         assertEquals(0,count("admin_cases"));assertEquals(0,count("admin_statements"));
     }
     @MockitoBean ChatTimelineClient timelines;
-    @Test void preparedResolutionBlocksWritesAndResumesTheOriginalOperationAfterChatOutage(){
-        UUID id=reviewCase(),key=UUID.randomUUID();evidence(id);long version=revision(id);
-        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"TEST ONLY barrier outage")).when(conversations).prepareClosure(eq(id),eq(key),anyString());
-        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->resolve(id,key,version)).getStatusCode());
-        assertEquals("UNDER_REVIEW",db.queryForObject("SELECT state FROM admin_cases WHERE id=?",String.class,id));
-        assertEquals(key,service.detail(jwt(reviewer,"ADMIN"),id).closure().operationId());
+    @Test void preparedResolutionBlocksWritesUntilBothOwnerConfirmations(){
+        UUID id=reviewCase(),key=UUID.randomUUID();long version=revision(id);
+        assertEquals(202,resolutions.resolve(jwt(reviewer,"ADMIN"),id,key,"Reviewed all evidence; no further action required",version,List.of()).status());
         assertFalse(access.check(id,reviewer,reporter).canWriteConversation());
         assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->correction(id,UUID.randomUUID(),1)).getStatusCode());
-        assertEquals(409,report(courier,UUID.randomUUID()).status());
-        assertEquals(0,count("admin_case_decisions"));assertEquals(2,count("admin_case_outbox"));
+        assertEquals(409,report(courier,UUID.randomUUID()).status());assertEquals(0,count("admin_case_decisions"));
         assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->resolve(id,UUID.randomUUID(),version)).getStatusCode());
-        doNothing().when(conversations).prepareClosure(eq(id),eq(key),anyString());
-        var completed=resolve(id,key,version);assertEquals(200,completed.status());assertEquals(completed,resolve(id,key,version));
-        assertEquals(1,count("admin_resolution_preparations"));assertEquals(1,count("admin_case_decisions"));
+        confirmResolution(key);assertEquals(200,resolve(id,key,version).status());
     }
     @Test void lostConversationConfirmationIsRecoveredByReadWithoutAnotherCreation(){
         UUID id=reviewCase(),conversation=UUID.randomUUID();
@@ -246,14 +242,12 @@ class CaseWorkflowTest {
     @Autowired JdbcTemplate db;
     @MockitoBean UserEligibilityClient users;
     @MockitoBean ChatEligibilityClient chat;
-    @MockitoBean DisputeOrderClient reviewOrders;
     @MockitoBean ChatConversationClient conversations;
     final JsonMapper json = JsonMapper.builder().build();
     final UUID order = UUID.randomUUID(), reporter=UUID.randomUUID(), courier=UUID.randomUUID(), reviewer=UUID.randomUUID();
     Jwt jwt(UUID id, String role) { return Jwt.withTokenValue("actor-jwt").header("alg","RS256").subject(id.toString()).claim("role",role).issuedAt(Instant.now()).expiresAt(Instant.now().plusSeconds(60)).build(); }
     @BeforeEach void prepare() {
-        when(reviewOrders.freeze(any(),any(),anyString())).thenAnswer(call->{var r=json.createObjectNode();r.put("orderId",call.getArgument(0).toString());r.put("caseId",call.getArgument(1).toString());r.putArray("participants").add(reporter.toString()).add(courier.toString());return r;});
-        db.execute("TRUNCATE admin_report_preparations");
+        db.execute("TRUNCATE dispute_inbox,dispute_outbox,dispute_operations,dispute_quarantine,admin_report_preparations");
         db.execute("TRUNCATE admin_action_quarantine,admin_case_outbox,admin_case_audit,admin_mutation_receipts,admin_statements,admin_case_participants,admin_cases CASCADE");
         when(users.find(any())).thenAnswer(call -> new UserEligibilityClient.Eligibility(call.getArgument(0),true,true));
         when(chat.check(any(),any(),anyString())).thenReturn(new ChatEligibilityClient.Eligibility(true,true,"evidence-1"));
@@ -269,7 +263,10 @@ class CaseWorkflowTest {
     }
     long revision(UUID id){return db.queryForObject("SELECT revision FROM admin_cases WHERE id=?",Long.class,id);}
     void evidence(UUID id){when(timelines.fetch(eq(id),eq(order),anyString(),isNull(),eq(100))).thenAnswer(call->freshEvidence(id));}
-    CaseViews.Mutation resolve(UUID id,UUID key,long revision){return resolutions.resolve(jwt(reviewer,"ADMIN"),id,key,"Reviewed all evidence; no further action required",revision,List.of());}
+    CaseViews.Mutation resolve(UUID id,UUID key,long revision){
+        var result=resolutions.resolve(jwt(reviewer,"ADMIN"),id,key,"Reviewed all evidence; no further action required",revision,List.of());
+        if(result.status()==202){confirmResolution(key);return resolutions.resolve(jwt(reviewer,"ADMIN"),id,key,"Reviewed all evidence; no further action required",revision,List.of());}return result;
+    }
     @Test void resolutionWithoutActionsIsAtomicImmutablePrivateAndReplayable() {
         UUID id=reviewCase(),key=UUID.randomUUID();evidence(id);long version=revision(id);
         var result=resolve(id,key,version);assertEquals(200,result.status());
@@ -313,7 +310,7 @@ class CaseWorkflowTest {
         deliver(outcome(operation,false));
         assertEquals(HttpStatus.BAD_REQUEST,assertThrows(ResponseStatusException.class,()->resolve(id,UUID.randomUUID(),revision(id))).getStatusCode());
         var explanation=new ResolutionService.Explanation(operation,"Correction rejected; reviewed alternate evidence and no replacement needed");
-        assertEquals(200,resolutions.resolve(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"Final review completed",revision(id),List.of(explanation)).status());
+        UUID decisionKey=UUID.randomUUID();assertEquals(202,resolutions.resolve(jwt(reviewer,"ADMIN"),id,decisionKey,"Final review completed",revision(id),List.of(explanation)).status());confirmResolution(decisionKey);
         assertTrue(db.queryForObject("SELECT rejected_action_explanations FROM admin_case_decisions",String.class).contains(explanation.explanation()));
     }
     @Test void actionDuringEvidenceReadInvalidatesResolutionAndConcurrentRetryCreatesOneDecision() throws Exception {
@@ -335,8 +332,73 @@ class CaseWorkflowTest {
         assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->resolve(id,UUID.randomUUID(),revision(id))).getStatusCode());
         assertEquals(0,count("admin_case_decisions"));
     }
+    @Test void durableInboxRecoversExpiredLeaseAndDoesNotRepeatAcceptedReport(){
+        UUID key=UUID.randomUUID();service.report(jwt(reporter,"REQUESTER"),key,order,"Pickup issue");
+        var request=disputes.fact(key,"REQUEST").orElseThrow();var frozen=owner(request,"OrderReviewFrozen","order-service",Map.of("participants",List.of(reporter,courier)));
+        var ack=mock(org.springframework.kafka.support.Acknowledgment.class);
+        var record=new org.apache.kafka.clients.consumer.ConsumerRecord<String,String>("order.dispute.events",0,1,order.toString(),json.writeValueAsString(frozen));
+        disputes.receive(record,ack);verify(ack).acknowledge();
+        db.update("UPDATE dispute_inbox SET lease_until=CURRENT_TIMESTAMP+interval '1 minute' WHERE event_id=?",frozen.eventId());disputes.drain();assertEquals(0,count("dispute_operations")-1);
+        db.update("UPDATE dispute_inbox SET lease_until=CURRENT_TIMESTAMP-interval '1 second' WHERE event_id=?",frozen.eventId());disputes.drain();assertEquals(0,count("admin_statements"));
+        var chat=owner(request,"ErrandReviewPrepared","chat-service",Map.of("readOnly",true,"orderConfirmationId",frozen.eventId()));
+        disputes.receive(new org.apache.kafka.clients.consumer.ConsumerRecord<String,String>("chat.dispute.events",0,1,order.toString(),json.writeValueAsString(chat)),ack);disputes.drain();
+        disputes.receive(record,ack);disputes.drain();assertEquals(1,count("admin_statements"));assertEquals(1,count("admin_case_outbox"));
+        assertEquals(0,db.queryForObject("SELECT count(*) FROM dispute_outbox WHERE repeat_until_done AND active",Integer.class));
+    }
+    @Test void conflictingReplayAndForgedProducerAreQuarantinedWithoutChangingInbox(){
+        UUID key=UUID.randomUUID();service.report(jwt(reporter,"REQUESTER"),key,order,"Pickup issue");var request=disputes.fact(key,"REQUEST").orElseThrow();
+        var original=owner(request,"OrderReviewFrozen","order-service",Map.of("participants",List.of(reporter,courier)));var ack=mock(org.springframework.kafka.support.Acknowledgment.class);
+        disputes.receive(new org.apache.kafka.clients.consumer.ConsumerRecord<String,String>("order.dispute.events",0,1,order.toString(),json.writeValueAsString(original)),ack);
+        var conflicting=new com.friendoncampus.admin.dispute.DisputeBus.Message(original.eventId(),1,original.type(),original.producer(),key,original.caseId(),order,reporter,"REQUESTER",original.occurredAt(),json.valueToTree(Map.of("participants",List.of(reporter))));
+        disputes.receive(new org.apache.kafka.clients.consumer.ConsumerRecord<String,String>("order.dispute.events",0,2,order.toString(),json.writeValueAsString(conflicting)),ack);
+        disputes.receive(new org.apache.kafka.clients.consumer.ConsumerRecord<String,String>("chat.dispute.events",0,3,order.toString(),json.writeValueAsString(original)),ack);
+        assertEquals(1,count("dispute_inbox"));assertEquals(2,count("dispute_quarantine"));assertEquals(0,count("admin_statements"));
+        verify(ack,times(3)).acknowledge();
+    }
+    @Test void invalidDispositionIsRejectedLocallyBeforeCreatingAnImmutableClosure(){
+        frozenCreditStatus="RESERVED";UUID id=reviewCase();
+        assertEquals(HttpStatus.CONFLICT,assertThrows(ResponseStatusException.class,()->resolve(id,UUID.randomUUID(),revision(id))).getStatusCode());
+        assertEquals(0,count("admin_resolution_preparations"));assertNull(service.detail(jwt(reviewer,"ADMIN"),id).closure());
+        var accepted=resolutions.resolve(jwt(reviewer,"ADMIN"),id,UUID.randomUUID(),"Return held credits after review",revision(id),List.of(),"RETURN_TO_REQUESTER");
+        assertEquals(202,accepted.status());
+    }
+    @Test void legacyPreparationRestoresVerifiedNonreporterMembershipWithoutAssigningAReviewer(){
+        UUID id=caseId(report(reporter,UUID.randomUUID())),key=UUID.randomUUID();
+        db.update("DELETE FROM admin_case_participants WHERE case_id=? AND user_id=?",id,courier);
+        db.update("UPDATE admin_cases SET review_status='LEGACY' WHERE id=?",id);
+        assertEquals(202,service.claim(jwt(reviewer,"ADMIN"),key,id,revision(id)).status());
+        var request=disputes.fact(key,"REQUEST").orElseThrow();var frozen=owner(request,"OrderReviewFrozen","order-service",Map.of("participants",List.of(reporter,courier)));
+        deliverDispute(frozen);deliverDispute(owner(request,"ErrandReviewPrepared","chat-service",Map.of("readOnly",true,"orderConfirmationId",frozen.eventId())));
+        var own=service.reportStatus(jwt(courier,"COURIER"),id);assertNull(own.ownStatement());assertEquals("READY",own.caseSummary().reviewStatus());assertNull(own.caseSummary().reviewerId());
+    }
+    @Test void credentialsCannotEnterTheDisputeEnvelope(){
+        var m=new com.friendoncampus.admin.dispute.DisputeBus.Message(UUID.randomUUID(),1,"PrepareReview","admin-service",UUID.randomUUID(),UUID.randomUUID(),order,reporter,"REQUESTER",Instant.now(),json.valueToTree(Map.of("actorToken","TEST ONLY")));
+        assertThrows(IllegalArgumentException.class,()->com.friendoncampus.admin.dispute.DisputeBus.validate(m,"admin.dispute.commands",order.toString()));
+    }
     long count(String table) { return db.queryForObject("SELECT count(*) FROM "+table,Long.class); }
-    CaseViews.Mutation report(UUID actor, UUID key) { return service.report(jwt(actor,"REQUESTER"),key,order,"Pickup issue"); }
+    CaseViews.Mutation report(UUID actor, UUID key) { return reportAs(actor,"REQUESTER",key,"Pickup issue"); }
+    CaseViews.Mutation reportAs(UUID actor,String role,UUID key,String description) {
+        var result=service.report(jwt(actor,role),key,order,description);
+        if(result.status()==202){
+            var request=disputes.fact(key,"REQUEST").orElseThrow();var frozen=owner(request,"OrderReviewFrozen","order-service",Map.of("participants",List.of(reporter,courier)));
+            deliverDispute(frozen);deliverDispute(owner(request,"ErrandReviewPrepared","chat-service",Map.of("readOnly",true,"orderConfirmationId",frozen.eventId())));
+            return service.report(jwt(actor,role),key,order,description);
+        }return result;
+    }
+    @Autowired com.friendoncampus.admin.dispute.DisputeBus disputes;
+    @Autowired com.friendoncampus.admin.dispute.DisputeCoordinator coordinator;
+    @Autowired org.springframework.transaction.PlatformTransactionManager manager;
+    String frozenCreditStatus="RELEASED";
+    com.friendoncampus.admin.dispute.DisputeBus.Message owner(com.friendoncampus.admin.dispute.DisputeBus.Message source,String type,String producer,Object data){
+        var node=json.valueToTree(data);
+        if("OrderReviewFrozen".equals(type)){
+            var snapshot=(tools.jackson.databind.node.ObjectNode)node;snapshot.put("creditStatus",frozenCreditStatus);snapshot.put("courierId",courier.toString());snapshot.put("requesterId",reporter.toString());snapshot.put("orderId",source.orderId().toString());snapshot.put("caseId",source.caseId().toString());snapshot.put("state","OPEN");snapshot.put("resolved",false);
+        }
+        return new com.friendoncampus.admin.dispute.DisputeBus.Message(UUID.nameUUIDFromBytes((type+source.operationId()).getBytes(java.nio.charset.StandardCharsets.UTF_8)),1,type,producer,source.operationId(),source.caseId(),source.orderId(),source.actorId(),source.actorRole(),Instant.now(),node);
+    }
+    void deliverDispute(com.friendoncampus.admin.dispute.DisputeBus.Message message){coordinator.authorize(message);new org.springframework.transaction.support.TransactionTemplate(manager).executeWithoutResult(s->coordinator.handle(message));}
+    void confirmResolution(UUID operation){var request=disputes.fact(operation,"REQUEST").orElseThrow();deliverDispute(owner(request,"CaseClosurePrepared","chat-service",Map.of("readOnly",true)));deliverDispute(owner(request,"OrderDisputeFinalized","order-service",Map.of("resolved",true,"disposition",request.data().path("disposition").asText())));}
+
 
     CaseViews.Mutation correction(UUID id,UUID key,int amount){return creditActions.create(jwt(reviewer,"ADMIN"),id,key,"CREDIT_ADJUSTMENT",reporter,json.valueToTree(amount),"  Case correction  ");}
     UUID operation(CaseViews.Mutation result){return UUID.fromString(json.readTree(result.body()).path("operationId").asText());}
@@ -454,7 +516,7 @@ class CaseWorkflowTest {
     }
     @Test void conflictingConversationReferenceOrReusedKeyCannotChangeTargetOrAudit() {
         UUID id=reviewCase(),key=UUID.randomUUID();var original=reference(id);
-        service.report(jwt(courier,"COURIER"),UUID.randomUUID(),order,"Historical courier statement");
+        reportAs(courier,"COURIER",UUID.randomUUID(),"Historical courier statement");
         when(conversations.open(eq(id),eq(order),eq(reporter),any(),any())).thenReturn(original);
         assertEquals(200,service.openConversation(jwt(reviewer,"ADMIN"),key,id,reporter).status());
         assertEquals(409,service.openConversation(jwt(reviewer,"ADMIN"),key,id,courier).status());
@@ -492,7 +554,7 @@ class CaseWorkflowTest {
         var response=report(reporter,UUID.randomUUID()); assertEquals(201,response.status());
         UUID id=caseId(response);
         assertEquals("Pickup issue",service.reportStatus(jwt(reporter,"REQUESTER"),id).ownStatement().description());
-        assertEquals("evidence-1",db.queryForObject("SELECT eligibility_revision FROM admin_statements",String.class));
+        assertTrue(db.queryForObject("SELECT eligibility_revision FROM admin_statements",String.class).startsWith("ORDER_CONFIRMATION:"));
         assertEquals(1,count("admin_cases")); assertEquals(1,count("admin_case_audit")); assertEquals(1,count("admin_case_outbox"));
         var event=json.readTree(db.queryForObject("SELECT payload FROM admin_case_outbox",String.class));
         assertEquals("CaseOpened",event.path("eventType").asText()); assertEquals(id.toString(),event.path("aggregateId").asText());
@@ -501,7 +563,7 @@ class CaseWorkflowTest {
     }
     @Test void joinsExistingCaseAndKeepsParticipantViewsPrivate() {
         UUID id=caseId(report(reporter,UUID.randomUUID()));
-        var second=service.report(jwt(courier,"COURIER"),UUID.randomUUID(),order,"Courier statement");
+        var second=reportAs(courier,"COURIER",UUID.randomUUID(),"Courier statement");
         assertEquals(id,caseId(second)); assertEquals(1,count("admin_cases")); assertEquals(2,count("admin_statements"));
         assertEquals(2,count("admin_case_audit")); assertEquals(1,count("admin_case_outbox"));
         assertEquals("Pickup issue",service.reportStatus(jwt(reporter,"REQUESTER"),id).ownStatement().description());
@@ -524,14 +586,12 @@ class CaseWorkflowTest {
         db.update("UPDATE admin_cases SET state='RESOLVED',reviewer_id=? WHERE id=?",reviewer,id);
         assertEquals(409,report(courier,UUID.randomUUID()).status()); assertEquals(1,count("admin_case_audit"));
     }
-    @Test void rejectsMissingEvidenceIneligibilityInactiveAndInvalidInput() {
-        when(chat.check(any(),any(),anyString())).thenReturn(new ChatEligibilityClient.Eligibility(false,true,"revision"));
-        assertEquals(403,report(reporter,UUID.randomUUID()).status());
-        when(chat.check(any(),any(),anyString())).thenReturn(new ChatEligibilityClient.Eligibility(true,false,"revision"));
-        assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->report(reporter,UUID.randomUUID())).getStatusCode());
+    @Test void reportingQueuesWithoutChatButStillRejectsInactiveAndWrongRole(){
+        when(chat.check(any(),any(),anyString())).thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE));
+        var pending=service.report(jwt(reporter,"REQUESTER"),UUID.randomUUID(),order,"Pickup issue");assertEquals(202,pending.status());
+        assertEquals(1,count("admin_cases"));assertEquals(0,count("admin_statements"));assertEquals(0,count("admin_case_outbox"));verifyNoInteractions(chat);
         when(users.find(reporter)).thenReturn(new UserEligibilityClient.Eligibility(reporter,false,false));
         assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->report(reporter,UUID.randomUUID())).getStatusCode());
-        assertEquals(0,count("admin_cases")); assertEquals(0,count("admin_case_outbox"));
         assertEquals(HttpStatus.FORBIDDEN,assertThrows(ResponseStatusException.class,()->service.report(jwt(reviewer,"ADMIN"),UUID.randomUUID(),order,"Issue")).getStatusCode());
     }
     @Test void firstReportRaceJoinsOneCaseAndSameKeyRaceHasOneEffect() throws Exception {
@@ -540,7 +600,7 @@ class CaseWorkflowTest {
         assertEquals(1,count("admin_cases")); assertEquals(2,count("admin_statements")); assertEquals(1,count("admin_case_outbox"));
         UUID otherOrder=UUID.randomUUID(), key=UUID.randomUUID();
         outcomes=race(()->service.report(jwt(reporter,"REQUESTER"),key,otherOrder,"Retry"),()->service.report(jwt(reporter,"REQUESTER"),key,otherOrder,"Retry"));
-        assertEquals(outcomes.get(0),outcomes.get(1)); assertEquals(2,count("admin_cases")); assertEquals(3,count("admin_statements"));
+        assertEquals(outcomes.get(0),outcomes.get(1)); assertEquals(2,count("admin_cases")); assertEquals(2,count("admin_statements")); assertEquals(202,outcomes.get(0).status());
     }
     @Test void competingClaimsHaveOneWinnerAndNoExtraEventOnReplay() throws Exception {
         UUID id=caseId(report(reporter,UUID.randomUUID())); UUID key=UUID.randomUUID(); UUID other=UUID.randomUUID();
@@ -611,12 +671,12 @@ class CaseWorkflowTest {
         assertThrows(ResponseStatusException.class,()->service.queue(jwt(reviewer,"ADMIN"),null,null,0,101));
         assertThrows(ResponseStatusException.class,()->service.detail(jwt(reporter,"REQUESTER"),id));
     }
-    @Test void outboxFailureRollsBackEveryPartOfFirstMutation() {
-        db.execute("ALTER TABLE admin_case_outbox ADD CONSTRAINT test_outbox_failure CHECK (event_type <> 'CaseOpened')");
-        try {
-            assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->report(reporter,UUID.randomUUID())).getStatusCode());
-            for(String table:List.of("admin_cases","admin_statements","admin_case_audit","admin_case_outbox","admin_mutation_receipts")) assertEquals(0,count(table));
-        } finally { db.execute("ALTER TABLE admin_case_outbox DROP CONSTRAINT test_outbox_failure"); }
+    @Test void commandOutboxFailureRollsBackEveryPartOfThePreparation(){
+        db.execute("ALTER TABLE dispute_outbox ADD CONSTRAINT test_outbox_failure CHECK (topic <> 'admin.dispute.commands')");
+        try{
+            assertEquals(HttpStatus.SERVICE_UNAVAILABLE,assertThrows(ResponseStatusException.class,()->service.report(jwt(reporter,"REQUESTER"),UUID.randomUUID(),order,"Pickup issue")).getStatusCode());
+            for(String table:List.of("admin_cases","admin_statements","admin_report_preparations","admin_mutation_receipts","dispute_operations","dispute_outbox"))assertEquals(0,count(table));
+        }finally{db.execute("ALTER TABLE dispute_outbox DROP CONSTRAINT test_outbox_failure");}
     }
     private List<CaseViews.Mutation> race(Callable<CaseViews.Mutation> first,Callable<CaseViews.Mutation> second) throws Exception {
         var executor=Executors.newFixedThreadPool(2); var barrier=new CyclicBarrier(2);

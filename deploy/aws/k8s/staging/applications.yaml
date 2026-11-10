@@ -201,7 +201,6 @@ spec:
             - { name: DB_PASSWORD, valueFrom: { secretKeyRef: { name: order-service-secrets, key: DB_PASSWORD } } }
             - { name: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE, value: "2" }
             - { name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE, value: "0" }
-            - { name: ORDER_CREDIT_URL, value: "http://credit-service:8083" }
             - { name: ORDER_USER_URL, value: "http://user-service:8081" }
             - { name: ORDER_SERVICE_KEY_ID, valueFrom: { secretKeyRef: { name: order-service-secrets, key: ORDER_SERVICE_KEY_ID } } }
             - { name: ORDER_SERVICE_PRIVATE_KEY, valueFrom: { secretKeyRef: { name: order-service-secrets, key: ORDER_SERVICE_PRIVATE_KEY } } }
@@ -323,7 +322,6 @@ spec:
             - { name: SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE, value: "0" }
             - { name: ADMIN_USER_URL, value: "http://user-service:8081" }
             - { name: ADMIN_USER_JWKS, value: "http://user-service:8081/.well-known/jwks.json" }
-            - { name: ADMIN_ORDER_URL, value: "http://order-service:8082" }
             - { name: ADMIN_CHAT_URL, value: "http://chat-service:8085" }
             - { name: ADMIN_KAFKA_ENABLED, value: "true" }
             - { name: KAFKA_BOOTSTRAP_SERVERS, valueFrom: { configMapKeyRef: { name: cloud-runtime, key: KAFKA_BOOTSTRAP_SERVERS } } }

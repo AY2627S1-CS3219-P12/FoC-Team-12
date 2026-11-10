@@ -70,6 +70,7 @@ import com.sun.net.httpserver.HttpServer;
                 "app.security.jwt.audience=" + OrderSecurityIntegrationTest.AUDIENCE
         })
 class OrderSecurityIntegrationTest {
+    @MockitoBean com.friendoncampus.order.dispute.DisputeBus disputeBus;
     @MockitoBean com.friendoncampus.order.authorization.CurrentAuthorization currentAuthorization;
 
     @MockitoBean com.friendoncampus.order.service.DisputeReviewService disputeReviews;

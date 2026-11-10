@@ -125,6 +125,16 @@ export function ResolutionPanel({
         operation,
       )
       if (
+        result.case.caseId === summary.caseId &&
+        result.case.state !== 'RESOLVED' &&
+        result.closure?.operationId === operation.key
+      ) {
+        setError('')
+        setConfirm(false)
+        refresh()
+        return
+      }
+      if (
         result.case.caseId !== summary.caseId ||
         result.case.state !== 'RESOLVED' ||
         result.case.reviewerId !== actor
@@ -172,8 +182,9 @@ export function ResolutionPanel({
       )}
       {closure && summary.state !== 'RESOLVED' && (
         <p role="status">
-          This case is still closing, so nothing new can be added. Resume your
-          earlier request below.
+          Closure is preparing. The decision is saved, and we are waiting for
+          chat, errand and credit confirmations. Nothing new can be added while
+          it is pending.
         </p>
       )}
       {done && (
@@ -284,7 +295,7 @@ export function ResolutionPanel({
                   disabled={busy}
                   onClick={() => void submit()}
                 >
-                  {busy ? 'Checking resolution…' : 'Resume case closure'}
+                  {busy ? 'Checking resolution…' : 'Check case closure'}
                 </button>
               ) : confirm ? (
                 <div role="region" aria-label="Confirm final resolution">

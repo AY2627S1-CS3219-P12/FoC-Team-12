@@ -16,7 +16,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: order-service
-          image: arkanian4/foc-order-service:sha-4dd402ca4359b4612e084eda1822e117f784a50e-r42644545436-1
+          image: foc-order-service:local-8a986a27-kafka-20261110-v2
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8082

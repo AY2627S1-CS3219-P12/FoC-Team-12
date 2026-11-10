@@ -46,7 +46,7 @@ public class SecurityConfiguration {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/internal/chat/orders/*/report-eligibility",
                                 "/internal/chat/cases/*/messages/*/attachment", "/internal/chat/cases/*/timeline", "/internal/chat/cases/*/conversations").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/internal/chat/orders/*/review", "/internal/chat/cases/*/conversations", "/internal/chat/cases/*/closure").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/internal/chat/cases/*/conversations").authenticated()
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .authenticationEntryPoint(errors).accessDeniedHandler(errors)

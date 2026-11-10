@@ -6,6 +6,57 @@ requirements or approval of draft interfaces. Product scope remains in the Admin
 wire shapes in `docs/contracts/` remain review drafts until the affected owners agree them.
 Never replace an unavailable dependency with synthetic data in application code.
 
+## Kafka replacement — 10 November 2026
+
+The user-approved [Kafka coordination contract](../docs/integration/dispute-kafka-contract.md)
+replaces the synchronous dispute writes and supersedes the HTTP rollout notes below. The single
+shared editor is this Admin task; affected owners remain Darryl (Admin/User), XueTing (Order),
+Eldridge (Chat/Credit) and Jun Hui (broker/shared runtime).
+
+**Prepared and verified:** forward-only owner-local inbox/outbox/stage migrations, credential-free
+commands/outcomes, bounded leased workers, immutable identities, current authorization, independent
+review and private-chat drains. Obsolete dispute HTTP clients/routes, exclusive URLs, pins and
+network edges were removed; the current-account and evidence/conversation read identities remain.
+The interrupted HTTP rollout was inspected and reconciled. Test accounts, private keys, databases
+and PVCs were retained; no blanket rollback, key rotation or data reset occurred.
+
+**Local deployment:** source base `8a986a27` plus this uncommitted replacement, context/namespace
+`foc-local`, gateway `http://127.0.0.1:8089`. Admin/Order/Chat use
+`local-8a986a27-kafka-20261110-v2`; Credit/Gateway/Supplier use
+`local-8a986a27-kafka-20261110-v1`; User uses `local-8a986a27-20261110`.
+All selected application rollouts are ready. Deployment files pin these local-only images;
+build and load them before applying on another local cluster. No images were published.
+
+**Verification:** 65 distinct Admin PostgreSQL workflow cases (64-case suite plus the final legacy
+membership regression), 7 Order PostgreSQL cases, 10 Chat integration cases, 3 Credit settlement
+cases, and 5 focused Order/Chat coordinator tests pass. Admin UI passes 106 tests, lint and
+production build. The shared UI contract passes 12 checks; Compose validates all 31 required
+variables across five environments. Generated contracts validate 43 HTTP operation fixtures,
+existing event/WebSocket shapes, eight new dispute variants and invalid identity/version/credential
+cases. Kafka initializer CLI-mock regressions and real local topic/ACL initialization pass.
+
+**Real local business evidence:** test errand `0fa526ed-79f6-4fbe-a29e-1b75132e0fb1`, case
+`656b14c6-7df3-3072-bc5e-e1470727c59f`. With Chat scaled to zero, context remained
+PREPARATION_AVAILABLE and POST returned 202; Order froze while the report remained PENDING with
+no accepted statement. Chat was restored in a finally block; both confirmations made the report
+READY. Complete real evidence was available. The independent test admin assigned the case and
+closed it through the GUI with RETURN_TO_REQUESTER. Order became COMPLETED/DISPUTE_RESOLVED,
+Admin became RESOLVED, and Credit returned the two-credit hold. Two exact HTTP closure retries
+returned identical 200 receipts with exactly one RESERVATION_RELEASED ledger entry for operation
+`9ed56080-74e4-4a09-9de7-ca784b71fa2e`. The completed smoke left 10 available and zero reserved
+credits before preparing the separate one-credit manual test case. Shared-topic outcomes for other
+logical consumers now finish cleanly; all four coordination inboxes/outboxes showed zero pending
+work and quarantine after recovery. Desktop/375px checks showed no horizontal overflow and visible
+keyboard focus. The two local test accounts sign in and switch to their assigned roles.
+
+**Manual test fixture:** fresh errand `3280621f-ad3c-4b20-8da7-a43f5399c5e9`, case
+`1ceb89cb-d437-37f1-b352-1e74008cde55`, is OPEN/READY with no reviewer. It holds one local
+credit for the user's manual assignment/closure test. No test credentials are recorded here.
+
+**Acceptance remaining:** the user has not yet manually accepted the new local flow. Affected-owner
+review remains required before merge/shared deployment. No AWS deployment, commit, push, merge,
+publication or production acceptance is claimed by this task.
+
 ## Report review continuation — 10 November 2026
 
 The [dispute review contract](../docs/integration/dispute-review-contract.md) adds owner-controlled freeze/finalization APIs and original Chat messages/images. This iteration has not been deployed or accepted against the running multi-service system. Existing cases require barrier reconciliation; updated service pins, migrations and network reachability are rollout prerequisites. Earlier integration acceptance below does not cover this change.
