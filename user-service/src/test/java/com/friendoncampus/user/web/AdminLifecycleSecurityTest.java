@@ -40,6 +40,26 @@ class AdminLifecycleSecurityTest {
     }
 
     @Test
+    void exactUuidSearchReturnsTheOwnerNameOnlyToAnActiveAdministrator() throws Exception {
+        User admin = activeAdmin("lookup-admin@u.nus.edu", "LookupAdmin", "lookupadmin");
+        User member = activeUser("lookup-member@u.nus.edu", "LookupMember", "lookupmember");
+        users.save(admin); users.save(member);
+        String route = "/api/users/admin/accounts";
+        mvc.perform(get(route).param("query", member.getId().toString()).param("size", "1")
+                .header("Authorization", "Bearer " + token(admin, "ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].userId").value(member.getId().toString()))
+                .andExpect(jsonPath("$.content[0].username").value("LookupMember"));
+        mvc.perform(get(route).param("query", member.getId().toString())
+                .header("Authorization", "Bearer " + token(member, "REQUESTER"))).andExpect(status().isForbidden());
+        mvc.perform(get(route).param("query", member.getId().toString())).andExpect(status().isUnauthorized());
+        admin.ban(); users.save(admin);
+        mvc.perform(get(route).param("query", member.getId().toString())
+                .header("Authorization", "Bearer " + token(admin, "ADMIN"))).andExpect(status().isForbidden());
+    }
+
+    @Test
     void requiresAnAdminTokenAndPerformsAnAllowedRolePromotion() throws Exception {
         User admin = activeAdmin("admin-security@u.nus.edu", "Admin", "adminsecurity");
         User member = activeUser("member-security@u.nus.edu", "Member", "membersecurity");

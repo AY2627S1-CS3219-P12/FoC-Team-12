@@ -40,6 +40,29 @@ class AdminLifecycleServiceTest {
     }
 
     @Test
+    void findsOnlyTheExactUuidAndPreservesPaginationAndAdminAuthorization() {
+        var first = org.springframework.data.domain.PageRequest.of(0, 1);
+        assertThat(service.list(actor.getId(), " " + target.getId().toString().toUpperCase() + " ", first).getContent()).containsExactly(target);
+        var later = service.list(actor.getId(), target.getId().toString(), org.springframework.data.domain.PageRequest.of(1, 1));
+        assertThat(later.getContent()).isEmpty();
+        assertThat(later.getTotalElements()).isEqualTo(1);
+        UUID missing = UUID.randomUUID();
+        when(users.findById(missing)).thenReturn(Optional.empty());
+        assertThat(service.list(actor.getId(), missing.toString(), first).getTotalElements()).isZero();
+        verify(users, never()).searchByEmailOrUsername(anyString(), any());
+        actor.ban();
+        assertThatThrownBy(() -> service.list(actor.getId(), target.getId().toString(), first)).isInstanceOf(AdminAccessDeniedException.class);
+    }
+
+    @Test
+    void preservesExistingNameSearch() {
+        var page = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(users.searchByEmailOrUsername("Member", page)).thenReturn(org.springframework.data.domain.Page.empty(page));
+        service.list(actor.getId(), " Member ", page);
+        verify(users).searchByEmailOrUsername("Member", page);
+    }
+
+    @Test
     void promotesAndDemotesAnActiveAccount() {
         User promoted = service.promote(actor.getId(), target.getId());
         assertThat(promoted.hasRole(UserRole.ADMIN)).isTrue();
