@@ -1880,7 +1880,6 @@ a.button-secondary svg {
   max-height: 20rem;
   border-radius: 0.7rem;
 }
-.message-author,
 .message-bubble time {
   display: block;
   font-size: 0.72rem;

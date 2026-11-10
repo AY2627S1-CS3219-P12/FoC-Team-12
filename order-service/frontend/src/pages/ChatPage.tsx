@@ -277,9 +277,10 @@ export function ChatPage() {
           ) : messages.data?.length ? (
             messages.data.map((message) => (
               <MessageBubble
-                key={message.id}
+                key={`${message.id}-${targetLanguage ?? 'original'}`}
                 message={message}
                 mine={message.senderUserId === session?.userId}
+                preferredLanguage={targetLanguage}
               />
             ))
           ) : (
@@ -373,9 +374,11 @@ export function ChatPage() {
 export function MessageBubble({
   message,
   mine,
+  preferredLanguage,
 }: {
   message: ChatMessage
   mine: boolean
+  preferredLanguage?: string
 }) {
   const [url, setUrl] = useState('')
   const [showOriginal, setShowOriginal] = useState(false)
@@ -408,14 +411,17 @@ export function MessageBubble({
       </article>
     )
 
+  const translationApplies =
+    !mine &&
+    preferredLanguage !== message.originalLanguage &&
+    message.translation?.targetLanguage === preferredLanguage
   const translated =
-    !mine && message.translation?.status === 'READY' && message.translation.text
+    translationApplies &&
+    message.translation?.status === 'READY' &&
+    message.translation.text
 
   return (
     <article className={`message-bubble ${mine ? 'message-mine' : ''}`}>
-      <span className="message-author">
-        {mine ? 'You' : 'Other participant'}
-      </span>
       {message.messageType === 'IMAGE' ? (
         url ? (
           <img alt={message.attachment?.filename ?? 'Shared image'} src={url} />
@@ -441,10 +447,10 @@ export function MessageBubble({
           {translated && showOriginal && (
             <p className="message-original">{message.text}</p>
           )}
-          {!mine && message.translation?.status === 'PENDING' && (
+          {translationApplies && message.translation?.status === 'PENDING' && (
             <span className="translation-status">Translating…</span>
           )}
-          {!mine && message.translation?.status === 'FAILED' && (
+          {translationApplies && message.translation?.status === 'FAILED' && (
             <span className="translation-status">
               Translation unavailable · showing original
             </span>
