@@ -771,37 +771,89 @@ export function App() {
       {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
       {adminUsersPage
         ? <main className="admin-users-main"><AdminUserManagement currentUserId={session.userId} /></main>
-        : <main className="profile-main"><section className="dashboard-page" aria-labelledby="dashboard-title">
-      <header className="dashboard-hero">
+        : <main className="profile-main"><section className={`dashboard-page ${adminMode ? 'admin-home' : 'participant-home'}`} aria-labelledby="dashboard-title">
+      {adminMode ? <header className="dashboard-hero">
         <div>
-          <p className="eyebrow">{adminMode ? 'Administration' : 'Your campus dashboard'}</p>
-          <h1 id="dashboard-title">{adminMode ? 'Keep FoC running smoothly.' : <>Good to see you, <span>{session.username}</span>.</>}</h1>
-          <p className="intro">{adminMode
-            ? 'Manage the people and places that keep Friend on Campus useful and safe.'
-            : 'What would make your day a little easier?'}</p>
+          <p className="eyebrow">Administration</p>
+          <h1 id="dashboard-title">Keep FoC running smoothly.</h1>
+          <p className="intro">Manage the people and places that keep Friend on Campus useful and safe.</p>
         </div>
-      </header>
+      </header> : <>
+        <header className="campus-home-hero">
+          <div className="campus-home-copy">
+            <p className="campus-home-kicker"><Sparkles aria-hidden="true" /> Made for your campus day</p>
+            <h1 id="dashboard-title">Your campus.<br /><span>A thousand</span> small favours.</h1>
+            <p className="campus-home-lede">Get everyday campus errands done by students already heading your way. Simple, trusted and made for the rhythm of university life.</p>
+            <nav className="campus-home-actions" aria-label="Start on Friend on Campus">
+              <a className="campus-home-primary" href="/errands/new" onClick={event => {
+                if (session.role === 'REQUESTER') return
+                event.preventDefault()
+                void selectWorkspaceRole('REQUESTER').then(changed => { if (changed) navigateTo('/errands/new') })
+              }}>
+                Request help <ArrowRight aria-hidden="true" />
+              </a>
+              <a className="campus-home-secondary" href="/errands/browse" onClick={event => {
+                if (session.role === 'COURIER') return
+                event.preventDefault()
+                void selectWorkspaceRole('COURIER').then(changed => { if (changed) navigateTo('/errands/browse') })
+              }}>
+                Run an errand <ArrowUpRight aria-hidden="true" />
+              </a>
+            </nav>
+            <div className="campus-home-trust" aria-label="Friend on Campus safeguards">
+              <span><CheckCircle2 aria-hidden="true" /> NUS email verified</span>
+              <span><MapPin aria-hidden="true" /> Campus-only handoffs</span>
+              <span><Coins aria-hidden="true" /> Credit rewards</span>
+            </div>
+          </div>
+          <div className="campus-home-visual" role="img" aria-label="Friend on Campus connects students who need a hand with students already heading their way">
+            <span className="campus-home-orbit campus-home-orbit-one" aria-hidden="true" />
+            <span className="campus-home-orbit campus-home-orbit-two" aria-hidden="true" />
+            <div className="campus-home-brand-art" aria-hidden="true"><img alt="" src={bagIcon} /></div>
+            <div className="campus-home-float campus-home-float-request" aria-hidden="true">
+              <span className="campus-home-float-icon coral"><HandHeart /></span>
+              <span><strong>Need a hand?</strong><small>Post a pickup or delivery</small></span>
+            </div>
+            <div className="campus-home-float campus-home-float-courier" aria-hidden="true">
+              <span className="campus-home-float-icon blue"><PackageCheck /></span>
+              <span><strong>Free to help?</strong><small>Find an errand along your route</small></span>
+            </div>
+          </div>
+        </header>
 
-      {!adminMode && <nav className="dashboard-actions" aria-label="Start an errand">
-        <a className="dashboard-action dashboard-action-request" href="/errands/new" onClick={event => {
-          if (session.role === 'REQUESTER') return
-          event.preventDefault()
-          void selectWorkspaceRole('REQUESTER').then(changed => { if (changed) navigateTo('/errands/new') })
-        }}>
-          <span className="dashboard-action-icon"><HandHeart aria-hidden="true" /></span>
-          <span><small>I need a hand</small><strong>Request help</strong><em>Post a pickup or delivery and choose the credit reward.</em></span>
-          <ArrowUpRight aria-hidden="true" />
-        </a>
-        <a className="dashboard-action dashboard-action-courier" href="/errands/browse" onClick={event => {
-          if (session.role === 'COURIER') return
-          event.preventDefault()
-          void selectWorkspaceRole('COURIER').then(changed => { if (changed) navigateTo('/errands/browse') })
-        }}>
-          <span className="dashboard-action-icon"><PackageCheck aria-hidden="true" /></span>
-          <span><small>I have time to help</small><strong>Run an errand</strong><em>Find an open request nearby and earn credits.</em></span>
-          <ArrowUpRight aria-hidden="true" />
-        </a>
-      </nav>}
+        <section className="campus-home-shortcuts" aria-labelledby="shortcut-title">
+          <div className="campus-home-section-heading">
+            <div><p className="eyebrow">Find your shortcut</p><h2 id="shortcut-title">What would make today easier?</h2></div>
+            <p>Move quickly between the everyday campus tasks that Friend on Campus supports.</p>
+          </div>
+          <nav className="campus-home-shortcut-grid" aria-label="Campus shortcuts">
+            <a className="campus-home-shortcut coral" href="/errands/new" onClick={event => {
+              if (session.role === 'REQUESTER') return
+              event.preventDefault()
+              void selectWorkspaceRole('REQUESTER').then(changed => { if (changed) navigateTo('/errands/new') })
+            }}>
+              <span className="campus-home-shortcut-icon"><HandHeart aria-hidden="true" /></span><span className="campus-home-shortcut-index">01</span>
+              <span className="campus-home-shortcut-copy"><strong>Post a campus request</strong><small>Ask for a pickup or delivery.</small></span><span className="campus-home-shortcut-arrow"><ArrowRight aria-hidden="true" /></span>
+            </a>
+            <a className="campus-home-shortcut blue" href="/errands/browse" onClick={event => {
+              if (session.role === 'COURIER') return
+              event.preventDefault()
+              void selectWorkspaceRole('COURIER').then(changed => { if (changed) navigateTo('/errands/browse') })
+            }}>
+              <span className="campus-home-shortcut-icon"><PackageCheck aria-hidden="true" /></span><span className="campus-home-shortcut-index">02</span>
+              <span className="campus-home-shortcut-copy"><strong>Browse open requests</strong><small>Help along a route you already take.</small></span><span className="campus-home-shortcut-arrow"><ArrowRight aria-hidden="true" /></span>
+            </a>
+            <a className="campus-home-shortcut gold" href="/suppliers">
+              <span className="campus-home-shortcut-icon"><Store aria-hidden="true" /></span><span className="campus-home-shortcut-index">03</span>
+              <span className="campus-home-shortcut-copy"><strong>Find campus suppliers</strong><small>Locate food, printing and essentials.</small></span><span className="campus-home-shortcut-arrow"><ArrowRight aria-hidden="true" /></span>
+            </a>
+            <a className="campus-home-shortcut mauve" href="/credits">
+              <span className="campus-home-shortcut-icon"><Coins aria-hidden="true" /></span><span className="campus-home-shortcut-index">04</span>
+              <span className="campus-home-shortcut-copy"><strong>Check your credits</strong><small>Review balance and transaction history.</small></span><span className="campus-home-shortcut-arrow"><ArrowRight aria-hidden="true" /></span>
+            </a>
+          </nav>
+        </section>
+      </>}
 
       <div className="dashboard-content">
         <section className="dashboard-explore" aria-labelledby="explore-title">
@@ -811,7 +863,7 @@ export function App() {
             {!adminMode && <a className="service-card" href="/suppliers"><Store aria-hidden="true" /><strong>Browse suppliers</strong><span>Find food, coffee, printing and shopping across campus.</span><ArrowRight aria-hidden="true" /></a>}
             {adminMode && <a className="service-card admin-card" href="/admin/suppliers"><Store aria-hidden="true" /><strong>Manage suppliers</strong><span>Create, update, activate or remove campus locations.</span><ArrowRight aria-hidden="true" /></a>}
             {adminMode && <a className="service-card admin-card" href="/?view=users"><ShieldCheck aria-hidden="true" /><strong>Manage users</strong><span>Manage roles, account access and account status.</span><ArrowRight aria-hidden="true" /></a>}
-            <a className="service-card" href="/credits"><Coins aria-hidden="true" /><strong>View my credits</strong><span>See available credits, reservations and transaction history.</span><ArrowRight aria-hidden="true" /></a>
+            {!adminMode && <a className="service-card" href="/credits"><Coins aria-hidden="true" /><strong>View my credits</strong><span>See available credits, reservations and transaction history.</span><ArrowRight aria-hidden="true" /></a>}
           </nav>
         </section>
 
