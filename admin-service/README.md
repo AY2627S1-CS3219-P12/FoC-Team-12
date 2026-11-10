@@ -25,6 +25,13 @@ when evidence is unavailable, reporting-account labels and account references re
 Historical courier assignments are retained. Verified participants can receive reviewer actions
 and private follow-up even before submitting their own statement.
 Errand descriptions and participant statements are displayed verbatim from their API fields.
+Participant-scoped panels keep their account fixed; switch through the participant cards instead
+of a duplicate selector. Ban/correction reasons are internal audit records, visible to authorized
+admins and sent to the responsible service, not included in participant case status. Completed
+action history is collapsed; pending or uncertain outcomes remain expanded. Confirmation and
+same-request retry safeguards still apply. Closure presents three radio choices with the existing
+dispositions: keep a confirmed outcome with no active hold, return held credits, or pay the courier.
+
 The dashboard does not generate, summarize or rephrase case content and has no LLM dependency.
 
 Cards sit side by side on desktop and stack on narrow screens. A `Reporter` badge marks each

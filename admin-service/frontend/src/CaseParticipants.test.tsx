@@ -135,7 +135,7 @@ it('groups each statement and SVG actions under the correct role, regardless of 
   const panel = within(
     screen.getByRole('region', { name: 'Credit corrections' }),
   )
-  expect(panel.getByLabelText('Participant')).toHaveValue(courier)
+  expect(panel.queryByLabelText('Participant')).not.toBeInTheDocument()
   expect(panel.getByRole('link', { name: 'Courier 1' })).toHaveAttribute(
     'href',
     `#person-${courier}`,
@@ -197,9 +197,7 @@ it('opens private chat and ban review for the account chosen on its card', async
   const chat = within(
     screen.getByRole('region', { name: 'Participant conversations' }),
   )
-  expect(
-    await chat.findByRole('button', { name: 'Courier 1' }),
-  ).toHaveAttribute('aria-pressed', 'true')
+  expect(chat.queryByText('Change participant')).not.toBeInTheDocument()
   expect(chat.getByRole('link', { name: 'Courier 1' })).toHaveAttribute(
     'href',
     `#person-${courier}`,
@@ -210,7 +208,7 @@ it('opens private chat and ban review for the account chosen on its card', async
   const bans = within(
     screen.getByRole('region', { name: 'Account ban requests' }),
   )
-  expect(bans.getByLabelText('Participant')).toHaveValue(requester)
+  expect(bans.queryByLabelText('Participant')).not.toBeInTheDocument()
   fireEvent.change(bans.getByLabelText('Reason for ban'), {
     target: { value: 'Reviewed account misuse' },
   })
@@ -255,8 +253,7 @@ it('resumes the original uncertain correction and cannot retarget it from anothe
   const panel = within(
     screen.getByRole('region', { name: 'Credit corrections' }),
   )
-  expect(panel.getByLabelText('Participant')).toHaveValue(courier)
-  expect(panel.getByLabelText('Participant')).toBeDisabled()
+  expect(panel.queryByLabelText('Participant')).not.toBeInTheDocument()
   expect(screen.getByRole('article', { name: 'Courier 1' })).toHaveClass(
     'case-person-selected',
   )
@@ -271,7 +268,7 @@ it('resumes the original uncertain correction and cannot retarget it from anothe
   expect(sent.headers['Idempotency-Key']).toBe(key)
 })
 
-it('shows only the selected account history and keeps the card highlight in sync with the account selector', () => {
+it('shows only the selected account history and switches history through participant cards', () => {
   const actions: Detail['actions'] = [requester, courier].map((id, index) => ({
     operationId: index ? orderId : caseId,
     caseId,
@@ -291,15 +288,21 @@ it('shows only the selected account history and keeps the card highlight in sync
   const panel = within(
     screen.getByRole('region', { name: 'Credit corrections' }),
   )
+  fireEvent.click(panel.getByText('Action history (1)'))
   expect(panel.getByText('Courier correction reason')).toBeVisible()
   expect(
     panel.queryByText('Requester correction reason'),
   ).not.toBeInTheDocument()
-  fireEvent.change(panel.getByLabelText('Participant'), {
-    target: { value: requester },
-  })
-  expect(panel.getByText('Requester correction reason')).toBeVisible()
-  expect(panel.queryByText('Courier correction reason')).not.toBeInTheDocument()
+  fireEvent.click(
+    card('Requester').getByRole('button', { name: 'Adjust credits' }),
+  )
+  const switched = within(
+    screen.getByRole('region', { name: 'Credit corrections' }),
+  )
+  expect(switched.getByText('Requester correction reason')).toBeVisible()
+  expect(
+    switched.queryByText('Courier correction reason'),
+  ).not.toBeInTheDocument()
   expect(screen.getByRole('article', { name: 'Requester' })).toHaveClass(
     'case-person-selected',
   )

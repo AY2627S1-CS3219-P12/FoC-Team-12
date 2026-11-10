@@ -235,13 +235,11 @@ it('keeps a durable accepted closure pending until owner confirmations arrive', 
   const refresh = vi.fn()
   vi.stubGlobal(
     'fetch',
-    vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        status: 202,
-        json: async () => ({ case: summary, closure }),
-      }),
+    vi.fn().mockResolvedValue({
+      ok: true,
+      status: 202,
+      json: async () => ({ case: summary, closure }),
+    }),
   )
   render(
     <ResolutionPanel
@@ -264,3 +262,42 @@ it('keeps a durable accepted closure pending until owner confirmations arrive', 
     ),
   ).not.toBeInTheDocument()
 })
+
+it.each([
+  ['Return to requester', 'RETURN_TO_REQUESTER'],
+  ['Pay courier', 'PAY_COURIER'],
+] as const)(
+  'reviews and submits the selected %s disposition',
+  async (label, value) => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue({
+        ok: true,
+        json: async () => ({ case: { ...summary, state: 'RESOLVED' } }),
+      })
+    vi.stubGlobal('fetch', fetcher)
+    render(
+      <ResolutionPanel
+        summary={summary}
+        actor={actor}
+        actions={[]}
+        refresh={() => {}}
+      />,
+    )
+    expect(screen.getAllByRole('radio')).toHaveLength(3)
+    fireEvent.click(screen.getByRole('radio', { name: new RegExp(label) }))
+    enterReason()
+    fireEvent.click(screen.getByRole('button', { name: 'Review case closure' }))
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(
+      screen.getByRole('radio', { name: new RegExp(label) }),
+    ).toBeDisabled()
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close case permanently' }),
+    )
+    await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
+    expect(JSON.parse(fetcher.mock.calls[0]![1].body).creditDisposition).toBe(
+      value,
+    )
+  },
+)
