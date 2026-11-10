@@ -15,7 +15,11 @@ if [ "${TEST_FAIL_ALWAYS:-false}" = true ]; then exit 1; fi
 if [ ! -e "$TEST_WORK/failed-once" ]; then touch "$TEST_WORK/failed-once"; exit 1; fi
 mkdir "$TEST_WORK/active" || { echo 'Unexpected concurrent CLI with parallelism=1' >&2; exit 1; }
 trap 'rmdir "$TEST_WORK/active"' EXIT
-printf '%s\n' "$0" >> "$TEST_WORK/calls"
+{
+  printf '%s' "$0"
+  printf ' %s' "$@"
+  printf '\n'
+} >> "$TEST_WORK/calls"
 sleep .01
 MOCK
 chmod +x "$work/cli"
@@ -24,6 +28,11 @@ export KAFKA_BIN_DIR="$work" KAFKA_ADMIN_PASSWORD=test-only KAFKA_INIT_PARALLELI
 bash /opt/foc-kafka/initialize.sh > "$work/log" 2>&1
 grep -q 'retry 1/3' "$work/log"
 grep -q 'Kafka topics and ACLs are initialized' "$work/log"
+grep -Fq -- '--operation Describe --group *' "$work/calls"
+if grep -Eq -- '--operation Read( --operation [A-Za-z]+)* --group \*$' "$work/calls"; then
+  echo 'Kafka UI must not receive wildcard group Read permission' >&2
+  exit 1
+fi
 test "$(wc -l < "$work/calls")" -gt 40
 export TEST_FAIL_ALWAYS=true
 if bash /opt/foc-kafka/initialize.sh > "$work/failure-log" 2>&1; then echo 'Failure was incorrectly accepted' >&2; exit 1; fi

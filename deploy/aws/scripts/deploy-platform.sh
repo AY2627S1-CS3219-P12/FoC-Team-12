@@ -225,6 +225,16 @@ sed "s/name: msk-init/name: $job/" "$root/deploy/aws/k8s/staging/msk-initialize-
   | kubectl -n foc-staging create -f -
 wait_for_job foc-staging "$job" 1200
 
+# During first-time cutover, adding ACLs incrementally can briefly deny a consumer before its own
+# ACL is installed. Spring then stops that listener while the Pod itself remains Ready. Restart all
+# Kafka clients only after the initializer has converged every topic and ACL so no listener remains
+# silently stopped. Repeating this during later provisioning is safe and gives clients a clean
+# authenticated session against the reconciled broker policy.
+for deployment in user-service order-service credit-service admin-service chat-service \
+  notification-service kafka-ui; do
+  kubectl -n foc-staging rollout restart "deployment/$deployment"
+done
+
 for deployment in user-service supplier-service order-service credit-service admin-service chat-service \
   notification-service gateway kafka-ui; do
   kubectl -n foc-staging rollout status "deployment/$deployment" --timeout=20m

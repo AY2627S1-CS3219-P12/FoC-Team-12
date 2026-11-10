@@ -248,16 +248,14 @@ verify_group_acl credit_service READ credit-service-admin
 verify_topic_acl credit_service WRITE credit.admin.events
 verify_topic_acl credit_service WRITE admin.credit.commands.DLT
 
-for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events order.lifecycle.events.DLT chat.events chat.events.DLT admin.credit.commands credit.admin.events admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT admin.events; do
+for topic in user.events order.events credit.events user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events order.lifecycle.events.DLT chat.events chat.events.DLT admin.credit.commands credit.admin.events admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands user.admin.events admin.user.commands.DLT user.admin.events.DLT admin.events; do
   verify_topic_acl kafka_ui READ "$topic"
   verify_topic_acl kafka_ui DESCRIBE "$topic"
   verify_topic_acl kafka_ui DESCRIBE_CONFIGS "$topic"
 done
 verify_cluster_acl kafka_ui DESCRIBE
 verify_cluster_acl kafka_ui DESCRIBE_CONFIGS
-verify_group_acl kafka_ui DESCRIBE order-service
-verify_group_acl kafka_ui DESCRIBE credit-service
-verify_group_acl kafka_ui DESCRIBE notification-service
+verify_group_acl kafka_ui DESCRIBE '*'
 verify_prefixed_group_acl kafka_ui READ kafka-ui-browser
 verify_prefixed_group_acl kafka_ui DESCRIBE kafka-ui-browser
 

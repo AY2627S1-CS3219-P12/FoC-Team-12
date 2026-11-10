@@ -110,7 +110,7 @@ production data-retention policy.
 | `credit_service` | Read/describe `user.events` and `order.events` as group `credit-service`; write/describe `credit.events`, `user.events.DLT` and `order.events.DLT`; cluster idempotent write |
 | `notification_service` | Read/describe `credit.events`, `order.lifecycle.events` and `chat.events` as group `notification-service`; write/describe their DLTs; cluster idempotent write. It cannot write source event topics or join another service's group |
 | `chat_service` | Read/describe `order.lifecycle.events` as group `chat-service-lifecycle`; write/describe `chat.events`; cluster idempotent write |
-| `kafka_ui` | Read/describe the project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
+| `kafka_ui` | Read/describe the project topics and their configurations; describe consumer groups, including MSK health groups; use only `kafka-ui-browser*` groups; no group membership, offset reset or Kafka mutations |
 | `foc_admin` | Broker initialization and local diagnosis (super-user) |
 | `foc_broker` | Broker-to-broker traffic (super-user) |
 
