@@ -114,6 +114,11 @@ Meet WCAG AA contrast for text and controls. Never communicate status using colo
 
 ### Operational surfaces
 
+- **Authentication:** signed-out Home pairs the public value story with one elevated account card.
+  Sign-in and account creation share clear tabs; registration shows Account and Verify email as
+  explicit steps. Keep labels visible, state the real email/password rules, retain password
+  visibility, recovery, OTP resend and API error states, and link guests to the live Supplier
+  directory rather than showing invented supplier records.
 - **Chat:** keep the errand context, privacy boundary and active/closed state visible above the
   thread. Participant messages use aligned bubbles, lifecycle activity uses a neutral system
   entry, and translation, quick replies, images and the composer remain part of one elevated

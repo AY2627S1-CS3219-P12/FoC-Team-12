@@ -1,6 +1,14 @@
 import { useState } from 'react'
+import {
+  ArrowLeft,
+  Building2,
+  Clock3,
+  Compass,
+  MapPin,
+  Store,
+  Tag,
+} from 'lucide-react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import arrowIcon from '../assets/foc-arrow.svg'
 import placeholderArtwork from '../assets/supplier-location-placeholder.svg'
 import {
   SupplierApiError,
@@ -140,28 +148,48 @@ export function SupplierDetailPage() {
       <div className={styles.detailLayout}>
         <div className={styles.content}>
           <header className={styles.heading}>
-            <span className={styles.badge}>{supplier.type}</span>
-            <h1>{supplier.name}</h1>
-            <p>{formatBuilding(supplier.building, supplier.floor)}</p>
+            <span className={styles.headingIcon} aria-hidden="true">
+              <Store />
+            </span>
+            <div className={styles.headingCopy}>
+              <span className={styles.badge}>{supplier.type}</span>
+              <h1>{supplier.name}</h1>
+              <p>
+                <MapPin aria-hidden="true" />
+                {formatBuilding(supplier.building, supplier.floor)}
+              </p>
+            </div>
           </header>
 
           <dl className={styles.details}>
             <div>
-              <dt>Category</dt>
+              <dt>
+                <Tag aria-hidden="true" />
+                Category
+              </dt>
               <dd>{supplier.type ?? 'Not provided'}</dd>
             </div>
             <div>
-              <dt>Building and floor</dt>
+              <dt>
+                <Building2 aria-hidden="true" />
+                Building and floor
+              </dt>
               <dd>{formatBuilding(supplier.building, supplier.floor)}</dd>
             </div>
             <div>
-              <dt>Directions</dt>
+              <dt>
+                <Compass aria-hidden="true" />
+                Directions
+              </dt>
               <dd>
                 {supplier.locationDescription ?? 'No directions provided'}
               </dd>
             </div>
             <div>
-              <dt>Operating hours</dt>
+              <dt>
+                <Clock3 aria-hidden="true" />
+                Operating hours
+              </dt>
               <dd>
                 {formatOperatingHours(
                   supplier.openingTime,
@@ -170,7 +198,10 @@ export function SupplierDetailPage() {
               </dd>
             </div>
             <div>
-              <dt>Coordinates</dt>
+              <dt>
+                <MapPin aria-hidden="true" />
+                Coordinates
+              </dt>
               <dd>
                 {supplier.latitude?.toFixed(6)},{' '}
                 {supplier.longitude?.toFixed(6)}
@@ -192,7 +223,7 @@ export function SupplierDetailPage() {
 function BackLink({ to }: { to: string }) {
   return (
     <Link className={styles.backLink} to={to}>
-      <img alt="" height="20" src={arrowIcon} width="20" />
+      <ArrowLeft aria-hidden="true" />
       <span>Back to campus locations</span>
     </Link>
   )

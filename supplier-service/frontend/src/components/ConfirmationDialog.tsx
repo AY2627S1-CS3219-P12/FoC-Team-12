@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { CircleAlert, Info } from 'lucide-react'
 import { Button } from './DirectoryControls'
 import styles from './ConfirmationDialog.module.css'
 
@@ -61,7 +62,10 @@ export function ConfirmationDialog({
         className={styles.dialog}
         role="dialog"
       >
-        <h2 id="confirmation-title">{title}</h2>
+        <div className={`${styles.heading} ${danger ? styles.danger : ''}`}>
+          <span aria-hidden="true">{danger ? <CircleAlert /> : <Info />}</span>
+          <h2 id="confirmation-title">{title}</h2>
+        </div>
         <div className={styles.content}>{children}</div>
         <div className={styles.actions}>
           <button

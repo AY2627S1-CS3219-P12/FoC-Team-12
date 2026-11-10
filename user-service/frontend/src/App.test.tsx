@@ -25,6 +25,26 @@ const fillLogin = async () => {
   return user
 }
 
+test('presents the upgraded signed-out account journey and live supplier handoff', async () => {
+  render(<App />)
+  const user = userEvent.setup()
+
+  expect(screen.getByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
+  expect(screen.getByLabelText('Email')).toHaveAttribute('placeholder', 'e1234567@u.nus.edu')
+  expect(screen.getByLabelText('Password')).toHaveAttribute('placeholder', 'Enter your password')
+  expect(screen.getByText('Only NUS student emails can join.')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Browse campus suppliers/ })).toHaveAttribute('href', '/suppliers')
+
+  await user.click(screen.getByRole('button', { name: 'Create account' }))
+
+  expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument()
+  const progress = screen.getByRole('list', { name: 'Account creation progress' })
+  expect(within(progress).getByText('Account')).toBeInTheDocument()
+  expect(within(progress).getByText('Verify email')).toBeInTheDocument()
+  expect(screen.getByText('Use 15–64 characters.')).toBeInTheDocument()
+  expect(screen.getByLabelText('Username')).toHaveAttribute('placeholder', 'Choose a username')
+})
+
 test('signs in successfully and stores the browser session', async () => {
   sessionStorage.setItem('foc.login-failures:alice@u.nus.edu', '2')
   vi.stubGlobal('fetch', vi.fn()

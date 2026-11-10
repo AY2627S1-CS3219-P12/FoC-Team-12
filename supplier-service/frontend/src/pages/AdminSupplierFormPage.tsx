@@ -1,4 +1,13 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
+import {
+  ArrowLeft,
+  Clock3,
+  Info,
+  MapPinned,
+  Plus,
+  Save,
+  Store,
+} from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   SupplierMutationError,
@@ -337,18 +346,24 @@ function SupplierFormLayout({
   return (
     <section aria-labelledby="supplier-form-heading" className={styles.page}>
       <Link className={styles.backLink} to="/admin/suppliers">
-        ← Back to suppliers
+        <ArrowLeft aria-hidden="true" />
+        Back to suppliers
       </Link>
       <header className={styles.heading}>
-        <p className={styles.eyebrow}>Supplier administration</p>
-        <h1 id="supplier-form-heading">
-          {create ? 'Add campus location' : `Edit ${supplier?.name}`}
-        </h1>
-        <p>
-          {create
-            ? 'Add a place students can pick up from or deliver to.'
-            : 'Change its status from the location list.'}
-        </p>
+        <span className={styles.headingIcon} aria-hidden="true">
+          <Store />
+        </span>
+        <div>
+          <p className={styles.eyebrow}>Supplier administration</p>
+          <h1 id="supplier-form-heading">
+            {create ? 'Add campus location' : `Edit ${supplier?.name}`}
+          </h1>
+          <p>
+            {create
+              ? 'Add a place students can pick up from or deliver to.'
+              : 'Change its status from the location list.'}
+          </p>
+        </div>
       </header>
 
       {submissionError && (
@@ -365,7 +380,10 @@ function SupplierFormLayout({
 
       <form className={styles.form} noValidate onSubmit={onSubmit}>
         <fieldset>
-          <legend>Supplier details</legend>
+          <legend>
+            <Store aria-hidden="true" />
+            Supplier details
+          </legend>
           <div className={styles.grid}>
             <FormField error={errors.name} id="supplier-name" label="Name">
               <input
@@ -482,7 +500,10 @@ function SupplierFormLayout({
         </fieldset>
 
         <fieldset>
-          <legend>Map coordinates</legend>
+          <legend>
+            <MapPinned aria-hidden="true" />
+            Map coordinates
+          </legend>
           <p className={styles.fieldsetHelp}>
             Decimal degrees. Latitude is −90 to 90; longitude is −180 to 180.
           </p>
@@ -525,7 +546,10 @@ function SupplierFormLayout({
         </fieldset>
 
         <fieldset>
-          <legend>Hours and image</legend>
+          <legend>
+            <Clock3 aria-hidden="true" />
+            Hours and image
+          </legend>
           <div className={styles.grid}>
             <FormField
               error={errors.openingTime}
@@ -587,7 +611,10 @@ function SupplierFormLayout({
 
         {!create && supplier && (
           <aside className={styles.recordInfo}>
-            <strong>Record information</strong>
+            <strong>
+              <Info aria-hidden="true" />
+              Record information
+            </strong>
             <span>ID: {supplier.id}</span>
             <span>Version: {supplier.version}</span>
             <span>Created: {supplier.createdAt}</span>
@@ -597,6 +624,7 @@ function SupplierFormLayout({
         <div className={styles.actions}>
           <Link to="/admin/suppliers">Cancel</Link>
           <Button disabled={pending} type="submit">
+            {create ? <Plus aria-hidden="true" /> : <Save aria-hidden="true" />}
             {pending ? 'Saving…' : create ? 'Create supplier' : 'Save changes'}
           </Button>
         </div>

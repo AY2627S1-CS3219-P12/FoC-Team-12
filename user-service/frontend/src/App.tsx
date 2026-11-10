@@ -10,12 +10,15 @@ import {
   EyeOff,
   HandHeart,
   House,
+  KeyRound,
+  MailCheck,
   MapPin,
   PackageCheck,
   Search,
   ShieldCheck,
   Sparkles,
   Store,
+  UserPlus,
 } from 'lucide-react'
 
 import { ApiError, api, type UserProfile } from './api/client'
@@ -57,7 +60,8 @@ function PasswordInput({
 }) {
   const [visible, setVisible] = useState(false)
   return <span className="password-control">
-    <input ref={inputRef} type={visible ? 'text' : 'password'} autoComplete={autoComplete} autoFocus={autoFocus} value={value}
+    <input ref={inputRef} type={visible ? 'text' : 'password'} autoComplete={autoComplete} autoFocus={autoFocus}
+      placeholder={autoComplete === 'current-password' ? 'Enter your password' : autoComplete === 'new-password' ? '15–64 characters' : undefined} value={value}
       onChange={event => onChange(event.target.value)} onKeyDown={onKeyDown} disabled={disabled} aria-invalid={invalid} />
     <button type="button" className="password-toggle" aria-label={visible ? 'Hide password' : 'Show password'}
       aria-pressed={visible} onClick={() => setVisible(current => !current)} disabled={disabled}>
@@ -931,30 +935,30 @@ export function App() {
       <li className={view === 'email-verification' ? 'current' : ''}><span>2</span>Verify email</li>
     </ol>}
 
-    {view === 'login' && <form onSubmit={login} noValidate aria-busy={busy} aria-label="Sign in form">
-      <h1 id="account-title">Sign in</h1>
-      <p className="intro">Use your NUS student email to continue.</p>
-      <label>Email<input ref={loginEmailRef} type="email" autoComplete="email" value={loginEmail} onChange={event => setLoginEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, loginPasswordRef)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
+    {view === 'login' && <form className="auth-form" onSubmit={login} noValidate aria-busy={busy} aria-label="Sign in form">
+      <div className="auth-form-heading"><div><p className="auth-form-kicker">Welcome back</p><h1 id="account-title">Sign in</h1>
+      <p className="intro">Use your NUS student email to continue.</p></div></div>
+      <label>Email<input ref={loginEmailRef} type="email" autoComplete="email" placeholder="e1234567@u.nus.edu" required value={loginEmail} onChange={event => setLoginEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, loginPasswordRef)} disabled={busy} aria-invalid={loginState === 'error'} /></label>
       <label>Password<PasswordInput value={loginPassword} onChange={setLoginPassword} inputRef={loginPasswordRef} disabled={busy} invalid={loginState === 'error'} autoComplete="current-password" /></label>
-      <button disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
+      <button className="auth-submit" disabled={busy}>{loginState === 'loading' ? 'Signing in…' : 'Sign in'}</button>
       <button type="button" className="text-button" onClick={openPasswordReset}>Forgot password?</button>
       <a className="guest-link" href="/suppliers">Browse suppliers without signing in <ArrowRight aria-hidden="true" /></a>
       {loginMessage && <p role={loginState === 'error' ? 'alert' : 'status'} className={loginState === 'error' ? 'error' : 'success'}>{loginMessage}</p>}
     </form>}
 
-    {view === 'register' && <form onSubmit={register} noValidate aria-busy={busy} aria-label="Create account form">
-      <h1 id="account-title">Create your account</h1>
-      <p className="intro">Use your NUS student email to join the campus community.</p>
-      <label>Email<input ref={registrationEmailRef} type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationUsernameRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
-      <label>Username<input ref={registrationUsernameRef} value={username} maxLength={20} onChange={event => setUsername(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationPasswordRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
-      <label>Password<PasswordInput value={password} onChange={setPassword} inputRef={registrationPasswordRef} disabled={busy} invalid={registrationState === 'error'} autoComplete="new-password" /></label>
-      <button disabled={busy}>{registrationState === 'loading' ? 'Creating account…' : 'Create account'}</button>
+    {view === 'register' && <form className="auth-form" onSubmit={register} noValidate aria-busy={busy} aria-label="Create account form">
+      <div className="auth-form-heading"><span className="auth-view-icon auth-view-icon-coral" aria-hidden="true"><UserPlus /></span><div><p className="auth-form-kicker">Join the community</p><h1 id="account-title">Create your account</h1>
+      <p className="intro">Use your NUS student email to join the campus community.</p></div></div>
+      <label>Email<input ref={registrationEmailRef} type="email" autoComplete="email" placeholder="e1234567@u.nus.edu" required value={email} onChange={event => setEmail(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationUsernameRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label>
+      <label>Username<input ref={registrationUsernameRef} autoComplete="username" placeholder="Choose a username" required value={username} maxLength={20} onChange={event => setUsername(event.target.value)} onKeyDown={event => focusOnEnter(event, registrationPasswordRef)} disabled={busy} aria-invalid={registrationState === 'error'} /></label><small className="auth-field-hint">Up to 20 characters.</small>
+      <label>Password<PasswordInput value={password} onChange={setPassword} inputRef={registrationPasswordRef} disabled={busy} invalid={registrationState === 'error'} autoComplete="new-password" /></label><small className="auth-field-hint">Use 15–64 characters.</small>
+      <button className="auth-submit" disabled={busy}>{registrationState === 'loading' ? 'Creating account…' : 'Create account'}</button>
       {registrationMessage && <p role={registrationState === 'error' ? 'alert' : 'status'} className={registrationState}>{registrationMessage}</p>}
     </form>}
 
-    {view === 'email-verification' && <form onSubmit={event => { event.preventDefault(); void verifyEmail() }} noValidate aria-busy={busy} aria-label="Verify email form">
-      <h1 id="account-title">Verify your email</h1>
-      <p className="intro">Enter the six-digit code we sent to your NUS email.</p>
+    {view === 'email-verification' && <form className="auth-form auth-verification-form" onSubmit={event => { event.preventDefault(); void verifyEmail() }} noValidate aria-busy={busy} aria-label="Verify email form">
+      <div className="auth-form-heading"><span className="auth-view-icon" aria-hidden="true"><MailCheck /></span><div><p className="auth-form-kicker">One last step</p><h1 id="account-title">Verify your email</h1>
+      <p className="intro">Enter the six-digit code we sent to your NUS email.</p></div></div>
       <p className="verification-email">Verification code sent to <strong>{verificationEmail}</strong>.</p>
       <label>Verification code<OtpInput value={verificationDigits} onChange={setVerificationDigits} onComplete={code => { void verifyEmail(code) }} focusFirst={verificationFocusVersion} disabled={busy} invalid={verificationState === 'error'} /></label>
       {verificationMessage && <p role={verificationState === 'error' ? 'alert' : 'status'} className={verificationState}>{verificationMessage}</p>}
@@ -966,18 +970,18 @@ export function App() {
       <button type="button" className="text-button" onClick={() => show('login')}>Back to sign in</button>
     </form>}
 
-    {view === 'reset-request' && <form onSubmit={requestPasswordReset} noValidate aria-busy={busy} aria-label="Request password reset form">
-      <h1 id="account-title">Reset your password</h1>
-      <p className="intro">Enter your email and we’ll send you a reset code.</p>
-      <label>Email<input type="email" autoFocus autoComplete="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} disabled={busy} aria-invalid={resetRequestState === 'error'} /></label>
-      <button disabled={busy}>{resetRequestState === 'loading' ? 'Sending…' : 'Send reset code'}</button>
+    {view === 'reset-request' && <form className="auth-form" onSubmit={requestPasswordReset} noValidate aria-busy={busy} aria-label="Request password reset form">
+      <div className="auth-form-heading"><span className="auth-view-icon auth-view-icon-gold" aria-hidden="true"><KeyRound /></span><div><p className="auth-form-kicker">Account recovery</p><h1 id="account-title">Reset your password</h1>
+      <p className="intro">Enter your email and we’ll send you a reset code.</p></div></div>
+      <label>Email<input type="email" autoFocus autoComplete="email" placeholder="e1234567@u.nus.edu" required value={resetEmail} onChange={event => setResetEmail(event.target.value)} disabled={busy} aria-invalid={resetRequestState === 'error'} /></label>
+      <button className="auth-submit" disabled={busy}>{resetRequestState === 'loading' ? 'Sending…' : 'Send reset code'}</button>
       {resetRequestMessage && <p role={resetRequestState === 'error' ? 'alert' : 'status'} className={resetRequestState}>{resetRequestMessage}</p>}
       <button type="button" className="text-button" onClick={returnFromPasswordResetToSignIn}>Back to sign in</button>
     </form>}
 
-    {view === 'reset-verification' && <form onSubmit={event => { event.preventDefault(); void verifyPasswordReset() }} noValidate aria-busy={busy} aria-label="Verify password reset code form">
-      <h1 id="account-title">Verify reset code</h1>
-      <p className="intro">Enter the six-digit code already sent to your email.</p>
+    {view === 'reset-verification' && <form className="auth-form auth-verification-form" onSubmit={event => { event.preventDefault(); void verifyPasswordReset() }} noValidate aria-busy={busy} aria-label="Verify password reset code form">
+      <div className="auth-form-heading"><span className="auth-view-icon auth-view-icon-gold" aria-hidden="true"><KeyRound /></span><div><p className="auth-form-kicker">Account recovery</p><h1 id="account-title">Verify reset code</h1>
+      <p className="intro">Enter the six-digit code already sent to your email.</p></div></div>
       <p className="verification-email">Reset code for <strong>{resetEmail}</strong>.</p>
       <label>Reset code<OtpInput value={resetDigits} onChange={setResetDigits} onComplete={code => { void verifyPasswordReset(code) }} focusFirst={resetFocusVersion} disabled={busy} invalid={resetVerificationState === 'error'} /></label>
       {resetVerificationMessage && <p role={resetVerificationState === 'error' ? 'alert' : 'status'} className={resetVerificationState}>{resetVerificationMessage}</p>}
@@ -986,17 +990,18 @@ export function App() {
       <button type="button" className="text-button" onClick={returnFromPasswordResetToSignIn}>Back to sign in</button>
     </form>}
 
-    {view === 'reset-confirmation' && <form onSubmit={confirmPasswordReset} noValidate aria-busy={busy} aria-label="Confirm password reset form">
-      <h1 id="account-title">Choose a new password</h1>
-      <p className="intro">Choose a new password for <strong>{resetEmail}</strong>.</p>
+    {view === 'reset-confirmation' && <form className="auth-form" onSubmit={confirmPasswordReset} noValidate aria-busy={busy} aria-label="Confirm password reset form">
+      <div className="auth-form-heading"><span className="auth-view-icon auth-view-icon-gold" aria-hidden="true"><KeyRound /></span><div><p className="auth-form-kicker">Secure your account</p><h1 id="account-title">Choose a new password</h1>
+      <p className="intro">Choose a new password for <strong>{resetEmail}</strong>.</p></div></div>
       <label>New password<PasswordInput value={newPassword} onChange={setNewPassword} inputRef={newPasswordRef} onKeyDown={event => focusOnEnter(event, confirmPasswordRef)} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
       <label>Confirm new password<PasswordInput value={confirmPassword} onChange={setConfirmPassword} inputRef={confirmPasswordRef} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
-      <button disabled={busy}>{resetConfirmationState === 'loading' ? 'Updating…' : 'Update password'}</button>
+      <small className="auth-field-hint">Use 15–64 characters and choose a password you have not used before.</small>
+      <button className="auth-submit" disabled={busy}>{resetConfirmationState === 'loading' ? 'Updating…' : 'Update password'}</button>
       {resetConfirmationMessage && <p role={resetConfirmationState === 'error' ? 'alert' : 'status'} className={resetConfirmationState}>{resetConfirmationMessage}</p>}
       <button type="button" className="text-button" onClick={returnFromPasswordResetToSignIn}>Back to sign in</button>
     </form>}
-    {view === 'reset-complete' && <div aria-labelledby="account-title">
-      <h1 id="account-title">Password updated</h1>
+    {view === 'reset-complete' && <div className="auth-complete" aria-labelledby="account-title">
+      <span className="auth-view-icon auth-view-icon-success" aria-hidden="true"><CheckCircle2 /></span><p className="auth-form-kicker">All set</p><h1 id="account-title">Password updated</h1>
       <p role="status" className="success">Your password has been updated. You can now sign in.</p>
       <button type="button" onClick={() => show('login')}>Sign in</button>
     </div>}
@@ -1011,6 +1016,10 @@ export function App() {
         <li><span>02</span><div><PackageCheck aria-hidden="true" /><h3>A student accepts</h3><p>A student nearby picks up your errand.</p></div></li>
         <li><span>03</span><div><CheckCircle2 aria-hidden="true" /><h3>Confirm the handoff</h3><p>Confirm you got it, and your courier gets paid.</p></div></li>
       </ol>
+    </section>
+    <section className="public-directory" aria-labelledby="directory-title">
+      <div><p className="eyebrow">Browse before joining</p><h2 id="directory-title">Useful places across campus</h2><p>Explore the live campus supplier directory before you create an account.</p></div>
+      <a href="/suppliers">Browse campus suppliers <ArrowUpRight aria-hidden="true" /></a>
     </section>
   </main>
 }

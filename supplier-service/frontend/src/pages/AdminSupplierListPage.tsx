@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Eye, EyeOff, Pencil, Plus, Trash2 } from 'lucide-react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import {
   SupplierMutationError,
@@ -164,6 +165,7 @@ export function AdminSupplierListPage() {
           <p>Add, update or hide campus locations.</p>
         </div>
         <Link className={styles.addLink} to="/admin/suppliers/new">
+          <Plus aria-hidden="true" />
           Add supplier
         </Link>
       </header>
@@ -418,11 +420,19 @@ function SupplierActions({
     supplier.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
   return (
     <div className={styles.actions}>
-      <Link to={`/admin/suppliers/${supplier.id}/edit`}>Edit</Link>
+      <Link to={`/admin/suppliers/${supplier.id}/edit`}>
+        <Pencil aria-hidden="true" />
+        Edit
+      </Link>
       <button
         onClick={() => onAction({ kind: 'status', supplier, nextStatus })}
         type="button"
       >
+        {nextStatus === 'ACTIVE' ? (
+          <Eye aria-hidden="true" />
+        ) : (
+          <EyeOff aria-hidden="true" />
+        )}
         {nextStatus === 'ACTIVE' ? 'Activate' : 'Deactivate'}
       </button>
       <button
@@ -430,6 +440,7 @@ function SupplierActions({
         onClick={() => onAction({ kind: 'delete', supplier })}
         type="button"
       >
+        <Trash2 aria-hidden="true" />
         Delete
       </button>
     </div>
