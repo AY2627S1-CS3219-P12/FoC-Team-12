@@ -140,6 +140,11 @@ it('groups each statement and SVG actions under the correct role, regardless of 
     'href',
     `#person-${courier}`,
   )
+  await waitFor(() =>
+    expect(
+      screen.getByRole('heading', { name: 'Credit corrections', level: 3 }),
+    ).toHaveFocus(),
+  )
   fireEvent.change(panel.getByLabelText('Number of credits'), {
     target: { value: '5' },
   })
@@ -150,11 +155,38 @@ it('groups each statement and SVG actions under the correct role, regardless of 
   expect(
     panel.getByRole('region', { name: 'Confirm credit correction' }),
   ).toHaveTextContent('Add 5 credits to Courier 1')
-  await waitFor(() =>
-    expect(
-      screen.getByRole('heading', { name: 'Credit corrections', level: 3 }),
-    ).toHaveFocus(),
+  expect(
+    panel.getByRole('button', { name: 'Confirm credit correction' }),
+  ).toHaveFocus()
+})
+
+it('marks each reporter and bounds tools to the selected account column using supplied names', () => {
+  const value = {
+    ...detail,
+    statements: detail.statements.filter((s) => s.reporterId === courier),
+  }
+  render(
+    <CaseParticipants
+      detail={value}
+      summary={value.case}
+      actorId={actor}
+      evidence={evidence}
+      names={{ [requester]: 'Mei', [courier]: 'Kai' }}
+    />,
   )
+  expect(card('Courier [Kai]').getByText('Reported')).toBeVisible()
+  expect(
+    card('Requester [Mei]').queryByText('Reported'),
+  ).not.toBeInTheDocument()
+  expect(screen.queryByText(/\d reports?/)).not.toBeInTheDocument()
+  fireEvent.click(
+    card('Courier [Kai]').getByRole('button', { name: 'Adjust credits' }),
+  )
+  expect(
+    screen
+      .getByRole('region', { name: 'Credit corrections' })
+      .closest('.participant-tools-area'),
+  ).toHaveStyle({ gridColumn: '2' })
 })
 
 it('opens private chat and ban review for the account chosen on its card', async () => {

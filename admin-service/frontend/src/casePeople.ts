@@ -2,7 +2,10 @@ import type { Timeline } from './EvidencePanel'
 
 export type ParticipantSelection = { userId: string; request: number }
 
-export function participantLabels(participants: Timeline['participants']) {
+export function participantLabels(
+  participants: Timeline['participants'],
+  names: Record<string, string> = {},
+) {
   const couriers = [
     ...new Set(
       participants
@@ -19,10 +22,12 @@ export function participantLabels(participants: Timeline['participants']) {
     )
       roles.push('Requester')
     const courier = couriers.indexOf(id)
-    if (courier >= 0) roles.push(`Courier ${courier + 1}`)
+    if (courier >= 0)
+      roles.push(names[id] ? 'Courier' : `Courier ${courier + 1}`)
     return (
-      roles.join(' · ') ||
-      'Account not identified in available participant history'
+      (roles.length
+        ? `${roles.join(' · ')}${names[id] ? ` [${names[id]}]` : ''}`
+        : '') || 'Account not identified in available participant history'
     )
   }
 }

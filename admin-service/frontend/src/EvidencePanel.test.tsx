@@ -110,8 +110,8 @@ it('leads with readable activity and participants, keeping diagnostics collapsed
     await screen.findByText('History checked through the latest update'),
   ).toBeVisible()
   expect(
-    screen.getByText(/Very recent activity may not appear yet/),
-  ).toBeVisible()
+    screen.queryByRole('heading', { name: /Missing activity/ }),
+  ).not.toBeInTheDocument()
   expect(screen.getByText('Courier assigned during this errand')).toBeVisible()
   expect(screen.getByText(/Assigned .*Unassigned/)).toBeVisible()
   expect(screen.getByRole('heading', { name: 'Case opened' })).toBeVisible()
@@ -136,9 +136,10 @@ it('leads with readable activity and participants, keeping diagnostics collapsed
       .getByText('Added to evidence')
       .nextElementSibling?.querySelector('time'),
   ).toHaveAttribute('datetime', at)
-  await user.click(screen.getByText('How the history was checked'))
+  await user.click(screen.getByText('Evidence details'))
   expect(screen.getByText('revision-1')).toBeVisible()
   expect(screen.getByText('Campus lunch')).toBeVisible()
+  expect(screen.getByText('Historical order description')).toBeVisible()
 })
 it('does not equate an empty page and absent gaps with complete coverage', async () => {
   const data = timeline()
@@ -156,6 +157,50 @@ it('does not equate an empty page and absent gaps with complete coverage', async
     screen.queryByText('History checked through the latest update'),
   ).not.toBeInTheDocument()
 })
+
+it.each([true, false])(
+  'draws credit movement only when the recorded two-account deltas balance (%s)',
+  async (balanced) => {
+    const data = timeline()
+    const courier = '40000000-0000-4000-8000-000000000001'
+    data.participants.push({
+      userId: courier,
+      relationship: 'HISTORICAL_COURIER',
+      assignedAt: at,
+      unassignedAt: null,
+    })
+    data.records[0]!.data = {
+      kind: 'CREDIT',
+      operationId: caseId,
+      result: 'APPLIED',
+      reasonCode: null,
+      ledgerEntries: [
+        {
+          ledgerEntryId: caseId,
+          userId: actor,
+          availableDelta: 0,
+          reservedDelta: -15,
+          availableBalance: 85,
+          reservedBalance: 0,
+        },
+        {
+          ledgerEntryId: orderId,
+          userId: courier,
+          availableDelta: balanced ? 15 : 10,
+          reservedDelta: 0,
+          availableBalance: 115,
+          reservedBalance: 0,
+        },
+      ],
+    }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(data)))
+    render(<EvidencePanel caseId={caseId} orderId={orderId} />)
+    await screen.findAllByText('Available credits')
+    const movement = screen.queryByLabelText('Recorded credit movement')
+    if (balanced) expect(movement).toHaveTextContent('15 credits')
+    else expect(movement).not.toBeInTheDocument()
+  },
+)
 it('uses consistent account labels across assignment periods and typed activity without inventing names', async () => {
   const data = timeline()
   const courier = '40000000-0000-4000-8000-000000000001'
@@ -373,7 +418,7 @@ it('never merges a changed revision and restarts from the first page', async () 
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Reload the timeline',
   )
-  expect(screen.getByText('1 events loaded')).toBeVisible()
+  expect(screen.getByText('1 event loaded')).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Reload timeline' }))
   await waitFor(() =>
     expect(screen.queryByRole('alert')).not.toBeInTheDocument(),
@@ -435,7 +480,7 @@ it.each([
   expect(await screen.findByRole('alert')).toHaveTextContent(
     'Reload the timeline',
   )
-  expect(screen.getByText('1 events loaded')).toBeVisible()
+  expect(screen.getByText('1 event loaded')).toBeVisible()
   expect(
     screen.queryByText('History checked through the latest update'),
   ).not.toBeInTheDocument()

@@ -12,6 +12,7 @@ import {
   MapPin,
   Route,
   ShieldCheck,
+  ArrowRight,
 } from 'lucide-react'
 
 type Checkpoint = {
@@ -202,6 +203,37 @@ function EvidenceData({
   linkParticipants?: boolean
 }) {
   const data = record.data
+  const debits =
+    data.kind === 'CREDIT'
+      ? data.ledgerEntries.filter(
+          (entry) => entry.availableDelta + entry.reservedDelta < 0,
+        )
+      : []
+  const credits =
+    data.kind === 'CREDIT'
+      ? data.ledgerEntries.filter(
+          (entry) => entry.availableDelta + entry.reservedDelta > 0,
+        )
+      : []
+  const debit = debits[0]
+  const credit = credits[0]
+  const movement =
+    data.kind === 'CREDIT' &&
+    data.result === 'APPLIED' &&
+    data.ledgerEntries.length === 2 &&
+    debits.length === 1 &&
+    credits.length === 1 &&
+    debit &&
+    credit &&
+    debit.userId !== credit.userId &&
+    -(debit.availableDelta + debit.reservedDelta) ===
+      credit.availableDelta + credit.reservedDelta
+      ? {
+          from: debit.userId,
+          to: credit.userId,
+          amount: credit.availableDelta + credit.reservedDelta,
+        }
+      : null
   const person = (id: string) =>
     linkParticipants &&
     !participant(id).startsWith('Account not identified') ? (
@@ -244,6 +276,20 @@ function EvidenceData({
           Outcome: {readable(data.result)}
           {data.reasonCode && ` · ${readable(data.reasonCode)}`}
         </p>
+        {movement && (
+          <div
+            className="credit-movement"
+            aria-label="Recorded credit movement"
+          >
+            <span>{person(movement.from)}</span>
+            <span className="credit-movement-amount">
+              <Coins aria-hidden="true" />
+              {movement.amount} credits
+              <ArrowRight aria-hidden="true" />
+            </span>
+            <span>{person(movement.to)}</span>
+          </div>
+        )}
         {data.ledgerEntries.length ? (
           <ul className="timeline-credit-people">
             {data.ledgerEntries.map((entry) => (
@@ -396,10 +442,12 @@ export function EvidencePanel({
   caseId,
   orderId,
   onSnapshot,
+  names = {},
 }: {
   caseId: string
   orderId: string
   onSnapshot?: (value: Timeline | null) => void
+  names?: Record<string, string>
 }) {
   const [snapshot, setSnapshot] = useState<Timeline>()
   const [records, setRecords] = useState<EvidenceRecord[]>([])
@@ -555,7 +603,7 @@ export function EvidencePanel({
   }
   const trustworthy =
     snapshot && !error && !restartRequired && complete(snapshot)
-  const participant = participantLabels(snapshot?.participants || [])
+  const participant = participantLabels(snapshot?.participants || [], names)
   return (
     <section
       className="case-panel evidence-panel"
@@ -635,11 +683,12 @@ export function EvidencePanel({
                     ? 'History completeness unverified'
                     : 'Evidence is incomplete'}
             </h3>
-            <p>
-              {trustworthy
-                ? 'The recorded history is complete through the last check. Very recent activity may not appear yet.'
-                : 'Some activity may be missing or unverified. Do not treat this history as complete.'}
-            </p>
+            {!trustworthy && (
+              <p>
+                Some activity may be missing or unverified. Refresh evidence
+                before resolving.
+              </p>
+            )}
             <p>
               Completeness checked{' '}
               <EvidenceTime value={snapshot.coverage.asOf} />
@@ -738,14 +787,9 @@ export function EvidencePanel({
                 there were no participants.
               </p>
             )}
-            <p className="evidence-meta">
-              Requester and courier labels refer to account references, not
-              names. Repeated entries show separate assignment periods for the
-              same courier.
-            </p>
           </details>
           <details className="evidence-section evidence-technical">
-            <summary>How the history was checked</summary>
+            <summary>Evidence details</summary>
             <dl className="evidence-identifiers">
               <div>
                 <dt>Snapshot revision</dt>
@@ -818,63 +862,71 @@ export function EvidencePanel({
               </p>
             )}
           </details>
-          <section className="evidence-section">
-            <h3>
-              Missing activity ({snapshot.coverage.blockingGaps.length} known
-              gaps)
-            </h3>
-            {snapshot.coverage.blockingGaps.length ? (
-              <ul className="evidence-gaps">
-                {snapshot.coverage.blockingGaps.map((gap, index) => (
-                  <li key={index}>
-                    <strong>
-                      {historyName(gap.source)}:{' '}
-                      {gap.reason === 'MISSING_SEQUENCE'
-                        ? 'Some activity is missing'
-                        : readable(gap.reason)}
-                    </strong>
-                    <details className="evidence-technical">
-                      <summary>Missing activity references</summary>
-                      <p>Reason: {gap.reason}</p>
-                      <p>
-                        {gap.source} / {gap.stream} · Sequences{' '}
-                        {gap.fromSequence}–{gap.toSequence}
-                      </p>
-                      <p>Aggregate ID: {gap.aggregateId}</p>
-                    </details>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p>
-                No missing activity was reported. Check the evidence status
-                above to verify completeness.
-              </p>
-            )}
-            {snapshot.coverage.checkpoints.some(
+          {(snapshot.coverage.blockingGaps.length > 0 ||
+            snapshot.coverage.checkpoints.some(
               (cp) => cp.projectedSequence < cp.committedSequence,
-            ) && (
-              <p className="evidence-lag">
-                Some activity has not reached the timeline yet:{' '}
-                {[
-                  ...new Set(
-                    snapshot.coverage.checkpoints
-                      .filter(
-                        (cp) => cp.projectedSequence < cp.committedSequence,
-                      )
-                      .map((cp) => historyName(cp.source)),
-                  ),
-                ].join(', ')}
-                . Refresh evidence to check progress.
-              </p>
-            )}
-          </section>
+            )) && (
+            <section className="evidence-section">
+              <h3>
+                Missing activity ({snapshot.coverage.blockingGaps.length} known
+                gaps)
+              </h3>
+              {snapshot.coverage.blockingGaps.length ? (
+                <ul className="evidence-gaps">
+                  {snapshot.coverage.blockingGaps.map((gap, index) => (
+                    <li key={index}>
+                      <strong>
+                        {historyName(gap.source)}:{' '}
+                        {gap.reason === 'MISSING_SEQUENCE'
+                          ? 'Some activity is missing'
+                          : readable(gap.reason)}
+                      </strong>
+                      <details className="evidence-technical">
+                        <summary>Missing activity references</summary>
+                        <p>Reason: {gap.reason}</p>
+                        <p>
+                          {gap.source} / {gap.stream} · Sequences{' '}
+                          {gap.fromSequence}–{gap.toSequence}
+                        </p>
+                        <p>Aggregate ID: {gap.aggregateId}</p>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p>
+                  No missing activity was reported. Check the evidence status
+                  above to verify completeness.
+                </p>
+              )}
+              {snapshot.coverage.checkpoints.some(
+                (cp) => cp.projectedSequence < cp.committedSequence,
+              ) && (
+                <p className="evidence-lag">
+                  Some activity has not reached the timeline yet:{' '}
+                  {[
+                    ...new Set(
+                      snapshot.coverage.checkpoints
+                        .filter(
+                          (cp) => cp.projectedSequence < cp.committedSequence,
+                        )
+                        .map((cp) => historyName(cp.source)),
+                    ),
+                  ].join(', ')}
+                  . Refresh evidence to check progress.
+                </p>
+              )}
+            </section>
+          )}
           <section className="evidence-section">
             <div className="section-heading">
               <h3 className="icon-heading">
                 <Clock3 aria-hidden="true" /> Activity timeline
               </h3>
-              <span className="role-chip">{records.length} events loaded</span>
+              <span className="role-chip">
+                {records.length} {records.length === 1 ? 'event' : 'events'}{' '}
+                loaded
+              </span>
             </div>
             {records.length ? (
               <ol className="evidence-records">

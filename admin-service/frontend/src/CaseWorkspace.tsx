@@ -4,6 +4,7 @@ import { readSession } from './auth/session'
 import { AccessError, checkAccess } from './access'
 import { EvidencePanel, type Timeline } from './EvidencePanel'
 import { CaseParticipants } from './CaseParticipants'
+import { useParticipantNames } from './useParticipantNames'
 import { formatSingaporeTime } from './time'
 import { ResolutionPanel } from './ResolutionPanel'
 import { ParticipantConversationStatus } from './CaseConversations'
@@ -890,6 +891,22 @@ function CaseDetail({ id, actor }: { id: string; actor: string }) {
 function DetailData({ id, actor }: { id: string; actor: string }) {
   const state = useRemote<Detail>('cases/' + id)
   const [evidence, setEvidence] = useState<Timeline | null>(null)
+  const participantNames = useParticipantNames([
+    ...(state.data?.statements.map((s) => s.reporterId) || []),
+    ...(evidence
+      ? [
+          evidence.order.requesterId,
+          ...(evidence.order.courierId ? [evidence.order.courierId] : []),
+          ...evidence.participants.map((p) => p.userId),
+        ]
+      : []),
+  ])
+  const [claimNotice, setClaimNotice] = useState('')
+  useEffect(() => {
+    if (!claimNotice) return
+    const timer = window.setTimeout(() => setClaimNotice(''), 6000)
+    return () => clearTimeout(timer)
+  }, [claimNotice])
   const mutation = useMutation<Summary>('foc.claim-pending.' + actor + '.' + id)
   if (!state.data) return <Feedback {...state} />
   const value =
@@ -904,11 +921,11 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
           <button onClick={state.retry}>Refresh case</button>
         </div>
         <SummaryCard value={value} actor={actor} />
-        <p>
-          You cannot review a case if you requested the errand or were ever its
-          courier. Another admin must review it, even if you did not submit a
-          report.
-        </p>
+        {claimNotice && (
+          <p role="status" className="workspace-error">
+            {claimNotice}
+          </p>
+        )}
         {mutation.error && (
           <p role="alert" className="workspace-error">
             {mutation.error}
@@ -917,17 +934,26 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         {mutation.result && <p role="status">Case assigned to you.</p>}
         {value.state === 'OPEN' || mutation.pending ? (
           <>
-            <p>
-              Assign this case to yourself to review it. Another admin may take
-              it first.
-            </p>
             <button
               disabled={mutation.busy}
-              onClick={() =>
+              onClick={() => {
+                if (
+                  evidence &&
+                  (evidence.order.requesterId === actor ||
+                    evidence.order.courierId === actor ||
+                    evidence.participants.some(
+                      (person) => person.userId === actor,
+                    ))
+                ) {
+                  setClaimNotice(
+                    'You took part in this errand. Another admin must review it.',
+                  )
+                  return
+                }
                 void mutation.submit('cases/' + id + '/claim', {
                   expectedRevision: value.revision,
                 })
-              }
+              }}
             >
               {mutation.busy
                 ? 'Assigning…'
@@ -941,13 +967,7 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
               </p>
             )}
           </>
-        ) : (
-          <p>
-            {value.reviewerId === actor
-              ? 'You are the assigned reviewer.'
-              : 'You can view this case but cannot take review actions.'}
-          </p>
-        )}
+        ) : null}
       </section>
       <CaseParticipants
         key={`${actor}.${id}`}
@@ -955,12 +975,14 @@ function DetailData({ id, actor }: { id: string; actor: string }) {
         summary={value}
         actorId={actor}
         evidence={evidence}
+        names={participantNames}
       />
       <EvidencePanel
         key={id}
         caseId={id}
         orderId={value.orderId}
         onSnapshot={setEvidence}
+        names={participantNames}
       />
       <ResolutionPanel
         key={`resolve.${actor}.${id}.${state.data.closure?.operationId || ''}`}

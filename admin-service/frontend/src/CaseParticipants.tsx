@@ -22,11 +22,13 @@ export function CaseParticipants({
   summary,
   actorId,
   evidence,
+  names = {},
 }: {
   detail: Detail
   summary: Summary
   actorId: string
   evidence: Timeline | null
+  names?: Record<string, string>
 }) {
   const [selection, setSelection] = useState<ParticipantSelection>()
   const [tool, setTool] = useState<Tool>()
@@ -51,15 +53,17 @@ export function CaseParticipants({
       ...reporters,
     ]),
   ]
-  const historyLabel = participantLabels(evidence?.participants || [])
+  const historyLabel = participantLabels(evidence?.participants || [], names)
   const label = (id: string) => {
-    if (evidence?.order.requesterId === id) return 'Requester'
+    if (evidence?.order.requesterId === id)
+      return names[id] ? `Requester [${names[id]}]` : 'Requester'
     if (evidence?.participants.some((p) => p.userId === id))
       return historyLabel(id)
-    if (evidence?.order.courierId === id) return 'Courier'
+    if (evidence?.order.courierId === id)
+      return names[id] ? `Courier [${names[id]}]` : 'Courier'
     const reporter = reporters.indexOf(id)
     return reporter >= 0
-      ? `Reporting participant ${reporter + 1}`
+      ? `Reporting participant ${reporter + 1}${names[id] ? ` [${names[id]}]` : ''}`
       : 'Account awaiting confirmation'
   }
   const labels = Object.fromEntries(ids.map((id) => [id, label(id)]))
@@ -89,15 +93,7 @@ export function CaseParticipants({
           <p className="eyebrow">People involved</p>
           <h2 id="participants-title">Reports and participant actions</h2>
         </div>
-        <span className="role-chip">
-          {detail.statements.length}{' '}
-          {detail.statements.length === 1 ? 'report' : 'reports'}
-        </span>
       </div>
-      <p className="case-scope-note">
-        Read each person's statement, then choose an action on their card.
-        Private messages are separate for each person.
-      </p>
       {(pendingCredit || pendingBan) && (
         <div className="evidence-notice evidence-warning" role="status">
           <h3>Some requests still need confirmation</h3>
@@ -153,10 +149,10 @@ export function CaseParticipants({
                 </span>
                 <div>
                   <h3 id={`person-title-${id}`}>{label(id)}</h3>
-                  <span className="evidence-meta">
-                    {statement ? 'Submitted a report' : 'No report submitted'}
-                  </span>
                 </div>
+                {statement && (
+                  <span className="role-chip reporter-badge">Reported</span>
+                )}
               </header>
               <p className="person-reference">
                 <span>Account reference</span>
@@ -231,65 +227,76 @@ export function CaseParticipants({
             <p>No courier is identified in the available errand history.</p>
           </article>
         )}
-      </div>
-      {tool && selection && (
-        <div className="participant-tools-heading">
-          <h3 id="participant-tools-title" tabIndex={-1}>
-            {tool === 'chat'
-              ? 'Private chat'
-              : tool === 'credit'
-                ? 'Credit corrections'
-                : 'Account ban requests'}{' '}
-          </h3>
-          <button
-            className="button-secondary"
-            aria-label="Close participant tools"
-            onClick={() => {
-              setTool(undefined)
-              opener.current?.focus()
-            }}
-          >
-            <X aria-hidden="true" /> Close
-          </button>
+        <div
+          className="participant-tools-area"
+          hidden={!tool}
+          style={{
+            gridColumn:
+              (Math.max(0, ids.indexOf(selectedId || selection?.userId || '')) %
+                2) +
+              1,
+          }}
+        >
+          {tool && selection && (
+            <div className="participant-tools-heading">
+              <h3 id="participant-tools-title" tabIndex={-1}>
+                {tool === 'chat'
+                  ? 'Private chat'
+                  : tool === 'credit'
+                    ? 'Credit corrections'
+                    : 'Account ban requests'}{' '}
+              </h3>
+              <button
+                className="button-secondary"
+                aria-label="Close participant tools"
+                onClick={() => {
+                  setTool(undefined)
+                  opener.current?.focus()
+                }}
+              >
+                <X aria-hidden="true" /> Close
+              </button>
+            </div>
+          )}
+          <div id="participant-chat" hidden={tool !== 'chat'}>
+            <CaseConversations
+              summary={summary}
+              actorId={actorId}
+              participantIds={reporters}
+              closing={!!detail.closure}
+              selection={tool === 'chat' ? selection : undefined}
+              participantLabels={labels}
+              onParticipantChange={setChatTarget}
+            />
+          </div>
+          <div id="participant-credit" hidden={tool !== 'credit'}>
+            <CreditActions
+              summary={summary}
+              actorId={actorId}
+              participantIds={reporters}
+              initialActions={detail.actions}
+              closing={!!detail.closure}
+              selection={tool === 'credit' ? selection : undefined}
+              participantLabels={labels}
+              onPendingTargetChange={setPendingCredit}
+              onParticipantChange={setCreditTarget}
+            />
+          </div>
+          <div id="participant-ban" hidden={tool !== 'ban'}>
+            <CreditActions
+              kind="BAN"
+              summary={summary}
+              actorId={actorId}
+              participantIds={reporters}
+              initialActions={detail.actions}
+              closing={!!detail.closure}
+              selection={tool === 'ban' ? selection : undefined}
+              participantLabels={labels}
+              onPendingTargetChange={setPendingBan}
+              onParticipantChange={setBanTarget}
+            />
+          </div>
         </div>
-      )}
-      <div id="participant-chat" hidden={tool !== 'chat'}>
-        <CaseConversations
-          summary={summary}
-          actorId={actorId}
-          participantIds={reporters}
-          closing={!!detail.closure}
-          selection={tool === 'chat' ? selection : undefined}
-          participantLabels={labels}
-          onParticipantChange={setChatTarget}
-        />
-      </div>
-      <div id="participant-credit" hidden={tool !== 'credit'}>
-        <CreditActions
-          summary={summary}
-          actorId={actorId}
-          participantIds={reporters}
-          initialActions={detail.actions}
-          closing={!!detail.closure}
-          selection={tool === 'credit' ? selection : undefined}
-          participantLabels={labels}
-          onPendingTargetChange={setPendingCredit}
-          onParticipantChange={setCreditTarget}
-        />
-      </div>
-      <div id="participant-ban" hidden={tool !== 'ban'}>
-        <CreditActions
-          kind="BAN"
-          summary={summary}
-          actorId={actorId}
-          participantIds={reporters}
-          initialActions={detail.actions}
-          closing={!!detail.closure}
-          selection={tool === 'ban' ? selection : undefined}
-          participantLabels={labels}
-          onPendingTargetChange={setPendingBan}
-          onParticipantChange={setBanTarget}
-        />
       </div>
     </section>
   )

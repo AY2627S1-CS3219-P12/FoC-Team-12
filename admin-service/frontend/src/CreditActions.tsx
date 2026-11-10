@@ -153,6 +153,11 @@ export function CreditActions({
   const [denied, setDenied] = useState(false)
   const [refresh, setRefresh] = useState(0)
   const [handledSelection, setHandledSelection] = useState<number>()
+  const confirmButton = useRef<HTMLButtonElement>(null)
+  const reviewButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (confirm) confirmButton.current?.focus()
+  }, [confirm])
   useEffect(() => {
     onParticipantChange?.(target)
   }, [target, onParticipantChange])
@@ -354,10 +359,15 @@ export function CreditActions({
     <section className="case-panel credit-actions" aria-labelledby={headingId}>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">
-            {ban ? 'Account safety' : 'Administrative correction'}
-          </p>
-          <h2 id={headingId} className="icon-heading">
+          {!selection && (
+            <p className="eyebrow">
+              {ban ? 'Account safety' : 'Administrative correction'}
+            </p>
+          )}
+          <h2
+            id={headingId}
+            className={selection ? 'visually-hidden' : 'icon-heading'}
+          >
             {ban ? (
               <ShieldBan aria-hidden="true" />
             ) : (
@@ -389,11 +399,13 @@ export function CreditActions({
             An unconfirmed submission must be retried for its original account.
           </p>
         )}
-      <p>
-        {ban
-          ? 'Request a ban for a participant who submitted a report. You cannot ban yourself or the last active admin.'
-          : 'Add or remove available credits without changing the errand reward or reserved credits. Wait for confirmation before treating a correction as complete.'}
-      </p>
+      {!selection && (
+        <p>
+          {ban
+            ? 'Request a ban for a participant who submitted a report. You cannot ban yourself or the last active admin.'
+            : 'Add or remove available credits without changing the errand reward or reserved credits. Wait for confirmation before treating a correction as complete.'}
+        </p>
+      )}
       {error && (
         <p role="alert" className="workspace-error">
           {error}
@@ -521,21 +533,27 @@ export function CreditActions({
                 else void submit()
               }}
             >
-              <label htmlFor={`${kind}-target`}>Participant</label>
-              <select
-                id={`${kind}-target`}
-                value={target}
-                disabled={busy || !!pending || confirm}
-                onChange={(e) => setTarget(e.target.value)}
-                required
+              <details
+                className="action-account-picker"
+                open={selection ? undefined : true}
               >
-                <option value="">Choose a reporting participant</option>
-                {eligible.map((id) => (
-                  <option key={id} value={id}>
-                    {participantName(id)}
-                  </option>
-                ))}
-              </select>
+                <summary>Change participant</summary>
+                <label htmlFor={`${kind}-target`}>Participant</label>
+                <select
+                  id={`${kind}-target`}
+                  value={target}
+                  disabled={busy || !!pending || confirm}
+                  onChange={(e) => setTarget(e.target.value)}
+                  required
+                >
+                  <option value="">Choose a reporting participant</option>
+                  {eligible.map((id) => (
+                    <option key={id} value={id}>
+                      {participantName(id)}
+                    </option>
+                  ))}
+                </select>
+              </details>
               {!ban && (
                 <>
                   <fieldset
@@ -581,7 +599,7 @@ export function CreditActions({
               </label>
               <textarea
                 id={`${kind}-reason`}
-                rows={4}
+                rows={2}
                 required
                 maxLength={2000}
                 value={reason}
@@ -602,23 +620,15 @@ export function CreditActions({
                     ban ? 'Confirm account ban' : 'Confirm credit correction'
                   }
                 >
-                  <h3>
-                    Confirm{' '}
-                    {ban
-                      ? 'account ban'
-                      : direction === 'add'
-                        ? 'addition'
-                        : 'subtraction'}
-                  </h3>
                   <p>
                     {ban
-                      ? `Request a ban for ${participantName(target)}? Once applied, sign-in and new protected requests are blocked. Already authorized requests may finish.`
+                      ? `Request a ban for ${participantName(target)}? Blocks sign-in and new protected requests once applied.`
                       : `${direction === 'add' ? 'Add' : 'Subtract'} ${numeric} credits ${direction === 'add' ? 'to' : 'from'} ${participantName(target)}. This changes available credits independently of the errand reward.`}
                   </p>
-                  <p className="statement-text">{reason.trim()}</p>
                   <div className="conversation-picker">
                     <button
                       type="button"
+                      ref={confirmButton}
                       className={ban ? 'button-danger' : undefined}
                       disabled={busy || !valid}
                       onClick={() => void submit()}
@@ -631,14 +641,22 @@ export function CreditActions({
                       type="button"
                       className="button-secondary"
                       disabled={busy}
-                      onClick={() => setConfirm(false)}
+                      onClick={() => {
+                        setConfirm(false)
+                        requestAnimationFrame(() =>
+                          reviewButton.current?.focus(),
+                        )
+                      }}
                     >
                       Back to editing
                     </button>
                   </div>
                 </div>
               ) : (
-                <button disabled={busy || (!pending && !valid)}>
+                <button
+                  ref={reviewButton}
+                  disabled={busy || (!pending && !valid)}
+                >
                   {busy
                     ? 'Submitting…'
                     : pending

@@ -150,8 +150,11 @@ export function CaseConversations({
     summary.reviewerId === actorId
   return (
     <section className="case-panel" aria-labelledby="case-conversations-title">
-      <p className="eyebrow">Private follow-up</p>
-      <h2 id="case-conversations-title" className="icon-heading">
+      {!selection && <p className="eyebrow">Private follow-up</p>}
+      <h2
+        id="case-conversations-title"
+        className={selection ? 'visually-hidden' : 'icon-heading'}
+      >
         <MessageSquare aria-hidden="true" />
         Participant conversations
       </h2>
@@ -161,10 +164,12 @@ export function CaseConversations({
           <a href={`#person-${selected}`}>{participantLabels[selected]}</a>
         </p>
       )}
-      <p>
-        Select a participant who submitted a report to view or start a private
-        conversation.
-      </p>
+      {!selection && (
+        <p>
+          Select a participant who submitted a report to view or start a private
+          conversation.
+        </p>
+      )}
       {!assigned && (
         <p className="conversation-status">
           {summary.state === 'OPEN'
@@ -178,21 +183,24 @@ export function CaseConversations({
       <SavedStatus saved={saved} />
       {saved.references && (
         <>
-          <div
-            className="conversation-picker"
-            aria-label="Select a reporting participant"
-          >
-            {[...new Set(participantIds)].map((id, index) => (
-              <button
-                key={id}
-                className="button-secondary"
-                aria-pressed={id === selected}
-                onClick={() => setSelected(id)}
-              >
-                {participantLabels[id] || `Participant ${index + 1}`}
-              </button>
-            ))}
-          </div>
+          <details open={selection ? undefined : true}>
+            <summary>Change participant</summary>
+            <div
+              className="conversation-picker"
+              aria-label="Select a reporting participant"
+            >
+              {[...new Set(participantIds)].map((id, index) => (
+                <button
+                  key={id}
+                  className="button-secondary"
+                  aria-pressed={id === selected}
+                  onClick={() => setSelected(id)}
+                >
+                  {participantLabels[id] || `Participant ${index + 1}`}
+                </button>
+              ))}
+            </div>
+          </details>
           {!participantIds.length && (
             <p>
               No participants are available to contact. Only participants who

@@ -72,7 +72,7 @@ it('requires a reason and confirmation, omits amount and preserves the exact req
   ).toHaveTextContent('ban for Participant 1')
   expect(
     screen.getByRole('region', { name: 'Confirm account ban' }),
-  ).toHaveTextContent('new protected requests are blocked')
+  ).toHaveTextContent('Blocks sign-in and new protected requests once applied')
   expect(screen.queryByText(/sessions.*until expiry/)).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Confirm ban request' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
