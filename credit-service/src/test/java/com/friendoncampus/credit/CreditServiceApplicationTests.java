@@ -30,6 +30,8 @@ class CreditServiceApplicationTests {
     @MockitoBean com.friendoncampus.credit.integration.AdminCreditCorrectionService adminCorrections;
     @MockitoBean com.friendoncampus.credit.integration.AdminCreditOutbox adminOutbox;
 
+    @MockitoBean com.friendoncampus.credit.service.DisputeSettlementService disputeSettlements;
+
     @Test
     void contextLoads() {
     }
