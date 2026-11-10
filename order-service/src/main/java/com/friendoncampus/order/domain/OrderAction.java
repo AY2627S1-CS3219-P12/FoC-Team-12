@@ -2,6 +2,8 @@ package com.friendoncampus.order.domain;
 
 /** Lifecycle actions recorded in the transition history. */
 public enum OrderAction {
+    REVIEW_STARTED,
+    DISPUTE_RESOLVED,
     SUBMIT,
     OPEN,
     FAIL_RESERVATION,

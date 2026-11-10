@@ -72,6 +72,8 @@ import com.sun.net.httpserver.HttpServer;
 class OrderSecurityIntegrationTest {
     @MockitoBean com.friendoncampus.order.authorization.CurrentAuthorization currentAuthorization;
 
+    @MockitoBean com.friendoncampus.order.service.DisputeReviewService disputeReviews;
+
     static final String ISSUER = "friend-on-campus-user-service";
     static final String AUDIENCE = "friend-on-campus-api";
     private static final String KEY_ID = "test-user-service-key";

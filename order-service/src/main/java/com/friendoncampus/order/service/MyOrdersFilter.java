@@ -16,6 +16,7 @@ import com.friendoncampus.order.domain.OrderState;
 public record MyOrdersFilter(Status status, OrderState state) {
 
     public enum Status {
+        REVIEW,
         ACTIVE,
         PAST
     }
@@ -38,7 +39,7 @@ public record MyOrdersFilter(Status status, OrderState state) {
             try {
                 parsedStatus = Status.valueOf(status.trim().toUpperCase(Locale.ROOT));
             } catch (IllegalArgumentException exception) {
-                throw new InvalidOrderQueryException("status must be active or past");
+                throw new InvalidOrderQueryException("status must be active, review or past");
             }
         }
         OrderState parsedState = null;
@@ -54,7 +55,7 @@ public record MyOrdersFilter(Status status, OrderState state) {
 
     /** The states to list from {@code active}/{@code past}; a {@code state} outside them is rejected. */
     Set<OrderState> states(Set<OrderState> active, Set<OrderState> past) {
-        Set<OrderState> listed = status == Status.ACTIVE ? active : past;
+        Set<OrderState> listed = status == Status.REVIEW ? EnumSet.allOf(OrderState.class) : status == Status.ACTIVE ? active : past;
         if (state == null) {
             return listed;
         }

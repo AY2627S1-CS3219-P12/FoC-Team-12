@@ -56,8 +56,9 @@ public class OrderQueryService {
     @Transactional(readOnly = true)
     public Page<Order> findRequested(UUID callerId, MyOrdersFilter filter, OrderPaging paging) {
         Specification<Order> specification = OrderSpecifications.requestedBy(callerId)
-                .and(OrderSpecifications.inStates(
-                        filter.states(MyOrdersFilter.REQUESTED_ACTIVE, MyOrdersFilter.REQUESTED_PAST)));
+                .and(OrderSpecifications.inStatesIncludingResolvedReviews(
+                        filter.states(MyOrdersFilter.REQUESTED_ACTIVE, MyOrdersFilter.REQUESTED_PAST),filter.status()==MyOrdersFilter.Status.PAST && filter.state()==null))
+                .and(OrderSpecifications.reviewVisibility(filter.status()==MyOrdersFilter.Status.REVIEW));
         return orderRepository.findAll(specification, pageRequest(paging, sortFor(filter)));
     }
 
@@ -67,9 +68,10 @@ public class OrderQueryService {
      */
     @Transactional(readOnly = true)
     public Page<Order> findDelivered(UUID callerId, MyOrdersFilter filter, OrderPaging paging) {
-        Specification<Order> specification = OrderSpecifications.deliveredBy(callerId)
-                .and(OrderSpecifications.inStates(
-                        filter.states(MyOrdersFilter.DELIVERED_ACTIVE, MyOrdersFilter.DELIVERED_PAST)));
+        Specification<Order> specification = OrderSpecifications.reviewCourier(callerId)
+                .and(OrderSpecifications.inStatesIncludingResolvedReviews(
+                        filter.states(MyOrdersFilter.DELIVERED_ACTIVE, MyOrdersFilter.DELIVERED_PAST),filter.status()==MyOrdersFilter.Status.PAST && filter.state()==null))
+                .and(OrderSpecifications.reviewVisibility(filter.status()==MyOrdersFilter.Status.REVIEW));
         return orderRepository.findAll(specification, pageRequest(paging, sortFor(filter)));
     }
 

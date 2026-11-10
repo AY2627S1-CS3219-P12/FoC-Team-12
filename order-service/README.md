@@ -552,3 +552,7 @@ Configure ORDER_USER_URL, ORDER_SERVICE_KEY_ID and
 ORDER_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
 and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
 configuration fails closed even when administrative Kafka consumers are disabled.
+
+## Dispute review workflow
+
+See the [approved report freeze and finalization contract](../docs/integration/dispute-review-contract.md) for service ownership, retry barriers, timeline message/image evidence, credit dispositions and rollout requirements. Existing lifecycle and case states are retained.

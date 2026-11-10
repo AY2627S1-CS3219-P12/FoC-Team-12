@@ -103,6 +103,28 @@ export function ErrandReportPanel({ orderId }: { orderId: string }) {
             View your report
           </a>
         </>
+      ) : context.data.status === 'CASE_PARTICIPANT' ? (
+        <>
+          <p>
+            {context.data.state === 'RESOLVED'
+              ? 'This errand was resolved after review.'
+              : 'This errand is under review following a reported issue. You have not submitted a statement.'}
+          </p>
+          <a
+            className="button-secondary"
+            href={`/admin/reports/${context.data.caseId}`}
+          >
+            View case and contact admin
+          </a>
+          {context.data.state !== 'RESOLVED' && (
+            <a
+              className="button-secondary"
+              href={`/admin/reports/new?orderId=${encodeURIComponent(orderId)}`}
+            >
+              Add your statement
+            </a>
+          )}
+        </>
       ) : context.data.status === 'ELIGIBLE' ? (
         <>
           <p>

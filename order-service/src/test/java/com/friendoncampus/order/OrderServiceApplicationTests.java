@@ -31,6 +31,8 @@ class OrderServiceApplicationTests {
     @MockitoBean
     private ProcessedEventRepository processedEventRepository;
 
+    @MockitoBean com.friendoncampus.order.service.DisputeReviewService disputeReviews;
+
     @Test
     void contextLoads() {
     }

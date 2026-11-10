@@ -25,6 +25,7 @@ public final class OrderSpecifications {
                 cb.equal(root.get("state"), OrderState.OPEN),
                 cb.greaterThan(root.<OffsetDateTime>get("pickupDeadline"), now),
                 cb.isNull(root.get("pendingCreditReward")),
+                cb.isNull(root.get("reviewCaseId")),
                 cb.notEqual(root.get("requesterId"), callerId));
     }
 
@@ -52,6 +53,19 @@ public final class OrderSpecifications {
         return (root, query, cb) -> cb.equal(root.get("courierId"), courierId);
     }
 
+    public static Specification<Order> reviewVisibility(boolean reviewing) {
+        return (root,query,cb)->reviewing ? cb.and(cb.isNotNull(root.get("reviewCaseId")),cb.isNull(root.get("reviewResolvedAt"))) : cb.or(cb.isNull(root.get("reviewCaseId")),cb.isNotNull(root.get("reviewResolvedAt")));
+    }
+    public static Specification<Order> reviewCourier(UUID courier) {
+        return (root,query,cb)->{
+            var history=query.subquery(java.util.UUID.class);var row=history.from(com.friendoncampus.order.domain.OrderTransitionRecord.class);
+            history.select(row.get("orderId")).where(cb.equal(row.get("courierId"),courier),cb.equal(row.get("orderId"),root.get("id")));
+            return cb.or(cb.equal(root.get("courierId"),courier),cb.and(cb.isNotNull(root.get("reviewCaseId")),cb.exists(history)));
+        };
+    }
+    public static Specification<Order> inStatesIncludingResolvedReviews(Collection<OrderState> states,boolean includeReviewed) {
+        return (root,query,cb)->includeReviewed ? cb.or(root.get("state").in(states),cb.isNotNull(root.get("reviewResolvedAt"))) : root.get("state").in(states);
+    }
     public static Specification<Order> inStates(Collection<OrderState> states) {
         return (root, query, cb) -> root.get("state").in(states);
     }

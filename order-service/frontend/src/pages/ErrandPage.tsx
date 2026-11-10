@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { ArrowLeft, CircleAlert, MessageCircle, RotateCcw, SearchX } from 'lucide-react'
+import {
+  ArrowLeft,
+  CircleAlert,
+  MessageCircle,
+  RotateCcw,
+  SearchX,
+} from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import {
   fetchOrder,
@@ -25,6 +31,7 @@ import {
   REPOSTABLE_STATES,
   repostPath,
   reservationFailure,
+  stateLabel,
 } from '../utils/orderFormatting'
 
 /** Friendly text for the error codes in the Order README. */
@@ -158,9 +165,27 @@ export function ErrandPage() {
       </div>
       <div className="two-column">
         <section aria-labelledby="errand-title">
-          {view === 'browser' && <BrowserHeading order={order} />}
-          {view === 'courier' && <CourierHeading order={order} />}
-          {view === 'requester' && <RequesterHeading order={order} />}
+          {order.reviewCaseId ? (
+            <>
+              <h1 id="errand-title">
+                {order.reviewResolved
+                  ? 'Resolved after review'
+                  : 'Under review'}
+              </h1>
+              <p>
+                {order.title}
+                {!order.reviewResolved && (
+                  <> · Paused at: {stateLabel(order.state)}</>
+                )}
+              </p>
+            </>
+          ) : (
+            <>
+              {view === 'browser' && <BrowserHeading order={order} />}
+              {view === 'courier' && <CourierHeading order={order} />}
+              {view === 'requester' && <RequesterHeading order={order} />}
+            </>
+          )}
           <StateBadge
             state={order.state}
             terminalReason={order.terminalReason}
@@ -178,10 +203,36 @@ export function ErrandPage() {
               {errorText(action.error)}
             </div>
           )}
-          <div className="actions">
-            {view !== 'browser' && ['ACCEPTED','PICKED_UP','DELIVERED','COMPLETED','CANCELLED'].includes(order.state) && (
-              <Link className="button-secondary" to={`/errands/${order.id}/chat`}><MessageCircle aria-hidden="true" /> Chat</Link>
-            )}
+          {order.reviewCaseId && (
+            <div role="status" className="notice notice-review">
+              <strong>
+                {order.reviewResolved
+                  ? 'Resolved after review'
+                  : 'Under review'}
+              </strong>
+              <p>
+                {order.reviewResolved
+                  ? 'This errand is finished following dispute review.'
+                  : 'This errand is under review following a reported issue. Errand actions are paused. You can add your statement below.'}
+              </p>
+            </div>
+          )}
+          <div className="actions" hidden={!!order.reviewCaseId}>
+            {view !== 'browser' &&
+              [
+                'ACCEPTED',
+                'PICKED_UP',
+                'DELIVERED',
+                'COMPLETED',
+                'CANCELLED',
+              ].includes(order.state) && (
+                <Link
+                  className="button-secondary"
+                  to={`/errands/${order.id}/chat`}
+                >
+                  <MessageCircle aria-hidden="true" /> Chat
+                </Link>
+              )}
             {view === 'browser' && order.state === 'OPEN' && (
               <button
                 disabled={
@@ -328,12 +379,9 @@ function BrowserHeading({ order }: { order: Order }) {
 
 function CourierHeading({ order }: { order: Order }) {
   const next: Partial<Record<Order['state'], string>> = {
-    ACCEPTED:
-      'Next: pick up the item.',
-    PICKED_UP:
-      'Next: bring it to the drop-off point.',
-    DELIVERED:
-      "Delivered. You'll get your reward once they confirm.",
+    ACCEPTED: 'Next: pick up the item.',
+    PICKED_UP: 'Next: bring it to the drop-off point.',
+    DELIVERED: "Delivered. You'll get your reward once they confirm.",
   }
   return (
     <header className="errand-heading">
@@ -389,11 +437,11 @@ function RequesterHeading({ order }: { order: Order }) {
           'Your courier was late, so you got all your credits back.',
         ]
       : creditTimedOut
-      ? [
-          'Errand not posted',
-          "We couldn't post it this time. Your credits are safe.",
-        ]
-      : headings[order.state]
+        ? [
+            'Errand not posted',
+            "We couldn't post it this time. Your credits are safe.",
+          ]
+        : headings[order.state]
   return (
     <header className="errand-heading">
       <h1 id="errand-title">{title}</h1>

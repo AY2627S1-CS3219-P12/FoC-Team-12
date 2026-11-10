@@ -15,7 +15,9 @@ public enum TerminalReason {
     /** RESERVATION_FAILED for any other or missing Credit reason code. */
     CREDIT_RESERVATION_REJECTED,
     /** EXPIRED from PENDING_CREDIT: Credit did not answer the reservation before the credit timeout. */
-    CREDIT_RESERVATION_TIMEOUT;
+    CREDIT_RESERVATION_TIMEOUT,
+    /** Finished by an administrator after a dispute; credits have an explicit disposition. */
+    DISPUTE_RESOLVED;
 
     /** Maps a {@code CreditReservationRejected} reason code to the terminal reason the client shows. */
     public static TerminalReason forReservationRejection(String reasonCode) {

@@ -24,7 +24,7 @@ public record OrderResponse(
         TerminalReason terminalReason,
         long version,
         OffsetDateTime createdAt,
-        OffsetDateTime stateChangedAt) {
+        OffsetDateTime stateChangedAt, UUID reviewCaseId, boolean reviewResolved) {
 
     public static OrderResponse from(Order order) {
         return new OrderResponse(
@@ -44,6 +44,6 @@ public record OrderResponse(
                 order.getTerminalReason(),
                 order.getVersion(),
                 order.getCreatedAt(),
-                order.getStateChangedAt());
+                order.getStateChangedAt(), order.getReviewCaseId(), order.isResolvedAfterReview());
     }
 }

@@ -16,8 +16,12 @@ import tools.jackson.databind.json.JsonMapper;
 public final class ServiceTokenDecoder {
     private final JsonNode trusted;
     private final String audience;
+    private final Set<String> allowed;
     public ServiceTokenDecoder(String audience,String trust){
-        this.audience=audience;
+        this(audience,trust,Set.of("chat-service"));
+    }
+    public ServiceTokenDecoder(String audience,String trust,Set<String> allowed){
+        this.audience=audience;this.allowed=Set.copyOf(allowed);
         try{trusted=JsonMapper.builder().build().readTree(trust);if(!trusted.isObject())throw new IllegalArgumentException();}
         catch(Exception ex){throw new IllegalArgumentException("Invalid service trust");}
     }
@@ -29,7 +33,7 @@ public final class ServiceTokenDecoder {
             var key=(RSAPublicKey)KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(pin.path("publicKey").asText())));
             if(key.getModulus().bitLength()<2048||!token.verify(new RSASSAVerifier(key)))throw new IllegalArgumentException();
             var c=token.getJWTClaimsSet();Instant now=Instant.now(),issued=c.getIssueTime().toInstant(),expires=c.getExpirationTime().toInstant();
-            if(!"foc-service-auth".equals(c.getIssuer())||!"chat-service".equals(c.getSubject())||!c.getSubject().equals(pin.path("subject").asText())
+            if(!"foc-service-auth".equals(c.getIssuer())||!allowed.contains(c.getSubject())||!c.getSubject().equals(pin.path("subject").asText())
                     ||!c.getAudience().contains(audience)||!expires.isAfter(now)||issued.isAfter(now.plusSeconds(5))||!expires.isAfter(issued)
                     ||expires.isAfter(issued.plusSeconds(60))||c.getJWTID()==null||c.getJWTID().isBlank()
                     ||c.getNotBeforeTime()!=null&&c.getNotBeforeTime().toInstant().isAfter(now))throw new IllegalArgumentException();

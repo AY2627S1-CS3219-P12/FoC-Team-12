@@ -4,12 +4,23 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { saveSession } from '../auth/session'
-import { COURIER_ID, order, page, REQUESTER_ID, signIn, stubFetch } from '../test/fixtures'
+import {
+  COURIER_ID,
+  order,
+  page,
+  REQUESTER_ID,
+  signIn,
+  stubFetch,
+} from '../test/fixtures'
 import { MyErrandsPage } from './MyErrandsPage'
 
 function renderPage() {
   return render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+    <QueryClientProvider
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
+    >
       <MemoryRouter>
         <MyErrandsPage />
       </MemoryRouter>
@@ -17,7 +28,8 @@ function renderPage() {
   )
 }
 
-const section = (name: 'Active' | 'Past') => screen.getByRole('region', { name: new RegExp(`^${name}`) })
+const section = (name: 'Active' | 'Past') =>
+  screen.getByRole('region', { name: new RegExp(`^${name}`) })
 
 describe('MyErrandsPage', () => {
   beforeEach(() => signIn(REQUESTER_ID, 'REQUESTER'))
@@ -29,17 +41,45 @@ describe('MyErrandsPage', () => {
   it("shows the requester's active errands above their finished ones (F9.1)", async () => {
     const { fetchMock, calls } = stubFetch((url) => ({
       body: url.includes('status=active')
-        ? page([order({ id: 'a', state: 'OPEN', title: 'Get my lunch' }), order({ id: 'p', state: 'PENDING_CREDIT', title: 'Return my book' })])
-        : page([order({ state: 'COMPLETED', courierId: COURIER_ID }), order({ id: 'b', state: 'CANCELLED', title: 'Pick up my coffee' })]),
+        ? page([
+            order({ id: 'a', state: 'OPEN', title: 'Get my lunch' }),
+            order({
+              id: 'p',
+              state: 'PENDING_CREDIT',
+              title: 'Return my book',
+            }),
+          ])
+        : page([
+            order({ state: 'COMPLETED', courierId: COURIER_ID }),
+            order({ id: 'b', state: 'CANCELLED', title: 'Pick up my coffee' }),
+          ]),
     }))
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
-    expect(await within(section('Active')).findByRole('heading', { name: 'Get my lunch' })).toBeInTheDocument()
-    expect(within(section('Active')).getByRole('heading', { name: 'Return my book' })).toBeInTheDocument()
-    expect(within(section('Active')).getByRole('link', { name: 'View Get my lunch' })).toHaveAttribute('href', '/errands/a')
-    expect(await within(section('Past')).findByRole('heading', { name: 'Collect my printed notes' })).toBeInTheDocument()
-    const coffee = within(section('Past')).getByRole('heading', { name: 'Pick up my coffee' }).closest('li')!
+    expect(
+      await within(section('Active')).findByRole('heading', {
+        name: 'Get my lunch',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(section('Active')).getByRole('heading', {
+        name: 'Return my book',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(section('Active')).getByRole('link', {
+        name: 'View Get my lunch',
+      }),
+    ).toHaveAttribute('href', '/errands/a')
+    expect(
+      await within(section('Past')).findByRole('heading', {
+        name: 'Collect my printed notes',
+      }),
+    ).toBeInTheDocument()
+    const coffee = within(section('Past'))
+      .getByRole('heading', { name: 'Pick up my coffee' })
+      .closest('li')!
     expect(within(coffee).getByText('Cancelled')).toBeInTheDocument()
     expect(calls.map((call) => call.url)).toEqual(
       expect.arrayContaining([
@@ -52,46 +92,85 @@ describe('MyErrandsPage', () => {
 
   it('narrows past errands to one finished state', async () => {
     const { fetchMock, calls } = stubFetch((url) => ({
-      body: url.includes('state=EXPIRED') ? page([order({ id: 'e', state: 'EXPIRED', title: 'Fetch my parcel' })]) : page([]),
+      body: url.includes('state=EXPIRED')
+        ? page([order({ id: 'e', state: 'EXPIRED', title: 'Fetch my parcel' })])
+        : page([]),
     }))
     vi.stubGlobal('fetch', fetchMock)
     const user = userEvent.setup()
     renderPage()
-    await within(section('Past')).findByText(/once they’re completed, cancelled or expired/)
+    await within(section('Past')).findByText(
+      /once they’re completed, cancelled or expired/,
+    )
 
-    await user.click(within(section('Past')).getByRole('button', { name: 'Expired' }))
+    await user.click(
+      within(section('Past')).getByRole('button', { name: 'Expired' }),
+    )
 
-    expect(await within(section('Past')).findByRole('heading', { name: 'Fetch my parcel' })).toBeInTheDocument()
-    expect(within(section('Past')).getByRole('button', { name: 'Expired' })).toHaveAttribute('aria-pressed', 'true')
+    expect(
+      await within(section('Past')).findByRole('heading', {
+        name: 'Fetch my parcel',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(section('Past')).getByRole('button', { name: 'Expired' }),
+    ).toHaveAttribute('aria-pressed', 'true')
     expect(calls.at(-1)?.url).toContain('status=past')
     expect(calls.at(-1)?.url).toContain('state=EXPIRED')
   })
 
-  it("shows the errands a courier session is running and has delivered (F9.2)", async () => {
+  it('shows the errands a courier session is running and has delivered (F9.2)', async () => {
     signIn(COURIER_ID, 'COURIER')
     const { fetchMock, calls } = stubFetch((url) => {
       if (!url.includes('delivered')) return { body: page([]) }
       return {
         body: url.includes('status=active')
-          ? page([order({ id: 'r', state: 'PICKED_UP', title: 'Carry my laptop', courierId: COURIER_ID })])
+          ? page([
+              order({
+                id: 'r',
+                state: 'PICKED_UP',
+                title: 'Carry my laptop',
+                courierId: COURIER_ID,
+              }),
+            ])
           : page([order({ state: 'COMPLETED', title: 'Bring my parcel' })]),
       }
     })
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
 
-    expect(await within(section('Active')).findByRole('heading', { name: 'Carry my laptop' })).toBeInTheDocument()
-    expect(await within(section('Past')).findByRole('heading', { name: 'Bring my parcel' })).toBeInTheDocument()
+    expect(
+      await within(section('Active')).findByRole('heading', {
+        name: 'Carry my laptop',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      await within(section('Past')).findByRole('heading', {
+        name: 'Bring my parcel',
+      }),
+    ).toBeInTheDocument()
     // A courier's past list has only completed deliveries, so there is nothing to filter.
-    expect(within(section('Past')).queryByRole('button', { name: 'Completed' })).not.toBeInTheDocument()
-    expect(calls.some((call) => call.url.includes('/api/orders/me/requested'))).toBe(false)
+    expect(
+      within(section('Past')).queryByRole('button', { name: 'Completed' }),
+    ).not.toBeInTheDocument()
+    expect(
+      calls.some((call) => call.url.includes('/api/orders/me/requested')),
+    ).toBe(false)
   })
 
   it('switches lists when the header role toggle changes the session', async () => {
     const { fetchMock, calls } = stubFetch((url) => ({
-      body: url.includes('delivered') && url.includes('status=active')
-        ? page([order({ id: 'r', state: 'ACCEPTED', title: 'Carry my laptop', courierId: REQUESTER_ID })])
-        : page([]),
+      body:
+        url.includes('delivered') && url.includes('status=active')
+          ? page([
+              order({
+                id: 'r',
+                state: 'ACCEPTED',
+                title: 'Carry my laptop',
+                courierId: REQUESTER_ID,
+              }),
+            ])
+          : page([]),
     }))
     vi.stubGlobal('fetch', fetchMock)
     renderPage()
@@ -109,17 +188,37 @@ describe('MyErrandsPage', () => {
       })
     })
 
-    expect(await within(section('Active')).findByRole('heading', { name: 'Carry my laptop' })).toBeInTheDocument()
-    await waitFor(() => expect(calls.some((call) => call.url.includes('/api/orders/me/delivered?status=active'))).toBe(true))
+    expect(
+      await within(section('Active')).findByRole('heading', {
+        name: 'Carry my laptop',
+      }),
+    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        calls.some((call) =>
+          call.url.includes('/api/orders/me/delivered?status=active'),
+        ),
+      ).toBe(true),
+    )
   })
 
   it('explains empty active and past lists', async () => {
     vi.stubGlobal('fetch', stubFetch(() => ({ body: page([]) })).fetchMock)
     renderPage()
 
-    expect(await within(section('Active')).findByText(/Errands you post appear here until they finish/)).toBeInTheDocument()
-    expect(within(section('Active')).getByRole('link', { name: 'Request help' })).toHaveAttribute('href', '/errands/new')
-    expect(await within(section('Past')).findByText(/once they’re completed, cancelled or expired/)).toBeInTheDocument()
+    expect(
+      await within(section('Active')).findByText(
+        /Errands you post appear here until they finish/,
+      ),
+    ).toBeInTheDocument()
+    expect(
+      within(section('Active')).getByRole('link', { name: 'Request help' }),
+    ).toHaveAttribute('href', '/errands/new')
+    expect(
+      await within(section('Past')).findByText(
+        /once they’re completed, cancelled or expired/,
+      ),
+    ).toBeInTheDocument()
     expect(within(section('Past')).queryByRole('link')).not.toBeInTheDocument()
   })
 
@@ -129,17 +228,24 @@ describe('MyErrandsPage', () => {
       stubFetch((url) => ({
         body: url.includes('status=active')
           ? page([order({ id: 'a', state: 'OPEN', title: 'Get my lunch' })])
-          : page([order({ id: 'done', state: 'COMPLETED', courierId: COURIER_ID })]),
+          : page([
+              order({ id: 'done', state: 'COMPLETED', courierId: COURIER_ID }),
+            ]),
       })).fetchMock,
     )
     renderPage()
 
-    expect(await within(section('Past')).findByRole('link', { name: 'Post Collect my printed notes again' })).toHaveAttribute(
-      'href',
-      '/errands/new?from=done',
-    )
-    await within(section('Active')).findByRole('heading', { name: 'Get my lunch' })
-    expect(within(section('Active')).queryByRole('link', { name: /again/ })).not.toBeInTheDocument()
+    expect(
+      await within(section('Past')).findByRole('link', {
+        name: 'Post Collect my printed notes again',
+      }),
+    ).toHaveAttribute('href', '/errands/new?from=done')
+    await within(section('Active')).findByRole('heading', {
+      name: 'Get my lunch',
+    })
+    expect(
+      within(section('Active')).queryByRole('link', { name: /again/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('offers no Post again on errands a courier delivered', async () => {
@@ -147,13 +253,19 @@ describe('MyErrandsPage', () => {
     vi.stubGlobal(
       'fetch',
       stubFetch((url) => ({
-        body: url.includes('status=past') ? page([order({ state: 'COMPLETED', courierId: COURIER_ID })]) : page([]),
+        body: url.includes('status=past')
+          ? page([order({ state: 'COMPLETED', courierId: COURIER_ID })])
+          : page([]),
       })).fetchMock,
     )
     renderPage()
 
-    await within(section('Past')).findByRole('heading', { name: 'Collect my printed notes' })
-    expect(screen.queryByRole('link', { name: /again/ })).not.toBeInTheDocument()
+    await within(section('Past')).findByRole('heading', {
+      name: 'Collect my printed notes',
+    })
+    expect(
+      screen.queryByRole('link', { name: /again/ }),
+    ).not.toBeInTheDocument()
   })
 
   it('points a courier with no active errands to the open pool', async () => {
@@ -161,9 +273,53 @@ describe('MyErrandsPage', () => {
     vi.stubGlobal('fetch', stubFetch(() => ({ body: page([]) })).fetchMock)
     renderPage()
 
-    expect(await within(section('Active')).findByRole('link', { name: 'Find errands' })).toHaveAttribute(
-      'href',
-      '/errands/browse',
-    )
+    expect(
+      await within(section('Active')).findByRole('link', {
+        name: 'Find errands',
+      }),
+    ).toHaveAttribute('href', '/errands/browse')
   })
+})
+
+it('places paused errands in a distinct review section and keeps finished reviews in Past', async () => {
+  signIn(REQUESTER_ID, 'REQUESTER')
+  vi.stubGlobal(
+    'fetch',
+    stubFetch((url) => ({
+      body: url.includes('status=review')
+        ? page([
+            order({
+              title: 'Review fixture',
+              state: 'ACCEPTED',
+              reviewCaseId: '10000000-0000-4000-8000-000000000001',
+              reviewResolved: false,
+            }),
+          ])
+        : url.includes('status=past')
+          ? page([
+              order({
+                title: 'Finished fixture',
+                state: 'COMPLETED',
+                reviewCaseId: '10000000-0000-4000-8000-000000000002',
+                reviewResolved: true,
+              }),
+            ])
+          : page([]),
+    })).fetchMock,
+  )
+  renderPage()
+  const review = screen.getByRole('region', { name: /^Under review/ })
+  expect(
+    await within(review).findByRole('heading', { name: 'Review fixture' }),
+  ).toBeVisible()
+  expect(
+    within(review).getByText('Under review', { selector: '.review-badge' }),
+  ).toBeVisible()
+  expect(within(review).getByText(/Paused at/)).toHaveTextContent('Accepted')
+  expect(
+    await within(section('Past')).findByText('Resolved after review'),
+  ).toBeVisible()
+  expect(
+    within(section('Active')).queryByText('Review fixture'),
+  ).not.toBeInTheDocument()
 })

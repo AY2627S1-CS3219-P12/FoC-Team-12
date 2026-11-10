@@ -156,6 +156,7 @@ public class OrderEventRecorder {
         snapshot.put("requesterId", order.getRequesterId());
         snapshot.put("courierId", order.getCourierId());
         snapshot.put("status", transition.toState().name());
+        snapshot.put("reviewCaseId",order.getReviewCaseId());snapshot.put("reviewResolved",order.isResolvedAfterReview());
         snapshot.put("title", order.getTitle());
         snapshot.put("description", order.getDescription());
         snapshot.put("creditReward", order.getCreditReward());
