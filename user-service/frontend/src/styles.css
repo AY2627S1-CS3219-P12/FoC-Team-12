@@ -244,11 +244,11 @@ label { display: grid; gap: 0.45rem; color: var(--foc-ink); font-size: 0.9rem; f
 .welcome-page .auth-card form > button:not(.text-button) { width: 100%; }
 .welcome-page .auth-card .text-button { justify-self: start; color: var(--foc-muted); font-size: 0.82rem; }
 .welcome-page .guest-link { margin-top: 0.15rem; border-radius: 0.55rem; background: #f3f7f5; font-size: 0.82rem; }
-.auth-progress { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin: 1.25rem 0 0; padding: 0; list-style: none; }
+.auth-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; margin: 1.25rem 0 0; padding: 0; list-style: none; }
 .auth-progress li { display: flex; position: relative; align-items: center; gap: 0.45rem; color: #8b9792; font-size: 0.75rem; font-weight: 650; }
-.auth-progress li::after { position: absolute; z-index: 0; top: 50%; right: 0.5rem; left: 2rem; height: 1px; background: var(--foc-line); content: ''; }
+.auth-progress li::after { flex: 1; min-width: 0.5rem; height: 1px; background: var(--foc-line); content: ''; }
 .auth-progress li:last-child::after { display: none; }
-.auth-progress li > span { display: grid; z-index: 1; width: 1.55rem; height: 1.55rem; border: 1px solid var(--foc-line); border-radius: 50%; background: white; font-size: 0.68rem; place-items: center; }
+.auth-progress li > span { display: grid; flex: 0 0 1.55rem; width: 1.55rem; height: 1.55rem; border: 1px solid var(--foc-line); border-radius: 50%; background: white; font-size: 0.68rem; place-items: center; }
 .auth-progress li > span svg { width: 0.85rem; height: 0.85rem; }
 .auth-progress li.current, .auth-progress li.complete { color: var(--foc-action); }
 .auth-progress li.current > span { border-color: var(--foc-action); background: var(--foc-action); color: white; }
