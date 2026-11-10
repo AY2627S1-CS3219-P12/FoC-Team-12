@@ -38,6 +38,10 @@ spec:
           operator: In
           values: [c5a.large, c6a.large, c7a.large, m5a.large, m6a.large, m7a.large]
   disruption:
+    # Static pools are not eligible for consolidation, but the EKS Auto Mode NodePool CRD
+    # requires an explicit consolidation delay whenever disruption settings are supplied.
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: Never
     budgets:
       - nodes: "1"
 ---
@@ -78,5 +82,7 @@ spec:
           operator: In
           values: [c5a.large, c6a.large, c7a.large, m5a.large, m6a.large, m7a.large]
   disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: Never
     budgets:
       - nodes: "1"
