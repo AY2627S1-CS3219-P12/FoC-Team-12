@@ -234,6 +234,14 @@ class SharedNotificationBellTest(unittest.TestCase):
                         f"{service} rule '{rule_selector}' also styles the bell",
                     )
 
+    def test_every_frontend_hides_the_bell_in_admin_mode(self):
+        participant_only = re.compile(
+            r"(?:!adminMode|session\??\.role\s*!==\s*'ADMIN')\s*&&\s*\(?\s*<NotificationBell"
+        )
+        for service, path in PRIMARY_NAV_SOURCES.items():
+            with self.subTest(service=service):
+                self.assertRegex(path.read_text(), participant_only)
+
 
 class SharedPrimaryNavigationTest(unittest.TestCase):
     def test_every_frontend_uses_text_only_primary_navigation(self):
@@ -257,6 +265,16 @@ class SharedPrimaryNavigationTest(unittest.TestCase):
                     path.read_text(),
                     r'<a[^>]+href="/\?view=profile"[^>]*>Profile</a>',
                 )
+
+    def test_requester_errands_links_open_history_before_the_create_form(self):
+        requester_landing = re.compile(
+            r"\?\s*'/errands/mine'\s*:\s*'/errands/browse'"
+        )
+        for service, path in PRIMARY_NAV_SOURCES.items():
+            with self.subTest(service=service):
+                source = path.read_text()
+                self.assertRegex(source, requester_landing)
+                self.assertIn('href={errandsPath}', source)
 
 
 class UpgradedCardPolishTest(unittest.TestCase):

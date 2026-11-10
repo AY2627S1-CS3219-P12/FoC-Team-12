@@ -1,11 +1,13 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { App } from './App'
+import { navigateTo } from './navigation'
 
 // The header bell polls on its own and has its own tests; keep it out of these fetch sequences.
 vi.mock('./components/NotificationBell', () => ({
   NotificationBell: () => null,
 }))
+vi.mock('./navigation', () => ({ navigateTo: vi.fn() }))
 function mockFetch(fetcher: (url: string, options?: RequestInit) => unknown) {
   vi.stubGlobal('fetch', (url: string, options?: RequestInit) =>
     url.startsWith('/api/admin/cases?')
@@ -36,7 +38,10 @@ function session(role = 'ADMIN') {
     }),
   )
 }
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.clearAllMocks()
+})
 it('shows sign-in without loading protected data', () => {
   const fetcher = vi.fn()
   mockFetch(fetcher)
@@ -158,6 +163,7 @@ it('switches workspace through User and rechecks Admin access with the replaceme
       headers: { Authorization: 'Bearer admin-token' },
     }),
   )
+  expect(navigateTo).toHaveBeenCalledWith('/admin')
 })
 it('keeps access denied when User cannot change the workspace', async () => {
   session('REQUESTER')

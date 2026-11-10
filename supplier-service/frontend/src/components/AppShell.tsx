@@ -20,11 +20,15 @@ export function AppShell() {
   const returnTo = `${location.pathname}${location.search}`
   const locationsPath =
     session?.role === 'ADMIN' ? '/admin/suppliers' : '/suppliers'
+  const errandsPath =
+    session?.role === 'REQUESTER' || session?.role === 'USER'
+      ? '/errands/mine'
+      : '/errands/browse'
 
   const openAdminWorkspace = async () => {
     if (!(await selectWorkspaceRole('ADMIN'))) return
     if (accountMenuRef.current) accountMenuRef.current.open = false
-    navigateTo('/admin/suppliers')
+    navigateTo('/admin')
   }
 
   const returnToRequesterWorkspace = async () => {
@@ -45,17 +49,14 @@ export function AppShell() {
           </a>
           <nav aria-label="Main navigation" className={styles.serviceNav}>
             <a href="/">Home</a>
-            {session?.role !== 'ADMIN' && <a href="/errands/browse">Errands</a>}
+            {session?.role !== 'ADMIN' && <a href={errandsPath}>Errands</a>}
             <Link aria-current="page" to={locationsPath}>
               Suppliers
             </Link>
             {session?.role !== 'ADMIN' && <a href="/credits">Credits</a>}
             {session?.role === 'ADMIN' && <a href="/admin">Admin</a>}
           </nav>
-          <nav
-            aria-label="Account and workspace"
-            className={styles.actions}
-          >
+          <nav aria-label="Account and workspace" className={styles.actions}>
             {session && session.role !== 'ADMIN' && (
               <div
                 aria-label="Choose your current role"
@@ -86,7 +87,12 @@ export function AppShell() {
                 </span>
               </div>
             )}
-            <NotificationBell badgeClassName={styles.notificationBadge} className={styles.notificationBell} />
+            {session?.role !== 'ADMIN' && (
+              <NotificationBell
+                badgeClassName={styles.notificationBadge}
+                className={styles.notificationBell}
+              />
+            )}
             {session ? (
               <>
                 <details className={styles.userMenu} ref={accountMenuRef}>
@@ -145,7 +151,10 @@ export function AppShell() {
                 </details>
               </>
             ) : (
-              <a href={`/?returnTo=${encodeURIComponent(returnTo)}`}><LogIn aria-hidden="true" />Sign in</a>
+              <a href={`/?returnTo=${encodeURIComponent(returnTo)}`}>
+                <LogIn aria-hidden="true" />
+                Sign in
+              </a>
             )}
           </nav>
         </div>

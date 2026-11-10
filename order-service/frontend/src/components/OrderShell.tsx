@@ -19,6 +19,10 @@ export function OrderShell({ children }: { children: ReactNode }) {
   const initial = session?.username.trim().charAt(0).toUpperCase() || 'F'
   const suppliersPath =
     session?.role === 'ADMIN' ? '/admin/suppliers' : '/suppliers'
+  const errandsPath =
+    session?.role === 'REQUESTER' || session?.role === 'USER'
+      ? '/errands/mine'
+      : '/errands/browse'
 
   useEffect(() => {
     const refreshSession = () => setSession(readSession())
@@ -49,6 +53,7 @@ export function OrderShell({ children }: { children: ReactNode }) {
   const selectWorkspaceRoleFromMenu = async (role: WorkspaceRole) => {
     if (!(await selectWorkspaceRole(role))) return
     if (accountMenuRef.current) accountMenuRef.current.open = false
+    navigateTo(role === 'ADMIN' ? '/admin' : '/')
   }
 
   return (
@@ -62,7 +67,9 @@ export function OrderShell({ children }: { children: ReactNode }) {
           <nav aria-label="Main navigation" className="main-nav">
             <a href="/">Home</a>
             {session?.role !== 'ADMIN' && (
-              <a aria-current="page" href="/errands/browse">Errands</a>
+              <a aria-current="page" href={errandsPath}>
+                Errands
+              </a>
             )}
             <a href={suppliersPath}>Suppliers</a>
             {session?.role !== 'ADMIN' && <a href="/credits">Credits</a>}
@@ -95,10 +102,13 @@ export function OrderShell({ children }: { children: ReactNode }) {
                 </span>
               </div>
             )}
-            <NotificationBell />
+            {session?.role !== 'ADMIN' && <NotificationBell />}
             {session ? (
               <details className="account-menu" ref={accountMenuRef}>
-                <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
+                <summary
+                  aria-label={`Open account menu for ${session.username}`}
+                  title="Account menu"
+                >
                   <span className="avatar" aria-hidden="true">
                     {initial}
                   </span>
@@ -114,7 +124,9 @@ export function OrderShell({ children }: { children: ReactNode }) {
                     session.role !== 'ADMIN' && (
                       <button
                         disabled={workspaceBusy}
-                        onClick={() => void selectWorkspaceRoleFromMenu('ADMIN')}
+                        onClick={() =>
+                          void selectWorkspaceRoleFromMenu('ADMIN')
+                        }
                         type="button"
                       >
                         Switch to Admin
@@ -123,7 +135,9 @@ export function OrderShell({ children }: { children: ReactNode }) {
                   {session.role === 'ADMIN' && (
                     <button
                       disabled={workspaceBusy}
-                      onClick={() => void selectWorkspaceRoleFromMenu('REQUESTER')}
+                      onClick={() =>
+                        void selectWorkspaceRoleFromMenu('REQUESTER')
+                      }
                       type="button"
                     >
                       Switch to User
@@ -144,7 +158,8 @@ export function OrderShell({ children }: { children: ReactNode }) {
               </details>
             ) : (
               <a className="sign-in-link" href={signInPath()}>
-                <LogIn aria-hidden="true" />Sign in
+                <LogIn aria-hidden="true" />
+                Sign in
               </a>
             )}
           </nav>
