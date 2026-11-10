@@ -28,7 +28,7 @@ function renderPage() {
   )
 }
 
-const section = (name: 'Active' | 'Past') =>
+const section = (name: 'Active' | 'Under review' | 'Past') =>
   screen.getByRole('region', { name: new RegExp(`^${name}`) })
 
 describe('MyErrandsPage', () => {
@@ -131,16 +131,27 @@ describe('MyErrandsPage', () => {
     const { fetchMock, calls } = stubFetch((url) => {
       if (!url.includes('delivered')) return { body: page([]) }
       return {
-        body: url.includes('status=active')
+        body: url.includes('status=review')
           ? page([
               order({
-                id: 'r',
-                state: 'PICKED_UP',
-                title: 'Carry my laptop',
+                id: 'review',
+                state: 'ACCEPTED',
+                title: 'Review my delivery',
                 courierId: COURIER_ID,
+                reviewCaseId: '10000000-0000-4000-8000-000000000001',
+                reviewResolved: false,
               }),
             ])
-          : page([order({ state: 'COMPLETED', title: 'Bring my parcel' })]),
+          : url.includes('status=active')
+            ? page([
+                order({
+                  id: 'r',
+                  state: 'PICKED_UP',
+                  title: 'Carry my laptop',
+                  courierId: COURIER_ID,
+                }),
+              ])
+            : page([order({ state: 'COMPLETED', title: 'Bring my parcel' })]),
       }
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -157,6 +168,19 @@ describe('MyErrandsPage', () => {
     expect(
       screen.getByRole('heading', { name: 'Past errands you ran' }),
     ).toBeInTheDocument()
+    expect(
+      await within(section('Under review')).findByRole('heading', {
+        name: 'Review my delivery',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(section('Under review')).getByText('Under review', {
+        selector: '.review-badge',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      within(section('Under review')).getByText(/Paused at/),
+    ).toHaveTextContent('Accepted')
     expect(
       await within(section('Active')).findByRole('heading', {
         name: 'Carry my laptop',
@@ -176,6 +200,11 @@ describe('MyErrandsPage', () => {
     expect(
       calls.some((call) => call.url.includes('/api/orders/me/requested')),
     ).toBe(false)
+    expect(
+      calls.some((call) =>
+        call.url.includes('/api/orders/me/delivered?status=review'),
+      ),
+    ).toBe(true)
   })
 
   it('switches lists when the header role toggle changes the session', async () => {
@@ -294,6 +323,11 @@ describe('MyErrandsPage', () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Past errands you ran' })
+    expect(
+      await within(section('Under review')).findByText(
+        'No errands are under review.',
+      ),
+    ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open requests' })).toHaveAttribute(
       'href',
       '/errands/browse',

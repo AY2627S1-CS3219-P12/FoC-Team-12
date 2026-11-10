@@ -13,7 +13,6 @@ import {
   PackageCheck,
   Search,
   ShieldCheck,
-  Sparkles,
   Store,
   UserPlus,
 } from 'lucide-react'
@@ -892,7 +891,6 @@ export function App() {
       </header> : <>
         <header className="campus-home-hero">
           <div className="campus-home-copy">
-            <p className="campus-home-kicker"><Sparkles aria-hidden="true" /> Made for your campus day</p>
             <h1 id="dashboard-title">Your campus.<br /><span>A thousand</span> small favours.</h1>
             <p className="campus-home-lede">Get everyday campus errands done by students already heading your way. Simple, trusted and made for the rhythm of university life.</p>
             <nav className="campus-home-actions" aria-label="Start on Friend on Campus">

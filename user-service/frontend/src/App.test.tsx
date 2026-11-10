@@ -170,6 +170,7 @@ test('uses the Requester and Courier selector to replace a session token', async
   const user = userEvent.setup()
 
   expect(screen.getByRole('heading', { name: 'Your campus. A thousand small favours.' })).toBeInTheDocument()
+  expect(screen.queryByText('Made for your campus day')).not.toBeInTheDocument()
   expect(screen.getByRole('img', { name: /connects students who need a hand/i })).toBeInTheDocument()
   expect(screen.queryByText('NUS email verified')).not.toBeInTheDocument()
   expect(screen.queryByText('Campus-only handoffs')).not.toBeInTheDocument()
