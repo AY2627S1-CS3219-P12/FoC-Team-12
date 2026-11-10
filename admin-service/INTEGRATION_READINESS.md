@@ -6,6 +6,10 @@ requirements or approval of draft interfaces. Product scope remains in the Admin
 wire shapes in `docs/contracts/` remain review drafts until the affected owners agree them.
 Never replace an unavailable dependency with synthetic data in application code.
 
+## Report review continuation — 10 November 2026
+
+The [dispute review contract](../docs/integration/dispute-review-contract.md) adds owner-controlled freeze/finalization APIs and original Chat messages/images. This iteration has not been deployed or accepted against the running multi-service system. Existing cases require barrier reconciliation; updated service pins, migrations and network reachability are rollout prerequisites. Earlier integration acceptance below does not cover this change.
+
 ## Integration completion — 9 November 2026
 
 This section supersedes the producer-gap status below for this iteration; historical acceptance

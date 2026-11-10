@@ -640,5 +640,86 @@
       "expectedRevision": 1,
       "rejectedActionExplanations": []
     }
+  },
+  {
+    "operationId": "orders_post__internal_orders_orderId_review",
+    "status": 200,
+    "body": {
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "requesterId": "11111111-1111-4111-8111-111111111111",
+      "courierId": "11111111-1111-4111-8111-111111111111",
+      "state": "PENDING_CREDIT",
+      "creditStatus": "RESERVED",
+      "resolved": true,
+      "participants": []
+    },
+    "requestBody": {
+      "caseId": "11111111-1111-4111-8111-111111111111"
+    }
+  },
+  {
+    "operationId": "orders_get__internal_orders_orderId_review",
+    "status": 200,
+    "body": {
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "requesterId": "11111111-1111-4111-8111-111111111111",
+      "courierId": "11111111-1111-4111-8111-111111111111",
+      "state": "PENDING_CREDIT",
+      "creditStatus": "RESERVED",
+      "resolved": true,
+      "participants": []
+    }
+  },
+  {
+    "operationId": "orders_post__internal_orders_orderId_dispute_resolution",
+    "status": 200,
+    "body": {
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "requesterId": "11111111-1111-4111-8111-111111111111",
+      "courierId": "11111111-1111-4111-8111-111111111111",
+      "state": "PENDING_CREDIT",
+      "creditStatus": "RESERVED",
+      "resolved": true,
+      "participants": []
+    },
+    "requestBody": {
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "operationId": "11111111-1111-4111-8111-111111111111",
+      "disposition": "RETURN_TO_REQUESTER"
+    }
+  },
+  {
+    "operationId": "credits_post__internal_credits_orders_orderId_dispute_resolution",
+    "status": 200,
+    "body": {
+      "operationId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "disposition": "RETURN_TO_REQUESTER",
+      "reservationStatus": "ABSENT",
+      "complete": true
+    },
+    "requestBody": {
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "operationId": "11111111-1111-4111-8111-111111111111",
+      "requesterId": "11111111-1111-4111-8111-111111111111",
+      "courierId": "11111111-1111-4111-8111-111111111111",
+      "disposition": "RETURN_TO_REQUESTER"
+    }
+  },
+  {
+    "operationId": "chat_post__internal_chat_orders_orderId_review",
+    "status": 200,
+    "body": {
+      "orderId": "11111111-1111-4111-8111-111111111111",
+      "caseId": "11111111-1111-4111-8111-111111111111",
+      "readOnly": true
+    },
+    "requestBody": {
+      "caseId": "11111111-1111-4111-8111-111111111111"
+    }
   }
 ]

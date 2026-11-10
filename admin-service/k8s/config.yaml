@@ -10,6 +10,7 @@ data:
   ADMIN_DB_USER: admin_user
   ADMIN_USER_URL: http://user-service.foc-local.svc.cluster.local.:8081
   ADMIN_USER_JWKS: http://user-service.foc-local.svc.cluster.local.:8081/.well-known/jwks.json
+  ADMIN_ORDER_URL: http://order-service.foc-local.svc.cluster.local.:8082
   ADMIN_CHAT_URL: http://chat-service.foc-local.svc.cluster.local.:8085
   ADMIN_KAFKA_ENABLED: "true"
   ADMIN_CASE_EVENTS_ENABLED: "true"

@@ -139,6 +139,10 @@ Meet WCAG AA contrast for text and controls. Never communicate status using colo
 - Credits are an account view inside the main application, not a separate dashboard. Account
   creation and initial allocation are platform processes, not user-facing setup actions.
 
+## Disputed errands
+
+Order review metadata places errands in a separate **Under review** section with a text badge, a distinct border, and the lifecycle stage where progress paused. The detail notice explains the report and permits the other party to add a statement. Normal errand actions and errand-chat sending are unavailable; private admin follow-up remains available until closure. Finished reviews appear in Past with **Resolved after review**; their detail heading shows the review outcome without marking unperformed delivery milestones as done. Admin shows original messages and protected images chronologically with other evidence, and labels statement authors **Reporter**. Verified parties retain admin contact/actions even without a statement. These displays follow producer authorization and never generate issue summaries.
+
 ## Responsive and accessible delivery
 
 Every affected journey must be checked at desktop and `375px` width, with keyboard-only input.

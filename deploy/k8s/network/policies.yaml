@@ -193,10 +193,20 @@ spec:
         - podSelector:
             matchLabels:
               app: chat-service
+        - podSelector:
+            matchLabels:
+              app: admin-service
       ports:
         - protocol: TCP
           port: 8082
   egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: credit-service
+      ports:
+        - protocol: TCP
+          port: 8083
     - to:
         - podSelector:
             matchLabels:
@@ -239,6 +249,9 @@ spec:
         - podSelector:
             matchLabels:
               app: chat-service
+        - podSelector:
+            matchLabels:
+              app: order-service
       ports:
         - protocol: TCP
           port: 8083
