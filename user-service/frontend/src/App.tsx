@@ -3,13 +3,10 @@ import {
   ArrowRight,
   ArrowUpRight,
   CheckCircle2,
-  ClipboardList,
-  Clock3,
   Coins,
   Eye,
   EyeOff,
   HandHeart,
-  House,
   KeyRound,
   MailCheck,
   MapPin,
@@ -699,14 +696,34 @@ export function App() {
   if (session) {
     const displayedProfile = profile?.userId === session.userId ? profile : null
     const adminMode = session.role === 'ADMIN'
-    const adminUsersPage = adminMode && new URLSearchParams(window.location.search).get('view') === 'users'
+    const requestedPage = new URLSearchParams(window.location.search).get('view')
+    const adminUsersPage = adminMode && requestedPage === 'users'
+    const profilePage = requestedPage === 'profile'
+    const homePage = !adminUsersPage && !profilePage
     const suppliersPath = adminMode ? '/admin/suppliers' : '/suppliers'
     const canUseAdmin = session.availableRoles?.includes('ADMIN') ?? false
     const accountInitial = session.username.trim().charAt(0).toUpperCase()
+    const accountNameParts = session.username.trim().split(/\s+/)
+    const capitalLetters = session.username.match(/[A-Z]/g)?.join('') ?? ''
+    const accountInitials = (accountNameParts.length > 1
+      ? accountNameParts.map(part => part.charAt(0)).join('')
+      : capitalLetters.length > 1
+        ? capitalLetters
+        : session.username.slice(0, 2))
+      .slice(0, 2)
+      .toUpperCase()
+    const accessLabel = session.role === 'ADMIN'
+      ? 'Admin'
+      : session.role === 'COURIER'
+        ? 'Courier'
+        : session.role === 'REQUESTER'
+          ? 'Requester'
+          : 'User'
     const signOut = () => {
       const emailAddress = displayedProfile?.email ?? ''
       clearProfileUsernameSuccess()
       clearPasswordChange()
+      if (accountMenuRef.current) accountMenuRef.current.open = false
       clearSession()
       setProfile(null)
       setSession(null)
@@ -714,7 +731,65 @@ export function App() {
       setLoginEmail(emailAddress)
       setLoginPassword('')
       setLoginPasswordFocusVersion(version => version + 1)
+      navigateTo('/')
     }
+    const profileSettings = <section className="account-panel profile-settings-card" aria-labelledby="profile-title">
+      <div className="section-heading account-panel-heading">
+        <div><p className="eyebrow">Account settings</p><h2 id="profile-title">Profile</h2></div>
+        <span className="account-security"><CheckCircle2 aria-hidden="true" />Verified</span>
+      </div>
+      {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
+      {profileMessage && <p role="alert" className="error">{profileMessage}</p>}
+      {displayedProfile && <dl className="identity-card profile-settings-list">
+        <div><dt>Email</dt><dd><strong>{displayedProfile.email}</strong><small>Your verified student email cannot be changed.</small></dd></div>
+        <div className="profile-username-card"><dt>Username</dt><dd>
+          {!profileUsernameEditing && <span className="profile-username-display">
+            <span><strong>{displayedProfile.username}</strong><small>This is how other students see you during an errand.</small></span>
+            <span className="profile-username-actions">
+              {profileUsernameState === 'success' && <span role="status" className="profile-username-notice success" style={{ fontSize: '0.75rem', fontWeight: 400 }}>{profileUsernameMessage}</span>}
+              <button type="button" className="secondary compact-action" aria-label="Edit username" onClick={() => {
+                setProfileUsername(displayedProfile.username)
+                clearProfileUsernameSuccess()
+                setProfileUsernameEditing(true)
+              }}>Edit</button>
+            </span>
+          </span>}
+          {profileUsernameEditing && <form className="profile-username-editor" onSubmit={changeUsername} noValidate aria-busy={profileUsernameState === 'loading'} aria-label="Change username form">
+            <input aria-label="Username" value={profileUsername} maxLength={20} autoFocus onChange={event => setProfileUsername(event.target.value)} disabled={profileUsernameState === 'loading'} aria-invalid={profileUsernameState === 'error'} />
+            <span className="profile-username-actions">
+              <button type="submit" className="secondary compact-action" disabled={profileUsernameState === 'loading' || profileUsername === displayedProfile.username}>{profileUsernameState === 'loading' ? 'Saving…' : 'Save'}</button>
+              <button type="button" className="text-button compact-text-action" disabled={profileUsernameState === 'loading'} onClick={() => {
+                setProfileUsername(displayedProfile.username)
+                clearProfileUsernameSuccess()
+                setProfileUsernameEditing(false)
+              }}>Cancel</button>
+            </span>
+          </form>}
+          {profileUsernameState === 'error' && profileUsernameMessage && <p role="alert" className="error">{profileUsernameMessage}</p>}
+        </dd></div>
+        <div className="profile-access-card"><dt>Account access</dt><dd><span><strong>{accessLabel}</strong><small>Your available tools follow your current access mode.</small></span><span className="profile-access-pill">{accessLabel}</span></dd></div>
+        <div className="profile-password-card"><dt>Password</dt><dd>
+          {!passwordChangeEditing && <span className="profile-password-display">
+            <span><strong aria-label="Password is set">••••••••</strong><small>Use a strong password unique to Friend on Campus.</small></span>
+            <button type="button" className="secondary compact-action" onClick={() => {
+              setPasswordChangeEditing(true)
+              setPasswordChangeState('idle')
+              setPasswordChangeMessage('')
+            }}>Change</button>
+          </span>}
+          {passwordChangeEditing && <form className="profile-password-editor" onSubmit={changePassword} noValidate aria-busy={passwordChangeState === 'loading'} aria-label="Change password form">
+            <label>Current password<PasswordInput value={currentPassword} onChange={setCurrentPassword} inputRef={currentPasswordRef} onKeyDown={event => focusOnEnter(event, changedPasswordRef)} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="current-password" /></label>
+            <label>New password<PasswordInput value={changedPassword} onChange={setChangedPassword} inputRef={changedPasswordRef} onKeyDown={event => focusOnEnter(event, confirmPasswordRef)} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="new-password" /></label>
+            <label>Confirm new password<PasswordInput value={changedPasswordConfirmation} onChange={setChangedPasswordConfirmation} inputRef={confirmPasswordRef} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="new-password" /></label>
+            <span className="profile-password-actions">
+              <button className="secondary compact-action" disabled={passwordChangeState === 'loading'}>{passwordChangeState === 'loading' ? 'Updating…' : 'Save'}</button>
+              <button type="button" className="text-button compact-text-action" disabled={passwordChangeState === 'loading'} onClick={clearPasswordChange}>Cancel</button>
+            </span>
+            {passwordChangeMessage && <p role={passwordChangeState === 'error' ? 'alert' : 'status'} className={passwordChangeState}>{passwordChangeMessage}</p>}
+          </form>}
+        </dd></div>
+      </dl>}
+    </section>
     return <div className="profile-shell">
       <header className="profile-app-header">
         <div className="profile-app-header-content">
@@ -723,11 +798,11 @@ export function App() {
             <span>Friend on Campus</span>
           </a>
           <nav className="profile-service-nav" aria-label="Main navigation">
-            <a aria-current={adminUsersPage ? undefined : 'page'} href="/"><House aria-hidden="true" />Home</a>
-            {!adminMode && <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>}
-            <a href={suppliersPath}><Store aria-hidden="true" />Suppliers</a>
-            {!adminMode && <a href="/credits"><Coins aria-hidden="true" />Credits</a>}
-            {adminMode && <a href="/admin"><ShieldCheck aria-hidden="true" />Admin</a>}
+            <a aria-current={homePage ? 'page' : undefined} href="/">Home</a>
+            {!adminMode && <a href="/errands/browse">Errands</a>}
+            <a href={suppliersPath}>Suppliers</a>
+            {!adminMode && <a href="/credits">Credits</a>}
+            {adminMode && <a href="/admin">Admin</a>}
           </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">
             {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">
@@ -746,7 +821,7 @@ export function App() {
                 <span aria-hidden="true" className="account-menu-chevron" />
               </summary>
               <div className="profile-account-menu-items">
-                <a aria-current={adminUsersPage ? undefined : 'page'} href="/">Profile</a>
+                <a aria-current={profilePage ? 'page' : undefined} href="/?view=profile">Profile</a>
                 {adminMode && <a aria-current={adminUsersPage ? 'page' : undefined} href="/?view=users">Manage users</a>}
                 {canUseAdmin && !adminMode && <button type="button" disabled={workspaceState === 'loading'}
                   onClick={() => { void selectWorkspaceRole('ADMIN').then(changed => {
@@ -771,6 +846,22 @@ export function App() {
       {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
       {adminUsersPage
         ? <main className="admin-users-main"><AdminUserManagement currentUserId={session.userId} /></main>
+        : profilePage
+          ? <main className="profile-main profile-settings-main">
+            <section className="profile-settings-page" aria-labelledby="profile-page-title">
+              <header className="profile-settings-hero">
+                <div>
+                  <h1 id="profile-page-title">Your profile</h1>
+                  <p>Manage your personal details, account access, and password.</p>
+                </div>
+                <div className="profile-identity-summary" aria-label={`${session.username}'s account`}>
+                  <span aria-hidden="true" className="profile-identity-avatar">{accountInitials || accountInitial}</span>
+                  <span><strong>{session.username}</strong><small>{displayedProfile?.email ?? 'Loading email…'}</small></span>
+                </div>
+              </header>
+              {profileSettings}
+            </section>
+          </main>
         : <main className="profile-main"><section className={`dashboard-page ${adminMode ? 'admin-home' : 'participant-home'}`} aria-labelledby="dashboard-title">
       {adminMode ? <header className="dashboard-hero">
         <div>
@@ -800,11 +891,6 @@ export function App() {
                 Run an errand <ArrowUpRight aria-hidden="true" />
               </a>
             </nav>
-            <div className="campus-home-trust" aria-label="Friend on Campus safeguards">
-              <span><CheckCircle2 aria-hidden="true" /> NUS email verified</span>
-              <span><MapPin aria-hidden="true" /> Campus-only handoffs</span>
-              <span><Coins aria-hidden="true" /> Credit rewards</span>
-            </div>
           </div>
           <div className="campus-home-visual" role="img" aria-label="Friend on Campus connects students who need a hand with students already heading their way">
             <span className="campus-home-orbit campus-home-orbit-one" aria-hidden="true" />
@@ -855,73 +941,6 @@ export function App() {
         </section>
       </>}
 
-      <div className="dashboard-content">
-        <section className="dashboard-explore" aria-labelledby="explore-title">
-          <div className="section-heading"><div><p className="eyebrow">Quick access</p><h2 id="explore-title">Explore Friend on Campus</h2></div></div>
-          <nav className="service-grid" aria-label="Friend on Campus services">
-            {!adminMode && <a className="service-card" href="/errands/mine"><Clock3 aria-hidden="true" /><strong>My errands</strong><span>Track requests, deliveries and completed handoffs.</span><ArrowRight aria-hidden="true" /></a>}
-            {!adminMode && <a className="service-card" href="/suppliers"><Store aria-hidden="true" /><strong>Browse suppliers</strong><span>Find food, coffee, printing and shopping across campus.</span><ArrowRight aria-hidden="true" /></a>}
-            {adminMode && <a className="service-card admin-card" href="/admin/suppliers"><Store aria-hidden="true" /><strong>Manage suppliers</strong><span>Create, update, activate or remove campus locations.</span><ArrowRight aria-hidden="true" /></a>}
-            {adminMode && <a className="service-card admin-card" href="/?view=users"><ShieldCheck aria-hidden="true" /><strong>Manage users</strong><span>Manage roles, account access and account status.</span><ArrowRight aria-hidden="true" /></a>}
-            {!adminMode && <a className="service-card" href="/credits"><Coins aria-hidden="true" /><strong>View my credits</strong><span>See available credits, reservations and transaction history.</span><ArrowRight aria-hidden="true" /></a>}
-          </nav>
-        </section>
-
-        <section className="account-panel" aria-labelledby="profile-title">
-          <div className="section-heading account-panel-heading"><div><p className="eyebrow">Account settings</p><h2 id="profile-title">Profile</h2></div><span className="account-security"><CheckCircle2 aria-hidden="true" />Verified</span></div>
-      {!displayedProfile && !profileMessage && <p role="status">Loading your profile…</p>}
-      {profileMessage && <p role="alert" className="error">{profileMessage}</p>}
-      {displayedProfile && <dl className="identity-card">
-        <div><dt>Email</dt><dd>{displayedProfile.email}</dd></div>
-        <div className="profile-username-card"><dt>Username</dt><dd>
-          {!profileUsernameEditing && <span className="profile-username-display">
-            <span>{displayedProfile.username}</span>
-            <span className="profile-username-actions">
-              {profileUsernameState === 'success' && <span role="status" className="profile-username-notice success" style={{ fontSize: '0.75rem', fontWeight: 400 }}>{profileUsernameMessage}</span>}
-              <button type="button" className="secondary compact-action" aria-label="Edit username" onClick={() => {
-                setProfileUsername(displayedProfile.username)
-                clearProfileUsernameSuccess()
-                setProfileUsernameEditing(true)
-              }}>Edit</button>
-            </span>
-          </span>}
-          {profileUsernameEditing && <form className="profile-username-editor" onSubmit={changeUsername} noValidate aria-busy={profileUsernameState === 'loading'} aria-label="Change username form">
-            <input aria-label="Username" value={profileUsername} maxLength={20} autoFocus onChange={event => setProfileUsername(event.target.value)} disabled={profileUsernameState === 'loading'} aria-invalid={profileUsernameState === 'error'} />
-            <span className="profile-username-actions">
-              <button type="submit" className="secondary compact-action" disabled={profileUsernameState === 'loading' || profileUsername === displayedProfile.username}>{profileUsernameState === 'loading' ? 'Saving…' : 'Save'}</button>
-              <button type="button" className="text-button compact-text-action" disabled={profileUsernameState === 'loading'} onClick={() => {
-                setProfileUsername(displayedProfile.username)
-                clearProfileUsernameSuccess()
-                setProfileUsernameEditing(false)
-              }}>Cancel</button>
-            </span>
-          </form>}
-          {profileUsernameState === 'error' && profileUsernameMessage && <p role="alert" className="error">{profileUsernameMessage}</p>}
-        </dd></div>
-        <div><dt>Account access</dt><dd>{canUseAdmin ? 'Admin' : 'User'}</dd></div>
-        <div className="profile-password-card"><dt>Password</dt><dd>
-          {!passwordChangeEditing && <span className="profile-password-display">
-            <span aria-label="Password is set">••••••••</span>
-            <button type="button" className="secondary compact-action" onClick={() => {
-              setPasswordChangeEditing(true)
-              setPasswordChangeState('idle')
-              setPasswordChangeMessage('')
-            }}>Change</button>
-          </span>}
-          {passwordChangeEditing && <form className="profile-password-editor" onSubmit={changePassword} noValidate aria-busy={passwordChangeState === 'loading'} aria-label="Change password form">
-            <label>Current password<PasswordInput value={currentPassword} onChange={setCurrentPassword} inputRef={currentPasswordRef} onKeyDown={event => focusOnEnter(event, changedPasswordRef)} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="current-password" /></label>
-            <label>New password<PasswordInput value={changedPassword} onChange={setChangedPassword} inputRef={changedPasswordRef} onKeyDown={event => focusOnEnter(event, confirmPasswordRef)} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="new-password" /></label>
-            <label>Confirm new password<PasswordInput value={changedPasswordConfirmation} onChange={setChangedPasswordConfirmation} inputRef={confirmPasswordRef} disabled={passwordChangeState === 'loading'} invalid={passwordChangeState === 'error'} autoComplete="new-password" /></label>
-            <span className="profile-password-actions">
-              <button className="secondary compact-action" disabled={passwordChangeState === 'loading'}>{passwordChangeState === 'loading' ? 'Updating…' : 'Save'}</button>
-              <button type="button" className="text-button compact-text-action" disabled={passwordChangeState === 'loading'} onClick={clearPasswordChange}>Cancel</button>
-            </span>
-            {passwordChangeMessage && <p role={passwordChangeState === 'error' ? 'alert' : 'status'} className={passwordChangeState}>{passwordChangeMessage}</p>}
-          </form>}
-        </dd></div>
-      </dl>}
-        </section>
-      </div>
     </section></main>}
     </div>
   }

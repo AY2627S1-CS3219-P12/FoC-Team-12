@@ -45,11 +45,14 @@ Service workflow:
   selection action.
 - Search is joined by API-backed category and building filters, safe sorting, result totals,
   and pagination because the real Supplier API supports those operations.
+- The directory heading is a left-aligned text block without the decorative storefront icon or
+  descriptive line, leaving the filters and live result count to explain the directory contents.
 - Cards become a responsive one-, two-, or three-column grid and include operating hours and
   directions when available.
 - The latest supplied card reference is adapted into category-tinted Lucide icon blocks, compact
   metadata rows and one consistent detail action. Colours support the visible category text and
-  do not imply availability or other state.
+  do not imply availability or other state. The category colour stays inside the icon and badge;
+  Supplier cards use a neutral outline without a coloured top edge.
 - A separate detail route shows coordinates and optional images; administrative version and
   timestamp fields stay hidden.
 - Unimplemented global navigation and the Admin route are not linked from the public shell.

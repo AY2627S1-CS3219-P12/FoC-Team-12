@@ -87,7 +87,6 @@ label { display: grid; gap: 0.45rem; color: var(--foc-ink); font-size: 0.9rem; f
 .profile-brand { display: inline-flex; align-items: center; gap: 0.5rem; min-height: 2.75rem; color: var(--foc-ink); font-size: 0.875rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
 .profile-service-nav { display: flex; align-self: stretch; align-items: center; gap: 0.25rem; margin-right: auto; }
 .profile-service-nav a { position: relative; display: inline-flex; align-self: stretch; align-items: center; gap: 0.42rem; min-height: 2.75rem; padding: 0 0.75rem; color: var(--foc-muted); font-size: 0.875rem; font-weight: 600; text-decoration: none; }
-.profile-service-nav a svg { width: 1rem; height: 1rem; stroke-width: 1.8; }
 .profile-service-nav a:hover, .profile-service-nav a:focus-visible, .profile-service-nav a[aria-current='page'] { color: var(--foc-action); }
 .profile-service-nav a[aria-current='page']::after { position: absolute; right: 0.75rem; bottom: 0; left: 0.75rem; height: 3px; border-radius: 3px 3px 0 0; background: var(--foc-action); content: ''; }
 .profile-app-actions { display: flex; align-items: center; justify-content: flex-end; gap: 1rem; }
@@ -440,6 +439,50 @@ h1, h2, h3, .welcome-brand, .profile-brand { font-family: 'Manrope', 'DM Sans', 
   .profile-brand img { width: 2.6rem; height: 2.6rem; }
 }
 
+/* Dedicated account profile, opened from the account menu. */
+.profile-main > .profile-settings-page { width: min(100%, 76rem); }
+.profile-settings-page { display: grid; gap: 2rem; }
+.profile-settings-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 2rem; }
+.profile-settings-hero h1, .profile-settings-hero p { margin: 0; }
+.profile-settings-hero h1 { color: var(--foc-ink); font-family: 'Manrope', 'DM Sans', sans-serif; font-size: clamp(2.75rem, 7vw, 5rem); font-weight: 500; letter-spacing: -0.06em; line-height: 1; }
+.profile-settings-hero p { margin-top: 1rem; color: var(--foc-muted); font-size: 1rem; }
+.profile-identity-summary { display: flex; align-items: center; gap: 0.9rem; min-width: min(100%, 15rem); padding: 0.85rem 1rem; border: 1px solid var(--foc-line); border-radius: 1rem; background: var(--foc-surface); box-shadow: var(--foc-shadow-soft); }
+.profile-identity-avatar { display: grid; width: 3rem; height: 3rem; flex: 0 0 auto; border-radius: 50%; background: var(--foc-gold); color: #172641; font-size: 0.85rem; font-weight: 800; place-items: center; }
+.profile-identity-summary > span:last-child { display: grid; min-width: 0; gap: 0.2rem; }
+.profile-identity-summary strong, .profile-identity-summary small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-identity-summary strong { color: var(--foc-ink); font-size: 0.9rem; }
+.profile-identity-summary small { color: var(--foc-muted); font-size: 0.72rem; }
+.profile-settings-card { padding: clamp(1.5rem, 4vw, 3rem); border-radius: 1.5rem; }
+.profile-settings-card .account-panel-heading { margin-bottom: 0; padding-bottom: 1.75rem; }
+.profile-settings-card .account-panel-heading h2 { font-size: clamp(1.75rem, 4vw, 2.35rem); font-weight: 500; }
+.profile-settings-card .account-security { color: #34705b; font-size: 0.85rem; }
+.profile-settings-card .account-security svg { width: 1.15rem; height: 1.15rem; }
+.profile-settings-card .profile-settings-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; margin: 0; }
+.profile-settings-card .profile-settings-list > div { min-width: 0; padding: 1.75rem 0; border: 0; border-bottom: 1px solid var(--foc-line); border-radius: 0; background: transparent; }
+.profile-settings-card .profile-settings-list > div:last-child { padding-bottom: 0; border-bottom: 0; }
+.profile-settings-card .profile-settings-list dt { font-size: 0.82rem; }
+.profile-settings-card .profile-settings-list dd { margin-top: 0.75rem; }
+.profile-settings-card .profile-settings-list dd strong { display: block; color: var(--foc-ink); font-size: 1.2rem; }
+.profile-settings-card .profile-settings-list dd small { display: block; margin-top: 0.45rem; color: var(--foc-muted); font-size: 0.75rem; font-weight: 400; line-height: 1.45; }
+.profile-settings-card .profile-username-display, .profile-settings-card .profile-password-display { align-items: center; }
+.profile-settings-card .profile-access-card dd { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.profile-access-pill { display: inline-flex; align-items: center; min-height: 2.25rem; padding: 0 0.9rem; border-radius: 999px; background: #fbecea; color: #9a5751; font-size: 0.75rem; font-weight: 700; }
+.profile-settings-card .compact-action { min-width: 5.5rem; min-height: 2.75rem; border-radius: 0.75rem; }
+.profile-settings-card .profile-username-editor, .profile-settings-card .profile-password-editor { max-width: 38rem; }
+
+@media (max-width: 50rem) {
+  .profile-settings-hero { align-items: stretch; flex-direction: column; gap: 1.25rem; }
+  .profile-identity-summary { width: 100%; }
+}
+
+@media (max-width: 31rem) {
+  .profile-settings-card .profile-username-display,
+  .profile-settings-card .profile-password-display,
+  .profile-settings-card .profile-access-card dd { align-items: stretch; flex-direction: column; }
+  .profile-settings-card .profile-username-actions,
+  .profile-settings-card .profile-password-display > button { width: 100%; }
+}
+
 /* Authentication gateway upgrade. */
 .welcome-page .auth-card { padding:clamp(1.5rem,3vw,2.1rem); border-color:rgb(23 38 65 / 12%); border-radius:1.65rem; box-shadow:0 30px 80px rgb(23 38 65 / 13%); }
 .auth-card-intro .eyebrow { font-size:.7rem; letter-spacing:.11em; }
@@ -526,9 +569,6 @@ h1, h2, h3, .welcome-brand, .profile-brand { font-family: 'Manrope', 'DM Sans', 
 .campus-home-primary:hover { border-color: var(--foc-blue); background: var(--foc-blue); box-shadow: 0 12px 26px rgb(23 38 65 / 22%); }
 .campus-home-secondary { border: 1px solid var(--foc-line); background: var(--foc-surface); color: var(--foc-ink); box-shadow: var(--foc-shadow-soft); }
 .campus-home-secondary:hover { border-color: #dce2f5; background: #f8f9fd; color: var(--foc-blue); }
-.campus-home-trust { display: flex; flex-wrap: wrap; gap: 0.8rem 1.15rem; margin-top: 1.75rem; color: var(--foc-muted); font-size: 0.72rem; }
-.campus-home-trust span { display: inline-flex; align-items: center; gap: 0.4rem; }
-.campus-home-trust svg { width: 0.85rem; height: 0.85rem; color: var(--foc-blue); }
 .campus-home-visual { position: relative; min-height: 31rem; }
 .campus-home-visual::before { position: absolute; inset: 2rem 3% 1rem 7%; border-radius: 48% 48% 16% 16%; background: linear-gradient(145deg, #eef1f9 15%, #f8e7e4 100%); box-shadow: 0 30px 70px rgb(23 38 65 / 12%); transform: rotate(2deg); content: ''; }
 .campus-home-visual::after { position: absolute; inset: 7rem 15% 4rem 20%; border: 1px solid rgb(255 255 255 / 70%); border-radius: 48% 48% 18% 18%; background: linear-gradient(155deg, rgb(255 255 255 / 92%), rgb(255 255 255 / 52%)); content: ''; }
@@ -588,7 +628,6 @@ h1, h2, h3, .welcome-brand, .profile-brand { font-family: 'Manrope', 'DM Sans', 
   .campus-home-lede { font-size: 0.95rem; }
   .campus-home-actions { align-items: stretch; flex-direction: column; }
   .campus-home-actions a { width: 100%; }
-  .campus-home-trust { display: grid; }
   .campus-home-visual { min-height: 22rem; }
   .campus-home-visual::before { inset: 1.25rem 4% 0.5rem; }
   .campus-home-visual::after { inset: 5.5rem 14% 3rem; }

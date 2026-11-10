@@ -133,6 +133,9 @@ describe('Credit dashboard', () => {
       await screen.findByRole('heading', { name: /4 available/i }),
     ).toBeInTheDocument()
     expect(
+      screen.queryByText('See what is ready to spend and follow every change in your ledger.'),
+    ).not.toBeInTheDocument()
+    expect(
       screen.getByRole('link', { name: 'Friend on Campus' }),
     ).toHaveAttribute('href', '/')
     expect(

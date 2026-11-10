@@ -51,6 +51,15 @@ BELL_STYLES = {
     "notification": (ROOT / "notification-service/frontend/src/styles.css", ".notification-bell"),
 }
 
+PRIMARY_NAV_SOURCES = {
+    "user": ROOT / "user-service/frontend/src/App.tsx",
+    "supplier": ROOT / "supplier-service/frontend/src/components/AppShell.tsx",
+    "order": ROOT / "order-service/frontend/src/components/OrderShell.tsx",
+    "credit": ROOT / "credit-service/frontend/src/components/CreditShell.tsx",
+    "admin": ROOT / "admin-service/frontend/src/components/AdminShell.tsx",
+    "notification": ROOT / "notification-service/frontend/src/components/NotificationShell.tsx",
+}
+
 
 def declarations(css, selector):
     match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", css, re.DOTALL)
@@ -224,6 +233,50 @@ class SharedNotificationBellTest(unittest.TestCase):
                         rule_selector,
                         f"{service} rule '{rule_selector}' also styles the bell",
                     )
+
+
+class SharedPrimaryNavigationTest(unittest.TestCase):
+    def test_every_frontend_uses_text_only_primary_navigation(self):
+        for service, path in PRIMARY_NAV_SOURCES.items():
+            with self.subTest(service=service):
+                source = path.read_text()
+                navigation = re.search(
+                    r'<nav[^>]+aria-label="Main navigation"[\s\S]*?</nav>',
+                    source,
+                )
+                self.assertIsNotNone(navigation, f"Missing primary navigation in {service}")
+                self.assertIsNone(
+                    re.search(r'<(?:House|ClipboardList|Store|Coins|ShieldCheck)\b', navigation.group()),
+                    f"{service} primary navigation must use text labels without icons",
+                )
+
+    def test_every_account_menu_links_to_the_dedicated_profile_view(self):
+        for service, path in PRIMARY_NAV_SOURCES.items():
+            with self.subTest(service=service):
+                self.assertRegex(
+                    path.read_text(),
+                    r'<a[^>]+href="/\?view=profile"[^>]*>Profile</a>',
+                )
+
+
+class UpgradedCardPolishTest(unittest.TestCase):
+    def test_errand_cards_use_a_neutral_edge_and_center_the_reward(self):
+        css = (ROOT / "order-service/frontend/src/styles.css").read_text()
+        self.assertEqual("1px solid var(--line)", declarations(css, ".errand-card").get("border"))
+        self.assertEqual("none", declarations(css, ".errand-card::before").get("display"))
+        for selector in (".reward", ".reward strong", ".reward small"):
+            with self.subTest(selector=selector):
+                self.assertEqual("center", declarations(css, selector).get("text-align"))
+
+    def test_supplier_cards_do_not_draw_a_coloured_top_edge(self):
+        css = (
+            ROOT / "supplier-service/frontend/src/components/DirectoryComponents.module.css"
+        ).read_text()
+        self.assertNotIn(".card::before", css)
+
+    def test_notification_cards_do_not_draw_a_coloured_left_edge(self):
+        css = (ROOT / "notification-service/frontend/src/styles.css").read_text()
+        self.assertNotIn(".notification-item::before", css)
 
 
 if __name__ == "__main__":

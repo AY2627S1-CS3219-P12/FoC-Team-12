@@ -60,7 +60,6 @@
   text-decoration: none;
 }
 
-.serviceNav a svg,
 .actions > a:not(.notificationBell) svg {
   width: 1rem;
   height: 1rem;

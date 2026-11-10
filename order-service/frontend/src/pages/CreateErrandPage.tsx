@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useState } from 'react'
+import { ArrowRight } from 'lucide-react'
 import { ErrandFormFields } from '../components/ErrandFormFields'
-import { ErrandTabs } from '../components/ErrandTabs'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   createOrder,
@@ -13,6 +13,7 @@ import {
 import { fetchCampusLocations, fetchMyCredits } from '../api/sharedApi'
 import { readSession } from '../auth/session'
 import { credits } from '../utils/orderFormatting'
+import bagIcon from '../assets/foc-bag.svg'
 import {
   EMPTY,
   type Errors,
@@ -50,9 +51,13 @@ export function CreateErrandPage() {
   const [errors, setErrors] = useState<Errors>({})
   const fromId = useSearchParams()[0].get('from')
   // Which `from` errand the form was already filled from, and how that went.
-  const [copy, setCopy] = useState<{ id: string; title: string | null } | null>(null)
+  const [copy, setCopy] = useState<{ id: string; title: string | null } | null>(
+    null,
+  )
   // The errand just posted while Credit decides on its reservation; the form stays until then.
-  const [posted, setPosted] = useState<{ id: string; reward: number } | null>(null)
+  const [posted, setPosted] = useState<{ id: string; reward: number } | null>(
+    null,
+  )
   const [slowId, setSlowId] = useState<string | null>(null)
   // A failure message stays until the requester edits the form or posts again.
   const [dismissedId, setDismissedId] = useState<string | null>(null)
@@ -114,7 +119,9 @@ export function CreateErrandPage() {
       setErrors(
         error instanceof OrderApiError
           ? error.status === 403 && !error.code
-            ? { form: 'Switch to Requester at the top of the page to post an errand.' }
+            ? {
+                form: 'Switch to Requester at the top of the page to post an errand.',
+              }
             : serverErrors(error)
           : { form: 'Something went wrong. Please try again.' },
       ),
@@ -213,123 +220,89 @@ export function CreateErrandPage() {
       pickupDeadline: new Date(fields.pickupDeadline).toISOString(),
     }
     const body = JSON.stringify(input)
-    const key =
-      attempt?.body === body ? attempt.key : newIdempotencyKey()
+    const key = attempt?.body === body ? attempt.key : newIdempotencyKey()
     setAttempt({ body, key })
     create.mutate({ input, key })
   }
 
   return (
-    <>
-      <div className="page-intro">
-        <div>
-          <h1>Request a hand</h1>
-          <p>Tell your courier what to collect and where to bring it.</p>
-        </div>
-      </div>
-      <ErrandTabs />
-      <div className="two-column">
-        <form
-          aria-labelledby="create-heading"
-          className="errand-form"
-          noValidate
-          onSubmit={submit}
-        >
-          <h2 className="visually-hidden" id="create-heading">
-            Errand details
-          </h2>
-          {fromId && copy?.id !== fromId && (
-            <p className="notice notice-next" role="status">
-              Copying your errand…
+    <section className="create-errand-page">
+      <form
+        aria-labelledby="create-heading"
+        className="errand-form create-errand-form"
+        noValidate
+        onSubmit={submit}
+      >
+        <header className="create-form-heading">
+          <div>
+            <p className="eyebrow">Request a hand</p>
+            <h1 id="create-heading">Create a campus errand</h1>
+            <p>
+              Share the details and a verified student already heading your way
+              can accept it.
             </p>
-          )}
-          {copy?.id === fromId && (
-            <p className="notice notice-next" role="status">
-              {copy.title !== null
-                ? `Copied from “${copy.title}”. Choose a new pickup time, then post.`
-                : "We couldn't copy that errand. Fill in the details below."}
-            </p>
-          )}
-          <fieldset className="errand-fields" disabled={waiting}>
+          </div>
+          <img alt="" aria-hidden="true" src={bagIcon} />
+        </header>
+        {fromId && copy?.id !== fromId && (
+          <p className="notice notice-next" role="status">
+            Copying your errand…
+          </p>
+        )}
+        {copy?.id === fromId && (
+          <p className="notice notice-next" role="status">
+            {copy.title !== null
+              ? `Copied from “${copy.title}”. Choose a new pickup time, then post.`
+              : "We couldn't copy that errand. Fill in the details below."}
+          </p>
+        )}
+        <fieldset className="errand-fields" disabled={waiting}>
           <ErrandFormFields
             errors={errors}
             fields={fields}
             locations={locations.data}
             locationsFailed={locations.isError}
             maxReward={balance.data?.availableBalance}
-            deadlineHint={
-              copied
-                ? 'Choose a new pickup time.'
-                : undefined
-            }
+            deadlineHint={copied ? 'Choose a new pickup time.' : undefined}
             onChange={update}
             rewardHint="Set aside from your credits when you post."
           />
-          </fieldset>
-          {errors.form && (
-            <p className="notice notice-error" role="alert">
-              {errors.form}
-            </p>
-          )}
-          {failure && (
-            <p className="notice notice-error" role="alert">
-              {failure.message}
-              {failure.setUpCredits && (
-                <>
-                  {' '}
-                  <a className="text-link" href="/credits">
-                    Set up your credits
-                  </a>
-                </>
-              )}
-            </p>
-          )}
-          {slowId && (
-            <p className="notice notice-next" role="status">
-              This is taking a little longer than usual. We'll post your errand as
-              soon as it's ready.{' '}
-              <Link className="text-link" to={`/errands/${slowId}`}>
-                View errand
-              </Link>
-            </p>
-          )}
-          <div className="actions">
-            <button
-              aria-describedby={
-                credit.message ? 'credit-check-message' : undefined
-              }
-              aria-busy={create.isPending || waiting}
-              disabled={create.isPending || waiting || !credit.canPost}
-              id="submit-errand"
-              type="submit"
-            >
-              {create.isPending
-                ? 'Posting…'
-                : waiting
-                  ? 'Reserving your credits…'
-                  : 'Post errand'}
-            </button>
+        </fieldset>
+        {errors.form && (
+          <p className="notice notice-error" role="alert">
+            {errors.form}
+          </p>
+        )}
+        {failure && (
+          <p className="notice notice-error" role="alert">
+            {failure.message}
+            {failure.setUpCredits && (
+              <>
+                {' '}
+                <a className="text-link" href="/credits">
+                  Set up your credits
+                </a>
+              </>
+            )}
+          </p>
+        )}
+        {slowId && (
+          <p className="notice notice-next" role="status">
+            This is taking a little longer than usual. We'll post your errand as
+            soon as it's ready.{' '}
+            <Link className="text-link" to={`/errands/${slowId}`}>
+              View errand
+            </Link>
+          </p>
+        )}
+        <section
+          aria-labelledby="credits-heading"
+          className="create-credit-summary"
+        >
+          <div>
+            <p className="eyebrow">Credit check</p>
+            <h2 id="credits-heading">Your credits</h2>
           </div>
-          {credit.message && (
-            <p
-              className="notice notice-warn"
-              id="credit-check-message"
-              role="status"
-            >
-              {credit.message}
-              {balanceStatus.kind === 'no-account' && (
-                <>
-                  {' '}
-                  <a className="text-link" href="/credits">
-                    Set up your credits
-                  </a>
-                </>
-              )}
-            </p>
-          )}
-        </form>
-        <aside aria-labelledby="credits-heading" className="card">
-          <h2 id="credits-heading">Your credits</h2>
           {balance.isPending && <p>Loading your balance…</p>}
           {balance.isError && <p>Your balance is unavailable right now.</p>}
           {balance.isSuccess && balance.data === null && (
@@ -361,8 +334,46 @@ export function CreateErrandPage() {
               </dl>
             </>
           )}
-        </aside>
-      </div>
-    </>
+        </section>
+        {credit.message && (
+          <p
+            className="notice notice-warn"
+            id="credit-check-message"
+            role="status"
+          >
+            {credit.message}
+            {balanceStatus.kind === 'no-account' && (
+              <>
+                {' '}
+                <a className="text-link" href="/credits">
+                  Set up your credits
+                </a>
+              </>
+            )}
+          </p>
+        )}
+        <div className="create-form-actions">
+          <Link className="button-secondary" to="/errands/mine">
+            Cancel
+          </Link>
+          <button
+            aria-describedby={
+              credit.message ? 'credit-check-message' : undefined
+            }
+            aria-busy={create.isPending || waiting}
+            disabled={create.isPending || waiting || !credit.canPost}
+            id="submit-errand"
+            type="submit"
+          >
+            {create.isPending
+              ? 'Posting…'
+              : waiting
+                ? 'Reserving your credits…'
+                : 'Post errand'}
+            {!create.isPending && !waiting && <ArrowRight aria-hidden="true" />}
+          </button>
+        </div>
+      </form>
+    </section>
   )
 }

@@ -1,6 +1,6 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { ClipboardList } from 'lucide-react'
+import { ArrowRight, ClipboardList } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { fetchMyOrders, type OrderState } from '../api/orderApi'
 import { ErrandCard } from '../components/ErrandCard'
@@ -44,22 +44,70 @@ export function MyErrandsPage() {
   const kind: Kind = role === 'COURIER' ? 'delivered' : 'requested'
   const current = LISTS.find((item) => item.value === kind)!
 
+  if (role === 'REQUESTER') {
+    return (
+      <>
+        <div className="requester-page-heading">
+          <div className="page-intro">
+            <p className="eyebrow">Your activity</p>
+            <h1>My errands</h1>
+          </div>
+          <Link className="create-errand-link" to="/errands/new">
+            Create new errand <ArrowRight aria-hidden="true" />
+          </Link>
+        </div>
+        <section
+          aria-labelledby="requester-history-heading"
+          className="requester-history-panel"
+        >
+          <header className="requester-history-heading">
+            <div>
+              <p className="eyebrow">Requester history</p>
+              <h2 id="requester-history-heading">Your recent errands</h2>
+            </div>
+          </header>
+          <div className="requester-history-content">
+            <ErrandSection
+              empty={current.activeEmpty}
+              history
+              key={`${kind}-active`}
+              kind={kind}
+              status="active"
+              title="Active"
+            />
+            <ErrandSection
+              empty="No errands are under review."
+              history
+              key={`${kind}-review`}
+              kind={kind}
+              status="review"
+              title="Under review"
+            />
+            <ErrandSection
+              empty={current.pastEmpty}
+              history
+              key={`${kind}-past`}
+              kind={kind}
+              states={current.pastStates}
+              status="past"
+              title="Past"
+            />
+          </div>
+        </section>
+      </>
+    )
+  }
+
   return (
     <>
-      <div className="page-intro">
-        <div>
-          <p className="eyebrow">
-            {role === 'COURIER' ? 'Courier activity' : 'Requester activity'}
-          </p>
-          <h1>My errands</h1>
-          <p>
-            {kind === 'requested'
-              ? 'Errands you posted, in progress and finished.'
-              : 'Errands you’re running and have delivered.'}
-          </p>
+      <div className="courier-page-heading">
+        <div className="page-intro">
+          <p className="eyebrow">Courier activity</p>
+          <h1>Campus errands</h1>
+          <p>Errands you’re running and have delivered.</p>
         </div>
+        <ErrandTabs />
       </div>
-      <ErrandTabs />
       <ErrandSection
         empty="No errands are under review."
         key={`${kind}-review`}
@@ -91,12 +139,14 @@ function ErrandSection({
   status,
   title,
   empty,
+  history = false,
   states = [],
 }: {
   kind: Kind
   status: Status
   title: string
   empty: string
+  history?: boolean
   states?: OrderState[]
 }) {
   const [page, setPage] = useState(0)
@@ -110,36 +160,45 @@ function ErrandSection({
 
   return (
     <section aria-labelledby={headingId} className="my-errands-section">
-      <div className="my-errands-section-head">
-        <h2 className="section-title" id={headingId}>
+      {history && (
+        <h2 className="visually-hidden" id={headingId}>
           {title}
-          {list.data && list.data.totalItems > 0 && (
-            <span className="record-count">{list.data.totalItems}</span>
-          )}
         </h2>
-        {states.length > 1 && (
-          <div
-            aria-label={`Filter ${title.toLowerCase()} errands`}
-            className="filter-chips"
-            role="group"
-          >
-            {[undefined, ...states].map((value) => (
-              <button
-                aria-pressed={state === value}
-                className="filter-chip"
-                key={value ?? 'all'}
-                onClick={() => {
-                  setState(value)
-                  setPage(0)
-                }}
-                type="button"
-              >
-                {value ? stateLabel(value) : 'All'}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      )}
+      {(!history || states.length > 1) && (
+        <div className="my-errands-section-head">
+          {!history && (
+            <h2 className="section-title" id={headingId}>
+              {title}
+              {list.data && list.data.totalItems > 0 && (
+                <span className="record-count">{list.data.totalItems}</span>
+              )}
+            </h2>
+          )}
+          {states.length > 1 && (
+            <div
+              aria-label={`Filter ${title.toLowerCase()} errands`}
+              className="filter-chips"
+              role="group"
+            >
+              {[undefined, ...states].map((value) => (
+                <button
+                  aria-pressed={state === value}
+                  className="filter-chip"
+                  key={value ?? 'all'}
+                  onClick={() => {
+                    setState(value)
+                    setPage(0)
+                  }}
+                  type="button"
+                >
+                  {value ? stateLabel(value) : 'All'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {list.isPending && (
         <ErrandListSkeleton count={2} label="Loading your errands…" />
       )}
@@ -174,11 +233,12 @@ function ErrandSection({
       )}
       {list.data && list.data.items.length > 0 && (
         <>
-          <ul className="errand-list">
+          <ul className={`errand-list${history ? ' errand-history-list' : ''}`}>
             {list.data.items.map((order) => (
               <ErrandCard
                 canRepost={kind === 'requested'}
                 key={order.id}
+                layout={history ? 'history' : 'card'}
                 order={order}
                 showPendingReward={status === 'active'}
                 timingLabel={

@@ -3,7 +3,13 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { order, REQUESTER_ID, signIn, STRANGER_ID, stubFetch } from '../test/fixtures'
+import {
+  order,
+  REQUESTER_ID,
+  signIn,
+  STRANGER_ID,
+  stubFetch,
+} from '../test/fixtures'
 import { validate } from '../utils/errandForm'
 import { CreateErrandPage } from './CreateErrandPage'
 
@@ -85,7 +91,9 @@ async function pickLocation(
   await waitFor(() => expect(input).toBeEnabled())
   await user.click(input)
   await user.type(input, search)
-  await user.click(screen.getByRole('option', { name: new RegExp(search, 'i') }))
+  await user.click(
+    screen.getByRole('option', { name: new RegExp(search, 'i') }),
+  )
 }
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
@@ -115,6 +123,13 @@ describe('CreateErrandPage', () => {
     const user = userEvent.setup()
     renderPage()
 
+    expect(
+      screen.getByRole('heading', { name: 'Create a campus errand' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Cancel' })).toHaveAttribute(
+      'href',
+      '/errands/mine',
+    )
     expect(await screen.findByText('10 cr')).toBeInTheDocument()
     await user.type(screen.getByLabelText('Reward (credits)'), '3')
 
@@ -203,9 +218,9 @@ describe('CreateErrandPage', () => {
     await user.click(screen.getByRole('button', { name: 'Post errand' }))
 
     await waitFor(() =>
-      expect(
-        calls.filter((call) => call.init?.method === 'POST'),
-      ).toHaveLength(2),
+      expect(calls.filter((call) => call.init?.method === 'POST')).toHaveLength(
+        2,
+      ),
     )
     const [first, second] = calls
       .filter((call) => call.init?.method === 'POST')
@@ -327,7 +342,9 @@ describe('CreateErrandPage', () => {
     renderPage()
 
     await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent("can't check your credits"),
+      expect(screen.getByRole('status')).toHaveTextContent(
+        "can't check your credits",
+      ),
     )
     await fillValidForm(user)
 
@@ -505,14 +522,24 @@ describe('CreateErrandPage', () => {
       vi.stubGlobal('fetch', api({ reads: [PAST] }).fetchMock)
       renderPage('/errands/new?from=past-1')
 
-      expect(await screen.findByText(/Copied from “Collect my printed notes”/)).toBeInTheDocument()
-      expect(screen.getByLabelText('Errand title')).toHaveValue('Collect my printed notes')
+      expect(
+        await screen.findByText(/Copied from “Collect my printed notes”/),
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText('Errand title')).toHaveValue(
+        'Collect my printed notes',
+      )
       expect(screen.getByLabelText('Pickup location')).toHaveValue(PICKUP_LABEL)
-      expect(screen.getByLabelText('Drop-off location')).toHaveValue(DROPOFF_LABEL)
+      expect(screen.getByLabelText('Drop-off location')).toHaveValue(
+        DROPOFF_LABEL,
+      )
       expect(screen.getByLabelText('Reward (credits)')).toHaveValue(4)
-      expect(screen.getByLabelText('Description')).toHaveValue('A bound set of CS3219 lecture notes.')
+      expect(screen.getByLabelText('Description')).toHaveValue(
+        'A bound set of CS3219 lecture notes.',
+      )
       expect(screen.getByLabelText('Pick up by')).toHaveValue('')
-      await waitFor(() => expect(screen.getByLabelText('Pick up by')).toHaveFocus())
+      await waitFor(() =>
+        expect(screen.getByLabelText('Pick up by')).toHaveFocus(),
+      )
     })
 
     it('posts the copy as a new errand with the new pickup time', async () => {
@@ -526,10 +553,15 @@ describe('CreateErrandPage', () => {
       await user.type(screen.getByLabelText('Pick up by'), deadline)
       await user.click(screen.getByRole('button', { name: 'Post errand' }))
 
-      expect(await screen.findByRole('heading', { name: 'Errand page' })).toBeInTheDocument()
+      expect(
+        await screen.findByRole('heading', { name: 'Errand page' }),
+      ).toBeInTheDocument()
       const post = calls.find((call) => call.init?.method === 'POST')
       expect(post?.url).toBe('/api/orders')
-      const body = JSON.parse(String(post?.init?.body)) as Record<string, unknown>
+      const body = JSON.parse(String(post?.init?.body)) as Record<
+        string,
+        unknown
+      >
       expect(body).toMatchObject({
         title: 'Collect my printed notes',
         pickupLocationName: 'Printers@PCCommons',
@@ -540,39 +572,73 @@ describe('CreateErrandPage', () => {
     })
 
     it('clears a location Supplier no longer lists and says which one', async () => {
-      const gone = order({ id: 'past-1', state: 'EXPIRED', pickupLocationId: 'removed', pickupLocationName: 'Old Kiosk' })
+      const gone = order({
+        id: 'past-1',
+        state: 'EXPIRED',
+        pickupLocationId: 'removed',
+        pickupLocationName: 'Old Kiosk',
+      })
       vi.stubGlobal('fetch', api({ reads: [gone] }).fetchMock)
       renderPage('/errands/new?from=past-1')
 
-      expect(await screen.findByText('Old Kiosk is no longer available. Choose another location.')).toBeInTheDocument()
+      expect(
+        await screen.findByText(
+          'Old Kiosk is no longer available. Choose another location.',
+        ),
+      ).toBeInTheDocument()
       expect(screen.getByLabelText('Pickup location')).toHaveValue('')
-      expect(screen.getByLabelText('Drop-off location')).toHaveValue(DROPOFF_LABEL)
+      expect(screen.getByLabelText('Drop-off location')).toHaveValue(
+        DROPOFF_LABEL,
+      )
     })
 
     it('still checks the copied reward against the available credits', async () => {
       vi.stubGlobal(
         'fetch',
-        api({ reads: [order({ id: 'past-1', state: 'COMPLETED', creditReward: 12 })] }).fetchMock,
+        api({
+          reads: [
+            order({ id: 'past-1', state: 'COMPLETED', creditReward: 12 }),
+          ],
+        }).fetchMock,
       )
       renderPage('/errands/new?from=past-1')
 
-      expect(await screen.findByText(/Lower the reward to 10 or less/)).toBeInTheDocument()
+      expect(
+        await screen.findByText(/Lower the reward to 10 or less/),
+      ).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Post errand' })).toBeDisabled()
     })
 
     it.each([
-      ['someone else’s errand', { status: 200, body: order({ id: 'past-1', requesterId: STRANGER_ID }) }],
-      ['an errand that cannot be loaded', { status: 404, body: { code: 'ORDER_NOT_FOUND' } }],
+      [
+        'someone else’s errand',
+        {
+          status: 200,
+          body: order({ id: 'past-1', requesterId: STRANGER_ID }),
+        },
+      ],
+      [
+        'an errand that cannot be loaded',
+        { status: 404, body: { code: 'ORDER_NOT_FOUND' } },
+      ],
     ])('starts empty for %s', async (_, answer) => {
       const fallback = api().fetchMock
       vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
         String(input) === '/api/orders/past-1'
-          ? Promise.resolve(new Response(JSON.stringify(answer.body), { status: answer.status }))
+          ? Promise.resolve(
+              new Response(JSON.stringify(answer.body), {
+                status: answer.status,
+              }),
+            )
           : fallback(input, init),
       )
       renderPage('/errands/new?from=past-1')
 
-      expect(await screen.findByText("We couldn't copy that errand. Fill in the details below.")).toBeInTheDocument()
+      expect(
+        await screen.findByText(
+          "We couldn't copy that errand. Fill in the details below.",
+        ),
+      ).toBeInTheDocument()
       expect(screen.getByLabelText('Errand title')).toHaveValue('')
     })
   })

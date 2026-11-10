@@ -12,6 +12,7 @@ import { StateBadge } from './StateBadge'
 
 interface ErrandCardProps {
   canRepost?: boolean
+  layout?: 'card' | 'history'
   order: Order
   showPendingReward?: boolean
   timingLabel: string
@@ -20,13 +21,14 @@ interface ErrandCardProps {
 /** One real-data card language for Courier discovery and both roles' errand history. */
 export function ErrandCard({
   canRepost = false,
+  layout = 'card',
   order,
   showPendingReward = false,
   timingLabel,
 }: ErrandCardProps) {
   return (
     <li
-      className={`card errand-card${order.reviewCaseId && !order.reviewResolved ? ' errand-under-review' : ''}`}
+      className={`card errand-card${layout === 'history' ? ' errand-card-history' : ''}${order.reviewCaseId && !order.reviewResolved ? ' errand-under-review' : ''}`}
     >
       <div aria-hidden="true" className="errand-card-visual">
         <span className="errand-card-visual-icon">
@@ -51,7 +53,7 @@ export function ErrandCard({
             className="reward"
           >
             <strong>{order.creditReward}</strong>
-            <small>credits</small>
+            <small>{layout === 'history' ? 'Reward' : 'credits'}</small>
           </span>
         </div>
         <h3>{order.title}</h3>
