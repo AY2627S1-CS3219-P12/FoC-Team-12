@@ -5,9 +5,10 @@ data "aws_availability_zones" "available" {
 
 locals {
   name_prefix = "foc-${var.environment}"
-  # Three distinct subnets are required for a three-broker, three-AZ MSK cluster. EKS can also
-  # schedule application capacity in the added AZ; workload spreading is handled separately.
-  azs = slice(data.aws_availability_zones.available.names, 0, 3)
+  # MSK needs three distinct AZs. The existing EKS control plane was created with the first two
+  # AZs and AWS does not permit expanding that set later, so keep its subnet selection stable.
+  azs     = slice(data.aws_availability_zones.available.names, 0, 3)
+  eks_azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
   msk_scram_users = {
     foc_admin            = "KAFKA_ADMIN_PASSWORD"

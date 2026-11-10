@@ -100,7 +100,9 @@ resource "aws_eks_cluster" "main" {
   vpc_config {
     endpoint_private_access = true
     endpoint_public_access  = true
-    subnet_ids              = values(aws_subnet.application)[*].id
+    # An EKS cluster may switch subnets only within the AZ set selected at creation. Keep the
+    # original two-AZ control-plane placement while MSK uses all three application subnets.
+    subnet_ids = [for az in local.eks_azs : aws_subnet.application[az].id]
   }
 
   depends_on = [

@@ -52,7 +52,18 @@ variable "vpc_cidr" {
 variable "msk_kafka_version" {
   type        = string
   description = "Pinned Amazon MSK Kafka version. Update only after client and MSK compatibility review."
-  default     = "4.2.x.kraft"
+  # MSK 4.2 is currently Express-only. Provisioned Standard brokers support 4.1 KRaft.
+  default = "4.1.x.kraft"
+
+  validation {
+    condition = contains([
+      "3.8.x.kraft",
+      "3.9.x.kraft",
+      "4.0.x.kraft",
+      "4.1.x.kraft"
+    ], var.msk_kafka_version)
+    error_message = "Provisioned Standard MSK must use a reviewed KRaft version from 3.8.x through 4.1.x; 4.2 is Express-only."
+  }
 }
 
 variable "msk_broker_instance_type" {
@@ -61,6 +72,11 @@ variable "msk_broker_instance_type" {
   # T3 brokers cannot run MSK's KRaft metadata mode. M7g is the smallest production-oriented
   # Graviton family supported by the pinned KRaft release.
   default = "kafka.m7g.large"
+
+  validation {
+    condition     = !startswith(var.msk_broker_instance_type, "kafka.t3.")
+    error_message = "T3 brokers do not support MSK KRaft clusters; use a supported Standard broker family such as kafka.m7g.large."
+  }
 }
 
 variable "msk_broker_storage_gib" {
