@@ -11,6 +11,16 @@ if ! [[ "$parallelism" =~ ^[1-7]$ ]]; then
 fi
 
 bootstrap_servers=${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+replication_factor=${KAFKA_REPLICATION_FACTOR:-1}
+min_insync_replicas=${KAFKA_MIN_INSYNC_REPLICAS:-1}
+if ! [[ "$replication_factor" =~ ^[1-9][0-9]*$ && "$min_insync_replicas" =~ ^[1-9][0-9]*$ ]]; then
+  echo 'KAFKA_REPLICATION_FACTOR and KAFKA_MIN_INSYNC_REPLICAS must be positive integers' >&2
+  exit 1
+fi
+if (( min_insync_replicas > replication_factor )); then
+  echo 'KAFKA_MIN_INSYNC_REPLICAS cannot exceed KAFKA_REPLICATION_FACTOR' >&2
+  exit 1
+fi
 admin_properties=/tmp/foc-kafka-admin.properties
 write_client_properties "$admin_properties" foc_admin "$KAFKA_ADMIN_PASSWORD"
 
@@ -39,15 +49,16 @@ create_topic() {
     --create --if-not-exists \
     --topic "$topic" \
     --partitions "$partitions" \
-    --replication-factor 1 \
+    --replication-factor "$replication_factor" \
     --config cleanup.policy=delete \
+    --config "min.insync.replicas=$min_insync_replicas" \
     --config "retention.ms=$retention_ms"
 
   init_command kafka-configs.sh \
     --bootstrap-server "$bootstrap_servers" \
     --command-config "$admin_properties" \
     --alter --entity-type topics --entity-name "$topic" \
-    --add-config "cleanup.policy=delete,retention.ms=$retention_ms"
+    --add-config "cleanup.policy=delete,min.insync.replicas=$min_insync_replicas,retention.ms=$retention_ms"
 }
 
 add_acl() {
@@ -84,7 +95,7 @@ limit_jobs() {
 }
 
 pids=()
-for topic in user.events order.events credit.events order.lifecycle.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events admin.dispute.commands order.dispute.commands order.dispute.events chat.dispute.events credit.dispute.events; do
+for topic in user.events order.events credit.events order.lifecycle.events chat.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events admin.dispute.commands order.dispute.commands order.dispute.events chat.dispute.events credit.dispute.events; do
   create_topic "$topic" 3 604800000 &
   pids+=("$!")
   limit_jobs
@@ -92,12 +103,19 @@ done
 wait_all "${pids[@]}"
 
 pids=()
-for topic in user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT; do
+for topic in user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events.DLT chat.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT; do
   create_topic "$topic" 1 2592000000 &
   pids+=("$!")
   limit_jobs
 done
 wait_all "${pids[@]}"
+
+# The administrator must remain able to reconcile topics and ACLs after MSK is switched from its
+# one-time bootstrap configuration to allow.everyone.if.no.acl.found=false.
+add_acl foc_admin --operation All --cluster
+add_acl foc_admin --operation All --topic '*'
+add_acl foc_admin --operation All --group '*'
+add_acl foc_admin --operation All --transactional-id '*'
 
 # User Service publishes activation facts.
 {
@@ -121,7 +139,9 @@ limit_jobs
 # Chat consumes Order lifecycle facts using its own projection group.
 {
 add_acl chat_service --operation Read --operation Describe --topic order.lifecycle.events
+add_acl chat_service --operation Write --operation Describe --topic chat.events
 add_acl chat_service --operation Read --group chat-service-lifecycle
+add_idempotent_write_acl chat_service
 } &
 pids+=("$!")
 limit_jobs
@@ -141,10 +161,10 @@ limit_jobs
 # letters. Order owns order.lifecycle.events; Notification and Chat consume it independently.
 {
 add_acl notification_service --operation Read --operation Describe \
-  --topic credit.events --topic order.lifecycle.events
+  --topic credit.events --topic order.lifecycle.events --topic chat.events
 add_acl notification_service --operation Read --group notification-service
 add_acl notification_service --operation Write --operation Describe \
-  --topic credit.events.DLT --topic order.lifecycle.events.DLT
+  --topic credit.events.DLT --topic order.lifecycle.events.DLT --topic chat.events.DLT
 add_idempotent_write_acl notification_service
 } &
 pids+=("$!")
@@ -202,14 +222,17 @@ add_acl kafka_ui --operation Describe --group admin-service-disputes --group ord
 # Kafka UI can inspect this local cluster but cannot mutate topics, data or business offsets.
 {
 add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfigs \
-  --topic user.events --topic order.events --topic order.lifecycle.events --topic credit.events \
+  --topic user.events --topic order.events --topic order.lifecycle.events --topic credit.events --topic chat.events \
   --topic user.events.DLT --topic order.events.DLT --topic credit.events.DLT \
-  --topic order.lifecycle.events --topic order.lifecycle.events.DLT \
+  --topic order.lifecycle.events --topic order.lifecycle.events.DLT --topic chat.events.DLT \
   --topic admin.credit.commands --topic credit.admin.events \
   --topic admin.credit.commands.DLT --topic credit.admin.events.DLT \
   --topic admin.user.commands --topic user.admin.events --topic admin.user.commands.DLT --topic user.admin.events.DLT --topic admin.events
 add_acl kafka_ui --operation Describe --operation DescribeConfigs --cluster
-add_acl kafka_ui --operation Describe --group order-service --group chat-service-lifecycle --group chat-service-timeline --group credit-service --group notification-service --group admin-service-credit --group credit-service-admin --group admin-service-user --group user-service-admin
+# Kafbat discovers consumer groups before it knows their names, including Amazon MSK's internal
+# canary groups. Describe on the wildcard group allows that inventory only; kafka_ui still has Read
+# solely on its own kafka-ui-browser* groups and therefore cannot join or reset business groups.
+add_acl kafka_ui --operation Describe --group '*'
 add_acl kafka_ui --operation Read --operation Describe --group kafka-ui-browser --resource-pattern-type prefixed
 } &
 pids+=("$!")

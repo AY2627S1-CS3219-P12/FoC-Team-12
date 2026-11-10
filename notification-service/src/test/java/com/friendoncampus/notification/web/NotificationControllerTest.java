@@ -41,6 +41,7 @@ import com.friendoncampus.notification.domain.NotificationType;
 import com.friendoncampus.notification.service.NotificationPaging;
 import com.friendoncampus.notification.service.NotificationNotFoundException;
 import com.friendoncampus.notification.service.NotificationQueryService;
+import com.friendoncampus.notification.service.NotificationQueryService.PushBatch;
 import com.friendoncampus.notification.service.NotificationReadStateService;
 import com.friendoncampus.notification.web.error.ApiExceptionHandler;
 
@@ -228,5 +229,22 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.unreadCount").value(3));
 
         verify(queryService).countUnread(CALLER);
+    }
+
+    @Test
+    void pollsPushNotificationsUsingTheServerCursorAndTokenSubject() throws Exception {
+        OffsetDateTime after = OCCURRED_AT.minusSeconds(1);
+        OffsetDateTime cursor = OCCURRED_AT.plusSeconds(2);
+        Notification chat = notification(NotificationType.CHAT_MESSAGE_RECEIVED, ORDER_ID, "{}");
+        when(queryService.pushFor(CALLER, after)).thenReturn(new PushBatch(List.of(chat), cursor));
+
+        mockMvc.perform(get("/api/notifications/me/push").param("after", after.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].type").value("CHAT_MESSAGE_RECEIVED"))
+                .andExpect(jsonPath("$.items[0].message")
+                        .value("New message in chat"))
+                .andExpect(jsonPath("$.cursor").value(cursor.toString()));
+
+        verify(queryService).pushFor(CALLER, after);
     }
 }

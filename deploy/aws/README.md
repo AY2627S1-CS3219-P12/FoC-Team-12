@@ -20,9 +20,10 @@ Browser
                                               |
                              private RDS PostgreSQL (seven databases/users)
 
-User / Order / Credit / Admin / Chat / Notification <-> Kafka StatefulSet on encrypted EBS
+User / Order / Credit / Admin / Chat / Notification <-> Amazon MSK (3 brokers / 3 AZs)
 Chat <-> RabbitMQ StatefulSet on encrypted EBS
 Chat -> private S3 attachment bucket through EKS IRSA
+Supplier -> private S3 image bucket through EKS IRSA
 External Secrets Operator     <-> AWS Secrets Manager through EKS IRSA
 Pods and EKS control plane    -> CloudWatch logs, metrics, dashboard and alarms
 ```
@@ -32,28 +33,37 @@ Kubernetes service accounts exchange EKS-issued OIDC tokens for short-lived AWS 
 The NUS AWS organization explicitly denies the newer EKS Pod Identity API, so this environment
 uses IRSA instead. No long-lived AWS keys are stored in Kubernetes or GitHub.
 
-Only CloudFront is public. The ALB is internal, RDS is private, Kafka has no public listener and
+Only CloudFront is public. The ALB is internal, RDS is private, MSK has no public listener and
 application Services are `ClusterIP`. The EKS API has a public authenticated endpoint because
 GitHub-hosted runners have changing addresses; access is still limited to EKS access entries for
 the two OIDC roles.
 
-The staging defaults deliberately minimize cost rather than provide production high availability:
-one NAT Gateway, one `db.t4g.micro` RDS instance and one Kafka broker with replication factor one.
-EKS Auto Mode may add/remove compute capacity for scheduled pods. The USD 25 budget is an alert,
-not a hard spending limit. Stop or destroy staging when it is not being demonstrated.
+Kafka is the first stateful component configured for production-oriented availability: Amazon MSK
+runs three provisioned brokers in three Availability Zones, topics use replication factor `3` and
+minimum ISR `2`, and clients use private `SASL_SSL`/`SCRAM-SHA-512` connections. EKS no longer runs
+the AWS Kafka broker. The cluster pins provisioned Standard brokers to `4.1.x.kraft`; MSK 4.2 is
+currently Express-only. The default `kafka.m7g.large` size is required because T3 brokers do not
+support KRaft mode. Kafbat remains a read-only client of MSK.
 
-Database-backed application Deployments do not surge during replacement. With one staging replica,
-Kubernetes stops the old pod before starting its replacement so the small RDS instance is not
-temporarily exhausted by two generations of connection pools. This permits brief service downtime
-during a staging rollout; production should combine appropriately sized database capacity with
-multiple replicas and a reviewed availability strategy.
+Other staging defaults still prioritize coursework cost over full production availability: one NAT
+Gateway and one `db.t4g.micro` RDS instance remain single points of failure. EKS Auto Mode may
+add/remove compute capacity for scheduled pods. Three always-on MSK brokers materially increase the
+monthly cost; the USD 25 budget is only an alert, not a hard limit. Destroy staging when it is not
+being demonstrated.
+
+Gateway and the seven stateless application Deployments maintain at least two replicas. Their Pod
+topology-spread constraints keep matching replicas within a skew of one across both Availability
+Zones and worker hostnames. Database-backed Deployments do not surge during replacement: one of
+their two replicas is replaced at a time, keeping the other available without adding a third
+generation of database connection pools. This application redundancy does not make the single RDS
+instance highly available; production still needs reviewed database capacity and Multi-AZ policy.
 
 ## Directory map
 
 | Path | Purpose |
 | --- | --- |
 | `terraform/bootstrap` | State bucket consumer, GitHub OIDC provider and workflow roles |
-| `terraform/staging-core` | VPC, NAT, EKS, ECR, RDS, secret containers, monitoring and budget |
+| `terraform/staging-core` | VPC, NAT, EKS, ECR, RDS, three-AZ MSK, secret containers, monitoring and budget |
 | `terraform/staging-edge` | CloudFront VPC origin, distribution and edge alarm |
 | `k8s/staging` | AWS runtime overlay, workloads, HPA, private ingress and secret projection |
 | `scripts` | State bootstrap, secret initialization, deployment, smoke/load tests and ALB discovery |
@@ -102,6 +112,8 @@ use short-lived OIDC sessions instead of stored AWS credentials.
 
    Re-run this bootstrap `apply` after an approved change to either GitHub workflow role. The
    operation updates the scoped IAM policies in place; it does not recreate the staging cluster.
+   The MSK migration adds scoped Kafka and KMS management permissions, so this bootstrap apply must
+   run before the MSK `plan-core` or `apply-core` workflow.
 
    If the AWS account already has a GitHub Actions OIDC provider, import that provider instead of
    creating a duplicate. The trust conditions accept only this repository's immutable GitHub owner
@@ -130,9 +142,17 @@ use short-lived OIDC sessions instead of stored AWS credentials.
      foc-team-12-chat-attachments-070096877754-ap-southeast-1
    ```
 
-   Reapply the bootstrap stack first when introducing this bucket to an existing environment so
-   the scoped infrastructure role receives the new S3 permissions. This creates chargeable
-   resources.
+   Reapply the bootstrap stack first when introducing the Chat attachment or Supplier image bucket
+   to an existing environment so the scoped infrastructure role receives the new S3 permissions.
+   The Supplier bucket is created by Terraform and must not be created manually. These resources
+   can incur storage and request charges.
+
+   The MSK plan adds a third public/application/database subnet and one provisioned broker in each
+   of three Availability Zones. The existing EKS control plane remains on its original two-AZ
+   subnet set because AWS does not permit expanding that set after cluster creation. The plan also
+   creates a customer-managed KMS key and eight empty
+   `AmazonMSK_*` SCRAM secret containers. It must not replace the VPC, EKS cluster, RDS instance or
+   existing subnets. MSK provisioning commonly takes tens of minutes.
 
    The core stack creates a tiny `foc-capacity-bootstrap/capacity-bootstrap` pause workload before
    installing node-dependent add-ons. Its only purpose is to make a new EKS Auto Mode cluster
@@ -165,7 +185,9 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    Secrets can project the new version.
 
    The helper also migrates an existing Kafka broker secret forward when new service identities
-   are introduced: it adds only missing fields and never rotates credentials already in use.
+   are introduced: it adds only missing fields and never rotates credentials already in use. For
+   AWS it copies those established passwords into KMS-encrypted `AmazonMSK_*` SCRAM secrets using
+   MSK's required `{username,password}` structure. Run `apply-core` first so those containers exist.
    Runtime provisioning validates the required Chat and Notification identities before building
    images, then forces External Secrets to synchronize the current AWS version before Kafka starts.
 
@@ -177,9 +199,78 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    `order.lifecycle.events` in staging (`ORDER_LIFECYCLE_EVENTS_ENABLED=true`); `kafka-init`
    creates the topic and its ACLs in every deployment before workloads roll out.
 
-6. Run **AWS staging infrastructure -> provision-runtime**. It builds all eight deployed application images,
+6. Run **AWS staging infrastructure -> provision-runtime**. It first associates the SCRAM secrets
+   with MSK, then builds all eight deployed application images,
    pushes immutable tags to ECR, applies the platform, creates CloudFront and smoke-tests the HTTPS
-   URL. Set `AWS_STAGING_ENABLED=true` only after this passes.
+   URL. The initializer creates topics with replication factor `3`, applies the existing
+   least-privilege ACLs and grants the reconciliation identity; provisioning then changes MSK from
+   bootstrap mode to `allow.everyone.if.no.acl.found=false`. Set `AWS_STAGING_ENABLED=true` only
+   after this passes.
+
+   `apply-core` also maintains two EKS Auto Mode static-capacity NodePools: one `amd64` on-demand
+   worker in `ap-southeast-1a` and one in `ap-southeast-1b`. These establish a fixed two-worker,
+   two-AZ baseline while the built-in dynamic pools remain available for load-driven burst
+   capacity. Each static pool permits one temporary extra node during replacement, but normally
+   maintains exactly one. The workflow waits for a Ready worker in each expected AZ and fails with
+   NodePool/NodeClaim diagnostics if capacity cannot be provisioned. Static capacity prevents Auto
+   Mode consolidation from reducing staging below two workers. The runtime overlay separately keeps
+   Gateway and all seven stateless applications at two or more replicas and requires their replicas
+   to spread across both zone and hostname failure domains.
+
+   Inspect the baseline with:
+
+   ```bash
+   kubectl get nodepool foc-static-1a foc-static-1b
+   kubectl get nodes -l friendoncampus.com/capacity=static \
+     -L topology.kubernetes.io/zone,karpenter.sh/nodepool
+   ```
+
+   Automatic staging deployment is guarded by `/foc/staging/msk-runtime-ready`. `apply-core`
+   creates it as `false`; only a completely successful MSK provision/lockdown marks it `true`.
+   Until then CI may publish immutable images, but it deliberately skips the Kubernetes rollout
+   instead of breaking the currently running single-broker deployment.
+
+   The cutover removes the old single-broker StatefulSet only after MSK initialization and all
+   application rollouts succeed. Kafka clients restart after topic and ACL reconciliation so a
+   listener cannot remain stopped after a transient authorization failure during first-time ACL
+   creation. The old broker PVC is intentionally retained as a short rollback aid.
+   Existing transient records and consumer offsets are not copied into the new staging cluster;
+   authoritative service databases and transactional outboxes remain the recovery sources.
+   After the team verifies MSK topics, consumers and Kafbat, remove that orphaned staging PVC
+   explicitly to stop paying for its EBS volume:
+
+   ```bash
+   kubectl -n foc-staging get pvc
+   kubectl -n foc-staging delete pvc data-kafka-0
+   ```
+
+   Kafbat still runs inside EKS and now inspects MSK. Access it privately when needed:
+
+   ```bash
+   kubectl -n foc-staging port-forward service/kafka-ui 8090:8080
+   # Open http://localhost:8090 and use the existing kafka-ui-secrets dashboard login.
+   ```
+
+   The `aws-staging-infra` GitHub environment variable `AWS_KAFBAT_VIEWER_ROLE_ARN` identifies the
+   human operator IAM role that receives this private access. `apply-core` adopts an existing EKS
+   access entry, maps it to the `foc-kafka-viewers` Kubernetes group and installs a namespace-scoped
+   Role. The Role permits pod discovery and port-forward creation but not exec, Secret access,
+   workload changes or public exposure. For the NUS sandbox, set it to the canonical IAM role ARN
+   shown by `aws eks list-access-entries --cluster-name foc-staging`; do not use the temporary
+   `arn:aws:sts::...:assumed-role/...` session ARN.
+
+   Retrieve the separate dashboard login without copying it into Git or shell history:
+
+   ```bash
+   aws secretsmanager get-secret-value \
+     --region ap-southeast-1 \
+     --secret-id foc/staging/kafka-ui-secrets \
+     --query SecretString \
+     --output text | jq '{
+       username: .KAFKA_UI_LOGIN_USERNAME,
+       password: .KAFKA_UI_LOGIN_PASSWORD
+     }'
+   ```
 
    The workflow validates the edge Terraform and resolves the required AWS-managed CloudFront
    policies before building images. If runtime deployment and the private ALB already succeeded but
@@ -232,12 +323,16 @@ diagnosis:
 
 ```bash
 kubectl -n foc-staging logs deployment/order-service --since=15m
-kubectl -n foc-staging logs statefulset/kafka --since=15m
+aws logs tail /aws/msk/foc-staging/broker --since 15m
 kubectl -n foc-staging get events --sort-by=.lastTimestamp | tail -100
 ```
 
-Gateway and all seven applications use HPA `1-3` at 70% CPU. To collect N2H evidence, run the load
-helper in one terminal and watch both pod and node scaling in others:
+Gateway and all seven applications use HPA `2-3` at 70% CPU. The two-replica floor supplies normal
+availability, while topology-spread constraints prevent replicas from sharing one node or AZ when
+both failure domains are available. The deployment smoke test fails unless every stateless workload
+has Ready replicas on at least two distinct worker nodes and two distinct Availability Zones. To
+collect N2H evidence, run the load helper in one terminal and watch both pod and node scaling in
+others:
 
 ```bash
 PUBLIC_URL=$(aws ssm get-parameter --name /foc/staging/public-url --query Parameter.Value --output text)
@@ -252,10 +347,11 @@ Mode separately adds capacity if pending pods do not fit. Scaling is eventual an
 ## Guarded teardown and recreation
 
 Routine teardown preserves the bootstrap bucket and OIDC roles but removes chargeable staging
-resources. Run **AWS staging infrastructure -> destroy-staging** and type exactly
+resources, including the three MSK brokers. Run **AWS staging infrastructure -> destroy-staging** and type exactly
 `DESTROY foc-staging`. The workflow destroys CloudFront first, deletes the Ingress/namespace and
-waits for ALB/PVC cleanup, then destroys core Terraform resources. RDS final snapshots, Kafka EBS
-volumes and ECR images are intentionally disposable.
+waits for ALB/PVC cleanup, disassociates the externally managed MSK SCRAM identities, then destroys
+core Terraform resources. RDS final snapshots, Kafka storage and ECR images are intentionally
+disposable.
 
 Verify cleanup in the AWS console and CLI, especially CloudFront distributions, load balancers,
 EBS volumes, NAT Gateways, EKS clusters and RDS instances. The budget may lag and is not proof that
@@ -277,6 +373,8 @@ for stack in bootstrap staging-core staging-edge; do
   terraform -chdir="deploy/aws/terraform/$stack" validate
 done
 kubectl kustomize --load-restrictor=LoadRestrictionsNone deploy/aws/k8s/staging >/tmp/foc-aws.yaml
+printf '\n---\n' >>/tmp/foc-aws.yaml
+cat deploy/aws/k8s/staging/msk-initialize-job.yaml >>/tmp/foc-aws.yaml
 docker compose config --quiet
 python3 -m unittest discover -s .github/scripts -p 'test_*.py' -v
 ```
@@ -286,17 +384,25 @@ syntax and internal consistency, not OIDC trust, AWS quotas, service health or t
 
 ## Known staging decisions requiring production review
 
-- The USD 25 budget, one-NAT design and single RDS/Kafka instances favor a short-lived demo.
+- The USD 25 budget threshold is below the likely monthly cost of three always-on provisioned MSK
+  brokers; it is an alert, not a spending cap. Keep staging short-lived and review actual charges.
+- The one-NAT design and single RDS instance remain availability gaps even though Kafka is now
+  multi-AZ.
 - RDS deletion protection and final snapshots are disabled because staging data is disposable.
-- Kafka replication factor one persists on encrypted EBS but does not survive broker/AZ failure.
+- MSK is private, encrypted and three-AZ with RF3/minISR2. Topic/ACL changes remain the team's
+  responsibility; AWS manages broker infrastructure, not event correctness or consumer retries.
 - RabbitMQ is also a single staging StatefulSet and does not survive a node/AZ failure without
   rescheduling; production should use a managed or clustered broker.
 - Chat attachments are private and encrypted in S3. Chat streams authorized downloads through its
   API, and its Pod receives short-lived AWS credentials through EKS Pod Identity; no AWS access
   key is stored in Kubernetes or GitHub.
+- Supplier images are private and encrypted in a separate S3 bucket. Supplier Service validates
+  uploads and streams public image responses through its API; its Pod receives narrowly scoped,
+  short-lived credentials through IRSA, and browsers never receive S3 credentials or object URLs.
 - The EKS API remains public for GitHub-hosted runners; a production platform should use private
   runners/network access and make it private-only.
-- Replace local Kafka `SASL_PLAINTEXT` with encrypted transport and rotate all credentials.
+- Compose and Minikube intentionally retain local `SASL_PLAINTEXT`; AWS staging uses
+  `SASL_SSL`/`SCRAM-SHA-512` and KMS-encrypted credentials.
 - Select production backup, multi-AZ, replication, disaster-recovery, log retention and alert
   notification policies before treating this design as production-ready.
 

@@ -19,6 +19,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import com.friendoncampus.notification.domain.Notification;
+import com.friendoncampus.notification.domain.NotificationType;
 
 /** Reading one recipient's notifications from a real PostgreSQL. Requires Docker. */
 @SpringBootTest(properties = "app.kafka.enabled=false")
@@ -42,11 +43,15 @@ class NotificationQueryIntegrationTest {
 
     /** Inserts a row that happened {@code occurredMinutes} and was stored {@code createdMinutes} after BASE. */
     private UUID insert(UUID recipient, int occurredMinutes, int createdMinutes) {
+        return insert(recipient, NotificationType.CREDITS_RECEIVED, occurredMinutes, createdMinutes);
+    }
+
+    private UUID insert(UUID recipient, NotificationType type, int occurredMinutes, int createdMinutes) {
         UUID id = UUID.randomUUID();
         jdbc.update("insert into notifications (id, recipient_id, type, order_id, params, source_event_id, "
                 + "business_key, occurred_at, created_at) "
-                + "values (?, ?, 'CREDITS_RECEIVED', ?, '{\"amount\":3}'::jsonb, ?, ?, ?, ?)",
-                id, recipient, UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID().toString(),
+                + "values (?, ?, ?, ?, '{\"amount\":3}'::jsonb, ?, ?, ?, ?)",
+                id, recipient, type.name(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID().toString(),
                 BASE.plusMinutes(occurredMinutes),
                 BASE.plusMinutes(createdMinutes));
         return id;
@@ -89,5 +94,30 @@ class NotificationQueryIntegrationTest {
 
         assertThat(page.getContent()).isEmpty();
         assertThat(page.getTotalElements()).isZero();
+    }
+
+    @Test
+    void chatMessagesArePushOnlyAndDoNotAffectTheBell() {
+        UUID recipient = UUID.randomUUID();
+        UUID lifecycle = insert(recipient, NotificationType.ORDER_ACCEPTED, 1, 1);
+        UUID chat = insert(recipient, NotificationType.CHAT_MESSAGE_RECEIVED, 2, 2);
+
+        Page<Notification> page = queryService.listFor(recipient, new NotificationPaging(0, 20));
+        NotificationQueryService.PushBatch push = queryService.pushFor(recipient, BASE);
+
+        assertThat(page.getContent()).extracting(Notification::getId).containsExactly(lifecycle);
+        assertThat(queryService.countUnread(recipient)).isEqualTo(1);
+        assertThat(push.items()).extracting(Notification::getId).containsExactly(lifecycle, chat);
+    }
+
+    @Test
+    void theInitialPushPollBootstrapsWithoutReplayingHistory() {
+        UUID recipient = UUID.randomUUID();
+        insert(recipient, NotificationType.ORDER_ACCEPTED, 1, 1);
+
+        NotificationQueryService.PushBatch push = queryService.pushFor(recipient, null);
+
+        assertThat(push.items()).isEmpty();
+        assertThat(push.cursor()).isNotNull();
     }
 }

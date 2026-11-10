@@ -80,7 +80,6 @@ resource "aws_cloudwatch_metric_alarm" "service_pods_unavailable" {
     "admin-service",
     "chat-service",
     "notification-service",
-    "kafka",
     "rabbitmq"
   ])
 
@@ -99,6 +98,34 @@ resource "aws_cloudwatch_metric_alarm" "service_pods_unavailable" {
     Namespace   = "foc-staging"
     Service     = each.value
   }
+}
+
+resource "aws_cloudwatch_metric_alarm" "msk_under_replicated_partitions" {
+  alarm_name          = "${local.name_prefix}-msk-under-replicated-partitions"
+  alarm_description   = "One or more MSK partitions have fewer in-sync replicas than expected."
+  namespace           = "AWS/Kafka"
+  metric_name         = "UnderReplicatedPartitions"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 3
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+  treat_missing_data  = "breaching"
+  dimensions          = { "Cluster Name" = aws_msk_cluster.main.cluster_name }
+}
+
+resource "aws_cloudwatch_metric_alarm" "msk_offline_partitions" {
+  alarm_name          = "${local.name_prefix}-msk-offline-partitions"
+  alarm_description   = "One or more MSK partitions have no active leader."
+  namespace           = "AWS/Kafka"
+  metric_name         = "OfflinePartitionsCount"
+  statistic           = "Maximum"
+  period              = 60
+  evaluation_periods  = 2
+  comparison_operator = "GreaterThanThreshold"
+  threshold           = 0
+  treat_missing_data  = "breaching"
+  dimensions          = { "Cluster Name" = aws_msk_cluster.main.cluster_name }
 }
 
 resource "aws_cloudwatch_dashboard" "staging" {
@@ -130,14 +157,27 @@ resource "aws_cloudwatch_dashboard" "staging" {
       {
         type = "metric", x = 12, y = 0, width = 12, height = 6,
         properties = {
-          title  = "Application and Kafka running pods"
+          title  = "Application and RabbitMQ running pods"
           region = var.aws_region
           metrics = [
-            for service in ["gateway", "user-service", "supplier-service", "order-service", "credit-service", "admin-service", "chat-service", "notification-service", "kafka", "rabbitmq"] :
+            for service in ["gateway", "user-service", "supplier-service", "order-service", "credit-service", "admin-service", "chat-service", "notification-service", "rabbitmq"] :
             ["ContainerInsights", "service_number_of_running_pods", "ClusterName", aws_eks_cluster.main.name, "Namespace", "foc-staging", "Service", service]
           ]
           period = 60
           stat   = "Minimum"
+        }
+      },
+      {
+        type = "metric", x = 0, y = 14, width = 24, height = 6,
+        properties = {
+          title  = "Amazon MSK replication health"
+          region = var.aws_region
+          metrics = [
+            ["AWS/Kafka", "UnderReplicatedPartitions", "Cluster Name", aws_msk_cluster.main.cluster_name],
+            [".", "OfflinePartitionsCount", ".", "."]
+          ]
+          period = 60
+          stat   = "Maximum"
         }
       }
     ]

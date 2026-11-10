@@ -4,6 +4,8 @@ import { AdminShell } from './AdminShell'
 import { saveSession, expireSession, type WorkspaceRole } from '../auth/session'
 
 vi.mock('./NotificationBell', () => ({ NotificationBell: () => null }))
+vi.mock('./NotificationPush', () => ({ NotificationPush: () => null }))
+vi.mock('../navigation', () => ({ navigateTo: vi.fn() }))
 
 function session(role: WorkspaceRole, adminEligible = false) {
   saveSession({
@@ -79,7 +81,12 @@ it('shows Admin only in active Admin mode and removes it when the session ends',
   expect(screen.queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
   expect(
     Array.from(adminNav.querySelectorAll('a')).map((link) => link.textContent),
-  ).toEqual(['Home', 'Suppliers', 'Admin'])
+  ).toEqual(['Admin', 'Suppliers'])
+  expect(screen.queryByRole('link', { name: 'Home' })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Friend on Campus' })).toHaveAttribute(
+    'href',
+    '/admin',
+  )
   act(() => session('COURIER', true))
   expect(screen.queryByRole('link', { name: 'Admin' })).not.toBeInTheDocument()
   act(() => session('ADMIN', true))

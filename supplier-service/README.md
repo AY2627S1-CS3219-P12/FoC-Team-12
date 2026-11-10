@@ -45,6 +45,8 @@ The frontend uses these routes:
 The responsive administrative experience uses a table on desktop and management cards on
 mobile. It reads both active and inactive suppliers, keeps list filters in the URL, validates
 the complete create/edit contract, and confirms status changes and permanent deletion.
+Administrators may keep no photo, use an external HTTP(S) image URL, or upload a validated JPEG,
+PNG, or WebP file up to 5 MB. Uploaded files are displayed only on Supplier detail pages.
 Optimistic-lock conflicts are never retried automatically: reload the latest supplier before
 trying the mutation again. The administrative routes remain deliberately absent from public
 navigation.
@@ -392,6 +394,38 @@ timestamps. Invalid fields or malformed JSON return `400 Bad Request` using Prob
 field validation responses include an `errors` object.
 
 This endpoint requires a valid User Service access token with role `ADMIN`.
+
+## Upload or remove a supplier image
+
+An administrator can upload or replace a Supplier image with the latest optimistic-lock version:
+
+```sh
+curl -i -X PUT \
+  "http://localhost:8080/api/admin/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa/image?version=0" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -F 'file=@campus-cafe.webp;type=image/webp'
+```
+
+The service accepts JPEG, PNG, and WebP files up to 5 MB and verifies the file signature instead
+of trusting the browser-supplied MIME type. A successful upload replaces either the previous
+upload or external image URL and returns the complete Supplier object with `imageSource: "UPLOAD"`.
+Its `imageUrl` points to `GET /api/suppliers/{id}/image`; the private S3 object key is never exposed.
+Public image reads are cached and do not require authentication.
+
+Remove either image source with:
+
+```sh
+curl -i -X DELETE \
+  "http://localhost:8080/api/admin/suppliers/ca9bd61f-93da-4500-9e9d-48de1bea52fa/image?version=1" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+```
+
+Uploads and removals require `ADMIN`, use optimistic locking, and return `409` for a stale version.
+Invalid or oversized files return `400`; unavailable object storage returns `503`. In AWS staging,
+images are encrypted in a private Supplier-only S3 bucket and Supplier Service obtains short-lived,
+least-privilege credentials through IRSA. Local development keeps upload storage disabled by
+default; set `SUPPLIER_IMAGE_STORAGE=s3`, `SUPPLIER_S3_BUCKET`, and AWS credentials when testing
+against a dedicated development bucket. External image URLs continue to work without S3.
 
 ## Update a supplier
 

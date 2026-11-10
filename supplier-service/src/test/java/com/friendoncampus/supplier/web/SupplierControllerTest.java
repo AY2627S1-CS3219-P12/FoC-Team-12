@@ -39,6 +39,7 @@ import com.friendoncampus.supplier.service.CreateSupplierCommand;
 import com.friendoncampus.supplier.service.DeleteSupplierCommand;
 import com.friendoncampus.supplier.service.SupplierNotFoundException;
 import com.friendoncampus.supplier.service.SupplierMetadata;
+import com.friendoncampus.supplier.service.SupplierImageService;
 import com.friendoncampus.supplier.service.SupplierQuery;
 import com.friendoncampus.supplier.service.SupplierService;
 import com.friendoncampus.supplier.service.SupplierUpdateConflictException;
@@ -59,9 +60,10 @@ class SupplierControllerTest {
     @BeforeEach
     void setUp() {
         supplierService = mock(SupplierService.class);
+        SupplierImageService supplierImageService = mock(SupplierImageService.class);
         supplierVersionLookup = mock(SupplierVersionLookup.class);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new SupplierController(supplierService))
+                .standaloneSetup(new SupplierController(supplierService, supplierImageService))
                 .setControllerAdvice(new ApiExceptionHandler(supplierVersionLookup))
                 .build();
     }

@@ -114,10 +114,48 @@ data "aws_iam_policy_document" "infra" {
       "eks:*",
       "elasticloadbalancing:*",
       "logs:*",
+      "kafka:*",
       "rds:*",
       "secretsmanager:*",
       "ssm:*",
       "sts:GetCallerIdentity"
+    ]
+    resources = ["*"]
+  }
+
+  # MSK SCRAM credentials require a customer-managed symmetric KMS key. The infrastructure
+  # workflow creates and owns only the foc-staging-prefixed key and alias declared by Terraform.
+  statement {
+    sid = "ManageMskEncryptionKey"
+    actions = [
+      "kms:CreateAlias",
+      "kms:CancelKeyDeletion",
+      "kms:CreateGrant",
+      "kms:CreateKey",
+      "kms:DeleteAlias",
+      "kms:DescribeKey",
+      "kms:DisableKey",
+      "kms:DisableKeyRotation",
+      "kms:Decrypt",
+      "kms:EnableKey",
+      "kms:EnableKeyRotation",
+      "kms:Encrypt",
+      "kms:GenerateDataKey",
+      "kms:GenerateDataKeyWithoutPlaintext",
+      "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
+      "kms:ListAliases",
+      "kms:ListGrants",
+      "kms:ListResourceTags",
+      "kms:PutKeyPolicy",
+      "kms:ReEncryptFrom",
+      "kms:ReEncryptTo",
+      "kms:RevokeGrant",
+      "kms:ScheduleKeyDeletion",
+      "kms:TagResource",
+      "kms:UntagResource",
+      "kms:UpdateAlias",
+      "kms:UpdateKeyDescription"
     ]
     resources = ["*"]
   }
@@ -160,7 +198,7 @@ data "aws_iam_policy_document" "infra" {
   }
 
   statement {
-    sid = "ChatAttachmentBucket"
+    sid = "PrivateMediaBuckets"
     actions = [
       "s3:CreateBucket",
       "s3:DeleteBucket",
@@ -176,12 +214,13 @@ data "aws_iam_policy_document" "infra" {
       "s3:PutEncryptionConfiguration"
     ]
     resources = [
-      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
+      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}",
+      "arn:aws:s3:::foc-team-12-supplier-images-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
     ]
   }
 
   statement {
-    sid = "ChatAttachmentObjectsForTeardown"
+    sid = "PrivateMediaObjectsForTeardown"
     actions = [
       "s3:AbortMultipartUpload",
       "s3:DeleteObject",
@@ -190,7 +229,8 @@ data "aws_iam_policy_document" "infra" {
       "s3:ListMultipartUploadParts"
     ]
     resources = [
-      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}/*"
+      "arn:aws:s3:::foc-team-12-chat-attachments-${data.aws_caller_identity.current.account_id}-${var.aws_region}/*",
+      "arn:aws:s3:::foc-team-12-supplier-images-${data.aws_caller_identity.current.account_id}-${var.aws_region}/*"
     ]
   }
 
@@ -259,6 +299,7 @@ data "aws_iam_policy_document" "infra" {
         "vpcorigin.cloudfront.amazonaws.com",
         "eks.amazonaws.com",
         "elasticloadbalancing.amazonaws.com",
+        "kafka.amazonaws.com",
         "rds.amazonaws.com",
         "spot.amazonaws.com"
       ]

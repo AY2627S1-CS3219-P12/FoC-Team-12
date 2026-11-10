@@ -55,6 +55,12 @@ public class Supplier {
     @Column(name = "image_url")
     private String imageUrl;
 
+    @Column(name = "image_object_key", length = 768)
+    private String imageObjectKey;
+
+    @Column(name = "image_content_type", length = 32)
+    private String imageContentType;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private SupplierStatus status;
@@ -120,6 +126,26 @@ public class Supplier {
         this.openingTime = openingTime;
         this.closingTime = closingTime;
         this.imageUrl = imageUrl;
+        if (imageUrl != null) {
+            this.imageObjectKey = null;
+            this.imageContentType = null;
+        }
+    }
+
+    public String useUploadedImage(String objectKey, String contentType) {
+        String previousObjectKey = imageObjectKey;
+        imageUrl = null;
+        imageObjectKey = objectKey;
+        imageContentType = contentType;
+        return previousObjectKey;
+    }
+
+    public String clearImage() {
+        String previousObjectKey = imageObjectKey;
+        imageUrl = null;
+        imageObjectKey = null;
+        imageContentType = null;
+        return previousObjectKey;
     }
 
     public boolean changeStatus(SupplierStatus status) {
@@ -184,6 +210,18 @@ public class Supplier {
 
     public String getImageUrl() {
         return imageUrl;
+    }
+
+    public String getImageObjectKey() {
+        return imageObjectKey;
+    }
+
+    public String getImageContentType() {
+        return imageContentType;
+    }
+
+    public boolean hasUploadedImage() {
+        return imageObjectKey != null;
     }
 
     public SupplierStatus getStatus() {

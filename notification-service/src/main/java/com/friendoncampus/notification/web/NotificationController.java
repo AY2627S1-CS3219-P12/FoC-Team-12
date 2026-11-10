@@ -1,5 +1,6 @@
 package com.friendoncampus.notification.web;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import org.springframework.http.MediaType;
@@ -17,6 +18,7 @@ import com.friendoncampus.notification.service.NotificationQueryService;
 import com.friendoncampus.notification.service.NotificationReadStateService;
 import com.friendoncampus.notification.web.dto.NotificationPageResponse;
 import com.friendoncampus.notification.web.dto.NotificationResponse;
+import com.friendoncampus.notification.web.dto.PushNotificationBatchResponse;
 import com.friendoncampus.notification.web.dto.UnreadCountResponse;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -126,5 +128,18 @@ public class NotificationController {
     @GetMapping("/unread-count")
     public UnreadCountResponse unreadCount(@AuthenticationPrincipal Jwt jwt) {
         return new UnreadCountResponse(queryService.countUnread(UUID.fromString(jwt.getSubject())));
+    }
+
+    @Operation(
+            operationId = "notification_get__api_notifications_me_push",
+            summary = "Poll my new in-app push notifications",
+            description = "Bootstraps a server cursor when after is omitted. Subsequent calls return new errand "
+                    + "lifecycle and chat-message cards only. Chat cards are transient and never enter the bell list.")
+    @GetMapping("/push")
+    public PushNotificationBatchResponse push(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) OffsetDateTime after) {
+        return PushNotificationBatchResponse.from(
+                queryService.pushFor(UUID.fromString(jwt.getSubject()), after));
     }
 }

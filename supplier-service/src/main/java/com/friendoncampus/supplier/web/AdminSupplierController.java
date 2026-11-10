@@ -1,15 +1,25 @@
 package com.friendoncampus.supplier.web;
 
+import java.util.UUID;
+
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.friendoncampus.supplier.service.AdminSupplierQuery;
+import com.friendoncampus.supplier.service.DeleteSupplierCommand;
+import com.friendoncampus.supplier.service.SupplierImageService;
 import com.friendoncampus.supplier.service.SupplierService;
 import com.friendoncampus.supplier.web.dto.SupplierListResponse;
 import com.friendoncampus.supplier.web.dto.SupplierMetadataResponse;
+import com.friendoncampus.supplier.web.dto.SupplierResponse;
 import com.friendoncampus.supplier.web.error.ApiErrorDocumentation;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,9 +40,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class AdminSupplierController {
 
     private final SupplierService supplierService;
+    private final SupplierImageService supplierImageService;
 
-    public AdminSupplierController(SupplierService supplierService) {
+    public AdminSupplierController(
+            SupplierService supplierService,
+            SupplierImageService supplierImageService) {
         this.supplierService = supplierService;
+        this.supplierImageService = supplierImageService;
     }
 
     @Operation(
@@ -121,5 +135,93 @@ public class AdminSupplierController {
     @GetMapping("/metadata")
     public SupplierMetadataResponse getSupplierMetadata() {
         return SupplierMetadataResponse.from(supplierService.getAllSupplierMetadata());
+    }
+
+    @Operation(
+            operationId = "uploadSupplierImage",
+            summary = "Upload or replace a supplier image",
+            description = "Stores a validated JPEG, PNG, or WebP image up to 5 MB in private object storage. Replaces any external URL or previous upload. Requires the latest Supplier version and an ADMIN access token.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Image uploaded",
+                    content = @Content(schema = @Schema(implementation = SupplierResponse.class))),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Missing version or invalid image",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.InvalidSupplierImage.class))),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Supplier not found",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierNotFound.class))),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "Requested version is stale",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierUpdateConflict.class))),
+            @ApiResponse(
+                    responseCode = "503",
+                    description = "Image storage is unavailable",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierImageUnavailable.class)))
+    })
+    @PutMapping(path = "/{id}/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public SupplierResponse uploadSupplierImage(
+            @PathVariable UUID id,
+            @Parameter(
+                    description = "Version from the latest supplier response",
+                    required = true,
+                    schema = @Schema(type = "integer", format = "int64", minimum = "0"))
+            @RequestParam(required = false) String version,
+            @Parameter(description = "JPEG, PNG, or WebP image up to 5 MB", required = true)
+            @RequestPart("file") MultipartFile file) {
+        long parsedVersion = DeleteSupplierCommand.from(version).version();
+        return SupplierResponse.from(supplierImageService.upload(id, parsedVersion, file));
+    }
+
+    @Operation(
+            operationId = "removeSupplierImage",
+            summary = "Remove a supplier image",
+            description = "Clears either an external image URL or an uploaded image. Requires the latest Supplier version and an ADMIN access token.")
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "Image removed, or unchanged when no image exists",
+                    content = @Content(schema = @Schema(implementation = SupplierResponse.class))),
+            @ApiResponse(
+                    responseCode = "400",
+                    description = "Missing or invalid version",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.InvalidRequest.class))),
+            @ApiResponse(
+                    responseCode = "404",
+                    description = "Supplier not found",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierNotFound.class))),
+            @ApiResponse(
+                    responseCode = "409",
+                    description = "Requested version is stale",
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                            schema = @Schema(implementation = ApiErrorDocumentation.SupplierUpdateConflict.class)))
+    })
+    @DeleteMapping("/{id}/image")
+    public SupplierResponse removeSupplierImage(
+            @PathVariable UUID id,
+            @Parameter(
+                    description = "Version from the latest supplier response",
+                    required = true,
+                    schema = @Schema(type = "integer", format = "int64", minimum = "0"))
+            @RequestParam(required = false) String version) {
+        long parsedVersion = DeleteSupplierCommand.from(version).version();
+        return SupplierResponse.from(supplierImageService.remove(id, parsedVersion));
     }
 }

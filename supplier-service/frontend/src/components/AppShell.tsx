@@ -6,6 +6,7 @@ import bagIcon from '../assets/foc-bag.svg'
 import { navigateTo } from '../navigation'
 import styles from './AppShell.module.css'
 import { NotificationBell } from './NotificationBell'
+import { NotificationPush } from './NotificationPush'
 
 export function AppShell() {
   const accountMenuRef = useRef<HTMLDetailsElement>(null)
@@ -20,11 +21,15 @@ export function AppShell() {
   const returnTo = `${location.pathname}${location.search}`
   const locationsPath =
     session?.role === 'ADMIN' ? '/admin/suppliers' : '/suppliers'
+  const errandsPath =
+    session?.role === 'REQUESTER' || session?.role === 'USER'
+      ? '/errands/mine'
+      : '/errands/browse'
 
   const openAdminWorkspace = async () => {
     if (!(await selectWorkspaceRole('ADMIN'))) return
     if (accountMenuRef.current) accountMenuRef.current.open = false
-    navigateTo('/admin/suppliers')
+    navigateTo('/admin')
   }
 
   const returnToRequesterWorkspace = async () => {
@@ -39,23 +44,33 @@ export function AppShell() {
     <div className={styles.app}>
       <header className={styles.header}>
         <div className={styles.headerContent}>
-          <a className={styles.brand} href="/">
+          <a
+            className={styles.brand}
+            href={session?.role === 'ADMIN' ? '/admin' : '/'}
+          >
             <img alt="" height="24" src={bagIcon} width="24" />
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className={styles.serviceNav}>
-            <a href="/">Home</a>
-            {session?.role !== 'ADMIN' && <a href="/errands/browse">Errands</a>}
-            <Link aria-current="page" to={locationsPath}>
-              Suppliers
-            </Link>
-            {session?.role !== 'ADMIN' && <a href="/credits">Credits</a>}
-            {session?.role === 'ADMIN' && <a href="/admin">Admin</a>}
+            {session?.role === 'ADMIN' ? (
+              <>
+                <a href="/admin">Admin</a>
+                <Link aria-current="page" to={locationsPath}>
+                  Suppliers
+                </Link>
+              </>
+            ) : (
+              <>
+                <a href="/">Home</a>
+                <a href={errandsPath}>Errands</a>
+                <Link aria-current="page" to={locationsPath}>
+                  Suppliers
+                </Link>
+                <a href="/credits">Credits</a>
+              </>
+            )}
           </nav>
-          <nav
-            aria-label="Account and workspace"
-            className={styles.actions}
-          >
+          <nav aria-label="Account and workspace" className={styles.actions}>
             {session && session.role !== 'ADMIN' && (
               <div
                 aria-label="Choose your current role"
@@ -86,7 +101,12 @@ export function AppShell() {
                 </span>
               </div>
             )}
-            <NotificationBell badgeClassName={styles.notificationBadge} className={styles.notificationBell} />
+            {session?.role !== 'ADMIN' && (
+              <NotificationBell
+                badgeClassName={styles.notificationBadge}
+                className={styles.notificationBell}
+              />
+            )}
             {session ? (
               <>
                 <details className={styles.userMenu} ref={accountMenuRef}>
@@ -145,11 +165,15 @@ export function AppShell() {
                 </details>
               </>
             ) : (
-              <a href={`/?returnTo=${encodeURIComponent(returnTo)}`}><LogIn aria-hidden="true" />Sign in</a>
+              <a href={`/?returnTo=${encodeURIComponent(returnTo)}`}>
+                <LogIn aria-hidden="true" />
+                Sign in
+              </a>
             )}
           </nav>
         </div>
       </header>
+      <NotificationPush role={session?.role} />
       {workspaceError && (
         <p className={styles.workspaceError} role="alert">
           {workspaceError}

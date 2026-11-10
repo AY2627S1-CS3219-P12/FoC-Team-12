@@ -13,7 +13,6 @@ import {
   PackageCheck,
   Search,
   ShieldCheck,
-  Sparkles,
   Store,
   UserPlus,
 } from 'lucide-react'
@@ -31,6 +30,7 @@ import {
 import { OtpInput } from './OtpInput'
 import { AdminUserManagement } from './AdminUserManagement'
 import { NotificationBell } from './components/NotificationBell'
+import { NotificationPush } from './components/NotificationPush'
 import { navigateTo } from './navigation'
 import bagIcon from './assets/foc-bag.svg'
 
@@ -171,6 +171,14 @@ export function App() {
       })
 
     return () => { cancelled = true }
+  }, [session])
+
+  useEffect(() => {
+    if (session?.role !== 'ADMIN' || window.location.pathname !== '/') return
+    const requestedView = new URLSearchParams(window.location.search).get('view')
+    if (requestedView !== 'profile' && requestedView !== 'users') {
+      navigateTo('/admin')
+    }
   }, [session])
 
   useEffect(() => () => {
@@ -701,7 +709,13 @@ export function App() {
     const profilePage = requestedPage === 'profile'
     const homePage = !adminUsersPage && !profilePage
     const suppliersPath = adminMode ? '/admin/suppliers' : '/suppliers'
-    const canUseAdmin = session.availableRoles?.includes('ADMIN') ?? false
+    const canUseAdmin =
+      (session.availableRoles?.includes('ADMIN') ?? false) ||
+      (displayedProfile?.roles?.includes('ADMIN') ?? false)
+    const errandsPath =
+      session.role === 'REQUESTER' || session.role === 'USER'
+        ? '/errands/mine'
+        : '/errands/browse'
     const accountInitial = session.username.trim().charAt(0).toUpperCase()
     const accountNameParts = session.username.trim().split(/\s+/)
     const capitalLetters = session.username.match(/[A-Z]/g)?.join('') ?? ''
@@ -793,16 +807,20 @@ export function App() {
     return <div className="profile-shell">
       <header className="profile-app-header">
         <div className="profile-app-header-content">
-          <a className="profile-brand" href="/">
+          <a className="profile-brand" href={adminMode ? '/admin' : '/'}>
             <img alt="" height="24" src={bagIcon} width="24" />
             <span>Friend on Campus</span>
           </a>
           <nav className="profile-service-nav" aria-label="Main navigation">
-            <a aria-current={homePage ? 'page' : undefined} href="/">Home</a>
-            {!adminMode && <a href="/errands/browse">Errands</a>}
-            <a href={suppliersPath}>Suppliers</a>
-            {!adminMode && <a href="/credits">Credits</a>}
-            {adminMode && <a href="/admin">Admin</a>}
+            {adminMode ? <>
+              <a href="/admin">Admin</a>
+              <a href={suppliersPath}>Suppliers</a>
+            </> : <>
+              <a aria-current={homePage ? 'page' : undefined} href="/">Home</a>
+              <a href={errandsPath}>Errands</a>
+              <a href={suppliersPath}>Suppliers</a>
+              <a href="/credits">Credits</a>
+            </>}
           </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">
             {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">
@@ -813,7 +831,7 @@ export function App() {
                   onClick={() => { void selectWorkspaceRole('COURIER') }}>Courier</button>
               </span>
             </div>}
-            <NotificationBell />
+            {!adminMode && <NotificationBell />}
             <details className="profile-account-menu" ref={accountMenuRef}>
               <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
                 <span aria-hidden="true" className="profile-account-avatar">{accountInitial}</span>
@@ -843,6 +861,7 @@ export function App() {
           </nav>
         </div>
       </header>
+      <NotificationPush role={session.role} />
       {workspaceMessage && <p className="access-message profile-workspace-error" role="alert">{workspaceMessage}</p>}
       {adminUsersPage
         ? <main className="admin-users-main"><AdminUserManagement currentUserId={session.userId} /></main>
@@ -872,7 +891,6 @@ export function App() {
       </header> : <>
         <header className="campus-home-hero">
           <div className="campus-home-copy">
-            <p className="campus-home-kicker"><Sparkles aria-hidden="true" /> Made for your campus day</p>
             <h1 id="dashboard-title">Your campus.<br /><span>A thousand</span> small favours.</h1>
             <p className="campus-home-lede">Get everyday campus errands done by students already heading your way. Simple, trusted and made for the rhythm of university life.</p>
             <nav className="campus-home-actions" aria-label="Start on Friend on Campus">

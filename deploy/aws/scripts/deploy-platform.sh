@@ -18,6 +18,9 @@ set -euo pipefail
 : "${NOTIFICATION_IMAGE:?NOTIFICATION_IMAGE is required}"
 : "${CHAT_S3_BUCKET:?CHAT_S3_BUCKET is required}"
 : "${CHAT_SERVICE_ROLE_ARN:?CHAT_SERVICE_ROLE_ARN is required}"
+: "${SUPPLIER_S3_BUCKET:?SUPPLIER_S3_BUCKET is required}"
+: "${SUPPLIER_SERVICE_ROLE_ARN:?SUPPLIER_SERVICE_ROLE_ARN is required}"
+: "${MSK_BOOTSTRAP_SERVERS:?MSK_BOOTSTRAP_SERVERS is required}"
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 profile_args=()
@@ -122,6 +125,15 @@ wait_for_secret_key() {
   return 1
 }
 
+webhook_endpoint_ready() {
+  local ready_endpoints
+  ready_endpoints=$(kubectl -n external-secrets get endpointslice \
+    -l kubernetes.io/service-name=external-secrets-webhook \
+    -o jsonpath='{range .items[*].endpoints[*]}{.conditions.ready}{"\n"}{end}' \
+    2>/dev/null || true)
+  [[ $ready_endpoints == *true* ]]
+}
+
 aws "${profile_args[@]}" --region "$AWS_REGION" eks update-kubeconfig --name "$EKS_CLUSTER_NAME" >/dev/null
 
 sed "s|RDS_HOST_REPLACED_BY_DEPLOY_SCRIPT|$RDS_HOST|g" \
@@ -144,23 +156,40 @@ helm upgrade --install external-secrets "$external_secrets_chart" \
 # Helm can update the ServiceAccount annotation without changing the Deployment template. Restart
 # the controller so an existing pod is recreated with AWS_ROLE_ARN and the projected IRSA token.
 kubectl -n external-secrets rollout restart deployment/external-secrets
-kubectl -n external-secrets rollout status deployment/external-secrets --timeout=10m
+for deployment in external-secrets external-secrets-webhook external-secrets-cert-controller; do
+  kubectl -n external-secrets rollout status "deployment/$deployment" --timeout=10m
+done
+retry 12 5 webhook_endpoint_ready
 
 export AWS_REGION RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID
 export GATEWAY_IMAGE USER_IMAGE SUPPLIER_IMAGE ORDER_IMAGE CREDIT_IMAGE ADMIN_IMAGE CHAT_IMAGE NOTIFICATION_IMAGE
 export CHAT_S3_BUCKET
 export CHAT_SERVICE_ROLE_ARN
+export SUPPLIER_S3_BUCKET
+export SUPPLIER_SERVICE_ROLE_ARN
+export MSK_BOOTSTRAP_SERVERS
 rendered=$(mktemp)
-trap 'rm -f "$rendered"; rm -rf "$chart_dir"' EXIT
+secret_resources=$(mktemp)
+runtime_resources=$(mktemp)
+trap 'rm -f "$rendered" "$secret_resources" "$runtime_resources"; rm -rf "$chart_dir"' EXIT
 "$root/deploy/aws/scripts/render-k8s.sh" > "$rendered"
 
 # Apply secret synchronization before workloads so missing credentials fail early.
-awk 'BEGIN{RS="---"} /kind: (ClusterSecretStore|ExternalSecret)/ {print $0 "---"}' "$rendered" | kubectl apply -f -
+awk 'BEGIN{RS="---"} /kind: (ClusterSecretStore|ExternalSecret)/ {print $0 "---"}' \
+  "$rendered" > "$secret_resources"
+# Do not send the same ExternalSecrets through their validating webhook again during the later
+# workload apply. Besides being redundant, that second pass previously made a transient webhook
+# timeout fail provisioning after every secret had already synchronized successfully.
+awk 'BEGIN{RS="---"} !/kind: (ClusterSecretStore|ExternalSecret)/ && NF {print $0 "---"}' \
+  "$rendered" > "$runtime_resources"
+# The admission webhook can briefly time out while EKS networking or webhook endpoints converge.
+# Reapplying this declarative subset is safe and avoids restarting the entire provisioning workflow.
+retry 5 10 kubectl apply -f "$secret_resources"
 secret_sync_token=$(date +%s)
 for name in user-service-secrets user-mail-secrets supplier-service-secrets order-service-secrets \
   credit-service-secrets admin-service-secrets chat-service-secrets notification-service-secrets \
   kafka-broker-secrets chat-kafka-client notification-kafka-client kafka-ui-secrets rds-master; do
-  kubectl -n foc-staging annotate "externalsecret/$name" \
+  retry 5 10 kubectl -n foc-staging annotate "externalsecret/$name" \
     "force-sync=$secret_sync_token" --overwrite >/dev/null
   if ! kubectl -n foc-staging wait --for=condition=Ready "externalsecret/$name" --timeout=5m; then
     echo "External Secret $name did not become ready; collecting diagnostics." >&2
@@ -180,15 +209,11 @@ wait_for_job foc-staging database-bootstrap 900
 
 kubectl -n foc-staging create configmap kafka-scripts \
   --from-file=lib.sh="$root/deploy/kafka/lib.sh" \
-  --from-file=broker-entrypoint.sh="$root/deploy/kafka/broker-entrypoint.sh" \
-  --from-file=healthcheck.sh="$root/deploy/kafka/healthcheck.sh" \
   --from-file=initialize.sh="$root/deploy/kafka/initialize.sh" \
-  --from-file=verify.sh="$root/deploy/kafka/verify.sh" \
-  --from-file=probe.sh="$root/deploy/kafka/k8s/probe.sh" \
   --dry-run=client -o yaml | kubectl apply -f -
 
 cli_dir=$(mktemp -d)
-trap 'rm -f "$rendered"; rm -rf "$chart_dir" "$cli_dir"' EXIT
+trap 'rm -f "$rendered" "$secret_resources" "$runtime_resources"; rm -rf "$chart_dir" "$cli_dir"' EXIT
 for name in kafka-topics.sh kafka-configs.sh kafka-acls.sh kafka-broker-api-versions.sh \
   kafka-console-producer.sh kafka-console-consumer.sh kafka-get-offsets.sh; do
   cp "$root/deploy/kafka/k8s/cli.sh" "$cli_dir/$name"
@@ -196,19 +221,34 @@ done
 kubectl -n foc-staging create configmap kafka-cli --from-file="$cli_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl apply -f "$rendered"
-kubectl -n foc-staging rollout status statefulset/kafka --timeout=20m
+kubectl apply -f "$runtime_resources"
 kubectl -n foc-staging rollout status statefulset/rabbitmq --timeout=20m
 
-job="kafka-init-$(date +%s)"
-sed "s/name: kafka-init/name: $job/" "$root/deploy/kafka/k8s/initialize-job.yaml" \
+job="msk-init-$(date +%s)"
+sed "s/name: msk-init/name: $job/" "$root/deploy/aws/k8s/staging/msk-initialize-job.yaml" \
   | kubectl -n foc-staging create -f -
 wait_for_job foc-staging "$job" 1200
+
+# During first-time cutover, adding ACLs incrementally can briefly deny a consumer before its own
+# ACL is installed. Spring then stops that listener while the Pod itself remains Ready. Restart all
+# Kafka clients only after the initializer has converged every topic and ACL so no listener remains
+# silently stopped. Repeating this during later provisioning is safe and gives clients a clean
+# authenticated session against the reconciled broker policy.
+for deployment in user-service order-service credit-service admin-service chat-service \
+  notification-service kafka-ui; do
+  kubectl -n foc-staging rollout restart "deployment/$deployment"
+done
 
 for deployment in user-service supplier-service order-service credit-service admin-service chat-service \
   notification-service gateway kafka-ui; do
   kubectl -n foc-staging rollout status "deployment/$deployment" --timeout=20m
 done
 
+# The successful MSK initialization and application rollout are the cutover point. Remove the old
+# single-broker workload but retain its PVC for an explicit, reviewed cleanup after verification.
+kubectl -n foc-staging delete statefulset kafka --ignore-not-found
+kubectl -n foc-staging delete service kafka kafka-headless --ignore-not-found
+kubectl -n foc-staging delete configmap kafka-config --ignore-not-found
+
 kubectl -n foc-staging get ingress gateway
-echo 'Staging workloads are healthy. The private ALB may need several minutes to become Active.'
+echo 'Staging workloads are healthy on Amazon MSK. The private ALB may need several minutes to become Active.'

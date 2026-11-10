@@ -6400,7 +6400,8 @@
               "PICKUP_OVERDUE",
               "CREDITS_WELCOME",
               "CREDITS_RECEIVED",
-              "CREDITS_COMPENSATED"
+              "CREDITS_COMPENSATED",
+              "CHAT_MESSAGE_RECEIVED"
             ]
           },
           "orderId": {

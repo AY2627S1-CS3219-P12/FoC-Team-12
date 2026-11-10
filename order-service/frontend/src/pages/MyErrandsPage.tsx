@@ -117,13 +117,16 @@ export function MyErrandsPage() {
       />
       <ErrandSection
         empty={current.activeEmpty}
+        hideWhenEmpty
         key={`${kind}-active`}
         kind={kind}
         status="active"
         title="Active"
       />
       <ErrandSection
+        courierHistory
         empty={current.pastEmpty}
+        history
         key={`${kind}-past`}
         kind={kind}
         states={current.pastStates}
@@ -140,6 +143,8 @@ function ErrandSection({
   title,
   empty,
   history = false,
+  courierHistory = false,
+  hideWhenEmpty = false,
   states = [],
 }: {
   kind: Kind
@@ -147,6 +152,8 @@ function ErrandSection({
   title: string
   empty: string
   history?: boolean
+  courierHistory?: boolean
+  hideWhenEmpty?: boolean
   states?: OrderState[]
 }) {
   const [page, setPage] = useState(0)
@@ -158,9 +165,28 @@ function ErrandSection({
   })
   const headingId = `${kind}-${status}-heading`
 
+  if (hideWhenEmpty && list.data && list.data.items.length === 0) return null
+
   return (
-    <section aria-labelledby={headingId} className="my-errands-section">
-      {history && (
+    <section
+      aria-labelledby={headingId}
+      className={`my-errands-section${courierHistory ? ' courier-history-panel' : ''}`}
+    >
+      {courierHistory && (
+        <header className="courier-history-heading">
+          <div>
+            <p className="eyebrow">Courier history</p>
+            <h2 id={headingId}>Past errands you ran</h2>
+          </div>
+          {list.data && (
+            <span>
+              {list.data.totalItems}{' '}
+              {list.data.totalItems === 1 ? 'completed errand' : 'completed'}
+            </span>
+          )}
+        </header>
+      )}
+      {history && !courierHistory && (
         <h2 className="visually-hidden" id={headingId}>
           {title}
         </h2>
@@ -244,7 +270,7 @@ function ErrandSection({
                 timingLabel={
                   status !== 'past'
                     ? `Pick up by ${formatDeadline(order.pickupDeadline)}`
-                    : `Finished ${formatDeadline(order.stateChangedAt)}`
+                    : formatDeadline(order.stateChangedAt)
                 }
               />
             ))}

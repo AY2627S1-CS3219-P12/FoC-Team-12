@@ -23,6 +23,7 @@ public class KafkaConfiguration {
 
     static final String CREDIT_EVENTS_DLT = "credit.events.DLT";
     static final String ORDER_LIFECYCLE_EVENTS_DLT = "order.lifecycle.events.DLT";
+    static final String CHAT_EVENTS_DLT = "chat.events.DLT";
 
     @Bean
     CreditEventsListener creditEventsListener(CreditEventHandler handler) {
@@ -32,6 +33,11 @@ public class KafkaConfiguration {
     @Bean
     OrderLifecycleEventsListener orderLifecycleEventsListener(OrderLifecycleEventHandler handler) {
         return new OrderLifecycleEventsListener(handler);
+    }
+
+    @Bean
+    ChatMessageEventsListener chatMessageEventsListener(ChatMessageEventHandler handler) {
+        return new ChatMessageEventsListener(handler);
     }
 
     /**
@@ -51,6 +57,12 @@ public class KafkaConfiguration {
     ConcurrentKafkaListenerContainerFactory<String, String> orderLifecycleEventsContainerFactory(
             ConsumerFactory<String, String> consumerFactory, KafkaTemplate<String, String> kafkaTemplate) {
         return containerFactory(consumerFactory, kafkaTemplate, ORDER_LIFECYCLE_EVENTS_DLT);
+    }
+
+    @Bean
+    ConcurrentKafkaListenerContainerFactory<String, String> chatEventsContainerFactory(
+            ConsumerFactory<String, String> consumerFactory, KafkaTemplate<String, String> kafkaTemplate) {
+        return containerFactory(consumerFactory, kafkaTemplate, CHAT_EVENTS_DLT);
     }
 
     private static ConcurrentKafkaListenerContainerFactory<String, String> containerFactory(

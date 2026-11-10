@@ -23,25 +23,37 @@ FoC should feel like one campus application, not a collection of service dashboa
 
 All signed-in service pages use the same shell and order:
 
-1. Friend on Campus brand, linking to `/`.
-2. Participant modes show `Home`, `Errands`, `Suppliers`, `Credits`. Admin mode shows only
-   `Home`, `Suppliers`, `Admin`; participant Errands and Credits destinations are omitted.
+1. Friend on Campus brand, linking to `/admin` in Admin mode and `/` otherwise.
+2. Participant modes show `Home`, `Errands`, `Suppliers`, `Credits`. Admin mode uses `Admin` as
+   its home destination and shows only `Admin`, `Suppliers`; `Home`, participant Errands and
+   Credits destinations are omitted.
 3. Requester/Courier selector for participant modes.
-4. Notification bell, signed in only: a Lucide `Bell` linking to `/notifications`, with the unread
-   count as a small badge (`9+` above nine) and in its accessible name ("Notifications, 3 unread").
-   It is `2.75rem` square with a `1.25rem` icon, centred, and marked current on the Notifications
-   page. Header rules for `1rem` navigation icons must exclude the bell.
+4. Notification bell in participant modes only: a Lucide `Bell` linking to `/notifications`, with
+   the unread count as a small badge (`9+` above nine) and in its accessible name
+   ("Notifications, 3 unread"). It is hidden in Admin mode, `2.75rem` square with a `1.25rem`
+   icon, centred, and marked current on the Notifications page. Its badge uses coral `#df9b93`
+   with navy `#172641` text in every frontend. Header rules for `1rem` navigation icons must
+   exclude the bell.
 5. Account menu with profile, permitted administration actions and sign out.
 
 Every account menu links Profile to `/?view=profile`. Personal details, username editing and
 password replacement live on that dedicated view and are not duplicated on Home. Sign out clears
 the shared browser session and UI mode before returning to `/`, so it behaves consistently from
-every service shell.
+every service shell. The header establishes a stacking layer above page artwork and cards, and the
+open account menu remains pointer-interactive above that layer on every route.
 
 The bell is the same `NotificationBell.tsx` and `useUnreadCount.ts` copied into every frontend's
 `src/components/`; Notification Service owns them and the copies must stay identical. It polls only
 the unread count, about every 30 seconds while the tab is visible, keeps the last count when a poll
 fails rather than showing `0`, and stops when the session ends.
+
+Participant pages also mount the Notification-owned `NotificationPush.tsx` and stylesheet. It
+polls the cursor-based push feed while the page is visible and shows up to three top-right cards.
+Errand lifecycle and private chat-message cards dismiss automatically after five seconds, may be
+dismissed manually, and open the relevant errand or chat when selected. They are never rendered in
+Admin mode. Chat-message cards are transient only: they do not appear in the bell list or its
+unread count; lifecycle notifications remain persistent in both places. Push payloads contain only
+the existing privacy-minimal notification message and order link, never private chat content.
 
 The active route uses text colour plus a 3 px underline. Primary navigation uses concise text labels
 without supporting icons; the notification bell remains an icon control with an accessible name.
@@ -65,7 +77,10 @@ The Requester/Courier selector is one control shared by every frontend:
 Changing role calls the User Service session-role endpoint. Only a valid replacement response may
 replace the stored JWT and selected role. While pending, both choices are disabled. On failure,
 keep the previous JWT and role, show an actionable error and leave backend authorization
-authoritative. A role switch must not alter balances, orders, profiles or other domain data.
+authoritative. A successful account-menu switch to Admin opens `/admin`; an existing Admin session
+visiting bare `/` also opens `/admin`. Switching back to User opens `/`. This prevents
+participant-only pages from remaining visible under an Admin session. A role switch must not alter
+balances, orders, profiles or other domain data.
 
 ## Foundations
 
@@ -132,10 +147,11 @@ Meet WCAG AA contrast for text and controls. Never communicate status using colo
 - **Notifications:** render event-backed rows newest first with an icon, plain-language category,
   timestamp, unread text and available actions. Colour accents distinguish errand, credit,
   completion and attention categories but never replace their text labels.
-- **Admin:** present the protected case queue as the dashboard's primary work area, followed by
-  platform tools. Filters, assignment, evidence, participant statements, private follow-up and
-  resolution remain visually distinct decision areas. Do not manufacture dashboard metrics when
-  the Admin API does not provide them.
+- **Admin:** present a protected overview with Admin-API-backed case counts and a short open-case
+  priority queue, followed by platform tools. The full queue remains the primary review work area
+  and keeps filters, assignment, evidence, participant statements, private follow-up and resolution
+  visually distinct. Never manufacture supplier, member or case metrics that the Admin API does
+  not provide.
 
 ## Key journeys
 
@@ -144,7 +160,9 @@ Meet WCAG AA contrast for text and controls. Never communicate status using colo
 - Signed-in Home prioritises requesting help and running errands, then exposes Suppliers, Credits
   and account information.
 - Errand screens adapt actions to the active Requester/Courier role while preserving access to the
-  user's own active and historical errands.
+  user's own active and historical errands. The Requester Errands destination is `/errands/mine`,
+  where **Create new errand** opens the separate `/errands/new` form; Courier Errands opens the
+  available request pool at `/errands/browse`.
 - Suppliers remain a discoverable participant destination; administration actions appear only in
   Admin mode and are still enforced by the Supplier backend.
 - Credits are an account view inside the main application, not a separate dashboard. Account

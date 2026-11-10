@@ -86,7 +86,8 @@ The backend contract wins over example data in Figma:
   The Courier tabs keep the existing `/errands/browse` and `/errands/mine` routes and omit reference
   counts because each route loads its own authoritative paginated result.
   Opening the other role's screen, or switching role while on one, goes to the current role's own
-  screen (`/errands/new` for Requester, `/errands/browse` for Courier).
+  landing (`/errands/mine` for Requester, `/errands/browse` for Courier). The Requester opens the
+  create form explicitly from **Create new errand**.
 - **An errand page follows the header role too.** Requester mode shows only the user's own errands;
   Courier mode shows errands they run or could accept. Opening any other errand in that role, or
   switching role while on one, goes to the current role's own screen. Admin sessions are unchanged.

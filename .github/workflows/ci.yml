@@ -578,7 +578,13 @@ jobs:
         run: docker run --rm -v "$PWD:/repo:ro" -w /repo koalaman/shellcheck:v0.11.0 deploy/aws/scripts/*.sh
       - name: Render and schema-check the AWS Kubernetes overlay
         run: |
-          kubectl kustomize --load-restrictor=LoadRestrictionsNone deploy/aws/k8s/staging > /tmp/foc-aws.yaml
+          {
+            kubectl kustomize --load-restrictor=LoadRestrictionsNone deploy/aws/k8s/staging
+            printf '\n---\n'
+            cat deploy/aws/k8s/staging/msk-initialize-job.yaml
+            printf '\n---\n'
+            cat deploy/aws/k8s/staging/static-node-pools.yaml
+          } > /tmp/foc-aws.yaml
           docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 \
             -strict -ignore-missing-schemas -summary < /tmp/foc-aws.yaml
 

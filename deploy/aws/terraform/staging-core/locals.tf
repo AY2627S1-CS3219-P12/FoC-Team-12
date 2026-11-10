@@ -5,7 +5,21 @@ data "aws_availability_zones" "available" {
 
 locals {
   name_prefix = "foc-${var.environment}"
-  azs         = slice(data.aws_availability_zones.available.names, 0, 2)
+  # MSK needs three distinct AZs. The existing EKS control plane was created with the first two
+  # AZs and AWS does not permit expanding that set later, so keep its subnet selection stable.
+  azs     = slice(data.aws_availability_zones.available.names, 0, 3)
+  eks_azs = slice(data.aws_availability_zones.available.names, 0, 2)
+
+  msk_scram_users = {
+    foc_admin            = "KAFKA_ADMIN_PASSWORD"
+    user_service         = "KAFKA_USER_SERVICE_PASSWORD"
+    order_service        = "KAFKA_ORDER_SERVICE_PASSWORD"
+    credit_service       = "KAFKA_CREDIT_SERVICE_PASSWORD"
+    admin_service        = "KAFKA_ADMIN_SERVICE_PASSWORD"
+    chat_service         = "KAFKA_CHAT_SERVICE_PASSWORD"
+    notification_service = "KAFKA_NOTIFICATION_SERVICE_PASSWORD"
+    kafka_ui             = "KAFKA_UI_BROKER_PASSWORD"
+  }
 
   # EKS exposes an OpenID Connect issuer for IAM Roles for Service Accounts (IRSA).
   # The NUS AWS organization denies eks-auth:AssumeRoleForPodIdentity, so workloads

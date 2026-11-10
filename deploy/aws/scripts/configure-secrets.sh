@@ -56,6 +56,24 @@ merge_file() {
     --secret-id "$name" --secret-string "file://$file" >/dev/null
   printf 'Initialized %s.\n' "$name"
 }
+sync_scram_secret() {
+  local name=$1 username=$2 password=$3
+  local file="$tmp/scram-${username}.json"
+  local current="$tmp/scram-${username}-current.json"
+  jq -n --arg username "$username" --arg password "$password" \
+    '{username:$username,password:$password}' > "$file"
+  if has_value "$name"; then
+    aws "${profile_args[@]}" --region "$region" secretsmanager get-secret-value \
+      --secret-id "$name" --query SecretString --output text > "$current"
+    if cmp -s <(jq -S . "$current") <(jq -S . "$file"); then
+      printf 'Preserved existing SCRAM identity %s.\n' "$username"
+      return
+    fi
+  fi
+  aws "${profile_args[@]}" --region "$region" secretsmanager put-secret-value \
+    --secret-id "$name" --secret-string "file://$file" >/dev/null
+  printf 'Synchronized SCRAM identity %s without printing its password.\n' "$username"
+}
 secret_property() {
   local name=$1 property=$2
   has_value "$name" || return 1
@@ -241,5 +259,26 @@ merge_trust_file "$chat_secret" "$tmp/chat.json" CHAT_SERVICE_TRUSTED_KEYS
 put_file "foc/$environment/notification-service-secrets" "$tmp/notification.json"
 merge_file "foc/$environment/kafka-broker-secrets" "$tmp/kafka.json"
 put_file "foc/$environment/kafka-ui-secrets" "$tmp/kafka-ui.json"
+
+# Amazon MSK requires one KMS-encrypted Secrets Manager secret per SCRAM identity. Copy the
+# already-established passwords rather than creating a second set of credentials. Run apply-core
+# first so Terraform has created these empty AmazonMSK_* secret containers.
+kafka_secret="foc/$environment/kafka-broker-secrets"
+sync_scram_secret "AmazonMSK_foc-${environment}_foc_admin" foc_admin \
+  "$(secret_property "$kafka_secret" KAFKA_ADMIN_PASSWORD)"
+sync_scram_secret "AmazonMSK_foc-${environment}_user_service" user_service \
+  "$(secret_property "$kafka_secret" KAFKA_USER_SERVICE_PASSWORD)"
+sync_scram_secret "AmazonMSK_foc-${environment}_order_service" order_service \
+  "$(secret_property "$kafka_secret" KAFKA_ORDER_SERVICE_PASSWORD)"
+sync_scram_secret "AmazonMSK_foc-${environment}_credit_service" credit_service \
+  "$(secret_property "$kafka_secret" KAFKA_CREDIT_SERVICE_PASSWORD)"
+sync_scram_secret "AmazonMSK_foc-${environment}_admin_service" admin_service \
+  "$(secret_property "$kafka_secret" KAFKA_ADMIN_SERVICE_PASSWORD)"
+sync_scram_secret "AmazonMSK_foc-${environment}_chat_service" chat_service \
+  "$(secret_property "$kafka_secret" KAFKA_CHAT_SERVICE_PASSWORD)"
+sync_scram_secret "AmazonMSK_foc-${environment}_notification_service" notification_service \
+  "$(secret_property "$kafka_secret" KAFKA_NOTIFICATION_SERVICE_PASSWORD)"
+sync_scram_secret "AmazonMSK_foc-${environment}_kafka_ui" kafka_ui \
+  "$(secret_property "$kafka_secret" KAFKA_UI_BROKER_PASSWORD)"
 
 echo 'Runtime secrets are initialized. Secret values were not printed or written to the repository.'

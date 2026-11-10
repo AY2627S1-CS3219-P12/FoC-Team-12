@@ -1218,6 +1218,135 @@
           "format": "uuid"
         },
         "eventType": {
+          "const": "ChatMessageSent"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "aggregateType": {
+          "const": "Conversation"
+        },
+        "aggregateId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aggregateVersion": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "producer": {
+          "const": "chat-service"
+        },
+        "correlationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "causationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "actor": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "USER"
+            },
+            "userId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "REQUESTER",
+                "COURIER"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "userId"
+          ],
+          "additionalProperties": false
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "messageId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "conversationId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "orderId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "senderUserId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "recipientUserId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "messageType": {
+              "type": "string",
+              "enum": [
+                "TEXT",
+                "QUICK_REPLY",
+                "IMAGE"
+              ]
+            },
+            "messagePreview": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "messageId",
+            "conversationId",
+            "orderId",
+            "senderUserId",
+            "recipientUserId",
+            "messageType"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "eventId",
+        "eventType",
+        "eventVersion",
+        "aggregateType",
+        "aggregateId",
+        "aggregateVersion",
+        "occurredAt",
+        "producer",
+        "correlationId",
+        "causationId",
+        "actor",
+        "data"
+      ],
+      "additionalProperties": false,
+      "title": "ChatMessageSent",
+      "x-topic": "chat.events"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "eventType": {
           "const": "DisputeCreditsFinalized"
         },
         "eventVersion": {

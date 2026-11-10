@@ -7,6 +7,7 @@ import {
   Plus,
   Save,
   Store,
+  Upload,
 } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
@@ -15,6 +16,8 @@ import {
   type SupplierStatus,
   type UpdateSupplierRequest,
   useCreateSupplierMutation,
+  useRemoveSupplierImageMutation,
+  useUploadSupplierImageMutation,
   useUpdateSupplierMutation,
 } from '../api/adminSupplierApi'
 import type { Supplier } from '../api/supplierQueries'
@@ -39,6 +42,11 @@ interface SupplierFormValues {
   imageUrl: string
   status: SupplierStatus
 }
+
+type ImageMode = 'NONE' | 'URL' | 'UPLOAD'
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
+const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 type FieldErrors = Partial<Record<keyof SupplierFormValues, string>>
 
@@ -75,7 +83,12 @@ function valuesFromSupplier(supplier: Supplier): SupplierFormValues {
   }
 }
 
-function validate(values: SupplierFormValues) {
+function validate(
+  values: SupplierFormValues,
+  imageMode: ImageMode,
+  imageFile: File | null,
+  existingImageSource?: Supplier['imageSource'],
+) {
   const errors: FieldErrors = {}
   const requiredText = [
     ['name', 'Name', 255],
@@ -106,7 +119,9 @@ function validate(values: SupplierFormValues) {
   }
 
   const imageUrl = values.imageUrl.trim()
-  if (imageUrl) {
+  if (imageMode === 'URL' && !imageUrl) {
+    errors.imageUrl = 'Enter an image URL or choose another image option.'
+  } else if (imageMode === 'URL' && imageUrl) {
     try {
       const parsed = new URL(imageUrl)
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -116,10 +131,22 @@ function validate(values: SupplierFormValues) {
       errors.imageUrl = 'Enter a valid absolute image URL.'
     }
   }
+  if (
+    imageMode === 'UPLOAD' &&
+    !imageFile &&
+    existingImageSource !== 'UPLOAD'
+  ) {
+    errors.imageUrl = 'Choose a JPEG, PNG, or WebP image to upload.'
+  }
+  if (imageFile && !ACCEPTED_IMAGE_TYPES.includes(imageFile.type)) {
+    errors.imageUrl = 'Choose a JPEG, PNG, or WebP image.'
+  } else if (imageFile && imageFile.size > MAX_IMAGE_SIZE) {
+    errors.imageUrl = 'Image must be 5 MB or smaller.'
+  }
   return errors
 }
 
-function normalizedDetails(values: SupplierFormValues) {
+function normalizedDetails(values: SupplierFormValues, imageMode: ImageMode) {
   const nullable = (value: string) => value.trim() || null
   return {
     name: values.name.trim(),
@@ -131,8 +158,14 @@ function normalizedDetails(values: SupplierFormValues) {
     longitude: Number(values.longitude),
     openingTime: nullable(values.openingTime),
     closingTime: nullable(values.closingTime),
-    imageUrl: nullable(values.imageUrl),
+    imageUrl: imageMode === 'URL' ? nullable(values.imageUrl) : null,
   }
+}
+
+function imageModeFromSupplier(supplier: Supplier): ImageMode {
+  if (supplier.imageSource === 'UPLOAD') return 'UPLOAD'
+  if (supplier.imageSource === 'EXTERNAL_URL') return 'URL'
+  return 'NONE'
 }
 
 function serverFieldErrors(error: SupplierMutationError) {
@@ -148,24 +181,44 @@ function serverFieldErrors(error: SupplierMutationError) {
 export function CreateSupplierPage() {
   const navigate = useNavigate()
   const mutation = useCreateSupplierMutation()
+  const uploadMutation = useUploadSupplierImageMutation()
   const [values, setValues] = useState(emptyValues)
+  const [imageMode, setImageMode] = useState<ImageMode>('NONE')
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [submissionError, setSubmissionError] = useState('')
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (mutation.isPending) return
-    const validationErrors = validate(values)
+    if (mutation.isPending || uploadMutation.isPending) return
+    const validationErrors = validate(values, imageMode, imageFile)
     setErrors(validationErrors)
     setSubmissionError('')
     if (Object.keys(validationErrors).length) return
 
     const request: CreateSupplierRequest = {
-      ...normalizedDetails(values),
+      ...normalizedDetails(values, imageMode),
       status: values.status,
     }
     try {
       const created = await mutation.mutateAsync(request)
+      if (imageMode === 'UPLOAD' && imageFile) {
+        try {
+          await uploadMutation.mutateAsync({
+            id: created.id!,
+            version: created.version!,
+            file: imageFile,
+          })
+        } catch {
+          navigate('/admin/suppliers', {
+            replace: true,
+            state: {
+              notice: `${created.name} was created, but its photo could not be uploaded. Edit the location to retry.`,
+            },
+          })
+          return
+        }
+      }
       navigate('/admin/suppliers', {
         replace: true,
         state: { notice: `${created.name} was created successfully.` },
@@ -183,13 +236,20 @@ export function CreateSupplierPage() {
   return (
     <SupplierFormLayout
       errors={errors}
+      imageFile={imageFile}
+      imageMode={imageMode}
       mode="create"
       onChange={(field, value) => {
         setValues((current) => ({ ...current, [field]: value }))
         setErrors((current) => ({ ...current, [field]: undefined }))
       }}
       onSubmit={submit}
-      pending={mutation.isPending}
+      onImageFileChange={setImageFile}
+      onImageModeChange={(mode) => {
+        setImageMode(mode)
+        setErrors((current) => ({ ...current, imageUrl: undefined }))
+      }}
+      pending={mutation.isPending || uploadMutation.isPending}
       submissionError={submissionError}
       values={values}
     />
@@ -255,24 +315,62 @@ function LoadedEditSupplierPage({
 }) {
   const navigate = useNavigate()
   const mutation = useUpdateSupplierMutation()
+  const uploadMutation = useUploadSupplierImageMutation()
+  const removeImageMutation = useRemoveSupplierImageMutation()
   const [values, setValues] = useState(() => valuesFromSupplier(supplier))
+  const [imageMode, setImageMode] = useState<ImageMode>(() =>
+    imageModeFromSupplier(supplier),
+  )
+  const [imageFile, setImageFile] = useState<File | null>(null)
   const [errors, setErrors] = useState<FieldErrors>({})
   const [submissionError, setSubmissionError] = useState('')
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
-    if (mutation.isPending) return
-    const validationErrors = validate(values)
+    if (
+      mutation.isPending ||
+      uploadMutation.isPending ||
+      removeImageMutation.isPending
+    )
+      return
+    const validationErrors = validate(
+      values,
+      imageMode,
+      imageFile,
+      supplier.imageSource,
+    )
     setErrors(validationErrors)
     setSubmissionError('')
     if (Object.keys(validationErrors).length) return
 
     const request: UpdateSupplierRequest = {
-      ...normalizedDetails(values),
+      ...normalizedDetails(values, imageMode),
       version: supplier.version!,
     }
     try {
       const updated = await mutation.mutateAsync({ id: supplier.id!, request })
+      try {
+        if (imageMode === 'UPLOAD' && imageFile) {
+          await uploadMutation.mutateAsync({
+            id: updated.id!,
+            version: updated.version!,
+            file: imageFile,
+          })
+        } else if (imageMode === 'NONE' && supplier.imageSource) {
+          await removeImageMutation.mutateAsync({
+            id: updated.id!,
+            version: updated.version!,
+          })
+        }
+      } catch {
+        navigate('/admin/suppliers', {
+          replace: true,
+          state: {
+            notice: `${updated.name} was updated, but its photo change could not be completed. Edit the location to retry.`,
+          },
+        })
+        return
+      }
       navigate('/admin/suppliers', {
         replace: true,
         state: { notice: `${updated.name} was updated successfully.` },
@@ -297,6 +395,8 @@ function LoadedEditSupplierPage({
     const result = await onRefetch()
     if (result.data) {
       setValues(valuesFromSupplier(result.data))
+      setImageMode(imageModeFromSupplier(result.data))
+      setImageFile(null)
       setErrors({})
     }
   }
@@ -304,14 +404,29 @@ function LoadedEditSupplierPage({
   return (
     <SupplierFormLayout
       errors={errors}
+      imageFile={imageFile}
+      imageMode={imageMode}
       mode="edit"
       onChange={(field, value) => {
         setValues((current) => ({ ...current, [field]: value }))
         setErrors((current) => ({ ...current, [field]: undefined }))
       }}
       onReload={submissionError.includes('changed') ? reloadLatest : undefined}
+      onImageFileChange={setImageFile}
+      onImageModeChange={(mode) => {
+        setImageMode(mode)
+        setImageFile(null)
+        if (mode === 'URL' && supplier.imageSource === 'UPLOAD') {
+          setValues((current) => ({ ...current, imageUrl: '' }))
+        }
+        setErrors((current) => ({ ...current, imageUrl: undefined }))
+      }}
       onSubmit={submit}
-      pending={mutation.isPending}
+      pending={
+        mutation.isPending ||
+        uploadMutation.isPending ||
+        removeImageMutation.isPending
+      }
       submissionError={submissionError}
       supplier={supplier}
       values={values}
@@ -322,11 +437,15 @@ function LoadedEditSupplierPage({
 interface SupplierFormLayoutProps {
   mode: 'create' | 'edit'
   values: SupplierFormValues
+  imageMode: ImageMode
+  imageFile: File | null
   errors: FieldErrors
   pending: boolean
   submissionError: string
   supplier?: Supplier
   onChange: (field: keyof SupplierFormValues, value: string) => void
+  onImageModeChange: (mode: ImageMode) => void
+  onImageFileChange: (file: File | null) => void
   onSubmit: (event: FormEvent) => void
   onReload?: () => void
 }
@@ -334,11 +453,15 @@ interface SupplierFormLayoutProps {
 function SupplierFormLayout({
   mode,
   values,
+  imageMode,
+  imageFile,
   errors,
   pending,
   submissionError,
   supplier,
   onChange,
+  onImageModeChange,
+  onImageFileChange,
   onSubmit,
   onReload,
 }: SupplierFormLayoutProps) {
@@ -588,23 +711,119 @@ function SupplierFormLayout({
               />
             </FormField>
             <div className={styles.fullWidth}>
-              <FormField
-                error={errors.imageUrl}
-                id="supplier-image-url"
-                label="Image URL"
-              >
-                <input
-                  aria-describedby={
-                    errors.imageUrl ? 'supplier-image-url-error' : undefined
-                  }
-                  aria-invalid={Boolean(errors.imageUrl)}
-                  id="supplier-image-url"
-                  onChange={(event) => onChange('imageUrl', event.target.value)}
-                  placeholder="https://example.com/location.jpg"
-                  type="url"
-                  value={values.imageUrl}
-                />
-              </FormField>
+              <div className={styles.imageField}>
+                <span className={styles.imageLabel}>Location photo</span>
+                <div
+                  aria-label="Choose location photo source"
+                  className={styles.imageOptions}
+                  role="radiogroup"
+                >
+                  {(
+                    [
+                      ['NONE', 'No photo'],
+                      ['URL', 'Use image URL'],
+                      ['UPLOAD', 'Upload from device'],
+                    ] as const
+                  ).map(([mode, label]) => (
+                    <label className={styles.imageOption} key={mode}>
+                      <input
+                        checked={imageMode === mode}
+                        name="supplier-image-mode"
+                        onChange={() => onImageModeChange(mode)}
+                        type="radio"
+                        value={mode}
+                      />
+                      <span>{label}</span>
+                    </label>
+                  ))}
+                </div>
+
+                {imageMode === 'URL' && (
+                  <FormField
+                    error={errors.imageUrl}
+                    id="supplier-image-url"
+                    label="Image URL"
+                  >
+                    <input
+                      aria-describedby={
+                        errors.imageUrl
+                          ? 'supplier-image-url-error'
+                          : 'supplier-image-url-help'
+                      }
+                      aria-invalid={Boolean(errors.imageUrl)}
+                      id="supplier-image-url"
+                      onChange={(event) =>
+                        onChange('imageUrl', event.target.value)
+                      }
+                      placeholder="https://example.com/location.jpg"
+                      type="url"
+                      value={values.imageUrl}
+                    />
+                    <small id="supplier-image-url-help">
+                      Use a direct HTTPS image address that you are allowed to
+                      display.
+                    </small>
+                  </FormField>
+                )}
+
+                {imageMode === 'UPLOAD' && (
+                  <FormField
+                    error={errors.imageUrl}
+                    id="supplier-image-file"
+                    label={
+                      supplier?.imageSource === 'UPLOAD'
+                        ? 'Replace uploaded image'
+                        : 'Choose image file'
+                    }
+                  >
+                    <div className={styles.filePicker}>
+                      <Upload aria-hidden="true" />
+                      <input
+                        accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                        aria-describedby={
+                          errors.imageUrl
+                            ? 'supplier-image-file-error'
+                            : 'supplier-image-file-help'
+                        }
+                        aria-invalid={Boolean(errors.imageUrl)}
+                        id="supplier-image-file"
+                        onChange={(event) =>
+                          onImageFileChange(event.target.files?.[0] ?? null)
+                        }
+                        type="file"
+                      />
+                    </div>
+                    <small id="supplier-image-file-help">
+                      JPEG, PNG or WebP, up to 5 MB.
+                      {supplier?.imageSource === 'UPLOAD' && !imageFile
+                        ? ' The current uploaded photo will be kept.'
+                        : ''}
+                    </small>
+                    {imageFile && (
+                      <span className={styles.selectedFile} aria-live="polite">
+                        Selected: {imageFile.name}
+                      </span>
+                    )}
+                    {!create && supplier?.imageUrl && (
+                      <img
+                        alt={`${supplier.name} current location`}
+                        className={styles.imagePreview}
+                        onError={(event) => {
+                          event.currentTarget.hidden = true
+                        }}
+                        src={supplier.imageUrl}
+                      />
+                    )}
+                  </FormField>
+                )}
+
+                {imageMode === 'NONE' && (
+                  <p className={styles.imageHelp}>
+                    The branded “Photo not available” illustration will be shown
+                    on the public detail page.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </fieldset>

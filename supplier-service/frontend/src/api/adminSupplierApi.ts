@@ -5,7 +5,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import type { components } from './schema'
-import { supplierApi } from './client'
+import { supplierApi, supplierFetch } from './client'
 import type { Supplier } from './supplierQueries'
 
 export type CreateSupplierRequest =
@@ -29,6 +29,8 @@ type SupplierProblem =
   | components['schemas']['InvalidSupplierRequestProblem']
   | components['schemas']['SupplierNotFoundProblem']
   | components['schemas']['SupplierUpdateConflictProblem']
+  | components['schemas']['InvalidSupplierImageProblem']
+  | components['schemas']['SupplierImageUnavailableProblem']
 
 export class SupplierMutationError extends Error {
   constructor(
@@ -151,6 +153,67 @@ export function useUpdateSupplierMutation() {
           response.status,
           error,
           'We couldn’t save this location.',
+        )
+      }
+      return data
+    },
+    onSuccess: invalidate,
+  })
+}
+
+export function useUploadSupplierImageMutation() {
+  const invalidate = useInvalidateSupplierQueries()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      version,
+      file,
+    }: {
+      id: string
+      version: number
+      file: File
+    }) => {
+      const body = new FormData()
+      body.set('file', file)
+      const response = await supplierFetch(
+        new Request(
+          new URL(
+            `/api/admin/suppliers/${encodeURIComponent(id)}/image?version=${version}`,
+            window.location.origin,
+          ),
+          { method: 'PUT', body },
+        ),
+      )
+      const payload = (await response.json().catch(() => undefined)) as
+        Supplier | SupplierProblem | undefined
+      if (!response.ok) {
+        throw mutationError(
+          response.status,
+          payload,
+          'We couldn’t upload this location’s photo.',
+        )
+      }
+      return payload as Supplier
+    },
+    onSuccess: invalidate,
+  })
+}
+
+export function useRemoveSupplierImageMutation() {
+  const invalidate = useInvalidateSupplierQueries()
+  return useMutation({
+    mutationFn: async ({ id, version }: { id: string; version: number }) => {
+      const { data, error, response } = await supplierApi.DELETE(
+        '/api/admin/suppliers/{id}/image',
+        {
+          params: { path: { id }, query: { version } },
+        },
+      )
+      if (error || !data) {
+        throw mutationError(
+          response.status,
+          error,
+          'We couldn’t remove this location’s photo.',
         )
       }
       return data

@@ -27,6 +27,7 @@ import com.friendoncampus.supplier.domain.Supplier;
 import com.friendoncampus.supplier.domain.SupplierStatus;
 import com.friendoncampus.supplier.service.AdminSupplierQuery;
 import com.friendoncampus.supplier.service.SupplierMetadata;
+import com.friendoncampus.supplier.service.SupplierImageService;
 import com.friendoncampus.supplier.service.SupplierService;
 import com.friendoncampus.supplier.service.SupplierVersionLookup;
 import com.friendoncampus.supplier.web.error.ApiExceptionHandler;
@@ -44,9 +45,10 @@ class AdminSupplierControllerTest {
     @BeforeEach
     void setUp() {
         supplierService = mock(SupplierService.class);
+        SupplierImageService supplierImageService = mock(SupplierImageService.class);
         SupplierVersionLookup supplierVersionLookup = mock(SupplierVersionLookup.class);
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new AdminSupplierController(supplierService))
+                .standaloneSetup(new AdminSupplierController(supplierService, supplierImageService))
                 .setControllerAdvice(new ApiExceptionHandler(supplierVersionLookup))
                 .build();
     }

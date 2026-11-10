@@ -36,6 +36,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.friendoncampus.notification.messaging.CreditEventHandler;
+import com.friendoncampus.notification.messaging.ChatMessageEventHandler;
 import com.friendoncampus.notification.messaging.OrderLifecycleEventHandler;
 import com.friendoncampus.notification.reminder.ReminderRepository;
 import com.friendoncampus.notification.service.NotificationNotFoundException;
@@ -94,6 +95,9 @@ class NotificationSecurityIntegrationTest {
     private OrderLifecycleEventHandler orderLifecycleEventHandler;
 
     @MockitoBean
+    private ChatMessageEventHandler chatMessageEventHandler;
+
+    @MockitoBean
     private ReminderRepository reminderRepository;
 
     private final HttpClient http = HttpClient.newHttpClient();
@@ -131,6 +135,21 @@ class NotificationSecurityIntegrationTest {
             assertThat(response.statusCode()).as(role).isEqualTo(200);
         }
         verify(queryService, times(3)).listFor(eq(UUID.fromString(SUBJECT)), any());
+    }
+
+    @Test
+    void everySessionRolePollsOnlyItsOwnPushNotifications() throws Exception {
+        var after = "2026-11-10T12:00:00Z";
+        when(queryService.pushFor(any(), any())).thenReturn(
+                new NotificationQueryService.PushBatch(List.of(), java.time.OffsetDateTime.parse(after)));
+
+        for (String role : List.of("REQUESTER", "COURIER", "ADMIN")) {
+            HttpResponse<String> response = get("/api/notifications/me/push?after=" + after,
+                    token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role, Instant.now().plusSeconds(600)));
+
+            assertThat(response.statusCode()).as(role).isEqualTo(200);
+        }
+        verify(queryService, times(3)).pushFor(eq(UUID.fromString(SUBJECT)), any());
     }
 
     @Test

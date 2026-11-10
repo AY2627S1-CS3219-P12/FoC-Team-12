@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
-import { readSession, sessionChangedEvent, sessionExpiredEvent } from '../auth/session'
+import {
+  readSession,
+  sessionChangedEvent,
+  sessionExpiredEvent,
+} from '../auth/session'
 
 export type ErrandRole = 'REQUESTER' | 'COURIER'
 
@@ -22,7 +26,7 @@ function currentRole(): ErrandRole {
   return readSession()?.role === 'COURIER' ? 'COURIER' : 'REQUESTER'
 }
 
-/** Each role's own errand screen: Requester posts errands, Courier runs them. */
+/** Each role's errand landing: Requester reviews activity, Courier browses open requests. */
 export function homeFor(role: ErrandRole): string {
-  return role === 'COURIER' ? '/errands/browse' : '/errands/new'
+  return role === 'COURIER' ? '/errands/browse' : '/errands/mine'
 }

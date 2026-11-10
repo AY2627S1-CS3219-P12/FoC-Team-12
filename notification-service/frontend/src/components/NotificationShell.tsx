@@ -9,6 +9,7 @@ import {
 } from '../auth/session'
 import { navigateTo, signInPath } from '../navigation'
 import { NotificationBell } from './NotificationBell'
+import { NotificationPush } from './NotificationPush'
 import bagIcon from '../assets/foc-bag.svg'
 
 export function NotificationShell({ children }: { children: ReactNode }) {
@@ -19,6 +20,10 @@ export function NotificationShell({ children }: { children: ReactNode }) {
   const initial = session?.username.trim().charAt(0).toUpperCase() || 'F'
   const suppliersPath =
     session?.role === 'ADMIN' ? '/admin/suppliers' : '/suppliers'
+  const errandsPath =
+    session?.role === 'REQUESTER' || session?.role === 'USER'
+      ? '/errands/mine'
+      : '/errands/browse'
 
   useEffect(() => {
     const refreshSession = () => setSession(readSession())
@@ -49,24 +54,31 @@ export function NotificationShell({ children }: { children: ReactNode }) {
   const selectWorkspaceRoleFromMenu = async (role: WorkspaceRole) => {
     if (!(await selectWorkspaceRole(role))) return
     if (accountMenuRef.current) accountMenuRef.current.open = false
+    navigateTo(role === 'ADMIN' ? '/admin' : '/')
   }
 
   return (
     <div className="app-shell">
       <header className="site-header">
         <div className="header-inner">
-          <a className="brand" href="/">
+          <a className="brand" href={session?.role === 'ADMIN' ? '/admin' : '/'}>
             <img alt="" height="24" src={bagIcon} width="24" />
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className="main-nav">
-            <a href="/">Home</a>
-            {session?.role !== 'ADMIN' && (
-              <a href="/errands/browse">Errands</a>
+            {session?.role === 'ADMIN' ? (
+              <>
+                <a href="/admin">Admin</a>
+                <a href={suppliersPath}>Suppliers</a>
+              </>
+            ) : (
+              <>
+                <a href="/">Home</a>
+                <a href={errandsPath}>Errands</a>
+                <a href={suppliersPath}>Suppliers</a>
+                <a href="/credits">Credits</a>
+              </>
             )}
-            <a href={suppliersPath}>Suppliers</a>
-            {session?.role !== 'ADMIN' && <a href="/credits">Credits</a>}
-            {session?.role === 'ADMIN' && <a href="/admin">Admin</a>}
           </nav>
           <nav aria-label="Account and workspace" className="header-actions">
             {session && session.role !== 'ADMIN' && (
@@ -95,7 +107,7 @@ export function NotificationShell({ children }: { children: ReactNode }) {
                 </span>
               </div>
             )}
-            <NotificationBell current />
+            {session?.role !== 'ADMIN' && <NotificationBell current />}
             {session ? (
               <details className="account-menu" ref={accountMenuRef}>
                 <summary aria-label={`Open account menu for ${session.username}`} title="Account menu">
@@ -150,6 +162,7 @@ export function NotificationShell({ children }: { children: ReactNode }) {
           </nav>
         </div>
       </header>
+      <NotificationPush role={session?.role} />
       {workspaceError && (
         <p className="workspace-error" role="alert">
           {workspaceError}

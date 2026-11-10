@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 
 import com.friendoncampus.chat.domain.ChatLanguage;
 import com.friendoncampus.chat.domain.QuickReplyKey;
+import com.friendoncampus.chat.messaging.ChatNotificationOutbox;
 import com.friendoncampus.chat.storage.AttachmentStorageException;
 import com.friendoncampus.chat.storage.AttachmentStorageRouter;
 
@@ -34,13 +35,16 @@ public class ChatConversationService {
     private final ApplicationEventPublisher events;
     private final AttachmentStorageRouter attachmentStorage;
     private final CaseConversationAccessGuard caseAccessGuard;
+    private final ChatNotificationOutbox notificationOutbox;
 
     public ChatConversationService(JdbcClient db, Clock clock, QuickReplyCatalog quickReplies,
             ChatPreferenceService preferences, ApplicationEventPublisher events,
-            AttachmentStorageRouter attachmentStorage, CaseConversationAccessGuard caseAccessGuard) {
+            AttachmentStorageRouter attachmentStorage, CaseConversationAccessGuard caseAccessGuard,
+            ChatNotificationOutbox notificationOutbox) {
         this.db = db; this.clock = clock; this.quickReplies = quickReplies;
         this.preferences = preferences; this.events = events; this.attachmentStorage = attachmentStorage;
         this.caseAccessGuard = caseAccessGuard;
+        this.notificationOutbox = notificationOutbox;
     }
 
     public record Conversation(UUID id, UUID orderId, String status, boolean readOnly) {}
@@ -271,12 +275,26 @@ public class ChatConversationService {
         Message existing=findByClient(id,actor,clientId);
         if(existing!=null){String expected=hash(type,text,key,attachmentId);String actual=hash(existing.messageType(),existing.text(),existing.quickReplyKey(),existing.attachment()==null?null:existing.attachment().id());if(!expected.equals(actual))throw new ChatConflictException("clientMessageId was already used for different content");return existing;}
         long seq=db.sql("UPDATE chat_conversations SET next_sequence=next_sequence+1,updated_at=:at WHERE id=:id RETURNING next_sequence-1").param("at",now()).param("id",id).query(Long.class).single();
-        int epoch=db.sql("SELECT assignment_epoch FROM chat_participants WHERE conversation_id=:id AND user_id=:actor AND valid_until IS NULL ORDER BY assignment_epoch DESC LIMIT 1").param("id",id).param("actor",actor).query(Integer.class).single();
+        int epoch=db.sql("""
+                SELECT CASE WHEN sender.relationship='REQUESTER' THEN COALESCE((
+                    SELECT courier.assignment_epoch FROM chat_participants courier
+                    WHERE courier.conversation_id=:id AND courier.relationship='COURIER'
+                      AND courier.valid_until IS NULL
+                    ORDER BY courier.assignment_epoch DESC LIMIT 1
+                ),sender.assignment_epoch) ELSE sender.assignment_epoch END
+                FROM chat_participants sender
+                WHERE sender.conversation_id=:id AND sender.user_id=:actor
+                  AND sender.valid_until IS NULL
+                ORDER BY sender.assignment_epoch DESC LIMIT 1
+                """).param("id",id).param("actor",actor).query(Integer.class).single();
         UUID mid=UUID.randomUUID();
         try{db.sql("INSERT INTO chat_messages(id,conversation_id,sender_user_id,sequence,client_message_id,message_type,original_language,quick_reply_key,text_content,attachment_id,assignment_epoch,created_at) VALUES(:mid,:cid,:actor,:seq,:client,:type,:lang,:key,:text,:aid,:epoch,:at)")
             .param("mid",mid).param("cid",id).param("actor",actor).param("seq",seq).param("client",clientId).param("type",type).param("lang",language).param("key",key).param("text",text).param("aid",attachmentId).param("epoch",epoch).param("at",now()).update();}
         catch(DuplicateKeyException e){return findByClient(id,actor,clientId);}
-        Message saved=findMessage(mid);events.publishEvent(new ChatMessageSaved(saved));return saved;
+        Message saved=findMessage(mid);
+        notificationOutbox.enqueue(saved);
+        events.publishEvent(new ChatMessageSaved(saved));
+        return saved;
     }
     private Message findByClient(UUID id,UUID actor,UUID client){return db.sql("SELECT m.*,a.content_type,a.original_filename,a.size_bytes FROM chat_messages m LEFT JOIN chat_attachments a ON a.id=m.attachment_id WHERE m.conversation_id=:id AND m.sender_user_id=:actor AND m.client_message_id=:client").param("id",id).param("actor",actor).param("client",client).query((rs,n)->mapMessage(rs)).optional().orElse(null);}
     private Message findBySourceEvent(UUID eventId){return db.sql("SELECT m.*,a.content_type,a.original_filename,a.size_bytes FROM chat_messages m LEFT JOIN chat_attachments a ON a.id=m.attachment_id WHERE m.source_event_id=:eventId").param("eventId",eventId).query((rs,n)->mapMessage(rs)).optional().orElse(null);}

@@ -42,6 +42,7 @@ SELECTORS = {
 # must stay identical; Notification Service owns them.
 BELL_SOURCES = ("NotificationBell.tsx", "useUnreadCount.ts", "NotificationBell.test.tsx")
 BELL_FRONTENDS = ("user", "supplier", "order", "credit", "admin", "notification")
+PUSH_SOURCES = ("NotificationPush.tsx", "NotificationPush.css")
 BELL_STYLES = {
     "user": (ROOT / "user-service/frontend/src/styles.css", ".notification-bell"),
     "supplier": (ROOT / "supplier-service/frontend/src/components/AppShell.module.css", ".notificationBell"),
@@ -49,6 +50,45 @@ BELL_STYLES = {
     "credit": (ROOT / "credit-service/frontend/src/styles.css", ".notification-bell"),
     "admin": (ROOT / "admin-service/frontend/src/styles.css", ".notification-bell"),
     "notification": (ROOT / "notification-service/frontend/src/styles.css", ".notification-bell"),
+}
+
+HEADER_LAYER_STYLES = {
+    "user": (
+        ROOT / "user-service/frontend/src/styles.css",
+        ".profile-app-header",
+        ".profile-account-menu-items",
+        ".notification-badge",
+    ),
+    "supplier": (
+        ROOT / "supplier-service/frontend/src/components/AppShell.module.css",
+        ".header",
+        ".userMenuItems",
+        ".notificationBadge",
+    ),
+    "order": (
+        ROOT / "order-service/frontend/src/styles.css",
+        ".site-header",
+        ".account-menu-items",
+        ".notification-badge",
+    ),
+    "credit": (
+        ROOT / "credit-service/frontend/src/styles.css",
+        ".site-header",
+        ".account-menu-items",
+        ".notification-badge",
+    ),
+    "admin": (
+        ROOT / "admin-service/frontend/src/styles.css",
+        ".site-header",
+        ".account-menu-items",
+        ".notification-badge",
+    ),
+    "notification": (
+        ROOT / "notification-service/frontend/src/styles.css",
+        ".site-header",
+        ".account-menu-items",
+        ".notification-badge",
+    ),
 }
 
 PRIMARY_NAV_SOURCES = {
@@ -71,6 +111,21 @@ def declarations(css, selector):
             continue
         name, value = declaration.split(":", 1)
         result[name.strip()] = " ".join(value.split())
+    return result
+
+
+def cascaded_declarations(css, selector):
+    """Merge every exact selector block in source order, like the CSS cascade."""
+    matches = re.findall(re.escape(selector) + r"\s*\{([^}]*)\}", css, re.DOTALL)
+    if not matches:
+        raise AssertionError(f"Missing CSS rule: {selector}")
+    result = {}
+    for block in matches:
+        for declaration in block.split(";"):
+            if ":" not in declaration:
+                continue
+            name, value = declaration.split(":", 1)
+            result[name.strip()] = " ".join(value.split())
     return result
 
 
@@ -210,6 +265,19 @@ class SharedNotificationBellTest(unittest.TestCase):
                     copy = ROOT / f"{service}-service/frontend/src/components" / source
                     self.assertEqual(reference, copy.read_text(), f"{service} {source} differs")
 
+    def test_every_frontend_has_the_same_participant_push_component(self):
+        for source in PUSH_SOURCES:
+            reference = (ROOT / "notification-service/frontend/src/components" / source).read_text()
+            for service in BELL_FRONTENDS:
+                with self.subTest(service=service, source=source):
+                    copy = ROOT / f"{service}-service/frontend/src/components" / source
+                    self.assertEqual(reference, copy.read_text(), f"{service} {source} differs")
+
+    def test_every_shell_passes_its_current_role_to_push_notifications(self):
+        for service, path in PRIMARY_NAV_SOURCES.items():
+            with self.subTest(service=service):
+                self.assertRegex(path.read_text(), r'<NotificationPush role=\{session\??\.role\} />')
+
     def test_every_frontend_gives_the_bell_the_same_control_size(self):
         for service, (path, selector) in BELL_STYLES.items():
             with self.subTest(service=service):
@@ -234,6 +302,34 @@ class SharedNotificationBellTest(unittest.TestCase):
                         f"{service} rule '{rule_selector}' also styles the bell",
                     )
 
+    def test_every_frontend_hides_the_bell_in_admin_mode(self):
+        participant_only = re.compile(
+            r"(?:!adminMode|session\??\.role\s*!==\s*'ADMIN')\s*&&\s*\(?\s*<NotificationBell"
+        )
+        for service, path in PRIMARY_NAV_SOURCES.items():
+            with self.subTest(service=service):
+                self.assertRegex(path.read_text(), participant_only)
+
+    def test_every_frontend_keeps_account_menus_above_page_content(self):
+        for service, (path, header_selector, menu_selector, _) in HEADER_LAYER_STYLES.items():
+            with self.subTest(service=service):
+                css = path.read_text()
+                header = cascaded_declarations(css, header_selector)
+                menu = cascaded_declarations(css, menu_selector)
+
+                self.assertEqual("relative", header.get("position"))
+                self.assertEqual("100", header.get("z-index"))
+                self.assertEqual("visible", header.get("overflow"))
+                self.assertEqual("120", menu.get("z-index"))
+                self.assertEqual("auto", menu.get("pointer-events"))
+
+    def test_every_frontend_uses_the_same_unread_badge_colours(self):
+        for service, (path, _, _, badge_selector) in HEADER_LAYER_STYLES.items():
+            with self.subTest(service=service):
+                badge = cascaded_declarations(path.read_text(), badge_selector)
+                self.assertEqual("#df9b93", badge.get("background"))
+                self.assertEqual("#172641", badge.get("color"))
+
 
 class SharedPrimaryNavigationTest(unittest.TestCase):
     def test_every_frontend_uses_text_only_primary_navigation(self):
@@ -257,6 +353,16 @@ class SharedPrimaryNavigationTest(unittest.TestCase):
                     path.read_text(),
                     r'<a[^>]+href="/\?view=profile"[^>]*>Profile</a>',
                 )
+
+    def test_requester_errands_links_open_history_before_the_create_form(self):
+        requester_landing = re.compile(
+            r"\?\s*'/errands/mine'\s*:\s*'/errands/browse'"
+        )
+        for service, path in PRIMARY_NAV_SOURCES.items():
+            with self.subTest(service=service):
+                source = path.read_text()
+                self.assertRegex(source, requester_landing)
+                self.assertIn('href={errandsPath}', source)
 
 
 class UpgradedCardPolishTest(unittest.TestCase):

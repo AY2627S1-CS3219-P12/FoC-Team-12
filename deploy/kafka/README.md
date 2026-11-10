@@ -86,6 +86,8 @@ pending; broker permissions alone do not implement it. See the
 | `credit.events.DLT` | 1 | 30 days | Failed Credit-event delivery |
 | `order.lifecycle.events` | 3 | 7 days | Order lifecycle facts for Notification; producer pending |
 | `order.lifecycle.events.DLT` | 1 | 30 days | Failed Order lifecycle-event delivery |
+| `chat.events` | 3 | 7 days | Privacy-minimal user-authored Chat message facts |
+| `chat.events.DLT` | 1 | 30 days | Failed Chat-message notification delivery |
 | `admin.credit.commands` | 3 | 7 days | Admin correction requests; Credit consumer pending |
 | `credit.admin.events` | 3 | 7 days | Credit correction outcomes; producer pending |
 | `admin.credit.commands.DLT` | 1 | 30 days | Credit-owned command recovery |
@@ -106,8 +108,9 @@ production data-retention policy.
 | `user_service` | Write/describe `user.events`; cluster idempotent write |
 | `order_service` | Write/describe `order.events` and `order.lifecycle.events`; read/describe `credit.events` as group `order-service`; write/describe `credit.events.DLT`; cluster idempotent write |
 | `credit_service` | Read/describe `user.events` and `order.events` as group `credit-service`; write/describe `credit.events`, `user.events.DLT` and `order.events.DLT`; cluster idempotent write |
-| `notification_service` | Read/describe `credit.events` and `order.lifecycle.events` as group `notification-service`; write/describe `credit.events.DLT` and `order.lifecycle.events.DLT`; cluster idempotent write. It cannot write `credit.events` or join another service's group |
-| `kafka_ui` | Read/describe the seventeen project topics and their configurations; describe known business consumer groups; use only `kafka-ui-browser*` groups; no Kafka mutations |
+| `notification_service` | Read/describe `credit.events`, `order.lifecycle.events` and `chat.events` as group `notification-service`; write/describe their DLTs; cluster idempotent write. It cannot write source event topics or join another service's group |
+| `chat_service` | Read/describe `order.lifecycle.events` as group `chat-service-lifecycle`; write/describe `chat.events`; cluster idempotent write |
+| `kafka_ui` | Read/describe the project topics and their configurations; describe consumer groups, including MSK health groups; use only `kafka-ui-browser*` groups; no group membership, offset reset or Kafka mutations |
 | `foc_admin` | Broker initialization and local diagnosis (super-user) |
 | `foc_broker` | Broker-to-broker traffic (super-user) |
 
@@ -131,7 +134,7 @@ docker compose ps kafka
 ```
 
 Open `http://localhost:8090` and sign in with `KAFKA_UI_LOGIN_USERNAME` and
-`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the seventeen
+`KAFKA_UI_LOGIN_PASSWORD` from the local `.env`. Select **foc-local** to inspect brokers, the
 topics, partitions, configurations, message keys/envelopes, consumer groups and lag. The UI uses
 both Kafbat's read-only mode and broker ACLs: it cannot produce records, create/delete topics,
 change retention, reset business offsets or join a service's consumer group.

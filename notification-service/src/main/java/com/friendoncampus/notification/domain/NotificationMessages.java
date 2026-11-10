@@ -30,6 +30,7 @@ public final class NotificationMessages {
             case CREDITS_WELCOME -> "Welcome! You received " + credits(params) + " to get started.";
             case CREDITS_RECEIVED -> "You received " + credits(params) + " for completing an errand.";
             case CREDITS_COMPENSATED -> "You received " + credits(params) + " as compensation for a cancelled errand.";
+            case CHAT_MESSAGE_RECEIVED -> chatPreview(params);
             case ORDER_OPENED -> "Your errand " + title(params) + " is live. Couriers can now accept it.";
             case ORDER_RESERVATION_FAILED -> "Your errand " + title(params) + " couldn't be posted: "
                     + reservationFailure(params) + ".";
@@ -79,5 +80,10 @@ public final class NotificationMessages {
     private static String credits(JsonNode params) {
         int amount = params.path("amount").asInt();
         return amount == 1 ? "1 credit" : amount + " credits";
+    }
+
+    private static String chatPreview(JsonNode params) {
+        String preview = params.path("messagePreview").asString();
+        return preview == null || preview.isBlank() ? "New message in chat" : preview;
     }
 }

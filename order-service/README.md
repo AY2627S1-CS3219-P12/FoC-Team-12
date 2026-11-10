@@ -1,50 +1,56 @@
 # Order Service
 
-## Admin evidence integration
+> Owns campus errands from creation and credit reservation through acceptance, delivery, and
+> completion.
 
-Chat's pinned service identity reads `/internal/orders/orders/{orderId}/evidence` (the existing
-`/internal/orders/{orderId}/evidence` alias remains). The export preserves original outbox IDs,
-sequences, actors, snapshots and previous couriers. Its cursor pins an immutable committed prefix;
-new transitions are excluded until a new first-page read. Missing events, zero/legacy history or
-history without the initial SUBMIT baseline return unavailable rather than invented participants
-or completeness. Invalid cursor bounds are rejected. Service assertions enforce subject/key,
-audience, RSA strength, issued/not-before times, expiry and assertion identity.
+Order Service is a Java 17 Spring Boot service that owns the order aggregate, lifecycle history,
+discovery APIs, expiry, concurrency rules, and Order-produced events. It runs on port `8082` and
+stores its data in a private PostgreSQL database.
 
-`OrderLifecycleEventIntegrationTest` verifies the exporter with real PostgreSQL and real Order
-domain transitions, including a new fact between pages and missing/legacy-baseline failures.
-No lifecycle or credit-request wire format changes. See
-[the approved integration protocol](../docs/integration/chat-admin-contract.md) and
-[actual acceptance/rollout evidence](../admin-service/INTEGRATION_READINESS.md).
+## Responsibilities and boundaries
 
-## Admin reporting entry
+- **Order owns** errand validation, lifecycle transitions, assignment history, discovery,
+  idempotency, expiry, and Order event publication.
+- **Credit owns** reservations, releases, settlement, compensation, and all ledger arithmetic.
+- **Supplier owns** campus locations. Order stores client-supplied location names as historical
+  snapshots and never reads Supplier's database.
+- **User owns** identity, roles, and current account status. Order validates User-issued JWTs and
+  performs current-account authorization for protected actions.
+- **Notification and Chat consume Order facts.** They do not change Order state.
 
-The errand detail screen shows the reporting panel to its requester or assigned courier,
-not couriers browsing an open errand. Acceptance enables the courier's panel. It uses Admin-owned
-`GET /api/admin/orders/{orderId}/report-context` through the gateway. The panel offers Report an
-issue only after authoritative ELIGIBLE, or View your report for OWN_REPORT (including resolved
-cases). INELIGIBLE hides the entire panel; failures show unavailable/retry instead of
-pretending no report exists. Query keys include actor, mode and order; auth/eligibility remain
-Admin/Chat responsibilities. Order lifecycle endpoints and database are unchanged.
+Owner: **XueTing**. See [AGENTS.md](AGENTS.md) for service invariants and
+[TASK_SPLIT.md](../TASK_SPLIT.md) for team ownership.
 
-An unavailable Order detail may still show the separate reporting-access panel, allowing a
-historical participant with a known errand URL to ask Admin/Chat without exposing the hidden Order
-details. My errands does not yet discover every withdrawn historical assignment; that is a separate
-Order-owned history/API task. Without real Chat eligibility, new reporting correctly stays blocked.
+## Documentation map
 
-Use the regular gateway at http://localhost:8088 for cross-service GUI checks. The Vite preview
-also proxies Admin paths through that gateway; isolated frontend unit fixtures are test-only.
+| Document | Purpose |
+| --- | --- |
+| [DESIGN.md](DESIGN.md) | Full lifecycle, transition, and Kafka event design |
+| [IMPLEMENTATION_CHECKLIST.md](IMPLEMENTATION_CHECKLIST.md) | D3 implementation roadmap and acceptance evidence |
+| [Kubernetes guide](k8s/README.md) | Local cluster deployment |
+| [Event communication blueprint](../docs/integration/event-communication-blueprint.md) | Shared event envelope and recovery contract |
+| [Chat/Admin integration contract](../docs/integration/chat-admin-contract.md) | Evidence export and case integration |
 
-Owned by XueTing. See [`AGENTS.md`](AGENTS.md) for the coding boundary and
-[`../TASK_SPLIT.md`](../TASK_SPLIT.md) for team responsibilities. The D3 roadmap is
-[`IMPLEMENTATION_CHECKLIST.md`](IMPLEMENTATION_CHECKLIST.md).
-The full lifecycle, transition and Kafka event design is in [`DESIGN.md`](DESIGN.md).
+## Quick start
 
-Spring Boot service (Java 17) that owns the order aggregate, its lifecycle, and
-the order database. Runs on port `8082`.
+Prepare the root `.env` from `.env.example`, including the required database, signing, and Kafka
+values, then start the stack from the repository root:
 
-## Authentication
+```bash
+docker compose up -d --build
+```
 
-Local cluster setup: [Kubernetes deployment](k8s/README.md).
+Open the frontend at <http://localhost:8088/errands>. For service tests, ensure Docker is running
+and run `./mvnw test` from `order-service/`. See [Running with Docker Compose](#running-with-docker-compose)
+and [Verification](#verification) for details.
+
+## HTTP API
+
+The gateway exposes the service under `/api/orders/**`. OpenAPI and Swagger documentation are
+available from the running service; use the gateway at <http://localhost:8088> for normal
+cross-service journeys.
+
+### Authentication
 
 All endpoints except `/actuator/health` and the OpenAPI/Swagger docs require a
 `Bearer` JWT issued by the **User Service**. The service is a stateless OAuth2
@@ -73,11 +79,10 @@ resource server; it **validates** tokens but never issues them, following the
 | `app.security.jwt.issuer` | `ORDER_JWT_ISSUER` | `friend-on-campus-user-service` |
 | `app.security.jwt.audience` | `ORDER_JWT_AUDIENCE` | `friend-on-campus-api` |
 
-The defaults suit a local run beside User Service. Whoever wires order-service
-into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
-`http://user-service:8081/.well-known/jwks.json`, as Supplier does.
+The defaults suit a local run beside User Service. Compose sets the JWKS URI to the User Service
+inside the shared network.
 
-## Create order
+### Create an order
 
 `POST /api/orders`
 
@@ -126,14 +131,14 @@ into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
 - **Forbidden:** `403` RFC-7807 `application/problem+json` when the token is valid
   but the session role is not `REQUESTER`.
 
-## Edit an order
+### Edit an order
 
 `PATCH /api/orders/{id}`
 
 - **Auth:** session role `REQUESTER` (any other role gets `403`), and the caller
   must be the order's requester.
 - **Body:** a full replacement. Every editable field is required, with the same
-  rules as [Create order](#create-order) (`title`, `description`,
+  rules as [Create an order](#create-an-order) (`title`, `description`,
   `pickupLocationId` + `pickupLocationName`, `dropoffLocationId` +
   `dropoffLocationName`, `creditReward`, `pickupDeadline` in the future), plus
   `version`: the order `version` the client last read (integer ≥ 0).
@@ -162,7 +167,7 @@ into `compose.yaml` (a shared-file task) should set `ORDER_JWT_JWK_SET_URI` to
   with `currentVersion`; reload and retry).
 - **Success:** `200` with the order; `version` increases on every applied edit.
 
-## Read and act on an order
+### Read and act on an order
 
 | Endpoint | Who | Result |
 | --- | --- | --- |
@@ -232,7 +237,7 @@ later Supplier edits or deletions don't rewrite existing errands. Order does not
 check that a location exists or is active. Orders created before this change have
 no stored names (the columns stay nullable).
 
-## Browse open orders and history
+### Browse open orders and history
 
 Any signed-in session role may call these; the caller is the token's `sub`. Each
 returns a page:
@@ -427,14 +432,11 @@ needs Credit Service to consume `order.events` and publish `credit.events`.
 
 ## Lifecycle
 
-Every transition in the table is implemented: creation, Credit's reservation
-outcome (`PENDING_CREDIT → OPEN / EXPIRED / RESERVATION_FAILED`, which the Kafka
-consumer will call in a later iteration), requester cancellation, expiry,
-acceptance, withdrawal, pickup, delivery and completion. Editing details and the
-reward (through Credit) is implemented too. Events are stored in the outbox but
-not yet published. The table
-below is the approved target; [`DESIGN.md`](DESIGN.md) has the full transition
-table with guards, error codes, events and the iteration plan.
+The implemented lifecycle covers creation, Credit reservation outcomes, requester cancellation,
+expiry, acceptance, withdrawal, pickup, delivery, completion, and edits to details or rewards.
+Credit-changing commands use the transactional outbox and Kafka flow described in
+[Order events](#order-events-contract). [DESIGN.md](DESIGN.md) contains the extended transition
+design, guards, error codes, and iteration history.
 
 **R** = the order's requester (session role `REQUESTER`), **C** = the assigned
 courier (session role `COURIER`), **Sys** = the expiry scheduler or a Credit reply.
@@ -474,7 +476,7 @@ Rules that apply to every transition:
 - **Errors:** wrong session role or not the order's requester/courier → `403`;
   invalid state → `409`; malformed body → `400` with nothing changed.
 
-## Errand UI
+## Frontend
 
 A React frontend in `frontend/` is packaged inside the service, like the Credit dashboard. The
 service serves it at `/errands` with assets under `/order-assets/**`; it reuses the shared-origin
@@ -493,7 +495,7 @@ npm run lint && npm run typecheck && npm test && npm run build
 Through the shared gateway the UI is at <http://localhost:8088/errands> (routes `order-ui` and
 `order-api`).
 
-## Run with Docker Compose
+## Running with Docker Compose
 
 Order Service and its private database (`order-db`, host port `127.0.0.1:5436`) are part of the
 root `compose.yaml`. Put `ORDER_DB_NAME`, `ORDER_DB_USER` and `ORDER_DB_PASSWORD` in the root `.env`
@@ -526,7 +528,7 @@ Set `requesterEmail`/`requesterPassword`, `courierEmail`/`courierPassword` and
 available credits (a new account's allocation covers errands of 7 and 3), the admin with the Admin role. Run the folders in order. Keep passwords and
 tokens in a local Postman environment; never commit or export them in the collection.
 
-## Build and test
+## Verification
 
 ```bash
 ./mvnw test          # unit, web and security tests, plus PostgreSQL integration tests
@@ -537,11 +539,13 @@ The persistence integration tests start a throwaway PostgreSQL with
 Testcontainers, so **Docker must be running**. They apply the real Flyway
 migrations.
 
-Running the service needs a PostgreSQL database (`DB_HOST`/`DB_PORT`/`DB_NAME`/
-`DB_USER`/`DB_PASSWORD`) and Compose wiring, which are shared root files added in
-a follow-up.
+Running the service outside Compose requires PostgreSQL configured through
+`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`. Kafka can be disabled with
+`ORDER_KAFKA_ENABLED=false`; unpublished outbox events remain available for later delivery.
 
-## Current account authorization
+## Cross-service integrations
+
+### Current account authorization
 
 Protected operations require the verified JWT's selected role to remain assigned to an ACTIVE
 User account. Current User decisions are never cached; denial is 403 and dependency uncertainty
@@ -553,7 +557,44 @@ ORDER_SERVICE_PRIVATE_KEY (base64 PKCS8 RSA, separate from User's JWT key),
 and pin the matching public key/subject in USER_SERVICE_TRUSTED_KEYS. Missing signing/trust
 configuration fails closed even when administrative Kafka consumers are disabled.
 
-## Dispute review workflow
+### Admin evidence export
+
+Chat's pinned service identity reads `/internal/orders/orders/{orderId}/evidence` (the existing
+`/internal/orders/{orderId}/evidence` alias remains). The export preserves original outbox IDs,
+sequences, actors, snapshots and previous couriers. Its cursor pins an immutable committed prefix;
+new transitions are excluded until a new first-page read. Missing events, zero/legacy history or
+history without the initial `SUBMIT` baseline return unavailable rather than invented participants
+or completeness. Invalid cursor bounds are rejected. Service assertions enforce subject/key,
+audience, RSA strength, issued/not-before times, expiry and assertion identity.
+
+`OrderLifecycleEventIntegrationTest` verifies the exporter with real PostgreSQL and real Order
+domain transitions, including a new fact between pages and missing/legacy-baseline failures. No
+lifecycle or credit-request wire format changes. See the
+[approved integration protocol](../docs/integration/chat-admin-contract.md) and
+[acceptance/rollout evidence](../admin-service/INTEGRATION_READINESS.md).
+
+### Admin reporting entry
+
+The errand detail screen shows the reporting panel to its requester or assigned courier, not to
+couriers browsing an open errand. Acceptance enables the assigned courier's panel. It uses the
+Admin-owned `GET /api/admin/orders/{orderId}/report-context` endpoint through the gateway.
+
+The panel offers **Report an issue** only after authoritative `ELIGIBLE`, or **View your report**
+for `OWN_REPORT`, including resolved cases. `INELIGIBLE` hides the panel; dependency failures show
+an unavailable/retry state rather than implying that no report exists. Query keys include the
+actor, mode, and order; authorization and eligibility remain Admin/Chat responsibilities. Order
+lifecycle endpoints and the Order database are unchanged.
+
+An unavailable Order detail may still show the reporting-access panel, allowing a historical
+participant with a known errand URL to ask Admin/Chat without exposing hidden Order details. My
+errands does not yet discover every withdrawn historical assignment; that remains a separate
+Order-owned history/API concern. Without authoritative Chat eligibility, new reporting stays
+blocked.
+
+Use the gateway at <http://localhost:8088> for cross-service GUI checks. The Vite preview also
+proxies Admin paths through that gateway; isolated frontend fixtures are test-only.
+
+### Dispute review workflow
 
 See the [approved report freeze and finalization contract](../docs/integration/dispute-review-contract.md) for service ownership, retry barriers, timeline message/image evidence, credit dispositions and rollout requirements. Existing lifecycle and case states are retained.
 

@@ -1,5 +1,7 @@
 package com.friendoncampus.chat.web.error;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -13,6 +15,7 @@ import com.friendoncampus.chat.storage.AttachmentStorageException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    private static final Logger LOG = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     @ExceptionHandler(ChatAccessException.class)
     ProblemDetail notFound(ChatAccessException exception) {
@@ -42,6 +45,7 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(AttachmentStorageException.class)
     ProblemDetail attachmentStorage(AttachmentStorageException exception) {
+        LOG.error("Chat attachment storage operation failed", exception);
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
                 "The image store is temporarily unavailable");
         problem.setTitle("Image unavailable");

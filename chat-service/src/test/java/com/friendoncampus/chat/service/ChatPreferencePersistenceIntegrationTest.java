@@ -148,6 +148,33 @@ class ChatPreferencePersistenceIntegrationTest {
     }
 
     @Test
+    void userMessagesCreateOneBoundedNotificationPreviewButLifecycleMessagesDoNot() {
+        UUID order=UUID.randomUUID(),requester=UUID.randomUUID(),courier=UUID.randomUUID();
+        new OrderLifecycleConsumer(jdbcClient,clock,chats).process(
+                event(order,requester,courier,"ACCEPT","ACCEPTED",1));
+        var conversation=chats.byOrder(order,requester);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_notification_outbox",Integer.class)).isZero();
+
+        UUID clientMessageId=UUID.randomUUID();
+        var message=chats.sendText(conversation.id(),requester,clientMessageId,"TEXT","private words",null);
+        chats.sendText(conversation.id(),requester,clientMessageId,"TEXT","private words",null);
+
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_notification_outbox",Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT recipient_id FROM chat_notification_outbox WHERE message_id=?",
+                UUID.class,message.id())).isEqualTo(courier);
+        String payload=jdbc.queryForObject("SELECT payload::text FROM chat_notification_outbox WHERE message_id=?",
+                String.class,message.id());
+        assertThat(payload).contains("ChatMessageSent",message.id().toString(),order.toString(),courier.toString())
+                .contains("private words")
+                .doesNotContain("attachmentId","filename","contentType");
+
+        chats.sendText(conversation.id(),courier,UUID.randomUUID(),"QUICK_REPLY",null,"ARRIVED");
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_notification_outbox",Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_notification_outbox WHERE recipient_id=?",
+                Integer.class,requester)).isEqualTo(1);
+    }
+
+    @Test
     void lifecycleCreatesPrivateChatSegmentsCourierHistoryAndLocksTerminalConversation() {
         UUID order=UUID.randomUUID(), requester=UUID.randomUUID(), first=UUID.randomUUID(), second=UUID.randomUUID();
         OrderLifecycleConsumer consumer=new OrderLifecycleConsumer(jdbcClient,clock,chats);
@@ -172,17 +199,22 @@ class ChatPreferencePersistenceIntegrationTest {
         assertThat(chats.messageRecipients(firstMessage.id())).containsExactlyInAnyOrder(requester,first);
         consumer.process(event(order,requester,null,"WITHDRAW","OPEN",2,first));
         consumer.process(event(order,requester,second,"ACCEPT","ACCEPTED",3));
+        var requesterMessage=chats.sendText(conversation.id(),requester,UUID.randomUUID(),"TEXT","Meet at COM2",null);
+        assertThat(jdbc.queryForObject("SELECT recipient_id FROM chat_notification_outbox WHERE message_id=?",
+                UUID.class,requesterMessage.id())).isEqualTo(second);
+        assertThat(chats.messageRecipients(requesterMessage.id())).containsExactlyInAnyOrder(requester,second);
         var secondMessage=chats.sendText(conversation.id(),second,UUID.randomUUID(),"TEXT","On my way",null);
         assertThat(chats.messageRecipients(secondMessage.id())).containsExactlyInAnyOrder(requester,second);
         assertThatThrownBy(() -> translations.request(conversation.id(),secondMessage.id(),first,"zh"))
                 .isInstanceOf(ChatAccessException.class);
 
-        assertThat(chats.messages(conversation.id(),requester,0,100)).hasSize(5);
+        assertThat(chats.messages(conversation.id(),requester,0,100)).hasSize(6);
         var secondHistory=chats.messages(conversation.id(),second,0,100);
         assertThat(secondHistory).extracting(ChatConversationService.Message::messageType)
-                .containsExactly("SYSTEM", "TEXT");
+                .containsExactly("SYSTEM", "TEXT", "TEXT");
         assertThat(secondHistory.get(0).lifecycleAction()).isEqualTo("ACCEPT");
-        assertThat(secondHistory.get(1).id()).isEqualTo(secondMessage.id());
+        assertThat(secondHistory.get(1).id()).isEqualTo(requesterMessage.id());
+        assertThat(secondHistory.get(2).id()).isEqualTo(secondMessage.id());
         assertThat(chats.byOrder(order,first).readOnly()).isTrue();
         assertThatThrownBy(() -> chats.sendText(conversation.id(),first,UUID.randomUUID(),"TEXT","still here",null))
                 .isInstanceOf(ChatConflictException.class);

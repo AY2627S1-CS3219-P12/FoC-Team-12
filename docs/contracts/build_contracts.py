@@ -107,7 +107,7 @@ S['Translation'] = obj({'messageId': UUID,'sourceLanguage': LANGUAGE,'targetLang
 S['Notification'] = obj({'id': UUID,'type': enum('ORDER_OPENED','ORDER_RESERVATION_FAILED','ORDER_ACCEPTED',
     'ORDER_COURIER_WITHDREW','ORDER_EXPIRED','ORDER_CANCELLED','ORDER_PICKED_UP','ORDER_DELIVERED',
     'ORDER_COMPLETED','ORDER_STILL_OPEN','PICKUP_DUE_SOON','PICKUP_OVERDUE',
-    'CREDITS_WELCOME','CREDITS_RECEIVED','CREDITS_COMPENSATED'),
+    'CREDITS_WELCOME','CREDITS_RECEIVED','CREDITS_COMPENSATED','CHAT_MESSAGE_RECEIVED'),
     'orderId': nullable(UUID),'message': TEXT,'occurredAt': TIME,'readAt': nullable(TIME)})
 S['NotificationPage'] = obj({'content': array(ref('Notification')), 'page': INT,
     'size': {'type':'integer','minimum':1,'maximum':100},'totalElements': INT,'totalPages': INT})
@@ -260,6 +260,15 @@ life={'orderId':UUID,'requesterId':UUID,'previousCourierId':nullable(UUID),'cour
       'fromState':nullable(S['OrderSnapshot']['properties']['status']),'toState':S['OrderSnapshot']['properties']['status'],'action':enum(*ORDER_ACTIONS),'sourceSequence':{'type':'integer','minimum':1},
       'reasonCode':nullable(TEXT),'snapshot':copy.deepcopy(S['OrderSnapshot'])}
 event('OrderTransitioned','order-service','Order','order.lifecycle.events',obj(life),False)
+event('ChatMessageSent','chat-service','Conversation','chat.events',obj({
+    'messageId':UUID,'conversationId':UUID,'orderId':UUID,'senderUserId':UUID,
+    'recipientUserId':UUID,'messageType':enum('TEXT','QUICK_REPLY','IMAGE'),
+    'messagePreview':{'type':'string','minLength':1,'maxLength':160}},
+    ['messageId','conversationId','orderId','senderUserId','recipientUserId','messageType']))
+variants[-1]['properties']['aggregateVersion']={'type':'integer','minimum':1}
+variants[-1]['properties']['causationId']=UUID
+variants[-1]['properties']['actor']=obj({'type':{'const':'USER'},'userId':UUID,
+    'role':enum('REQUESTER','COURIER')}, ['type','userId'])
 commoncase={'caseId':UUID,'orderId':UUID,'sourceSequence':{'type':'integer','minimum':1}}
 event('DisputeCreditsFinalized','credit-service','Order','credit.events',obj({'operationId':UUID,'orderId':UUID,'caseId':UUID,'disposition':DISPOSITION,'reservationStatus':enum('ABSENT','RELEASED','SETTLED','COMPENSATED')}))
 event('CaseOpened','admin-service','AdminCase','admin.events',obj({**commoncase,'reporterId':UUID}),False)
@@ -305,6 +314,13 @@ for index,v in enumerate(variants):
         payload['data'].update(fromState='OPEN',toState='ACCEPTED',action='ACCEPT',
             previousCourierId=None,courierId=payload['actor']['userId'],reasonCode=None)
         payload['data']['snapshot'].update(status='ACCEPTED',courierId=payload['actor']['userId'])
+    if payload['eventType']=='ChatMessageSent':
+        payload['actor']['role']='REQUESTER'
+        payload['aggregateId']=payload['data']['conversationId']
+        payload['correlationId']=payload['data']['orderId']
+        payload['causationId']=payload['data']['messageId']
+        payload['data']['senderUserId']=payload['actor']['userId']
+        payload['data']['messagePreview']='I am on my way.'
     fixtures.append({'topic':v['x-topic'],'key':U,'event':payload})
 write('events.examples.json',fixtures)
 http=[]
