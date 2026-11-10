@@ -50,7 +50,8 @@ public class SecurityConfiguration {
                         // The packaged Notifications UI; the API it calls is protected below.
                         .requestMatchers(HttpMethod.GET, "/notifications", "/notifications/**", "/notification-assets/**")
                         .permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/notifications/me", "/api/notifications/me/unread-count")
+                        .requestMatchers(HttpMethod.GET, "/api/notifications/me", "/api/notifications/me/unread-count",
+                                "/api/notifications/me/push")
                         .authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/notifications/me/*/read").authenticated()
                         .anyRequest().denyAll())

@@ -138,6 +138,21 @@ class NotificationSecurityIntegrationTest {
     }
 
     @Test
+    void everySessionRolePollsOnlyItsOwnPushNotifications() throws Exception {
+        var after = "2026-11-10T12:00:00Z";
+        when(queryService.pushFor(any(), any())).thenReturn(
+                new NotificationQueryService.PushBatch(List.of(), java.time.OffsetDateTime.parse(after)));
+
+        for (String role : List.of("REQUESTER", "COURIER", "ADMIN")) {
+            HttpResponse<String> response = get("/api/notifications/me/push?after=" + after,
+                    token(SIGNING_KEY, SUBJECT, ISSUER, AUDIENCE, role, Instant.now().plusSeconds(600)));
+
+            assertThat(response.statusCode()).as(role).isEqualTo(200);
+        }
+        verify(queryService, times(3)).pushFor(eq(UUID.fromString(SUBJECT)), any());
+    }
+
+    @Test
     void rejectsTokensThatBreakTheUserServiceContract() throws Exception {
         Instant valid = Instant.now().plusSeconds(600);
         List<String> invalidTokens = List.of(
