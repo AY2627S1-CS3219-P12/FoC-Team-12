@@ -123,6 +123,15 @@ wait_for_secret_key() {
   return 1
 }
 
+webhook_endpoint_ready() {
+  local ready_endpoints
+  ready_endpoints=$(kubectl -n external-secrets get endpointslice \
+    -l kubernetes.io/service-name=external-secrets-webhook \
+    -o jsonpath='{range .items[*].endpoints[*]}{.conditions.ready}{"\n"}{end}' \
+    2>/dev/null || true)
+  [[ $ready_endpoints == *true* ]]
+}
+
 aws "${profile_args[@]}" --region "$AWS_REGION" eks update-kubeconfig --name "$EKS_CLUSTER_NAME" >/dev/null
 
 sed "s|RDS_HOST_REPLACED_BY_DEPLOY_SCRIPT|$RDS_HOST|g" \
@@ -145,7 +154,10 @@ helm upgrade --install external-secrets "$external_secrets_chart" \
 # Helm can update the ServiceAccount annotation without changing the Deployment template. Restart
 # the controller so an existing pod is recreated with AWS_ROLE_ARN and the projected IRSA token.
 kubectl -n external-secrets rollout restart deployment/external-secrets
-kubectl -n external-secrets rollout status deployment/external-secrets --timeout=10m
+for deployment in external-secrets external-secrets-webhook external-secrets-cert-controller; do
+  kubectl -n external-secrets rollout status "deployment/$deployment" --timeout=10m
+done
+retry 12 5 webhook_endpoint_ready
 
 export AWS_REGION RDS_HOST RDS_MASTER_SECRET_ARN ALB_SECURITY_GROUP_ID
 export GATEWAY_IMAGE USER_IMAGE SUPPLIER_IMAGE ORDER_IMAGE CREDIT_IMAGE ADMIN_IMAGE CHAT_IMAGE NOTIFICATION_IMAGE
@@ -153,16 +165,27 @@ export CHAT_S3_BUCKET
 export CHAT_SERVICE_ROLE_ARN
 export MSK_BOOTSTRAP_SERVERS
 rendered=$(mktemp)
-trap 'rm -f "$rendered"; rm -rf "$chart_dir"' EXIT
+secret_resources=$(mktemp)
+runtime_resources=$(mktemp)
+trap 'rm -f "$rendered" "$secret_resources" "$runtime_resources"; rm -rf "$chart_dir"' EXIT
 "$root/deploy/aws/scripts/render-k8s.sh" > "$rendered"
 
 # Apply secret synchronization before workloads so missing credentials fail early.
-awk 'BEGIN{RS="---"} /kind: (ClusterSecretStore|ExternalSecret)/ {print $0 "---"}' "$rendered" | kubectl apply -f -
+awk 'BEGIN{RS="---"} /kind: (ClusterSecretStore|ExternalSecret)/ {print $0 "---"}' \
+  "$rendered" > "$secret_resources"
+# Do not send the same ExternalSecrets through their validating webhook again during the later
+# workload apply. Besides being redundant, that second pass previously made a transient webhook
+# timeout fail provisioning after every secret had already synchronized successfully.
+awk 'BEGIN{RS="---"} !/kind: (ClusterSecretStore|ExternalSecret)/ && NF {print $0 "---"}' \
+  "$rendered" > "$runtime_resources"
+# The admission webhook can briefly time out while EKS networking or webhook endpoints converge.
+# Reapplying this declarative subset is safe and avoids restarting the entire provisioning workflow.
+retry 5 10 kubectl apply -f "$secret_resources"
 secret_sync_token=$(date +%s)
 for name in user-service-secrets user-mail-secrets supplier-service-secrets order-service-secrets \
   credit-service-secrets admin-service-secrets chat-service-secrets notification-service-secrets \
   kafka-broker-secrets chat-kafka-client notification-kafka-client kafka-ui-secrets rds-master; do
-  kubectl -n foc-staging annotate "externalsecret/$name" \
+  retry 5 10 kubectl -n foc-staging annotate "externalsecret/$name" \
     "force-sync=$secret_sync_token" --overwrite >/dev/null
   if ! kubectl -n foc-staging wait --for=condition=Ready "externalsecret/$name" --timeout=5m; then
     echo "External Secret $name did not become ready; collecting diagnostics." >&2
@@ -186,7 +209,7 @@ kubectl -n foc-staging create configmap kafka-scripts \
   --dry-run=client -o yaml | kubectl apply -f -
 
 cli_dir=$(mktemp -d)
-trap 'rm -f "$rendered"; rm -rf "$chart_dir" "$cli_dir"' EXIT
+trap 'rm -f "$rendered" "$secret_resources" "$runtime_resources"; rm -rf "$chart_dir" "$cli_dir"' EXIT
 for name in kafka-topics.sh kafka-configs.sh kafka-acls.sh kafka-broker-api-versions.sh \
   kafka-console-producer.sh kafka-console-consumer.sh kafka-get-offsets.sh; do
   cp "$root/deploy/kafka/k8s/cli.sh" "$cli_dir/$name"
@@ -194,7 +217,7 @@ done
 kubectl -n foc-staging create configmap kafka-cli --from-file="$cli_dir" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl apply -f "$rendered"
+kubectl apply -f "$runtime_resources"
 kubectl -n foc-staging rollout status statefulset/rabbitmq --timeout=20m
 
 job="msk-init-$(date +%s)"
