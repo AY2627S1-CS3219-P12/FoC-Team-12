@@ -96,6 +96,40 @@ associate() {
   return 1
 }
 
+disassociate() {
+  local associated disassociate_arns_json=() arn deadline
+  wait_for_cluster_active
+  associated=$(aws_cli kafka list-scram-secrets --cluster-arn "$cluster_arn" \
+    --query 'SecretArnList' --output json)
+  while IFS= read -r arn; do disassociate_arns_json+=("$arn"); done \
+    < <(jq -r --argjson managed "$secret_arns_json" '.[] | select(. as $arn | $managed | index($arn))' \
+      <<< "$associated")
+
+  if ((${#disassociate_arns_json[@]} == 0)); then
+    echo 'No managed MSK SCRAM identities remain associated.'
+    return 0
+  fi
+
+  aws_cli kafka batch-disassociate-scram-secret \
+    --cluster-arn "$cluster_arn" \
+    --secret-arn-list "${disassociate_arns_json[@]}" >/dev/null
+
+  deadline=$((SECONDS + 900))
+  while ((SECONDS < deadline)); do
+    associated=$(aws_cli kafka list-scram-secrets --cluster-arn "$cluster_arn" \
+      --query 'SecretArnList' --output json)
+    if jq -e --argjson managed "$secret_arns_json" \
+      '[.[] | select(. as $arn | $managed | index($arn))] | length == 0' \
+      <<< "$associated" >/dev/null; then
+      echo "Disassociated ${#disassociate_arns_json[@]} managed MSK SCRAM identities."
+      return 0
+    fi
+    sleep 10
+  done
+  echo 'Timed out waiting for MSK SCRAM secret disassociation.' >&2
+  return 1
+}
+
 lockdown() {
   local cluster current_arn current_revision current_version response operation_arn
   wait_for_cluster_active
@@ -152,8 +186,9 @@ mark_ready() {
 
 case "${1:-}" in
   associate) associate ;;
+  disassociate) disassociate ;;
   lockdown) lockdown ;;
   verify) verify ;;
   mark-ready) mark_ready ;;
-  *) echo 'Usage: prepare-msk.sh {associate|lockdown|verify|mark-ready}' >&2; exit 64 ;;
+  *) echo 'Usage: prepare-msk.sh {associate|disassociate|lockdown|verify|mark-ready}' >&2; exit 64 ;;
 esac

@@ -141,33 +141,11 @@ resource "aws_secretsmanager_secret" "msk_scram" {
   recovery_window_in_days = 0
 }
 
-data "aws_iam_policy_document" "msk_scram_secret" {
-  for_each = local.msk_scram_users
-
-  statement {
-    sid    = "AWSKafkaResourcePolicy"
-    effect = "Allow"
-
-    principals {
-      type        = "Service"
-      identifiers = ["kafka.amazonaws.com"]
-    }
-
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = [aws_secretsmanager_secret.msk_scram[each.key].arn]
-  }
-}
-
-resource "aws_secretsmanager_secret_policy" "msk_scram" {
-  for_each = local.msk_scram_users
-
-  secret_arn = aws_secretsmanager_secret.msk_scram[each.key].arn
-  policy     = data.aws_iam_policy_document.msk_scram_secret[each.key].json
-}
-
 # SCRAM secret versions are populated after this stack exists, so their association is performed
-# idempotently by prepare-msk.sh before any client is deployed. This keeps secret values out of
-# Terraform state while retaining declarative ownership of the cluster, KMS key and containers.
+# idempotently by prepare-msk.sh before any client is deployed. BatchAssociateScramSecret owns the
+# cluster-specific resource policy AWS attaches to each secret; Terraform must not overwrite it.
+# This keeps secret values out of Terraform state while retaining declarative ownership of the
+# cluster, KMS key and secret containers.
 resource "aws_ssm_parameter" "msk_cluster_arn" {
   name  = "/foc/${var.environment}/msk-cluster-arn"
   type  = "String"

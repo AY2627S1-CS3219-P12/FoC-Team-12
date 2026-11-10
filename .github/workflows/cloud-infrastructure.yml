@@ -222,6 +222,17 @@ jobs:
         run: |
           kubectl -n foc-staging delete ingress gateway --ignore-not-found
           kubectl delete namespace foc-staging --ignore-not-found --wait=true --timeout=20m
+      - name: Disassociate Amazon MSK SCRAM identities
+        if: inputs.operation == 'destroy-staging'
+        run: |
+          cluster_arn=$(aws ssm get-parameter --name /foc/staging/msk-cluster-arn \
+            --query Parameter.Value --output text 2>/dev/null || true)
+          if test -n "$cluster_arn" && \
+             aws kafka describe-cluster-v2 --cluster-arn "$cluster_arn" >/dev/null 2>&1; then
+            deploy/aws/scripts/prepare-msk.sh disassociate
+          else
+            echo 'No live MSK cluster was found; skipping SCRAM disassociation.'
+          fi
       - name: Destroy core staging infrastructure
         if: inputs.operation == 'destroy-staging'
         run: terraform -chdir=deploy/aws/terraform/staging-core destroy -auto-approve

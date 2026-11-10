@@ -40,7 +40,8 @@ the two OIDC roles.
 Kafka is the first stateful component configured for production-oriented availability: Amazon MSK
 runs three provisioned brokers in three Availability Zones, topics use replication factor `3` and
 minimum ISR `2`, and clients use private `SASL_SSL`/`SCRAM-SHA-512` connections. EKS no longer runs
-the AWS Kafka broker. The default `kafka.m7g.large` size is required because T3 brokers do not
+the AWS Kafka broker. The cluster pins provisioned Standard brokers to `4.1.x.kraft`; MSK 4.2 is
+currently Express-only. The default `kafka.m7g.large` size is required because T3 brokers do not
 support KRaft mode. Kafbat remains a read-only client of MSK.
 
 Other staging defaults still prioritize coursework cost over full production availability: one NAT
@@ -144,7 +145,9 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    resources.
 
    The MSK plan adds a third public/application/database subnet and one provisioned broker in each
-   of three Availability Zones. It also creates a customer-managed KMS key and eight empty
+   of three Availability Zones. The existing EKS control plane remains on its original two-AZ
+   subnet set because AWS does not permit expanding that set after cluster creation. The plan also
+   creates a customer-managed KMS key and eight empty
    `AmazonMSK_*` SCRAM secret containers. It must not replace the VPC, EKS cluster, RDS instance or
    existing subnets. MSK provisioning commonly takes tens of minutes.
 
@@ -298,8 +301,9 @@ Mode separately adds capacity if pending pods do not fit. Scaling is eventual an
 Routine teardown preserves the bootstrap bucket and OIDC roles but removes chargeable staging
 resources, including the three MSK brokers. Run **AWS staging infrastructure -> destroy-staging** and type exactly
 `DESTROY foc-staging`. The workflow destroys CloudFront first, deletes the Ingress/namespace and
-waits for ALB/PVC cleanup, then destroys core Terraform resources. RDS final snapshots, Kafka EBS
-volumes and ECR images are intentionally disposable.
+waits for ALB/PVC cleanup, disassociates the externally managed MSK SCRAM identities, then destroys
+core Terraform resources. RDS final snapshots, Kafka storage and ECR images are intentionally
+disposable.
 
 Verify cleanup in the AWS console and CLI, especially CloudFront distributions, load balancers,
 EBS volumes, NAT Gateways, EKS clusters and RDS instances. The budget may lag and is not proof that
