@@ -87,6 +87,11 @@ jobs:
       - name: Apply core infrastructure
         if: inputs.operation == 'apply-core'
         run: terraform -chdir=deploy/aws/terraform/staging-core apply -auto-approve
+      - name: Maintain static multi-AZ worker capacity
+        if: inputs.operation == 'apply-core'
+        run: |
+          aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION"
+          deploy/aws/scripts/apply-static-node-pools.sh
       - name: Verify runtime provisioning preconditions
         if: inputs.operation == 'provision-runtime'
         run: |
@@ -240,6 +245,8 @@ jobs:
         run: |
           kubectl -n foc-staging delete ingress gateway --ignore-not-found
           kubectl delete namespace foc-staging --ignore-not-found --wait=true --timeout=20m
+          kubectl delete -f deploy/aws/k8s/staging/static-node-pools.yaml \
+            --ignore-not-found --wait=true --timeout=20m
       - name: Disassociate Amazon MSK SCRAM identities
         if: inputs.operation == 'destroy-staging'
         run: |

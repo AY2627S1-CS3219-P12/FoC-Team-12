@@ -204,6 +204,23 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    bootstrap mode to `allow.everyone.if.no.acl.found=false`. Set `AWS_STAGING_ENABLED=true` only
    after this passes.
 
+   `apply-core` also maintains two EKS Auto Mode static-capacity NodePools: one `amd64` on-demand
+   worker in `ap-southeast-1a` and one in `ap-southeast-1b`. These establish a fixed two-worker,
+   two-AZ baseline while the built-in dynamic pools remain available for load-driven burst
+   capacity. Each static pool permits one temporary extra node during replacement, but normally
+   maintains exactly one. The workflow waits for a Ready worker in each expected AZ and fails with
+   NodePool/NodeClaim diagnostics if capacity cannot be provisioned. Static capacity prevents Auto
+   Mode consolidation from reducing staging below two workers; Pod replica and topology rules are
+   still separate application-availability controls.
+
+   Inspect the baseline with:
+
+   ```bash
+   kubectl get nodepool foc-static-1a foc-static-1b
+   kubectl get nodes -l friendoncampus.com/capacity=static \
+     -L topology.kubernetes.io/zone,karpenter.sh/nodepool
+   ```
+
    Automatic staging deployment is guarded by `/foc/staging/msk-runtime-ready`. `apply-core`
    creates it as `false`; only a completely successful MSK provision/lockdown marks it `true`.
    Until then CI may publish immutable images, but it deliberately skips the Kubernetes rollout
