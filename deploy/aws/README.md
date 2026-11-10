@@ -50,11 +50,12 @@ add/remove compute capacity for scheduled pods. Three always-on MSK brokers mate
 monthly cost; the USD 25 budget is only an alert, not a hard limit. Destroy staging when it is not
 being demonstrated.
 
-Database-backed application Deployments do not surge during replacement. With one staging replica,
-Kubernetes stops the old pod before starting its replacement so the small RDS instance is not
-temporarily exhausted by two generations of connection pools. This permits brief service downtime
-during a staging rollout; production should combine appropriately sized database capacity with
-multiple replicas and a reviewed availability strategy.
+Gateway and the seven stateless application Deployments maintain at least two replicas. Their Pod
+topology-spread constraints keep matching replicas within a skew of one across both Availability
+Zones and worker hostnames. Database-backed Deployments do not surge during replacement: one of
+their two replicas is replaced at a time, keeping the other available without adding a third
+generation of database connection pools. This application redundancy does not make the single RDS
+instance highly available; production still needs reviewed database capacity and Multi-AZ policy.
 
 ## Directory map
 
@@ -210,8 +211,9 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    capacity. Each static pool permits one temporary extra node during replacement, but normally
    maintains exactly one. The workflow waits for a Ready worker in each expected AZ and fails with
    NodePool/NodeClaim diagnostics if capacity cannot be provisioned. Static capacity prevents Auto
-   Mode consolidation from reducing staging below two workers; Pod replica and topology rules are
-   still separate application-availability controls.
+   Mode consolidation from reducing staging below two workers. The runtime overlay separately keeps
+   Gateway and all seven stateless applications at two or more replicas and requires their replicas
+   to spread across both zone and hostname failure domains.
 
    Inspect the baseline with:
 
@@ -323,8 +325,12 @@ aws logs tail /aws/msk/foc-staging/broker --since 15m
 kubectl -n foc-staging get events --sort-by=.lastTimestamp | tail -100
 ```
 
-Gateway and all seven applications use HPA `1-3` at 70% CPU. To collect N2H evidence, run the load
-helper in one terminal and watch both pod and node scaling in others:
+Gateway and all seven applications use HPA `2-3` at 70% CPU. The two-replica floor supplies normal
+availability, while topology-spread constraints prevent replicas from sharing one node or AZ when
+both failure domains are available. The deployment smoke test fails unless every stateless workload
+has Ready replicas on at least two distinct worker nodes and two distinct Availability Zones. To
+collect N2H evidence, run the load helper in one terminal and watch both pod and node scaling in
+others:
 
 ```bash
 PUBLIC_URL=$(aws ssm get-parameter --name /foc/staging/public-url --query Parameter.Value --output text)

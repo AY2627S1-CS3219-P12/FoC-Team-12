@@ -3,7 +3,7 @@ kind: HorizontalPodAutoscaler
 metadata: { name: gateway, namespace: foc-staging }
 spec:
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: gateway }
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 3
   metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
   behavior: { scaleDown: { stabilizationWindowSeconds: 300 }, scaleUp: { stabilizationWindowSeconds: 30 } }
@@ -13,7 +13,7 @@ kind: HorizontalPodAutoscaler
 metadata: { name: user-service, namespace: foc-staging }
 spec:
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: user-service }
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 3
   metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
 ---
@@ -22,7 +22,7 @@ kind: HorizontalPodAutoscaler
 metadata: { name: supplier-service, namespace: foc-staging }
 spec:
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: supplier-service }
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 3
   metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
 ---
@@ -31,7 +31,7 @@ kind: HorizontalPodAutoscaler
 metadata: { name: order-service, namespace: foc-staging }
 spec:
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: order-service }
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 3
   metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
 ---
@@ -40,7 +40,7 @@ kind: HorizontalPodAutoscaler
 metadata: { name: credit-service, namespace: foc-staging }
 spec:
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: credit-service }
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 3
   metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
 ---
@@ -49,7 +49,7 @@ kind: HorizontalPodAutoscaler
 metadata: { name: admin-service, namespace: foc-staging }
 spec:
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: admin-service }
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 3
   metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
 ---
@@ -58,7 +58,7 @@ kind: HorizontalPodAutoscaler
 metadata: { name: chat-service, namespace: foc-staging }
 spec:
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: chat-service }
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 3
   metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
 ---
@@ -67,7 +67,7 @@ kind: HorizontalPodAutoscaler
 metadata: { name: notification-service, namespace: foc-staging }
 spec:
   scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: notification-service }
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 3
   metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 70 } } }]
 ---
