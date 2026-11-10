@@ -339,6 +339,10 @@ describe('Credit dashboard', () => {
       screen.getByRole('link', { name: 'Suppliers' }),
     ).toHaveAttribute('href', '/admin/suppliers')
     const mainNav = screen.getByRole('navigation', { name: 'Main navigation' })
+    expect(
+      within(mainNav).getAllByRole('link').map((link) => link.textContent),
+    ).toEqual(['Admin', 'Suppliers'])
+    expect(within(mainNav).queryByRole('link', { name: 'Home' })).not.toBeInTheDocument()
     expect(within(mainNav).queryByRole('link', { name: 'Errands' })).not.toBeInTheDocument()
     expect(within(mainNav).queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
     expect(
@@ -346,6 +350,10 @@ describe('Credit dashboard', () => {
     ).not.toBeInTheDocument()
     const accountMenuButton = screen.getByLabelText('Open account menu for admin')
     expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin')
+    expect(screen.getByRole('link', { name: 'Friend on Campus' })).toHaveAttribute(
+      'href',
+      '/admin',
+    )
     const accountMenu = accountMenuButton.closest('details')
     await user.click(accountMenuButton)
     expect(accountMenu).toHaveAttribute('open')

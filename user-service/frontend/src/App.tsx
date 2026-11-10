@@ -174,6 +174,14 @@ export function App() {
     return () => { cancelled = true }
   }, [session])
 
+  useEffect(() => {
+    if (session?.role !== 'ADMIN' || window.location.pathname !== '/') return
+    const requestedView = new URLSearchParams(window.location.search).get('view')
+    if (requestedView !== 'profile' && requestedView !== 'users') {
+      navigateTo('/admin')
+    }
+  }, [session])
+
   useEffect(() => () => {
     if (profileUsernameNoticeTimer.current !== null) {
       window.clearTimeout(profileUsernameNoticeTimer.current)
@@ -800,16 +808,20 @@ export function App() {
     return <div className="profile-shell">
       <header className="profile-app-header">
         <div className="profile-app-header-content">
-          <a className="profile-brand" href="/">
+          <a className="profile-brand" href={adminMode ? '/admin' : '/'}>
             <img alt="" height="24" src={bagIcon} width="24" />
             <span>Friend on Campus</span>
           </a>
           <nav className="profile-service-nav" aria-label="Main navigation">
-            <a aria-current={homePage ? 'page' : undefined} href="/">Home</a>
-            {!adminMode && <a href={errandsPath}>Errands</a>}
-            <a href={suppliersPath}>Suppliers</a>
-            {!adminMode && <a href="/credits">Credits</a>}
-            {adminMode && <a href="/admin">Admin</a>}
+            {adminMode ? <>
+              <a href="/admin">Admin</a>
+              <a href={suppliersPath}>Suppliers</a>
+            </> : <>
+              <a aria-current={homePage ? 'page' : undefined} href="/">Home</a>
+              <a href={errandsPath}>Errands</a>
+              <a href={suppliersPath}>Suppliers</a>
+              <a href="/credits">Credits</a>
+            </>}
           </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">
             {!adminMode && <div className="workspace-selector" role="group" aria-label="Choose your current role">

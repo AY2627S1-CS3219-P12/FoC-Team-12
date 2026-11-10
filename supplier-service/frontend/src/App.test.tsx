@@ -602,26 +602,27 @@ describe('Other frontend routes', () => {
     expect(
       await screen.findByRole('heading', { name: 'Campus locations' }),
     ).toBeInTheDocument()
+    const mainNav = screen.getByRole('navigation', { name: 'Main navigation' })
     expect(
-      within(
-        screen.getByRole('navigation', { name: 'Main navigation' }),
-      ).getByRole('link', { name: 'Suppliers' }),
+      within(mainNav).getAllByRole('link').map((link) => link.textContent),
+    ).toEqual(['Admin', 'Suppliers'])
+    expect(within(mainNav).queryByRole('link', { name: 'Home' })).not.toBeInTheDocument()
+    expect(
+      within(mainNav).getByRole('link', { name: 'Suppliers' }),
     ).toHaveAttribute('href', '/admin/suppliers')
     expect(
-      within(
-        screen.getByRole('navigation', { name: 'Main navigation' }),
-      ).getByRole('link', { name: 'Admin' }),
+      within(mainNav).getByRole('link', { name: 'Admin' }),
     ).toHaveAttribute('href', '/admin')
     expect(
-      within(
-        screen.getByRole('navigation', { name: 'Main navigation' }),
-      ).queryByRole('link', { name: 'Errands' }),
+      within(mainNav).queryByRole('link', { name: 'Errands' }),
     ).not.toBeInTheDocument()
     expect(
-      within(
-        screen.getByRole('navigation', { name: 'Main navigation' }),
-      ).queryByRole('link', { name: 'Credits' }),
+      within(mainNav).queryByRole('link', { name: 'Credits' }),
     ).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Friend on Campus' })).toHaveAttribute(
+      'href',
+      '/admin',
+    )
     await user.click(screen.getByLabelText('Open account menu for Admin'))
     expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute(
       'href',

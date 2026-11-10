@@ -61,20 +61,26 @@ export function OrderShell({ children }: { children: ReactNode }) {
     <div className="app-shell">
       <header className="site-header">
         <div className="header-inner">
-          <a className="brand" href="/">
+          <a className="brand" href={session?.role === 'ADMIN' ? '/admin' : '/'}>
             <img alt="" height="24" src={bagIcon} width="24" />
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className="main-nav">
-            <a href="/">Home</a>
-            {session?.role !== 'ADMIN' && (
-              <a aria-current="page" href={errandsPath}>
-                Errands
-              </a>
+            {session?.role === 'ADMIN' ? (
+              <>
+                <a href="/admin">Admin</a>
+                <a href={suppliersPath}>Suppliers</a>
+              </>
+            ) : (
+              <>
+                <a href="/">Home</a>
+                <a aria-current="page" href={errandsPath}>
+                  Errands
+                </a>
+                <a href={suppliersPath}>Suppliers</a>
+                <a href="/credits">Credits</a>
+              </>
             )}
-            <a href={suppliersPath}>Suppliers</a>
-            {session?.role !== 'ADMIN' && <a href="/credits">Credits</a>}
-            {session?.role === 'ADMIN' && <a href="/admin">Admin</a>}
           </nav>
           <nav aria-label="Account and workspace" className="header-actions">
             {session && session.role !== 'ADMIN' && (

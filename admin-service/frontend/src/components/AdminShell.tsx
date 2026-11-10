@@ -79,26 +79,32 @@ export function AdminShell({
       </a>
       <header className="site-header">
         <div className="header-inner">
-          <a className="brand" href="/">
+          <a className="brand" href={session?.role === 'ADMIN' ? '/admin' : '/'}>
             <img alt="" height="24" src={bagIcon} width="24" />
             <span>Friend on Campus</span>
           </a>
           <nav aria-label="Main navigation" className="main-nav">
-            <a href="/">Home</a>
-            {session?.role !== 'ADMIN' && <a href={errandsPath}>Errands</a>}
-            <a href={suppliersPath}>Suppliers</a>
-            {session?.role !== 'ADMIN' && <a href="/credits">Credits</a>}
-            {session?.role === 'ADMIN' && (
-              <a
-                aria-current={
-                  window.location.pathname.startsWith('/admin/reports')
-                    ? undefined
-                    : 'page'
-                }
-                href="/admin"
-              >
-                Admin
-              </a>
+            {session?.role === 'ADMIN' ? (
+              <>
+                <a
+                  aria-current={
+                    window.location.pathname.startsWith('/admin/reports')
+                      ? undefined
+                      : 'page'
+                  }
+                  href="/admin"
+                >
+                  Admin
+                </a>
+                <a href={suppliersPath}>Suppliers</a>
+              </>
+            ) : (
+              <>
+                <a href="/">Home</a>
+                <a href={errandsPath}>Errands</a>
+                <a href={suppliersPath}>Suppliers</a>
+                <a href="/credits">Credits</a>
+              </>
             )}
           </nav>
           <nav aria-label="Account and workspace" className="header-actions">
