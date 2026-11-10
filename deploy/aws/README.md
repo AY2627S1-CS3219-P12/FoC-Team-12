@@ -210,7 +210,9 @@ use short-lived OIDC sessions instead of stored AWS credentials.
    instead of breaking the currently running single-broker deployment.
 
    The cutover removes the old single-broker StatefulSet only after MSK initialization and all
-   application rollouts succeed. Its old PVC is intentionally retained as a short rollback aid.
+   application rollouts succeed. Kafka clients restart after topic and ACL reconciliation so a
+   listener cannot remain stopped after a transient authorization failure during first-time ACL
+   creation. The old broker PVC is intentionally retained as a short rollback aid.
    Existing transient records and consumer offsets are not copied into the new staging cluster;
    authoritative service databases and transactional outboxes remain the recovery sources.
    After the team verifies MSK topics, consumers and Kafbat, remove that orphaned staging PVC

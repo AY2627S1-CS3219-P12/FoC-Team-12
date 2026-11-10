@@ -213,7 +213,10 @@ add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfi
   --topic admin.credit.commands.DLT --topic credit.admin.events.DLT \
   --topic admin.user.commands --topic user.admin.events --topic admin.user.commands.DLT --topic user.admin.events.DLT --topic admin.events
 add_acl kafka_ui --operation Describe --operation DescribeConfigs --cluster
-add_acl kafka_ui --operation Describe --group order-service --group chat-service-lifecycle --group chat-service-timeline --group credit-service --group notification-service --group admin-service-credit --group credit-service-admin --group admin-service-user --group user-service-admin
+# Kafbat discovers consumer groups before it knows their names, including Amazon MSK's internal
+# canary groups. Describe on the wildcard group allows that inventory only; kafka_ui still has Read
+# solely on its own kafka-ui-browser* groups and therefore cannot join or reset business groups.
+add_acl kafka_ui --operation Describe --group '*'
 add_acl kafka_ui --operation Read --operation Describe --group kafka-ui-browser --resource-pattern-type prefixed
 } &
 pids+=("$!")
