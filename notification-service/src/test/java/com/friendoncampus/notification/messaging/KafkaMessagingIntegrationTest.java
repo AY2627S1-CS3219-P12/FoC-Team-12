@@ -77,7 +77,9 @@ class KafkaMessagingIntegrationTest {
                     new NewTopic("credit.events", 3, (short) 1),
                     new NewTopic("credit.events.DLT", 1, (short) 1),
                     new NewTopic("order.lifecycle.events", 3, (short) 1),
-                    new NewTopic("order.lifecycle.events.DLT", 1, (short) 1))).all().get();
+                    new NewTopic("order.lifecycle.events.DLT", 1, (short) 1),
+                    new NewTopic("chat.events", 3, (short) 1),
+                    new NewTopic("chat.events.DLT", 1, (short) 1))).all().get();
         }
     }
 
@@ -202,5 +204,51 @@ class KafkaMessagingIntegrationTest {
         Header group = deadLetter.headers().lastHeader(KafkaHeaders.DLT_ORIGINAL_CONSUMER_GROUP);
         assertThat(new String(group.value(), StandardCharsets.UTF_8)).isEqualTo("notification-service");
         assertThat(notificationsFor(errand.orderId())).isZero();
+    }
+
+    @Test
+    void aChatMessageNotifiesItsRecipientAndARepeatDoesNotDuplicateIt() throws Exception {
+        UUID orderId=UUID.randomUUID(),conversationId=UUID.randomUUID(),messageId=UUID.randomUUID();
+        String event=chatEvent(UUID.randomUUID(),conversationId,orderId,messageId,REQUESTER,COURIER,"TEXT");
+
+        publish("chat.events",conversationId.toString(),event);
+        publish("chat.events",conversationId.toString(),event);
+
+        await().atMost(Duration.ofSeconds(20)).until(() -> notificationsFor(orderId)==1);
+        assertThat(jdbc.queryForObject("SELECT recipient_id FROM notifications WHERE order_id=?",UUID.class,orderId))
+                .isEqualTo(COURIER);
+        assertThat(jdbc.queryForObject("SELECT type FROM notifications WHERE order_id=?",String.class,orderId))
+                .isEqualTo("CHAT_MESSAGE_RECEIVED");
+    }
+
+    @Test
+    void aChatEventWithTheWrongKeyGoesToItsOwnDlt() throws Exception {
+        UUID orderId=UUID.randomUUID(),conversationId=UUID.randomUUID();
+        String wrongKey=UUID.randomUUID().toString();
+        String event=chatEvent(UUID.randomUUID(),conversationId,orderId,UUID.randomUUID(),REQUESTER,COURIER,"IMAGE");
+
+        publish("chat.events",wrongKey,event);
+
+        List<ConsumerRecord<String,String>> dlt=readUntil("chat.events.DLT",
+                seen->seen.stream().anyMatch(record->wrongKey.equals(record.key())));
+        assertThat(dlt).anySatisfy(record->{
+            assertThat(record.key()).isEqualTo(wrongKey);
+            assertThat(record.value()).isEqualTo(event);
+        });
+        assertThat(notificationsFor(orderId)).isZero();
+    }
+
+    private static String chatEvent(UUID eventId,UUID conversationId,UUID orderId,UUID messageId,
+            UUID senderId,UUID recipientId,String messageType) {
+        return """
+                {"eventId":"%s","eventType":"ChatMessageSent","eventVersion":1,
+                "aggregateType":"Conversation","aggregateId":"%s","aggregateVersion":1,
+                "occurredAt":"2026-11-10T06:00:00Z","producer":"chat-service",
+                "correlationId":"%s","causationId":"%s",
+                "actor":{"type":"USER","userId":"%s"},
+                "data":{"messageId":"%s","conversationId":"%s","orderId":"%s",
+                "senderUserId":"%s","recipientUserId":"%s","messageType":"%s"}}
+                """.formatted(eventId,conversationId,orderId,messageId,senderId,messageId,conversationId,
+                        orderId,senderId,recipientId,messageType).replaceAll("\\s+","");
     }
 }

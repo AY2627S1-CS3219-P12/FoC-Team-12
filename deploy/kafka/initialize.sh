@@ -84,7 +84,7 @@ limit_jobs() {
 }
 
 pids=()
-for topic in user.events order.events credit.events order.lifecycle.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
+for topic in user.events order.events credit.events order.lifecycle.events chat.events admin.credit.commands credit.admin.events admin.user.commands user.admin.events admin.events; do
   create_topic "$topic" 3 604800000 &
   pids+=("$!")
   limit_jobs
@@ -92,7 +92,7 @@ done
 wait_all "${pids[@]}"
 
 pids=()
-for topic in user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT; do
+for topic in user.events.DLT order.events.DLT credit.events.DLT order.lifecycle.events.DLT chat.events.DLT admin.credit.commands.DLT credit.admin.events.DLT admin.user.commands.DLT user.admin.events.DLT; do
   create_topic "$topic" 1 2592000000 &
   pids+=("$!")
   limit_jobs
@@ -121,7 +121,9 @@ limit_jobs
 # Chat consumes Order lifecycle facts using its own projection group.
 {
 add_acl chat_service --operation Read --operation Describe --topic order.lifecycle.events
+add_acl chat_service --operation Write --operation Describe --topic chat.events
 add_acl chat_service --operation Read --group chat-service-lifecycle
+add_idempotent_write_acl chat_service
 } &
 pids+=("$!")
 limit_jobs
@@ -141,10 +143,10 @@ limit_jobs
 # letters. Order owns order.lifecycle.events; Notification and Chat consume it independently.
 {
 add_acl notification_service --operation Read --operation Describe \
-  --topic credit.events --topic order.lifecycle.events
+  --topic credit.events --topic order.lifecycle.events --topic chat.events
 add_acl notification_service --operation Read --group notification-service
 add_acl notification_service --operation Write --operation Describe \
-  --topic credit.events.DLT --topic order.lifecycle.events.DLT
+  --topic credit.events.DLT --topic order.lifecycle.events.DLT --topic chat.events.DLT
 add_idempotent_write_acl notification_service
 } &
 pids+=("$!")
@@ -186,9 +188,9 @@ add_acl chat_service --operation Read --group chat-service-timeline
 # Kafka UI can inspect this local cluster but cannot mutate topics, data or business offsets.
 {
 add_acl kafka_ui --operation Read --operation Describe --operation DescribeConfigs \
-  --topic user.events --topic order.events --topic order.lifecycle.events --topic credit.events \
+  --topic user.events --topic order.events --topic order.lifecycle.events --topic credit.events --topic chat.events \
   --topic user.events.DLT --topic order.events.DLT --topic credit.events.DLT \
-  --topic order.lifecycle.events --topic order.lifecycle.events.DLT \
+  --topic order.lifecycle.events --topic order.lifecycle.events.DLT --topic chat.events.DLT \
   --topic admin.credit.commands --topic credit.admin.events \
   --topic admin.credit.commands.DLT --topic credit.admin.events.DLT \
   --topic admin.user.commands --topic user.admin.events --topic admin.user.commands.DLT --topic user.admin.events.DLT --topic admin.events

@@ -37,5 +37,7 @@ public enum NotificationType {
     /** {@code CreditSettled}: the courier was paid the reward for a completed errand. */
     CREDITS_RECEIVED,
     /** {@code CourierCompensated}: the courier was compensated for an errand cancelled after acceptance. */
-    CREDITS_COMPENSATED
+    CREDITS_COMPENSATED,
+    /** A requester or courier sent this user a private errand-chat message. */
+    CHAT_MESSAGE_RECEIVED
 }

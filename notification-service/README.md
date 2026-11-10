@@ -263,6 +263,20 @@ snapshot. Credit outcomes are separate: a courier gets both `ORDER_COMPLETED` an
 other failure is retried three times with backoff first. Dead letters keep the original key and
 name the `notification-service` group.
 
+## Notifications from Chat messages
+
+Notification consumes `ChatMessageSent` from `chat.events` in the same independent
+`notification-service` group. Chat supplies the recipient from its current private conversation
+membership; Notification never reads Chat's database or guesses participants. The stored type is
+`CHAT_MESSAGE_RECEIVED`, deep-linked to the errand, with the generic text “You have a new message
+about your errand.” Neither the Kafka event nor Notification's database contains the private
+message body or image metadata.
+
+The inbox deduplicates by event ID and the notification business key is the Chat message ID, so a
+Kafka redelivery or controlled republish cannot notify twice. Invalid events retry only according
+to the standard listener policy and then go to `chat.events.DLT`. Chat `SYSTEM` lifecycle entries
+are intentionally excluded: Order's existing lifecycle notifications already cover them.
+
 ## Pickup reminders
 
 Notification also reminds people before an errand's pickup deadline, using only the
