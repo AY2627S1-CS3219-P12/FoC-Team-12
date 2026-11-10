@@ -192,7 +192,7 @@ endpoint('/api/admin/reports','post','admin','ParticipantReport',obj({'orderId':
 endpoint('/api/admin/reports/{caseId}','get','admin','ParticipantReport')
 S['ReportContext'] = {'oneOf':[
     obj({'orderId':UUID,'status':enum('OWN_REPORT','CASE_PARTICIPANT','PREPARING_REVIEW'),'caseId':UUID,'state':enum('OPEN','UNDER_REVIEW','RESOLVED')}),
-    obj({'orderId':UUID,'status':enum('PREPARATION_AVAILABLE'),'caseId':{'type':'null'},'state':{'type':'null'}})]}
+    obj({'orderId':UUID,'status':enum('REPORT_REQUEST_AVAILABLE'),'caseId':{'type':'null'},'state':{'type':'null'}})]}
 endpoint('/api/admin/orders/{orderId}/report-context','get','admin','ReportContext')
 endpoint('/api/admin/cases','get','admin','CasePage',params=[param('status',schema=enum('OPEN','UNDER_REVIEW','RESOLVED')),
     param('query',schema=UUID),param('page',schema={**INT,'default':0}),param('size',schema={'type':'integer','minimum':1,'maximum':100,'default':20})])

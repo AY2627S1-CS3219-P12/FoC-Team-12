@@ -6995,7 +6995,7 @@
               "status": {
                 "type": "string",
                 "enum": [
-                  "PREPARATION_AVAILABLE"
+                  "REPORT_REQUEST_AVAILABLE"
                 ]
               },
               "caseId": {

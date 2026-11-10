@@ -323,11 +323,11 @@ describe('MyErrandsPage', () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Past errands you ran' })
-    expect(
-      await within(section('Under review')).findByText(
-        'No errands are under review.',
-      ),
-    ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('region', { name: /^Under review/ }),
+      ).not.toBeInTheDocument(),
+    )
     expect(screen.getByRole('link', { name: 'Open requests' })).toHaveAttribute(
       'href',
       '/errands/browse',
@@ -381,4 +381,65 @@ it('places paused errands in a distinct review section and keeps finished review
   expect(
     within(section('Active')).queryByText('Review fixture'),
   ).not.toBeInTheDocument()
+})
+
+describe('recent errands section layout', () => {
+  beforeEach(() => signIn(REQUESTER_ID, 'REQUESTER'))
+  afterEach(() => {
+    sessionStorage.clear()
+    vi.unstubAllGlobals()
+  })
+  it('keeps active and past headings visible and omits a confirmed empty review section', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubFetch((url) => ({
+        body: url.includes('status=review')
+          ? page([])
+          : page([
+              order({
+                title: url.includes('status=past')
+                  ? 'Past fixture'
+                  : 'Active fixture',
+              }),
+            ]),
+      })).fetchMock,
+    )
+    renderPage()
+    await screen.findByRole('heading', { name: 'Active fixture' })
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('region', { name: /^Under review/ }),
+      ).not.toBeInTheDocument(),
+    )
+    expect(
+      within(section('Active')).getByRole('heading', {
+        name: 'Active',
+      }),
+    ).toBeVisible()
+    const past = section('Past')
+    expect(within(past).getByRole('heading', { name: 'Past' })).toBeVisible()
+    expect(
+      within(past).getByRole('group', { name: 'Filter past errands' }),
+    ).toBeVisible()
+    expect(
+      screen.queryByText('No under review errands'),
+    ).not.toBeInTheDocument()
+  })
+  it('keeps a failed review lookup visible instead of claiming there are no review cases', async () => {
+    vi.stubGlobal(
+      'fetch',
+      stubFetch((url) =>
+        url.includes('status=review')
+          ? { status: 503, body: { detail: 'Review lookup unavailable' } }
+          : { body: page([]) },
+      ).fetchMock,
+    )
+    renderPage()
+    expect(
+      await within(section('Under review')).findByRole('alert'),
+    ).toHaveTextContent('Review lookup unavailable')
+    expect(
+      screen.queryByText('No under review errands'),
+    ).not.toBeInTheDocument()
+  })
 })

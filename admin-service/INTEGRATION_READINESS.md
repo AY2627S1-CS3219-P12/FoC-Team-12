@@ -8,6 +8,32 @@ Never replace an unavailable dependency with synthetic data in application code.
 
 ## Kafka replacement — 10 November 2026
 
+### Report-context consumer repair — 11 November 2026
+
+The producer now emits `REPORT_REQUEST_AVAILABLE` instead of `PREPARATION_AVAILABLE`.
+Admin and Order consumers support the canonical status and accept the former spelling during
+mixed-version rollout. The historical acceptance record below uses the spelling observed then.
+Order now renders and polls `PREPARING_REVIEW`; Admin's entry page labels it as a saved request,
+not an accepted report. An actor's pending preparation takes precedence over general verified
+participant navigation, avoiding a second form while their statement is still being prepared.
+Both consumer validators reject malformed case/status combinations. Consumer regressions read
+the generated producer schema, rather than relying solely on copied status fixtures.
+The schema fixtures are read through Node's filesystem API only when tests execute. They are
+not static TypeScript imports: Admin and Order Docker builds copy only the owning service's
+frontend, so repository-level contract files are intentionally absent from those build contexts.
+
+Audit scope: report-context callers and response validation, report preparation/status polling,
+assignment preparation, closure-pending UI and removed synchronous dispute-write callers in
+Admin, Order, Chat and Credit runtime sources. No remaining calls to those removed write routes
+were found. Reporting documentation was reconciled with the existing Kafka semantics.
+
+Verified locally: 159 Order and 124 Admin frontend tests; both frontend builds and lint; 72 Admin
+HTTP/PostgreSQL workflow tests (none skipped); generated-contract/schema validation; 18 shared UI
+checks. Desktop, 375px and keyboard navigation from errand to report form/private preparation
+status were checked with isolated synthetic fixtures. This verifies the source repair, not a new
+live deployment or an end-to-end Kafka acceptance run. Updated Admin and Order artifacts must
+ship together; the existing running deployment was not changed by this repair.
+
 The user-approved [Kafka coordination contract](../docs/integration/dispute-kafka-contract.md)
 replaces the synchronous dispute writes and supersedes the HTTP rollout notes below. The single
 shared editor is this Admin task; affected owners remain Darryl (Admin/User), XueTing (Order),

@@ -25,6 +25,20 @@ when evidence is unavailable, reporting-account labels and account references re
 Historical courier assignments are retained. Verified participants can receive reviewer actions
 and private follow-up even before submitting their own statement.
 Errand descriptions and participant statements are displayed verbatim from their API fields.
+Participant-scoped panels keep their account fixed; switch through the participant cards instead
+of a duplicate selector. Ban/correction reasons are internal audit records, visible to authorized
+admins and sent to the responsible service, not included in participant case status. Completed
+action history is collapsed; pending or uncertain outcomes remain expanded. Confirmation and
+same-request retry safeguards still apply. Closure presents three radio choices with the existing
+dispositions: keep a confirmed outcome with no active hold, return held credits, or pay the courier.
+
+Credit evidence labels each balance change and its before/after values at that historical event.
+Timeline filters apply only to loaded events and never change coverage or closure eligibility.
+Consecutive messages from the same identified sender/conversation within five minutes on the same
+SGT day share a compact group; intervening events, conversation changes and unknown senders break
+groups even when a filter hides those events. Each message retains its original text, timestamp,
+protected attachments and individual audit details. Load more evidence preserves the existing
+snapshot/cursor validation and appends activity in producer order.
 The dashboard does not generate, summarize or rephrase case content and has no LLM dependency.
 
 Cards sit side by side on desktop and stack on narrow screens. A `Reporter` badge marks each
@@ -57,7 +71,7 @@ feedback; the backend independently enforces reviewer independence even without 
 
 Verify with the frontend test suite, lint, TypeScript/production build and the root UI design checks.
 Manual checks: compare two statements at desktop and 375px; use each card's controls and Tab/Enter;
-verify the selected account in confirmation, change the account selector, close/reopen a panel,
+verify the selected account in confirmation, switch participant cards, close/reopen a panel,
 resume an uncertain request, and check non-reporter, other-reviewer and evidence-outage states.
 
 ## Behavior and boundaries
@@ -681,11 +695,15 @@ See [sanctions ownership, behavior, recovery and verification](SANCTIONS_INTEGRA
 Order's errand detail links to Admin reporting through the regular gateway. The read-only
 `GET /api/admin/orders/{orderId}/report-context` requires a current active Requester/Courier JWT.
 `OWN_REPORT` returns only that actor's existing case ID and safe state, even during a Chat outage.
-Otherwise Admin asks Chat for verified reporting eligibility: `ELIGIBLE` offers the errand-scoped
-form; `INELIGIBLE` returns null case/state and exposes no other participant's case. Incomplete or
-unavailable eligibility returns 503, never an empty/no-report success. Responses are no-store.
-The GET creates no rows/events, needs no mutation identity and may be retried safely. Admin's
-existing POST still rechecks Chat eligibility and locks case state before accepting a statement.
+An actor's pending preparation returns `PREPARING_REVIEW` with only their private case reference,
+before general `CASE_PARTICIPANT` navigation is considered. Verified nonreporters receive
+`CASE_PARTICIPANT`. A new request returns `REPORT_REQUEST_AVAILABLE` with null case/state,
+without a Chat lookup, eligibility claim or disclosure of another party's case. This replaces the
+former `PREPARATION_AVAILABLE` spelling; both frontends accept that spelling during rollout.
+Responses are no-store. The GET creates no rows/events and can be retried safely. POST saves a
+private preparation and durable command with HTTP 202; Order verifies involvement and freezes the
+errand, Chat confirms its barrier, and only then does Admin accept the statement. Preparation
+progress is not an accepted report or a promise that the errand has already paused.
 
 The new-report page checks the same context so repeat visits lead to View your report rather than
 a duplicate statement form. Current account/role and per-report access stay backend-enforced.

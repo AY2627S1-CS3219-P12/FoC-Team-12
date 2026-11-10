@@ -131,14 +131,14 @@ public class CaseService {
         var own=db.query("SELECT c.id,c.state FROM admin_cases c JOIN admin_statements s ON s.case_id=c.id WHERE c.order_id=? AND s.reporter_id=?",
             (r,n)->new ReportContext(orderId,"OWN_REPORT",r.getObject("id",UUID.class),AdminCase.State.valueOf(r.getString("state"))),orderId,actor);
         if(!own.isEmpty())return own.get(0); // Existing private status does not depend on Chat.
+        var pending=db.query("SELECT case_id FROM admin_report_preparations WHERE order_id=? AND actor_id=? AND status='PENDING'",r->r.next()?new ReportContext(orderId,"PREPARING_REVIEW",r.getObject(1,UUID.class),AdminCase.State.OPEN):null,orderId,actor);
+        if(pending!=null)return pending;
         var membership=db.query("SELECT c.id,c.state FROM admin_cases c JOIN admin_case_participants p ON p.case_id=c.id WHERE c.order_id=? AND p.user_id=?",
             (r,n)->new ReportContext(orderId,"CASE_PARTICIPANT",r.getObject("id",UUID.class),AdminCase.State.valueOf(r.getString("state"))),orderId,actor);
         if(!membership.isEmpty())return membership.get(0); // Already verified membership survives evidence outages.
-        var pending=db.query("SELECT case_id FROM admin_report_preparations WHERE order_id=? AND actor_id=? AND status='PENDING'",r->r.next()?new ReportContext(orderId,"PREPARING_REVIEW",r.getObject(1,UUID.class),AdminCase.State.OPEN):null,orderId,actor);
-        if(pending!=null)return pending;
         // This permits saving a request, not access to an errand or an eligibility decision.
         // Order verifies membership when it consumes the command; no remote write/read is needed here.
-        return new ReportContext(orderId,"PREPARATION_AVAILABLE",null,null);
+        return new ReportContext(orderId,"REPORT_REQUEST_AVAILABLE",null,null);
     }
 
     public Page queue(Jwt jwt, AdminCase.State state, UUID query, int page, int size) {

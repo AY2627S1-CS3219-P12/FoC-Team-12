@@ -13,7 +13,9 @@ import { saveSession } from './auth/session'
 vi.mock('./components/NotificationBell', () => ({
   NotificationBell: () => null,
 }))
-vi.mock('./components/NotificationPush', () => ({ NotificationPush: () => null }))
+vi.mock('./components/NotificationPush', () => ({
+  NotificationPush: () => null,
+}))
 
 const id = '10000000-0000-4000-8000-000000000001'
 const actor = '20000000-0000-4000-8000-000000000001'
@@ -552,16 +554,14 @@ it('allows a preparation form without claiming synchronous Chat eligibility', as
   session()
   vi.stubGlobal(
     'fetch',
-    vi
-      .fn()
-      .mockResolvedValue(
-        response({
-          orderId: order,
-          status: 'PREPARATION_AVAILABLE',
-          caseId: null,
-          state: null,
-        }),
-      ),
+    vi.fn().mockResolvedValue(
+      response({
+        orderId: order,
+        status: 'REPORT_REQUEST_AVAILABLE',
+        caseId: null,
+        state: null,
+      }),
+    ),
   )
   render(<App />)
   expect(await screen.findByLabelText('What happened?')).toBeVisible()
@@ -569,4 +569,52 @@ it('allows a preparation form without claiming synchronous Chat eligibility', as
     screen.queryByText('Reporting is not available'),
   ).not.toBeInTheDocument()
   expect(screen.queryByText('Report submitted')).not.toBeInTheDocument()
+})
+
+it('shows a saved preparation from the entry link without offering a duplicate form', async () => {
+  window.history.replaceState({}, '', '/admin/reports/new?orderId=' + order)
+  session()
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValue(
+        response({
+          orderId: order,
+          status: 'PREPARING_REVIEW',
+          caseId: id,
+          state: 'OPEN',
+        }),
+      ),
+  )
+  render(<App />)
+  expect(
+    await screen.findByRole('heading', { name: 'Preparing review' }),
+  ).toBeVisible()
+  expect(screen.getByText(/Your request is saved/)).toBeVisible()
+  expect(screen.queryByLabelText('What happened?')).not.toBeInTheDocument()
+  expect(
+    screen.queryByText('You already reported this errand'),
+  ).not.toBeInTheDocument()
+})
+it.each([
+  { status: 'PREPARING_REVIEW', caseId: null, state: 'OPEN' },
+  { status: 'CASE_PARTICIPANT', caseId: null, state: null },
+  { status: 'REPORT_REQUEST_AVAILABLE', caseId: id, state: 'OPEN' },
+  { status: 'UNKNOWN', caseId: null, state: null },
+])('rejects malformed report entry $status', async (body) => {
+  window.history.replaceState({}, '', '/admin/reports/new?orderId=' + order)
+  session()
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(response({ orderId: order, ...body })),
+  )
+  render(<App />)
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'We couldn’t check reporting access',
+  )
+  expect(screen.queryByLabelText('What happened?')).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('link', { name: 'View case' }),
+  ).not.toBeInTheDocument()
 })

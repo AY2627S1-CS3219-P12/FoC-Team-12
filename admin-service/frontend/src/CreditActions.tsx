@@ -374,6 +374,12 @@ export function CreditActions({
             {ban ? 'Account ban requests' : 'Credit corrections'}
           </h2>
         </div>
+        {target && participantLabels[target] && (
+          <p className="action-person">
+            Selected account:{' '}
+            <a href={`#person-${target}`}>{participantName(target)}</a>
+          </p>
+        )}
         <button
           className="button-secondary"
           disabled={busy || denied}
@@ -382,12 +388,6 @@ export function CreditActions({
           {ban ? 'Refresh ban status' : 'Refresh correction status'}
         </button>
       </div>
-      {target && participantLabels[target] && (
-        <p className="action-person">
-          Selected account:{' '}
-          <a href={`#person-${target}`}>{participantName(target)}</a>
-        </p>
-      )}
       {selection &&
         target &&
         selection.userId !== target &&
@@ -423,102 +423,111 @@ export function CreditActions({
       )}
       {ban && (
         <p>
-          <a className="button-secondary" href="/?view=users">
-            Manage accounts and reactivation
-          </a>
+          <a href="/?view=users">Manage accounts and reactivation</a>
         </p>
       )}
       {!denied && (
         <>
           {visibleActions.length ? (
-            <ul className="credit-action-list">
-              {visibleActions.map((a) => (
-                <li key={a.operationId}>
-                  <div className="section-heading">
-                    <h3>
-                      {ban
-                        ? 'Reversible account ban'
-                        : `${Number(a.amount) > 0 ? 'Add' : 'Subtract'} ${Math.abs(Number(a.amount))} credits`}
-                    </h3>
-                    <span
-                      className={`action-state action-${a.status.toLowerCase()}`}
-                    >
-                      {
+            <details
+              className="action-history"
+              open={
+                !selection ||
+                visibleActions.some(
+                  (a) => a.status === 'PENDING' || a.status === 'UNKNOWN',
+                ) ||
+                undefined
+              }
+            >
+              <summary>Action history ({visibleActions.length})</summary>
+              <ul className="credit-action-list">
+                {visibleActions.map((a) => (
+                  <li key={a.operationId}>
+                    <div className="section-heading">
+                      <h3>
+                        {ban
+                          ? 'Reversible account ban'
+                          : `${Number(a.amount) > 0 ? 'Add' : 'Subtract'} ${Math.abs(Number(a.amount))} credits`}
+                      </h3>
+                      <span
+                        className={`action-state action-${a.status.toLowerCase()}`}
+                      >
                         {
-                          PENDING: 'Awaiting confirmation',
-                          UNKNOWN: 'Outcome unconfirmed',
-                          SUCCEEDED: 'Completed',
-                          REJECTED: 'Rejected',
-                        }[a.status]
-                      }
-                    </span>
-                  </div>
-                  <p>{labels[a.status]}</p>
-                  <p>
-                    Participant:{' '}
-                    {participantLabels[a.targetUserId] ? (
-                      <a href={`#person-${a.targetUserId}`}>
-                        {participantName(a.targetUserId)}
-                      </a>
-                    ) : (
-                      participantName(a.targetUserId)
-                    )}
-                  </p>
-                  <p className="statement-text">{a.reason}</p>
-                  {a.reasonCode && (
+                          {
+                            PENDING: 'Awaiting confirmation',
+                            UNKNOWN: 'Outcome unconfirmed',
+                            SUCCEEDED: 'Completed',
+                            REJECTED: 'Rejected',
+                          }[a.status]
+                        }
+                      </span>
+                    </div>
+                    <p>{labels[a.status]}</p>
                     <p>
-                      Reason:{' '}
-                      {(
-                        {
-                          SELF_SANCTION_FORBIDDEN:
-                            'Your own account is protected. You cannot ban yourself.',
-                          LAST_ADMIN_PROTECTED:
-                            'The final active administrator is protected.',
-                          ACTOR_NOT_AUTHORIZED:
-                            'You no longer have admin access.',
-                          INVALID_ACCOUNT_STATE:
-                            'This account cannot be banned in its current state.',
-                          INSUFFICIENT_AVAILABLE_CREDITS:
-                            'This account doesn’t have enough credits for that.',
-                          BALANCE_OVERFLOW:
-                            'That would go over the balance limit.',
-                        } as Record<string, string>
-                      )[a.reasonCode] ||
-                        'This was rejected. See the details for why.'}
+                      Participant:{' '}
+                      {participantLabels[a.targetUserId] ? (
+                        <a href={`#person-${a.targetUserId}`}>
+                          {participantName(a.targetUserId)}
+                        </a>
+                      ) : (
+                        participantName(a.targetUserId)
+                      )}
                     </p>
-                  )}
-                  <p className="evidence-meta">
-                    Requested{' '}
-                    <time dateTime={a.createdAt}>
-                      {formatSingaporeTime(a.createdAt)}
-                    </time>
-                    {a.completedAt && (
-                      <>
-                        {' '}
-                        · Completed{' '}
-                        <time dateTime={a.completedAt}>
-                          {formatSingaporeTime(a.completedAt)}
-                        </time>
-                      </>
+                    <p className="statement-text">{a.reason}</p>
+                    {a.reasonCode && (
+                      <p>
+                        Reason:{' '}
+                        {(
+                          {
+                            SELF_SANCTION_FORBIDDEN:
+                              'Your own account is protected. You cannot ban yourself.',
+                            LAST_ADMIN_PROTECTED:
+                              'The final active administrator is protected.',
+                            ACTOR_NOT_AUTHORIZED:
+                              'You no longer have admin access.',
+                            INVALID_ACCOUNT_STATE:
+                              'This account cannot be banned in its current state.',
+                            INSUFFICIENT_AVAILABLE_CREDITS:
+                              'This account doesn’t have enough credits for that.',
+                            BALANCE_OVERFLOW:
+                              'That would go over the balance limit.',
+                          } as Record<string, string>
+                        )[a.reasonCode] ||
+                          'This was rejected. See the details for why.'}
+                      </p>
                     )}
-                  </p>
-                  <details className="evidence-technical">
-                    <summary>Operation details</summary>
-                    <p>Operation ID: {a.operationId}</p>
-                    {a.reasonCode && <p>Reason code: {a.reasonCode}</p>}
-                    <p>Target account ID: {a.targetUserId}</p>
-                  </details>
-                </li>
-              ))}
-            </ul>
+                    <p className="evidence-meta">
+                      Requested{' '}
+                      <time dateTime={a.createdAt}>
+                        {formatSingaporeTime(a.createdAt)}
+                      </time>
+                      {a.completedAt && (
+                        <>
+                          {' '}
+                          · Completed{' '}
+                          <time dateTime={a.completedAt}>
+                            {formatSingaporeTime(a.completedAt)}
+                          </time>
+                        </>
+                      )}
+                    </p>
+                    <details className="evidence-technical">
+                      <summary>Operation details</summary>
+                      <p>Operation ID: {a.operationId}</p>
+                      {a.reasonCode && <p>Reason code: {a.reasonCode}</p>}
+                      <p>Target account ID: {a.targetUserId}</p>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            </details>
           ) : (
-            !historyUnavailable && (
+            !historyUnavailable &&
+            !selection && (
               <p>
-                {selection && target
-                  ? `No ${ban ? 'ban requests' : 'credit corrections'} recorded for ${participantName(target)}.`
-                  : ban
-                    ? 'No ban requests recorded for this case.'
-                    : 'No credit corrections recorded for this case.'}
+                {ban
+                  ? 'No ban requests recorded for this case.'
+                  : 'No credit corrections recorded for this case.'}
               </p>
             )
           )}
@@ -531,27 +540,26 @@ export function CreditActions({
                 else void submit()
               }}
             >
-              <details
-                className="action-account-picker"
-                open={selection ? undefined : true}
-              >
-                <summary>Change participant</summary>
-                <label htmlFor={`${kind}-target`}>Participant</label>
-                <select
-                  id={`${kind}-target`}
-                  value={target}
-                  disabled={busy || !!pending || confirm}
-                  onChange={(e) => setTarget(e.target.value)}
-                  required
-                >
-                  <option value="">Choose a reporting participant</option>
-                  {eligible.map((id) => (
-                    <option key={id} value={id}>
-                      {participantName(id)}
-                    </option>
-                  ))}
-                </select>
-              </details>
+              {!selection && (
+                <details className="action-account-picker" open>
+                  <summary>Change participant</summary>
+                  <label htmlFor={`${kind}-target`}>Participant</label>
+                  <select
+                    id={`${kind}-target`}
+                    value={target}
+                    disabled={busy || !!pending || confirm}
+                    onChange={(e) => setTarget(e.target.value)}
+                    required
+                  >
+                    <option value="">Choose a reporting participant</option>
+                    {eligible.map((id) => (
+                      <option key={id} value={id}>
+                        {participantName(id)}
+                      </option>
+                    ))}
+                  </select>
+                </details>
+              )}
               {!ban && (
                 <>
                   <fieldset
@@ -595,8 +603,12 @@ export function CreditActions({
               <label htmlFor={`${kind}-reason`}>
                 {ban ? 'Reason for ban' : 'Reason for correction'}
               </label>
+              <small id={`${kind}-reason-help`}>
+                Internal reason. Visible to authorized admins, not participants.
+              </small>
               <textarea
                 id={`${kind}-reason`}
+                aria-describedby={`${kind}-reason-help`}
                 rows={2}
                 required
                 maxLength={2000}

@@ -77,6 +77,7 @@ export function MyErrandsPage() {
             />
             <ErrandSection
               empty="No errands are under review."
+              hideWhenEmpty
               history
               key={`${kind}-review`}
               kind={kind}
@@ -110,6 +111,7 @@ export function MyErrandsPage() {
       </div>
       <ErrandSection
         empty="No errands are under review."
+        hideWhenEmpty
         key={`${kind}-review`}
         kind={kind}
         status="review"
@@ -165,7 +167,13 @@ function ErrandSection({
   })
   const headingId = `${kind}-${status}-heading`
 
-  if (hideWhenEmpty && list.data && list.data.items.length === 0) return null
+  if (
+    hideWhenEmpty &&
+    list.isSuccess &&
+    !list.isPlaceholderData &&
+    list.data.totalItems === 0
+  )
+    return null
 
   return (
     <section
@@ -186,13 +194,13 @@ function ErrandSection({
           )}
         </header>
       )}
-      {history && !courierHistory && (
-        <h2 className="visually-hidden" id={headingId}>
-          {title}
-        </h2>
-      )}
-      {(!history || states.length > 1) && (
+      {(!courierHistory || states.length > 1) && (
         <div className="my-errands-section-head">
+          {history && !courierHistory && (
+            <h3 className="section-title" id={headingId}>
+              {title}
+            </h3>
+          )}
           {!history && (
             <h2 className="section-title" id={headingId}>
               {title}
@@ -233,30 +241,32 @@ function ErrandSection({
           We couldn't load your errands. {list.error.message}
         </div>
       )}
-      {list.data && list.data.items.length === 0 && (
-        <StatePanel
-          action={
-            status === 'active' && (
-              <Link
-                className="button-secondary"
-                to={kind === 'requested' ? '/errands/new' : '/errands/browse'}
-              >
-                {kind === 'requested' ? 'Request help' : 'Find errands'}
-              </Link>
-            )
-          }
-          compact
-          headingLevel={3}
-          icon={ClipboardList}
-          title={
-            state
-              ? `No ${stateLabel(state).toLowerCase()} errands`
-              : `No ${title.toLowerCase()} errands`
-          }
-        >
-          {state ? 'Choose another status to see more.' : empty}
-        </StatePanel>
-      )}
+      {list.isSuccess &&
+        !list.isPlaceholderData &&
+        list.data.items.length === 0 && (
+          <StatePanel
+            action={
+              status === 'active' && (
+                <Link
+                  className="button-secondary"
+                  to={kind === 'requested' ? '/errands/new' : '/errands/browse'}
+                >
+                  {kind === 'requested' ? 'Request help' : 'Find errands'}
+                </Link>
+              )
+            }
+            compact
+            headingLevel={3}
+            icon={ClipboardList}
+            title={
+              state
+                ? `No ${stateLabel(state).toLowerCase()} errands`
+                : `No ${title.toLowerCase()} errands`
+            }
+          >
+            {state ? 'Choose another status to see more.' : empty}
+          </StatePanel>
+        )}
       {list.data && list.data.items.length > 0 && (
         <>
           <ul className={`errand-list${history ? ' errand-history-list' : ''}`}>

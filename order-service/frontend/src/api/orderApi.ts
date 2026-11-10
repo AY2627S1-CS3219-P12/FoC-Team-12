@@ -122,7 +122,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export type ReportContext = {
   orderId: string
-  status: 'OWN_REPORT' | 'ELIGIBLE' | 'INELIGIBLE' | 'CASE_PARTICIPANT'
+  status:
+    | 'OWN_REPORT'
+    | 'ELIGIBLE'
+    | 'INELIGIBLE'
+    | 'CASE_PARTICIPANT'
+    | 'REPORT_REQUEST_AVAILABLE'
+    | 'PREPARATION_AVAILABLE' // Compatibility with older Admin deployments.
+    | 'PREPARING_REVIEW'
   caseId: string | null
   state: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | null
 }
@@ -137,10 +144,18 @@ export async function fetchReportContext(
   if (
     !value ||
     value.orderId !== orderId ||
-    !['OWN_REPORT', 'ELIGIBLE', 'INELIGIBLE', 'CASE_PARTICIPANT'].includes(
+    ![
+      'OWN_REPORT',
+      'ELIGIBLE',
+      'INELIGIBLE',
+      'CASE_PARTICIPANT',
+      'REPORT_REQUEST_AVAILABLE',
+      'PREPARATION_AVAILABLE',
+      'PREPARING_REVIEW',
+    ].includes(value.status) ||
+    (['OWN_REPORT', 'CASE_PARTICIPANT', 'PREPARING_REVIEW'].includes(
       value.status,
-    ) ||
-    (['OWN_REPORT', 'CASE_PARTICIPANT'].includes(value.status)
+    )
       ? typeof value.caseId !== 'string' ||
         !uuid.test(value.caseId) ||
         !['OPEN', 'UNDER_REVIEW', 'RESOLVED'].includes(value.state || '')

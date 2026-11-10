@@ -11,6 +11,7 @@ import {
   Coins,
   FileText,
   MapPin,
+  MessageSquare,
   Route,
   ShieldCheck,
   ArrowRight,
@@ -217,23 +218,27 @@ function EvidenceData({
   record,
   participant,
   linkParticipants = false,
+  compactChat = false,
 }: {
   record: EvidenceRecord
   participant: (id: string) => string
   linkParticipants?: boolean
+  compactChat?: boolean
 }) {
   const data = record.data
   if (data.kind === 'CHAT')
     return (
       <div className="evidence-data">
-        <p>
-          {data.conversationType === 'ERRAND'
-            ? 'Errand conversation'
-            : 'Private conversation with ' +
-              (data.participantUserId
-                ? participant(data.participantUserId)
-                : 'case participant')}
-        </p>
+        {!compactChat && (
+          <p>
+            {data.conversationType === 'ERRAND'
+              ? 'Errand conversation'
+              : 'Private conversation with ' +
+                (data.participantUserId
+                  ? participant(data.participantUserId)
+                  : 'case participant')}
+          </p>
+        )}
         {data.text !== null && <p className="statement-text">{data.text}</p>}
         {data.attachment && (
           <EvidenceImage
@@ -341,20 +346,28 @@ function EvidenceData({
                     <dt>Available credits</dt>
                     <dd>
                       <strong>
-                        {entry.availableDelta > 0 ? '+' : ''}
-                        {entry.availableDelta}
+                        {entry.availableDelta === 0
+                          ? 'No change'
+                          : `${entry.availableDelta > 0 ? 'Added' : 'Removed'} ${Math.abs(entry.availableDelta)} ${Math.abs(entry.availableDelta) === 1 ? 'credit' : 'credits'}`}
                       </strong>
-                      <span>Balance after: {entry.availableBalance}</span>
+                      <span>
+                        {entry.availableBalance - entry.availableDelta} →{' '}
+                        {entry.availableBalance} available after this event
+                      </span>
                     </dd>
                   </div>
                   <div>
                     <dt>Credits held for errands</dt>
                     <dd>
                       <strong>
-                        {entry.reservedDelta > 0 ? '+' : ''}
-                        {entry.reservedDelta}
+                        {entry.reservedDelta === 0
+                          ? 'No change'
+                          : `${entry.reservedDelta > 0 ? 'Held' : 'Released'} ${Math.abs(entry.reservedDelta)} ${Math.abs(entry.reservedDelta) === 1 ? 'credit' : 'credits'}`}
                       </strong>
-                      <span>Balance after: {entry.reservedBalance}</span>
+                      <span>
+                        {entry.reservedBalance - entry.reservedDelta} →{' '}
+                        {entry.reservedBalance} held after this event
+                      </span>
                     </dd>
                   </div>
                 </dl>
@@ -479,6 +492,113 @@ function RecordDetails({ record }: { record: EvidenceRecord }) {
   )
 }
 
+// Group in producer order, before filtering: hidden intervening events still break a message run.
+type ActivityRecords = [EvidenceRecord, ...EvidenceRecord[]]
+function groupActivity(records: EvidenceRecord[]): ActivityRecords[] {
+  const groups: ActivityRecords[] = []
+  for (const record of records) {
+    const group = groups[groups.length - 1]
+    const previous = group?.[group.length - 1]
+    const gap = previous
+      ? Date.parse(record.occurredAt) - Date.parse(previous.occurredAt)
+      : NaN
+    if (
+      previous &&
+      previous.data.kind === 'CHAT' &&
+      record.data.kind === 'CHAT' &&
+      previous.actorUserId !== null &&
+      previous.actorUserId === record.actorUserId &&
+      previous.data.conversationId === record.data.conversationId &&
+      previous.data.conversationType === record.data.conversationType &&
+      previous.data.participantUserId === record.data.participantUserId &&
+      gap >= 0 &&
+      gap <= 5 * 60 * 1000 &&
+      date(previous.occurredAt).split(',')[0] ===
+        date(record.occurredAt).split(',')[0]
+    ) {
+      group.push(record)
+    } else groups.push([record])
+  }
+  return groups
+}
+
+function ActivityGroup({
+  records,
+  participant,
+  linkParticipants,
+}: {
+  records: ActivityRecords
+  participant: (id: string) => string
+  linkParticipants: boolean
+}) {
+  const first = records[0]
+  const chat = first.data.kind === 'CHAT'
+  const author = first.actorUserId
+    ? participant(first.actorUserId)
+    : 'Person not recorded'
+  return (
+    <li className={chat ? 'timeline-message-group' : undefined}>
+      <article>
+        <div className="section-heading">
+          <h4 className="icon-heading">
+            {chat ? (
+              <MessageSquare aria-hidden="true" />
+            ) : first.data.kind === 'ORDER' ? (
+              <Route aria-hidden="true" />
+            ) : first.data.kind === 'CREDIT' ? (
+              <Coins aria-hidden="true" />
+            ) : (
+              <ShieldCheck aria-hidden="true" />
+            )}
+            {chat ? author : activityTitle(first)}
+          </h4>
+          <span className="role-chip">{categoryName[first.data.kind]}</span>
+        </div>
+        {chat && first.data.kind === 'CHAT' && (
+          <p className="evidence-meta">
+            {first.data.conversationType === 'ERRAND'
+              ? 'Errand conversation'
+              : 'Private conversation with ' +
+                (first.data.participantUserId
+                  ? participant(first.data.participantUserId)
+                  : 'case participant')}
+          </p>
+        )}
+        {!chat && (
+          <p className="evidence-meta">
+            {first.actorUserId && 'By '}
+            {first.actorUserId &&
+            linkParticipants &&
+            !author.startsWith('Account not identified') ? (
+              <a href={`#person-${first.actorUserId}`}>{author}</a>
+            ) : (
+              author
+            )}
+          </p>
+        )}
+        {records.map((record) => (
+          <div
+            key={record.eventId}
+            className={chat ? 'timeline-message' : undefined}
+          >
+            <p className="evidence-meta">
+              {!chat && 'Occurred '}
+              <EvidenceTime value={record.occurredAt} />
+            </p>
+            <EvidenceData
+              record={record}
+              participant={participant}
+              linkParticipants={linkParticipants}
+              compactChat={chat}
+            />
+            <RecordDetails record={record} />
+          </div>
+        ))}
+      </article>
+    </li>
+  )
+}
+
 export function EvidencePanel({
   caseId,
   orderId,
@@ -490,6 +610,7 @@ export function EvidencePanel({
   onSnapshot?: (value: Timeline | null) => void
   names?: Record<string, string>
 }) {
+  const [filter, setFilter] = useState('ALL')
   const [snapshot, setSnapshot] = useState<Timeline>()
   const [records, setRecords] = useState<EvidenceRecord[]>([])
   const [loading, setLoading] = useState(false)
@@ -969,57 +1090,56 @@ export function EvidencePanel({
                 loaded
               </span>
             </div>
+            <div
+              className="timeline-filters"
+              role="group"
+              aria-label="Filter loaded activity"
+            >
+              {(
+                [
+                  ['ALL', 'All activity'],
+                  ['CHAT', 'Messages'],
+                  ['ORDER', 'Errand events'],
+                  ['CREDIT', 'Credits'],
+                  ['ADMIN', 'Admin actions'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="button-secondary"
+                  aria-pressed={filter === value}
+                  onClick={() => setFilter(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="evidence-meta" aria-live="polite">
+              Showing{' '}
+              {
+                records.filter(
+                  (r) => filter === 'ALL' || r.data.kind === filter,
+                ).length
+              }{' '}
+              of {records.length} loaded events.
+              {snapshot.nextCursor && ' More activity is available below.'}
+            </p>
             {records.length ? (
               <ol className="evidence-records">
-                {records.map((record) => (
-                  <li key={record.eventId}>
-                    <article>
-                      <div className="section-heading">
-                        <h4 className="icon-heading">
-                          {record.data.kind === 'ORDER' ? (
-                            <Route aria-hidden="true" />
-                          ) : record.data.kind === 'CREDIT' ? (
-                            <Coins aria-hidden="true" />
-                          ) : (
-                            <ShieldCheck aria-hidden="true" />
-                          )}
-                          {activityTitle(record)}
-                        </h4>
-                        <span className="role-chip">
-                          {categoryName[record.data.kind]}
-                        </span>
-                      </div>
-                      <p className="evidence-meta">
-                        Occurred <EvidenceTime value={record.occurredAt} />
-                      </p>
-                      <p className="evidence-meta">
-                        {record.actorUserId ? (
-                          <>
-                            By{' '}
-                            {onSnapshot &&
-                            !participant(record.actorUserId).startsWith(
-                              'Account not identified',
-                            ) ? (
-                              <a href={`#person-${record.actorUserId}`}>
-                                {participant(record.actorUserId)}
-                              </a>
-                            ) : (
-                              participant(record.actorUserId)
-                            )}
-                          </>
-                        ) : (
-                          'Person not recorded'
-                        )}
-                      </p>
-                      <EvidenceData
-                        record={record}
-                        participant={participant}
-                        linkParticipants={!!onSnapshot}
-                      />
-                      <RecordDetails record={record} />
-                    </article>
-                  </li>
-                ))}
+                {groupActivity(records)
+                  .filter(
+                    (group) =>
+                      filter === 'ALL' || group[0].data.kind === filter,
+                  )
+                  .map((group) => (
+                    <ActivityGroup
+                      key={group[0].eventId}
+                      records={group}
+                      participant={participant}
+                      linkParticipants={!!onSnapshot}
+                    />
+                  ))}
               </ol>
             ) : (
               <p>
@@ -1027,6 +1147,15 @@ export function EvidencePanel({
                 above; an empty page does not prove completeness.
               </p>
             )}
+            {records.length > 0 &&
+              !records.some(
+                (r) => filter === 'ALL' || r.data.kind === filter,
+              ) && (
+                <p>
+                  No matching events in loaded activity. Try another filter or
+                  load more evidence.
+                </p>
+              )}
             {snapshot.nextCursor ? (
               <button
                 disabled={loading || restartRequired || !!error}

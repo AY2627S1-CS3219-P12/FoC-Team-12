@@ -240,25 +240,45 @@ export function ResolutionPanel({
                 disabled={busy || !!pending || confirm}
                 onChange={(e) => setReason(e.target.value)}
               />
-              <label htmlFor="resolution-credit-disposition">
-                Reserved-credit outcome
-              </label>
-              <select
-                id="resolution-credit-disposition"
-                value={disposition}
+              <fieldset
+                className="resolution-choices"
                 disabled={busy || !!pending || confirm}
-                onChange={(e) => setDisposition(e.target.value)}
               >
-                <option value="KEEP_EXISTING">
-                  Preserve an already confirmed credit outcome (no active hold)
-                </option>
-                <option value="RETURN_TO_REQUESTER">
-                  Return the remaining reservation to the requester
-                </option>
-                <option value="PAY_COURIER">
-                  Pay the remaining reservation to the assigned courier
-                </option>
-              </select>
+                <legend>Reserved-credit outcome</legend>
+                {(
+                  [
+                    [
+                      'KEEP_EXISTING',
+                      'Keep confirmed outcome',
+                      'No active credit hold remains.',
+                    ],
+                    [
+                      'RETURN_TO_REQUESTER',
+                      'Return to requester',
+                      'Release remaining held credits to the requester.',
+                    ],
+                    [
+                      'PAY_COURIER',
+                      'Pay courier',
+                      'Transfer remaining held credits to the assigned courier.',
+                    ],
+                  ] as const
+                ).map(([value, label, hint]) => (
+                  <label key={value} className="resolution-choice">
+                    <input
+                      type="radio"
+                      name="credit-disposition"
+                      value={value}
+                      checked={disposition === value}
+                      onChange={() => setDisposition(value)}
+                    />
+                    <span>
+                      {label}
+                      <small>{hint}</small>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
               <p className="muted">
                 The errand finishes only after Credit confirms this outcome.
                 Available-credit corrections are separate.

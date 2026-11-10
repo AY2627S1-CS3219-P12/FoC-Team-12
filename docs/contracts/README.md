@@ -35,13 +35,17 @@ fixtures; a new required field is not a backward-compatible change.
 
 Admin report-context extension approved by Darryl for Order frontend integration:
 `GET /api/admin/orders/{orderId}/report-context` is a no-store, read-only participant endpoint.
-Caller: browser on the Order screen via gateway; producer: Admin; eligibility dependency: Chat's
-unchanged report-eligibility API. OWN_REPORT exposes only the active JWT actor's own case ID/state
-using an existing statement grant and does not require Chat. Otherwise ELIGIBLE/INELIGIBLE expose
-null case/state; 503 means eligibility/context unavailable and must not be treated as no report.
-401/403 reject identity/account/mode; malformed UUID is 400. Retries have no effect or operation
-identity; POST reporting separately rechecks authorization/eligibility/state and retains its existing
-idempotency contract. Existing HTTP metrics observe status/failure without private log payloads.
+Caller: browser on the Order screen via gateway; producer: Admin. Under the approved Kafka
+coordination contract, OWN_REPORT exposes the active actor's accepted statement reference;
+PREPARING_REVIEW exposes only that actor's pending preparation and takes precedence over
+CASE_PARTICIPANT navigation. Verified parties without a statement receive CASE_PARTICIPANT.
+REPORT_REQUEST_AVAILABLE exposes null case/state and permits saving a request without asserting
+eligibility. It replaces PREPARATION_AVAILABLE; consumers retain that former spelling as a rollout
+alias. Order verifies involvement asynchronously, Chat confirms its barrier, and Admin accepts only
+after both confirmations. Neither report-context nor retrying it changes state or freezes an errand.
+401/403 reject identity/account/mode; malformed UUID is 400. Unavailable or malformed context must
+not be treated as no report. POST returns 202 for preparation with its original idempotency key;
+polls never allocate a replacement. Existing metrics observe failures without private payloads.
 The UI must clear/isolate lookup data across identities and must never cache another actor's report.
 
 Admin resolution extension approved by Darryl: the resolve request optionally includes

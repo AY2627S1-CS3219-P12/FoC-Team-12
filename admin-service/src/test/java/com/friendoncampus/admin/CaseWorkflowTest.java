@@ -173,9 +173,9 @@ class CaseWorkflowTest {
         assertEquals("OWN_REPORT",own.status());assertEquals(id,own.caseId());assertEquals(AdminCase.State.UNDER_REVIEW,own.state());
         verifyNoInteractions(chat);
         assertEquals("CASE_PARTICIPANT",service.reportContext(jwt(courier,"COURIER"),order).status());
-        assertEquals("PREPARATION_AVAILABLE",service.reportContext(jwt(UUID.randomUUID(),"COURIER"),order).status());
+        assertEquals("REPORT_REQUEST_AVAILABLE",service.reportContext(jwt(UUID.randomUUID(),"COURIER"),order).status());
         doReturn(new ChatEligibilityClient.Eligibility(false,true,"context")).when(chat).check(any(),any(),anyString());
-        var other=service.reportContext(jwt(UUID.randomUUID(),"COURIER"),order);assertEquals("PREPARATION_AVAILABLE",other.status());assertNull(other.caseId());assertNull(other.state());
+        var other=service.reportContext(jwt(UUID.randomUUID(),"COURIER"),order);assertEquals("REPORT_REQUEST_AVAILABLE",other.status());assertNull(other.caseId());assertNull(other.state());
         when(chat.check(any(),any(),anyString())).thenReturn(new ChatEligibilityClient.Eligibility(true,true,"context"));
         assertEquals("CASE_PARTICIPANT",service.reportContext(jwt(courier,"COURIER"),order).status());
         db.update("UPDATE admin_cases SET state='RESOLVED' WHERE id=?",id);
@@ -217,7 +217,7 @@ class CaseWorkflowTest {
     }
     @Test void preparationAvailabilityDoesNotFabricateEligibilityOrAnAcceptedReport(){
         when(chat.check(any(),any(),anyString())).thenReturn(new ChatEligibilityClient.Eligibility(true,false,"incomplete"));
-        assertEquals("PREPARATION_AVAILABLE",service.reportContext(jwt(reporter,"REQUESTER"),order).status());
+        assertEquals("REPORT_REQUEST_AVAILABLE",service.reportContext(jwt(reporter,"REQUESTER"),order).status());
         verifyNoInteractions(chat);
         assertEquals(0,count("admin_cases"));assertEquals(0,count("admin_statements"));
     }
@@ -721,4 +721,16 @@ class CaseWorkflowTest {
         assertEquals("SUCCEEDED",creditActions.read(jwt(reviewer,"ADMIN"),id,op).status());
     }
 
+
+    @Test void pendingStatementForVerifiedParticipantTakesPrecedenceOverCaseNavigation() {
+        UUID id=reviewCase(), key=UUID.randomUUID();
+        assertEquals("CASE_PARTICIPANT",service.reportContext(jwt(courier,"COURIER"),order).status());
+        assertEquals(202,service.report(jwt(courier,"COURIER"),key,order,"Courier statement").status());
+        var context=service.reportContext(jwt(courier,"COURIER"),order);
+        assertEquals("PREPARING_REVIEW",context.status());assertEquals(id,context.caseId());
+        assertEquals("OWN_REPORT",service.reportContext(jwt(reporter,"REQUESTER"),order).status());
+        var unrelated=service.reportContext(jwt(UUID.randomUUID(),"COURIER"),order);
+        assertEquals("REPORT_REQUEST_AVAILABLE",unrelated.status());assertNull(unrelated.caseId());
+        assertEquals(409,service.report(jwt(courier,"COURIER"),UUID.randomUUID(),order,"Another statement").status());
+    }
 }
