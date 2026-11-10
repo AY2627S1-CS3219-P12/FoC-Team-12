@@ -581,6 +581,8 @@ jobs:
           kubectl kustomize --load-restrictor=LoadRestrictionsNone deploy/aws/k8s/staging > /tmp/foc-aws.yaml
           printf '\n---\n' >> /tmp/foc-aws.yaml
           cat deploy/aws/k8s/staging/msk-initialize-job.yaml >> /tmp/foc-aws.yaml
+          printf '\n---\n' >> /tmp/foc-aws.yaml
+          cat deploy/aws/k8s/staging/static-node-pools.yaml >> /tmp/foc-aws.yaml
           docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 \
             -strict -ignore-missing-schemas -summary < /tmp/foc-aws.yaml
 
