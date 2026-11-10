@@ -152,3 +152,23 @@ it('fails closed on malformed context rather than offering reporting', async () 
     'We can’t load reports right now',
   )
 })
+
+it('explains a report to a verified nonreporter and offers their statement and admin contact', async () => {
+  signIn(REQUESTER_ID, 'REQUESTER')
+  vi.stubGlobal(
+    'fetch',
+    stubFetch(() => ({
+      body: { orderId: id, status: 'CASE_PARTICIPANT', caseId, state: 'OPEN' },
+    })).fetchMock,
+  )
+  show()
+  expect(
+    await screen.findByText(/You have not submitted a statement/),
+  ).toBeVisible()
+  expect(
+    screen.getByRole('link', { name: 'Add your statement' }),
+  ).toHaveAttribute('href', '/admin/reports/new?orderId=' + id)
+  expect(
+    screen.getByRole('link', { name: 'View case and contact admin' }),
+  ).toHaveAttribute('href', '/admin/reports/' + caseId)
+})

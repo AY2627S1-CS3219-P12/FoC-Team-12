@@ -26,6 +26,8 @@ export type Order = {
   pendingCreditReward: number | null
   pickupDeadline: string
   state: OrderState
+  reviewCaseId?: string | null
+  reviewResolved?: boolean
   terminalReason: string | null
   version: number
   createdAt: string
@@ -120,7 +122,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export type ReportContext = {
   orderId: string
-  status: 'OWN_REPORT' | 'ELIGIBLE' | 'INELIGIBLE'
+  status: 'OWN_REPORT' | 'ELIGIBLE' | 'INELIGIBLE' | 'CASE_PARTICIPANT'
   caseId: string | null
   state: 'OPEN' | 'UNDER_REVIEW' | 'RESOLVED' | null
 }
@@ -135,8 +137,10 @@ export async function fetchReportContext(
   if (
     !value ||
     value.orderId !== orderId ||
-    !['OWN_REPORT', 'ELIGIBLE', 'INELIGIBLE'].includes(value.status) ||
-    (value.status === 'OWN_REPORT'
+    !['OWN_REPORT', 'ELIGIBLE', 'INELIGIBLE', 'CASE_PARTICIPANT'].includes(
+      value.status,
+    ) ||
+    (['OWN_REPORT', 'CASE_PARTICIPANT'].includes(value.status)
       ? typeof value.caseId !== 'string' ||
         !uuid.test(value.caseId) ||
         !['OPEN', 'UNDER_REVIEW', 'RESOLVED'].includes(value.state || '')
@@ -174,7 +178,7 @@ export function fetchHistory(id: string): Promise<OrderTransition[]> {
 /** The caller's own errands: `active` (in progress) or `past` (finished), optionally one state. */
 export function fetchMyOrders(
   kind: 'requested' | 'delivered',
-  status: 'active' | 'past',
+  status: 'active' | 'past' | 'review',
   page: number,
   state?: OrderState,
 ): Promise<OrderPage> {

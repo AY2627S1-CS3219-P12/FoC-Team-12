@@ -13,10 +13,10 @@ export type Statement = {
   description: string
   submittedAt: string
 }
-export type Report = { case: Summary; ownStatement: Statement }
+export type Report = { case: Summary; ownStatement: Statement | null }
 export type ReportContext = {
   orderId: string
-  status: 'OWN_REPORT' | 'ELIGIBLE' | 'INELIGIBLE'
+  status: 'OWN_REPORT' | 'ELIGIBLE' | 'INELIGIBLE' | 'CASE_PARTICIPANT'
   caseId: string | null
   state: Summary['state'] | null
 }
@@ -40,6 +40,7 @@ export type AdminAction = CreditAction | BanAction
 export type Detail = {
   closure?: {
     operationId: string
+    creditDisposition?: string
     resolution: string
     revision: number
     explanations: { operationId: string; explanation: string }[]

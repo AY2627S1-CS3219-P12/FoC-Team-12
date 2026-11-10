@@ -24,7 +24,7 @@ final class EvidenceValidation {
             record(record,orderId); require(ids.add(uuid(record,"eventId")));
             if(previous!=null) require(compare(previous,record)<=0);
             previous=record;
-            if("ADMIN".equals(record.path("data").path("kind").asText())) equalUuid(record.path("data"),"caseId",caseId);
+            if(Set.of("ADMIN","CHAT").contains(record.path("data").path("kind").asText())) equalUuid(record.path("data"),"caseId",caseId);
         }
         var coverage=node.path("coverage"); choice(coverage,"status",Set.of("COMPLETE","INCOMPLETE","UNKNOWN")); time(coverage,"asOf");
         array(coverage,"checkpoints"); array(coverage,"blockingGaps");
@@ -76,6 +76,7 @@ final class EvidenceValidation {
             var d=r.path("data");tools.jackson.databind.node.ObjectNode data;
             if("ORDER".equals(d.path("kind").asText())){data=pick(d,"kind","fromState","toState","requesterId","courierId","previousCourierId");data.set("snapshot",publicSnapshot(d.path("snapshot")));}
             else if("CREDIT".equals(d.path("kind").asText())){data=pick(d,"kind","operationId","reasonCode","result");var entries=JSON.createArrayNode();for(var e:d.path("ledgerEntries"))entries.add(pick(e,"ledgerEntryId","userId","availableDelta","reservedDelta","availableBalance","reservedBalance"));data.set("ledgerEntries",entries);}
+            else if("CHAT".equals(d.path("kind").asText())){data=pick(d,"kind","caseId","conversationId","conversationType","participantUserId","messageId","messageType","text");data.set("attachment",d.path("attachment").isNull()?JSON.nullNode():pick(d.path("attachment"),"id","contentType","filename","size"));}
             else data=pick(d,"kind","caseId","operationId","targetUserId","result");
             record.set("data",data);records.add(record);
         }
@@ -88,7 +89,7 @@ final class EvidenceValidation {
     static void record(JsonNode r,UUID orderId) {
         uuid(r,"eventId"); text(r,"source"); text(r,"stream"); number(r,"sourceSequence"); equalUuid(r,"orderId",orderId);
         text(r,"action"); nullableUuid(r,"actorUserId"); time(r,"occurredAt"); time(r,"ingestedAt"); var d=r.path("data");
-        choice(d,"kind",Set.of("ORDER","CREDIT","ADMIN"));
+        choice(d,"kind",Set.of("ORDER","CREDIT","ADMIN","CHAT"));
         switch(d.path("kind").asText()) {
             case "ORDER" -> { nullableText(d,"fromState"); text(d,"toState"); uuid(d,"requesterId"); nullableUuid(d,"courierId"); nullableUuid(d,"previousCourierId"); snapshot(d.path("snapshot"),orderId); }
             case "CREDIT" -> {
@@ -96,6 +97,15 @@ final class EvidenceValidation {
                 for(var entry:d.path("ledgerEntries")){ uuid(entry,"ledgerEntryId"); uuid(entry,"userId"); integer(entry,"availableDelta"); integer(entry,"reservedDelta"); number(entry,"availableBalance"); number(entry,"reservedBalance"); }
             }
             case "ADMIN" -> { uuid(d,"caseId"); nullableUuid(d,"operationId"); nullableUuid(d,"targetUserId"); nullableText(d,"result"); if(!d.path("result").isNull()) choice(d,"result",Set.of("APPLIED","REJECTED","NO_CHANGE")); }
+            case "CHAT" -> {
+                uuid(d,"caseId"); uuid(d,"conversationId"); uuid(d,"messageId"); nullableUuid(d,"participantUserId");
+                choice(d,"conversationType",Set.of("ERRAND","CASE"));require("CASE".equals(d.path("conversationType").asText())?!d.path("participantUserId").isNull():d.path("participantUserId").isNull());choice(d,"messageType",Set.of("TEXT","QUICK_REPLY","IMAGE"));
+                require("chat-service".equals(r.path("source").asText()) && "chat.messages".equals(r.path("stream").asText()));
+                require(uuid(r,"eventId").equals(uuid(d,"messageId")));uuid(r,"actorUserId");
+                if("IMAGE".equals(d.path("messageType").asText())) {
+                    require(d.path("text").isNull());var a=d.path("attachment");uuid(a,"id");choice(a,"contentType",Set.of("image/png","image/jpeg","image/webp"));text(a,"filename");number(a,"size");require(a.path("size").asLong()>0&&a.path("size").asLong()<=5242880);
+                } else {require(d.path("attachment").isNull());require(d.path("text").isString()&&!d.path("text").asText().isBlank()&&d.path("text").asText().length()<=4000);}
+            }
             default -> throw new IllegalArgumentException();
         }
     }

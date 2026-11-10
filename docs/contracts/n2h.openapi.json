@@ -4683,6 +4683,14 @@
                       ],
                       "additionalProperties": false
                     }
+                  },
+                  "creditDisposition": {
+                    "type": "string",
+                    "enum": [
+                      "RETURN_TO_REQUESTER",
+                      "PAY_COURIER",
+                      "KEEP_EXISTING"
+                    ]
                   }
                 },
                 "required": [
@@ -4690,6 +4698,861 @@
                   "expectedRevision"
                 ],
                 "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/orders/{orderId}/review": {
+      "post": {
+        "operationId": "orders_post__internal_orders_orderId_review",
+        "tags": [
+          "orders"
+        ],
+        "x-owner": "order-service",
+        "security": [
+          {
+            "serviceBearer": [],
+            "actorToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "caseId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "caseId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "operationId": "orders_get__internal_orders_orderId_review",
+        "tags": [
+          "orders"
+        ],
+        "x-owner": "order-service",
+        "security": [
+          {
+            "serviceBearer": [],
+            "actorToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "caseId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/orders/{orderId}/dispute-resolution": {
+      "post": {
+        "operationId": "orders_post__internal_orders_orderId_dispute_resolution",
+        "tags": [
+          "orders"
+        ],
+        "x-owner": "order-service",
+        "security": [
+          {
+            "serviceBearer": [],
+            "actorToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderReview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "caseId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "enum": [
+                      "RETURN_TO_REQUESTER",
+                      "PAY_COURIER",
+                      "KEEP_EXISTING"
+                    ]
+                  }
+                },
+                "required": [
+                  "caseId",
+                  "operationId",
+                  "disposition"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/credits/orders/{orderId}/dispute-resolution": {
+      "post": {
+        "operationId": "credits_post__internal_credits_orders_orderId_dispute_resolution",
+        "tags": [
+          "credits"
+        ],
+        "x-owner": "credit-service",
+        "security": [
+          {
+            "serviceBearer": [],
+            "actorToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisputeCreditReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "caseId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "operationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "requesterId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "courierId": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "disposition": {
+                    "type": "string",
+                    "enum": [
+                      "RETURN_TO_REQUESTER",
+                      "PAY_COURIER",
+                      "KEEP_EXISTING"
+                    ]
+                  }
+                },
+                "required": [
+                  "caseId",
+                  "operationId",
+                  "requesterId",
+                  "courierId",
+                  "disposition"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/chat/orders/{orderId}/review": {
+      "post": {
+        "operationId": "chat_post__internal_chat_orders_orderId_review",
+        "tags": [
+          "chat"
+        ],
+        "x-owner": "chat-service",
+        "security": [
+          {
+            "serviceBearer": [],
+            "actorToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrandReviewAcknowledgement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "caseId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "caseId"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/chat/cases/{caseId}/messages/{messageId}/attachment": {
+      "get": {
+        "operationId": "chat_get__internal_chat_cases_caseId_messages_messageId_attachment",
+        "tags": [
+          "chat"
+        ],
+        "x-owner": "chat-service",
+        "security": [
+          {
+            "serviceBearer": [],
+            "actorToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageBytes"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageBytes"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageBytes"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/cases/{caseId}/messages/{messageId}/attachment": {
+      "get": {
+        "operationId": "admin_get__api_admin_cases_caseId_messages_messageId_attachment",
+        "tags": [
+          "admin"
+        ],
+        "x-owner": "admin-service",
+        "security": [
+          {
+            "userBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageBytes"
+                }
+              },
+              "image/jpeg": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageBytes"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageBytes"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Problem Details; see contract semantics",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
               }
             }
           }
@@ -5019,6 +5882,20 @@
                 "type": "null"
               }
             ]
+          },
+          "reviewCaseId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reviewResolved": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -5249,6 +6126,172 @@
               "result"
             ],
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "const": "CHAT"
+              },
+              "caseId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "conversationId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "conversationType": {
+                "type": "string",
+                "enum": [
+                  "ERRAND",
+                  "CASE"
+                ]
+              },
+              "participantUserId": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "messageId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "messageType": {
+                "type": "string",
+                "enum": [
+                  "TEXT",
+                  "QUICK_REPLY",
+                  "IMAGE"
+                ]
+              },
+              "text": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "attachment": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "contentType": {
+                        "type": "string",
+                        "enum": [
+                          "image/png",
+                          "image/jpeg",
+                          "image/webp"
+                        ]
+                      },
+                      "filename": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      },
+                      "size": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5242880
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "contentType",
+                      "filename",
+                      "size"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "kind",
+              "caseId",
+              "conversationId",
+              "conversationType",
+              "participantUserId",
+              "messageId",
+              "messageType",
+              "text",
+              "attachment"
+            ],
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "messageType": {
+                      "const": "IMAGE"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "text": {
+                      "type": "null"
+                    },
+                    "attachment": {
+                      "type": "object"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "attachment": {
+                      "type": "null"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "conversationType": {
+                      "const": "CASE"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "participantUserId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "participantUserId": {
+                      "type": "null"
+                    }
+                  }
+                }
+              }
+            ]
           }
         ]
       },
@@ -6475,6 +7518,14 @@
               ],
               "additionalProperties": false
             }
+          },
+          "creditDisposition": {
+            "type": "string",
+            "enum": [
+              "RETURN_TO_REQUESTER",
+              "PAY_COURIER",
+              "KEEP_EXISTING"
+            ]
           }
         },
         "required": [
@@ -6498,7 +7549,14 @@
             "$ref": "#/components/schemas/CaseSummary"
           },
           "ownStatement": {
-            "$ref": "#/components/schemas/Statement"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Statement"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -6552,7 +7610,11 @@
                 "format": "uuid"
               },
               "status": {
-                "const": "OWN_REPORT"
+                "type": "string",
+                "enum": [
+                  "OWN_REPORT",
+                  "CASE_PARTICIPANT"
+                ]
               },
               "caseId": {
                 "type": "string",
@@ -6605,6 +7667,157 @@
             "additionalProperties": false
           }
         ]
+      },
+      "OrderReview": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "caseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requesterId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "courierId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "PENDING_CREDIT",
+              "OPEN",
+              "ACCEPTED",
+              "PICKED_UP",
+              "DELIVERED",
+              "COMPLETED",
+              "CANCELLED",
+              "EXPIRED",
+              "RESERVATION_FAILED"
+            ]
+          },
+          "creditStatus": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "RESERVED",
+                  "RELEASED",
+                  "SETTLED",
+                  "COMPENSATED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolved": {
+            "type": "boolean"
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        },
+        "required": [
+          "orderId",
+          "caseId",
+          "requesterId",
+          "courierId",
+          "state",
+          "creditStatus",
+          "resolved",
+          "participants"
+        ],
+        "additionalProperties": false
+      },
+      "DisputeCreditReceipt": {
+        "type": "object",
+        "properties": {
+          "operationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "caseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "RETURN_TO_REQUESTER",
+              "PAY_COURIER",
+              "KEEP_EXISTING"
+            ]
+          },
+          "reservationStatus": {
+            "type": "string",
+            "enum": [
+              "ABSENT",
+              "RELEASED",
+              "SETTLED",
+              "COMPENSATED"
+            ]
+          },
+          "complete": {
+            "const": true
+          }
+        },
+        "required": [
+          "operationId",
+          "caseId",
+          "orderId",
+          "disposition",
+          "reservationStatus",
+          "complete"
+        ],
+        "additionalProperties": false
+      },
+      "ErrandReviewAcknowledgement": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "caseId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "readOnly": {
+            "const": true
+          }
+        },
+        "required": [
+          "orderId",
+          "caseId",
+          "readOnly"
+        ],
+        "additionalProperties": false
+      },
+      "ImageBytes": {
+        "type": "string",
+        "format": "binary"
       },
       "OwnerOutcome": {
         "oneOf": [

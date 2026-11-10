@@ -5,6 +5,7 @@ import {
   credits,
   REPOSTABLE_STATES,
   repostPath,
+  stateLabel,
 } from '../utils/orderFormatting'
 import { RouteLine } from './RouteLine'
 import { StateBadge } from './StateBadge'
@@ -24,7 +25,9 @@ export function ErrandCard({
   timingLabel,
 }: ErrandCardProps) {
   return (
-    <li className="card errand-card">
+    <li
+      className={`card errand-card${order.reviewCaseId && !order.reviewResolved ? ' errand-under-review' : ''}`}
+    >
       <div aria-hidden="true" className="errand-card-visual">
         <span className="errand-card-visual-icon">
           <MapPinned />
@@ -33,16 +36,31 @@ export function ErrandCard({
       </div>
       <div className="errand-card-content">
         <div className="errand-card-head">
-          <StateBadge
-            state={order.state}
-            terminalReason={order.terminalReason}
-          />
-          <span aria-label={`${credits(order.creditReward)} reward`} className="reward">
+          {order.reviewCaseId ? (
+            <span className="review-badge">
+              {order.reviewResolved ? 'Resolved after review' : 'Under review'}
+            </span>
+          ) : (
+            <StateBadge
+              state={order.state}
+              terminalReason={order.terminalReason}
+            />
+          )}
+          <span
+            aria-label={`${credits(order.creditReward)} reward`}
+            className="reward"
+          >
             <strong>{order.creditReward}</strong>
             <small>credits</small>
           </span>
         </div>
         <h3>{order.title}</h3>
+        {order.reviewCaseId && !order.reviewResolved && (
+          <p className="subtle">
+            Paused at: {stateLabel(order.state)} · Errand actions are paused
+            during review.
+          </p>
+        )}
         <div className="errand-card-meta">
           <RouteLine order={order} />
           <p className="errand-timing">
@@ -57,15 +75,17 @@ export function ErrandCard({
         )}
         <div className="errand-card-foot">
           <div className="errand-card-links">
-            {canRepost && REPOSTABLE_STATES.includes(order.state) && (
-              <Link
-                aria-label={`Post ${order.title} again`}
-                className="text-link"
-                to={repostPath(order.id)}
-              >
-                <RotateCcw aria-hidden="true" /> Post again
-              </Link>
-            )}
+            {canRepost &&
+              (!order.reviewCaseId || order.reviewResolved) &&
+              REPOSTABLE_STATES.includes(order.state) && (
+                <Link
+                  aria-label={`Post ${order.title} again`}
+                  className="text-link"
+                  to={repostPath(order.id)}
+                >
+                  <RotateCcw aria-hidden="true" /> Post again
+                </Link>
+              )}
             <Link
               aria-label={`View ${order.title}`}
               className="text-link errand-view-link"

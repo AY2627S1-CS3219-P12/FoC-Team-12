@@ -2122,3 +2122,23 @@ a.button-secondary svg {
   color: inherit;
   text-decoration-thickness: 2px;
 }
+
+.errand-under-review {
+  border-left: 4px solid var(--action);
+  background: var(--action-soft);
+}
+.review-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  font-weight: 700;
+}
+.notice-review {
+  border-left: 4px solid var(--action);
+}
+.actions[hidden] {
+  display: none;
+}

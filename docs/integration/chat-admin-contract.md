@@ -161,3 +161,7 @@ source/stream/case gap metadata; original outcome and operation IDs provide obse
 General account and selected-role authorization is defined by the approved
 [current authorization contract](current-authorization.md). The compatibility Admin eligibility
 endpoint remains private and retains its existing caller ACL.
+
+## Report review continuation — 10 November 2026
+
+The [approved dispute review contract](dispute-review-contract.md) extends this protocol with verified nonreporter membership, original message/image evidence, durable errand review barriers and explicit reserved-credit finalization. Its review-specific behavior supersedes earlier reporter-only gates; assignment-epoch privacy and producer ownership remain in force.

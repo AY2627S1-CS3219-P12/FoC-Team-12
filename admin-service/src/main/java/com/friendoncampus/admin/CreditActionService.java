@@ -69,7 +69,7 @@ public class CreditActionService {
             if(!actor.equals(c.get("reviewer_id")))throw problem(403,"Only the assigned reviewer can request case actions.");
             if(!"UNDER_REVIEW".equals(c.get("state")))throw problem(409,"Case actions require a case under review.");
             if(Boolean.TRUE.equals(db.queryForObject("SELECT closure_operation_id IS NOT NULL FROM admin_cases WHERE id=?",Boolean.class,caseId)))throw problem(409,"Resolution is being prepared. Resume the existing resolution before taking further actions.");
-            if(!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_statements WHERE case_id=? AND reporter_id=?)",Boolean.class,caseId,target)))throw problem(404,"Eligible case participant not found.");
+            if(!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM admin_case_participants WHERE case_id=? AND user_id=?)",Boolean.class,caseId,target)))throw problem(404,"Eligible case participant not found.");
             UUID operation=UUID.randomUUID(),eventId=UUID.randomUUID(),order=(UUID)c.get("order_id"),correlation=(UUID)c.get("correlation_id");Instant now=Instant.now();
             db.update("UPDATE admin_cases SET revision=revision+1 WHERE id=?",caseId);
             long revision=db.queryForObject("SELECT revision FROM admin_cases WHERE id=?",Long.class,caseId);

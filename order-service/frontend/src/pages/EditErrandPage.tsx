@@ -2,7 +2,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useEffect, useState } from 'react'
 import { ArrowLeft, CircleAlert, Lock } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { fetchHistory, fetchOrder, type Order, OrderApiError, updateOrder } from '../api/orderApi'
+import {
+  fetchHistory,
+  fetchOrder,
+  type Order,
+  OrderApiError,
+  updateOrder,
+} from '../api/orderApi'
 import { fetchCampusLocations, fetchMyCredits } from '../api/sharedApi'
 import { readSession } from '../auth/session'
 import { ErrandFormFields } from '../components/ErrandFormFields'
@@ -25,22 +31,34 @@ import { credits } from '../utils/orderFormatting'
 
 /** Why the server refused the edit, in the requester's words. */
 const EDIT_ERRORS: Record<string, string> = {
-  INVALID_STATE_TRANSITION: 'This errand is no longer open, so it can’t be edited.',
+  INVALID_STATE_TRANSITION:
+    'This errand is no longer open, so it can’t be edited.',
   ORDER_EXPIRED: 'This errand expired, so it can’t be edited.',
-  REWARD_ADJUSTMENT_PENDING: 'Your new reward is still being saved. Try again in a moment.',
+  REWARD_ADJUSTMENT_PENDING:
+    'Your new reward is still being saved. Try again in a moment.',
   VERSION_CONFLICT: 'This errand was just updated. Reload to see the latest.',
   NOT_ORDER_REQUESTER: "This errand isn't yours to edit.",
 }
 
 function serverErrors(error: unknown): { errors: Errors; stale: boolean } {
-  if (!(error instanceof OrderApiError)) return { errors: { form: 'Something went wrong. Please try again.' }, stale: false }
-  if (error.status === 403 && !error.code) return { errors: { form: 'Switch to Requester at the top of the page to edit.' }, stale: false }
-  if (error.code && EDIT_ERRORS[error.code]) return { errors: { form: EDIT_ERRORS[error.code] }, stale: true }
+  if (!(error instanceof OrderApiError))
+    return {
+      errors: { form: 'Something went wrong. Please try again.' },
+      stale: false,
+    }
+  if (error.status === 403 && !error.code)
+    return {
+      errors: { form: 'Switch to Requester at the top of the page to edit.' },
+      stale: false,
+    }
+  if (error.code && EDIT_ERRORS[error.code])
+    return { errors: { form: EDIT_ERRORS[error.code] }, stale: true }
   const mapped: Errors = {}
   for (const [field, messages] of Object.entries(error.fieldErrors)) {
     const message = messages[0]
     if (!message) continue
-    if (field === 'locationsDistinct' || field === 'dropoffLocationName') mapped.dropoffLocationId = message
+    if (field === 'locationsDistinct' || field === 'dropoffLocationName')
+      mapped.dropoffLocationId = message
     else if (field === 'pickupLocationName') mapped.pickupLocationId = message
     else if (field in EMPTY) mapped[field as FieldName] = message
   }
@@ -51,7 +69,10 @@ function serverErrors(error: unknown): { errors: Errors; stale: boolean } {
 /** Edit an OPEN errand (the requester only). A reward change waits for Credit before leaving. */
 export function EditErrandPage() {
   const { orderId = '' } = useParams()
-  const errand = useQuery({ queryKey: ['orders', orderId], queryFn: () => fetchOrder(orderId) })
+  const errand = useQuery({
+    queryKey: ['orders', orderId],
+    queryFn: () => fetchOrder(orderId),
+  })
 
   if (errand.isPending) return <ErrandDetailSkeleton label="Loading errand…" />
   if (errand.isError)
@@ -70,7 +91,10 @@ export function EditErrandPage() {
     )
   const order = errand.data
   const editable =
-    order.requesterId === readSession()?.userId && order.state === 'OPEN' && order.pendingCreditReward === null
+    order.requesterId === readSession()?.userId &&
+    order.state === 'OPEN' &&
+    !order.reviewCaseId &&
+    order.pendingCreditReward === null
   if (!editable)
     return (
       <StatePanel
@@ -97,24 +121,42 @@ function EditForm({ order }: { order: Order }) {
   const [errors, setErrors] = useState<Errors>({})
   const [stale, setStale] = useState(false)
   // A saved reward change, while Credit decides; the form stays until then.
-  const [awaiting, setAwaiting] = useState<{ reward: number; version: number } | null>(null)
+  const [awaiting, setAwaiting] = useState<{
+    reward: number
+    version: number
+  } | null>(null)
   const [slow, setSlow] = useState(false)
   // A rejection message stays until the requester edits a field.
   const [dismissedVersion, setDismissedVersion] = useState<number | null>(null)
-  const locations = useQuery({ queryKey: ['campus-locations'], queryFn: fetchCampusLocations, staleTime: 300_000 })
-  const balance = useQuery({ queryKey: ['credits', 'me'], queryFn: fetchMyCredits })
+  const locations = useQuery({
+    queryKey: ['campus-locations'],
+    queryFn: fetchCampusLocations,
+    staleTime: 300_000,
+  })
+  const balance = useQuery({
+    queryKey: ['credits', 'me'],
+    queryFn: fetchMyCredits,
+  })
 
   const save = useMutation({
     mutationFn: () => {
-      const byId = new Map((locations.data ?? []).map((location) => [location.id, location]))
+      const byId = new Map(
+        (locations.data ?? []).map((location) => [location.id, location]),
+      )
       return updateOrder(order.id, {
         version: base.version,
         title: fields.title.trim(),
         description: fields.description.trim(),
         pickupLocationId: fields.pickupLocationId,
-        pickupLocationName: byId.get(fields.pickupLocationId)?.name ?? base.pickupLocationName ?? '',
+        pickupLocationName:
+          byId.get(fields.pickupLocationId)?.name ??
+          base.pickupLocationName ??
+          '',
         dropoffLocationId: fields.dropoffLocationId,
-        dropoffLocationName: byId.get(fields.dropoffLocationId)?.name ?? base.dropoffLocationName ?? '',
+        dropoffLocationName:
+          byId.get(fields.dropoffLocationId)?.name ??
+          base.dropoffLocationName ??
+          '',
         creditReward: Number(fields.creditReward),
         pickupDeadline: new Date(fields.pickupDeadline).toISOString(),
       })
@@ -123,7 +165,10 @@ function EditForm({ order }: { order: Order }) {
       void queryClient.invalidateQueries({ queryKey: ['orders', 'mine'] })
       setSlow(false)
       if (updated.pendingCreditReward !== null) {
-        setAwaiting({ reward: updated.pendingCreditReward, version: updated.version })
+        setAwaiting({
+          reward: updated.pendingCreditReward,
+          version: updated.version,
+        })
         return
       }
       queryClient.setQueryData(['orders', order.id], updated)
@@ -141,21 +186,34 @@ function EditForm({ order }: { order: Order }) {
     // Keyed by the saved version so a later save never reads an earlier answer.
     queryKey: ['orders', order.id, 'reward-change', awaiting?.version],
     queryFn: async () => {
-      const [current, history] = await Promise.all([fetchOrder(order.id), fetchHistory(order.id)])
+      const [current, history] = await Promise.all([
+        fetchOrder(order.id),
+        fetchHistory(order.id),
+      ])
       return { current, history }
     },
     enabled: pollable,
     refetchInterval: (query) =>
-      query.state.data && query.state.data.current.pendingCreditReward === null ? false : RESERVATION_POLL_MS,
+      query.state.data && query.state.data.current.pendingCreditReward === null
+        ? false
+        : RESERVATION_POLL_MS,
   })
   const outcome =
     awaiting && latest.data
-      ? rewardChangeOutcome(latest.data.current, latest.data.history, awaiting.reward, awaiting.version)
+      ? rewardChangeOutcome(
+          latest.data.current,
+          latest.data.history,
+          awaiting.reward,
+          awaiting.version,
+        )
       : null
   const outcomeKind = outcome?.kind
   const rejected =
-    outcome?.kind === 'rejected' && awaiting?.version !== dismissedVersion ? outcome.message : null
-  const waiting = pollable && (outcomeKind === undefined || outcomeKind === 'waiting')
+    outcome?.kind === 'rejected' && awaiting?.version !== dismissedVersion
+      ? outcome.message
+      : null
+  const waiting =
+    pollable && (outcomeKind === undefined || outcomeKind === 'waiting')
 
   useEffect(() => {
     if (!waiting) return
@@ -189,7 +247,11 @@ function EditForm({ order }: { order: Order }) {
         : { kind: 'loaded', available: balance.data.availableBalance }
   // After a rejection the saved errand is newer than the one this form opened with.
   const base = outcomeKind === 'rejected' && answered ? answered : order
-  const credit = rewardChangeCheck(balanceStatus, base.creditReward, rewardIsValid ? reward : null)
+  const credit = rewardChangeCheck(
+    balanceStatus,
+    base.creditReward,
+    rewardIsValid ? reward : null,
+  )
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -229,7 +291,12 @@ function EditForm({ order }: { order: Order }) {
         </div>
       </div>
       <div className="two-column">
-        <form aria-labelledby="edit-heading" className="errand-form" noValidate onSubmit={submit}>
+        <form
+          aria-labelledby="edit-heading"
+          className="errand-form"
+          noValidate
+          onSubmit={submit}
+        >
           <h2 className="visually-hidden" id="edit-heading">
             Errand details
           </h2>
@@ -239,7 +306,11 @@ function EditForm({ order }: { order: Order }) {
               fields={fields}
               locations={locations.data}
               locationsFailed={locations.isError}
-              maxReward={balance.data ? base.creditReward + balance.data.availableBalance : undefined}
+              maxReward={
+                balance.data
+                  ? base.creditReward + balance.data.availableBalance
+                  : undefined
+              }
               onChange={update}
               rewardHint={`You've set aside ${credits(base.creditReward)} for this errand.`}
             />
@@ -261,8 +332,9 @@ function EditForm({ order }: { order: Order }) {
           )}
           {slow && awaiting && (
             <p className="notice notice-next" role="status">
-              Credit is taking longer than usual. Your other changes are saved; the reward changes to{' '}
-              {credits(awaiting.reward)} once Credit confirms.{' '}
+              Credit is taking longer than usual. Your other changes are saved;
+              the reward changes to {credits(awaiting.reward)} once Credit
+              confirms.{' '}
               <Link className="text-link" to={`/errands/${order.id}`}>
                 View errand
               </Link>
@@ -270,19 +342,29 @@ function EditForm({ order }: { order: Order }) {
           )}
           <div className="actions">
             <button
-              aria-describedby={credit.message ? 'reward-check-message' : undefined}
+              aria-describedby={
+                credit.message ? 'reward-check-message' : undefined
+              }
               aria-busy={save.isPending || waiting}
               disabled={save.isPending || waiting || stale || !credit.canSave}
               type="submit"
             >
-              {save.isPending ? 'Saving…' : waiting ? 'Updating your reward…' : 'Save changes'}
+              {save.isPending
+                ? 'Saving…'
+                : waiting
+                  ? 'Updating your reward…'
+                  : 'Save changes'}
             </button>
             <Link className="button-secondary" to={`/errands/${order.id}`}>
               Cancel
             </Link>
           </div>
           {credit.message && (
-            <p className="notice notice-warn" id="reward-check-message" role="status">
+            <p
+              className="notice notice-warn"
+              id="reward-check-message"
+              role="status"
+            >
               {credit.message}
             </p>
           )}

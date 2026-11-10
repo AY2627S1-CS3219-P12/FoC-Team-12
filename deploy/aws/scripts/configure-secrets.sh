@@ -188,6 +188,11 @@ chat_trusted_keys=$(jq -cn --arg admin "$admin_public" \
 chat_caller_trusted_keys=$(jq -cn --arg chat "$chat_public" \
   '{"chat-staging-1":{"subject":"chat-service","publicKey":$chat}}')
 
+order_trusted_keys=$(jq -cn --argjson chat "$chat_caller_trusted_keys" --arg admin "$admin_public" \
+  '$chat + {"admin-staging-1":{"subject":"admin-service","publicKey":$admin}}')
+credit_trusted_keys=$(jq -cn --argjson chat "$chat_caller_trusted_keys" --arg order "$order_public" --arg kid "$order_kid" \
+  '$chat + {($kid):{"subject":"order-service","publicKey":$order}}')
+
 jq -n --arg db "$user_db" --arg jwt "$jwt_key" --arg trust "$user_trusted_keys" \
   --arg email "${ADMIN_BOOTSTRAP_EMAIL:-}" --arg username "${ADMIN_BOOTSTRAP_USERNAME:-}" \
   --arg password "${ADMIN_BOOTSTRAP_PASSWORD:-}" \
@@ -202,9 +207,9 @@ else
 fi
 jq -n --arg value "$supplier_db" --arg key "$supplier_key" --arg kid "$supplier_kid" \
   '{DB_PASSWORD:$value,SUPPLIER_SERVICE_PRIVATE_KEY:$key,SUPPLIER_SERVICE_KEY_ID:$kid}' > "$tmp/supplier.json"
-jq -n --arg value "$order_db" --arg trust "$chat_caller_trusted_keys" --arg key "$order_key" --arg kid "$order_kid" \
+jq -n --arg value "$order_db" --arg trust "$order_trusted_keys" --arg key "$order_key" --arg kid "$order_kid" \
   '{DB_PASSWORD:$value,ORDER_SERVICE_TRUSTED_KEYS:$trust,ORDER_SERVICE_PRIVATE_KEY:$key,ORDER_SERVICE_KEY_ID:$kid}' > "$tmp/order.json"
-jq -n --arg value "$credit_db" --arg trust "$chat_caller_trusted_keys" --arg key "$credit_key" --arg kid "$credit_kid" \
+jq -n --arg value "$credit_db" --arg trust "$credit_trusted_keys" --arg key "$credit_key" --arg kid "$credit_kid" \
   '{DB_PASSWORD:$value,CREDIT_SERVICE_TRUSTED_KEYS:$trust,CREDIT_SERVICE_PRIVATE_KEY:$key,CREDIT_SERVICE_KEY_ID:$kid}' > "$tmp/credit.json"
 jq -n --arg db "$admin_db" --arg key "$admin_key" --arg trust "$chat_caller_trusted_keys" \
   '{ADMIN_DB_PASSWORD:$db,ADMIN_SERVICE_PRIVATE_KEY:$key,ADMIN_SERVICE_KEY_ID:"admin-staging-1",ADMIN_SERVICE_TRUSTED_KEYS:$trust}' \

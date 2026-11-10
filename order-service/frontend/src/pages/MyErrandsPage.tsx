@@ -11,7 +11,7 @@ import { useSessionRole } from '../hooks/useSessionRole'
 import { formatDeadline, stateLabel } from '../utils/orderFormatting'
 
 type Kind = 'requested' | 'delivered'
-type Status = 'active' | 'past'
+type Status = 'active' | 'past' | 'review'
 
 const LISTS: {
   value: Kind
@@ -21,14 +21,18 @@ const LISTS: {
 }[] = [
   {
     value: 'requested',
-    activeEmpty: 'Errands you post appear here until they finish. Request help to post one.',
-    pastEmpty: 'Errands you requested appear here once they’re completed, cancelled or expired.',
+    activeEmpty:
+      'Errands you post appear here until they finish. Request help to post one.',
+    pastEmpty:
+      'Errands you requested appear here once they’re completed, cancelled or expired.',
     pastStates: ['COMPLETED', 'CANCELLED', 'EXPIRED'],
   },
   {
     value: 'delivered',
-    activeEmpty: 'Errands you accept appear here until the requester confirms receipt.',
-    pastEmpty: 'Errands you delivered appear here once the requester confirms receipt.',
+    activeEmpty:
+      'Errands you accept appear here until the requester confirms receipt.',
+    pastEmpty:
+      'Errands you delivered appear here once the requester confirms receipt.',
     pastStates: ['COMPLETED'],
   },
 ]
@@ -56,7 +60,20 @@ export function MyErrandsPage() {
         </div>
       </div>
       <ErrandTabs />
-      <ErrandSection empty={current.activeEmpty} key={`${kind}-active`} kind={kind} status="active" title="Active" />
+      <ErrandSection
+        empty="No errands are under review."
+        key={`${kind}-review`}
+        kind={kind}
+        status="review"
+        title="Under review"
+      />
+      <ErrandSection
+        empty={current.activeEmpty}
+        key={`${kind}-active`}
+        kind={kind}
+        status="active"
+        title="Active"
+      />
       <ErrandSection
         empty={current.pastEmpty}
         key={`${kind}-past`}
@@ -96,10 +113,16 @@ function ErrandSection({
       <div className="my-errands-section-head">
         <h2 className="section-title" id={headingId}>
           {title}
-          {list.data && list.data.totalItems > 0 && <span className="record-count">{list.data.totalItems}</span>}
+          {list.data && list.data.totalItems > 0 && (
+            <span className="record-count">{list.data.totalItems}</span>
+          )}
         </h2>
         {states.length > 1 && (
-          <div aria-label={`Filter ${title.toLowerCase()} errands`} className="filter-chips" role="group">
+          <div
+            aria-label={`Filter ${title.toLowerCase()} errands`}
+            className="filter-chips"
+            role="group"
+          >
             {[undefined, ...states].map((value) => (
               <button
                 aria-pressed={state === value}
@@ -117,7 +140,9 @@ function ErrandSection({
           </div>
         )}
       </div>
-      {list.isPending && <ErrandListSkeleton count={2} label="Loading your errands…" />}
+      {list.isPending && (
+        <ErrandListSkeleton count={2} label="Loading your errands…" />
+      )}
       {list.isError && (
         <div className="notice notice-error" role="alert">
           We couldn't load your errands. {list.error.message}
@@ -127,7 +152,10 @@ function ErrandSection({
         <StatePanel
           action={
             status === 'active' && (
-              <Link className="button-secondary" to={kind === 'requested' ? '/errands/new' : '/errands/browse'}>
+              <Link
+                className="button-secondary"
+                to={kind === 'requested' ? '/errands/new' : '/errands/browse'}
+              >
                 {kind === 'requested' ? 'Request help' : 'Find errands'}
               </Link>
             )
@@ -135,7 +163,11 @@ function ErrandSection({
           compact
           headingLevel={3}
           icon={ClipboardList}
-          title={state ? `No ${stateLabel(state).toLowerCase()} errands` : `No ${title.toLowerCase()} errands`}
+          title={
+            state
+              ? `No ${stateLabel(state).toLowerCase()} errands`
+              : `No ${title.toLowerCase()} errands`
+          }
         >
           {state ? 'Choose another status to see more.' : empty}
         </StatePanel>
@@ -150,7 +182,7 @@ function ErrandSection({
                 order={order}
                 showPendingReward={status === 'active'}
                 timingLabel={
-                  status === 'active'
+                  status !== 'past'
                     ? `Pick up by ${formatDeadline(order.pickupDeadline)}`
                     : `Finished ${formatDeadline(order.stateChangedAt)}`
                 }

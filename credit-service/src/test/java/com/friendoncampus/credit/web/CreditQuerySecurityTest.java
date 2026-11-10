@@ -65,6 +65,8 @@ class CreditQuerySecurityTest {
     @MockitoBean com.friendoncampus.credit.integration.AdminCreditCorrectionService adminCorrections;
     @MockitoBean com.friendoncampus.credit.integration.AdminCreditOutbox adminOutbox;
 
+    @MockitoBean com.friendoncampus.credit.service.DisputeSettlementService disputeSettlements;
+
     private CreditAccount account;
 
     @BeforeEach

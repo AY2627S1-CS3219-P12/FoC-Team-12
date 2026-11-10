@@ -34,6 +34,11 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column(name="review_case_id") private UUID reviewCaseId;
+    @Column(name="review_resolution_id") private UUID reviewResolutionId;
+    @Column(name="review_disposition") private String reviewDisposition;
+    @Column(name="review_resolved_at") private OffsetDateTime reviewResolvedAt;
+
     @Column(name = "requester_id", nullable = false)
     private UUID requesterId;
 
@@ -495,7 +500,7 @@ public class Order {
 
     /** True for OPEN orders and for orders where the caller is the requester or assigned courier. */
     public boolean isVisibleTo(UUID callerId) {
-        return state == OrderState.OPEN || isParticipant(callerId);
+        return (state == OrderState.OPEN && reviewCaseId==null) || isParticipant(callerId);
     }
 
     public boolean isParticipant(UUID callerId) {
@@ -558,6 +563,31 @@ public class Order {
         return createdAt != null;
     }
 
+    public UUID getReviewCaseId(){return reviewCaseId;}
+    public boolean isUnderReview(){return reviewCaseId!=null && reviewResolvedAt==null;}
+    public boolean isResolvedAfterReview(){return reviewResolvedAt!=null;}
+    public UUID getReviewResolutionId(){return reviewResolutionId;}
+    public String getReviewDisposition(){return reviewDisposition;}
+    public void requireNoReview(){if(reviewCaseId!=null)throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"This errand is under review or finished after review. Normal errand actions are unavailable.");}
+    public void freezeForReview(UUID caseId){
+        if(reviewCaseId!=null){if(!reviewCaseId.equals(caseId))throw new IllegalArgumentException("Another case owns this errand");return;}
+        if(state==OrderState.PENDING_CREDIT || pendingCreditReward!=null || (state==OrderState.COMPLETED&&creditStatus!=CreditStatus.SETTLED) || (state==OrderState.CANCELLED&&creditStatus!=CreditStatus.RELEASED&&creditStatus!=CreditStatus.COMPENSATED) || (state==OrderState.EXPIRED&&creditStatus!=CreditStatus.RELEASED))
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,"An earlier credit operation still needs confirmation. Retry reporting after it completes.");
+        reviewCaseId=caseId;
+    }
+    public void prepareReviewResolution(UUID caseId,UUID operation,String disposition){
+        if(!caseId.equals(reviewCaseId))throw new IllegalArgumentException("Case does not own this review");
+        if(reviewResolutionId!=null && (!operation.equals(reviewResolutionId)||!disposition.equals(reviewDisposition)))throw new IllegalArgumentException("Resume the original dispute resolution");
+        reviewResolutionId=operation;reviewDisposition=disposition;
+    }
+    public OrderTransition finishReview(OffsetDateTime now){
+        if(reviewResolvedAt!=null)return null;
+        if(reviewCaseId==null||reviewResolutionId==null)throw new IllegalStateException("Prepare the dispute resolution first");
+        OrderState from=state;
+        if(!java.util.Set.of(OrderState.COMPLETED,OrderState.CANCELLED,OrderState.EXPIRED,OrderState.RESERVATION_FAILED).contains(state)){state=OrderState.COMPLETED;completedAt=now;terminalReason=TerminalReason.DISPUTE_RESOLVED;}
+        reviewResolvedAt=now;stateChangedAt=now;
+        return new OrderTransition(OrderAction.DISPUTE_RESOLVED,from,state,null,ActorRole.SYSTEM,courierId,null,CreditEffect.NONE,"OrderDisputeResolved",now);
+    }
     public UUID getId() {
         return id;
     }

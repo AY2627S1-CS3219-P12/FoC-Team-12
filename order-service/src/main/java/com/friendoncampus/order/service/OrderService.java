@@ -122,7 +122,7 @@ public class OrderService {
     public Order getOrder(UUID orderId, UUID callerId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
-        if (!order.isVisibleTo(callerId)) {
+        if (!order.isVisibleTo(callerId) && !reviewParticipant(order,callerId)) {
             throw new OrderNotFoundException(orderId);
         }
         return order;
@@ -133,7 +133,7 @@ public class OrderService {
     public List<OrderTransitionRecord> getHistory(UUID orderId, UUID callerId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
-        if (!order.isParticipant(callerId)) {
+        if (!order.isParticipant(callerId) && !reviewParticipant(order,callerId)) {
             throw new OrderNotFoundException(orderId);
         }
         return transitionRepository.findByOrderIdOrderByOccurredAtAscOrderVersionAsc(orderId);
@@ -146,6 +146,7 @@ public class OrderService {
     @Transactional(noRollbackFor = OrderExpiredOnActionException.class)
     public Order cancel(UUID orderId, UUID callerId) {
         Order order = lockVisible(orderId, callerId);
+        order.requireNoReview();
         expireIfOverdue(order);
         if (order.getState() == OrderState.CANCELLED && order.getRequesterId().equals(callerId)) {
             return order;
@@ -182,6 +183,7 @@ public class OrderService {
     public Order withdraw(UUID orderId, UUID callerId) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
+        order.requireNoReview();
         if (lastTransitionWasWithdrawalBy(orderId, callerId)) {
             return order;
         }
@@ -300,7 +302,7 @@ public class OrderService {
     @Transactional
     public boolean expireIfStillOverdue(UUID orderId) {
         Order order = orderRepository.findByIdForUpdate(orderId).orElse(null);
-        if (order == null || !order.isOverdue(now())) {
+        if (order == null || order.isUnderReview() || !order.isOverdue(now())) {
             return false;
         }
         apply(order, order.expire(now()));
@@ -373,12 +375,17 @@ public class OrderService {
         return apply(order, order.failReservation(reason, now()), causationId);
     }
 
+    private boolean reviewParticipant(Order order,UUID caller){
+        return order.getReviewCaseId()!=null && transitionRepository.findByOrderIdOrderByOccurredAtAscOrderVersionAsc(order.getId()).stream().anyMatch(t->caller.equals(t.getCourierId()));
+    }
+
     private Order lockVisible(UUID orderId, UUID callerId) {
         Order order = orderRepository.findByIdForUpdate(orderId)
                 .orElseThrow(() -> new OrderNotFoundException(orderId));
         if (!order.isVisibleTo(callerId)) {
             throw new OrderNotFoundException(orderId);
         }
+        order.requireNoReview();
         return order;
     }
 

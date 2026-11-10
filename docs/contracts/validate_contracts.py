@@ -30,7 +30,7 @@ for example in examples:
     if 'targetUserId' in event['data']: assert event['aggregateId']==event['data']['targetUserId']
     if 'requestedBy' in event['data']: assert event['actor']['userId']==event['data']['requestedBy']
     if 'reviewerId' in event['data']: assert event['actor']['userId']==event['data']['reviewerId']
-    if event['aggregateType']=='Order':
+    if event['eventType']=='OrderTransitioned':
         assert event['aggregateId']==event['data']['orderId']
         assert event['data']['snapshot']['status']==event['data']['toState']
     if event['aggregateType']=='AdminCase': assert event['aggregateId']==event['data']['caseId']
@@ -53,6 +53,18 @@ for example in read('http.examples.json'):
     assert op['security']
     for p in op['parameters']:
         if p['in']=='path': assert p['required'] is True
+
+chat_schema=api['components']['schemas']['EvidenceData']
+chat_data={'kind':'CHAT','caseId':'10000000-0000-4000-8000-000000000001','conversationId':'10000000-0000-4000-8000-000000000002','conversationType':'ERRAND','participantUserId':None,'messageId':'10000000-0000-4000-8000-000000000003','messageType':'TEXT','text':'Original message, unchanged.','attachment':None}
+validate_http(chat_data,chat_schema)
+bad_chat=copy.deepcopy(chat_data);bad_chat['messageType']='IMAGE'
+assert not is_valid_http(bad_chat,chat_schema),'Image evidence accepted without protected attachment metadata'
+bad_chat=copy.deepcopy(chat_data);bad_chat['attachment']={'id':chat_data['messageId'],'contentType':'image/png','filename':'test.png','size':1}
+assert not is_valid_http(bad_chat,chat_schema),'Text evidence accepted with attachment'
+bad_chat=copy.deepcopy(chat_data);bad_chat['text']='x'*4001
+assert not is_valid_http(bad_chat,chat_schema),'Oversized original message accepted'
+bad_chat=copy.deepcopy(chat_data);bad_chat['conversationType']='CASE'
+assert not is_valid_http(bad_chat,chat_schema),'Private case message missing participant identity'
 
 ws_validator=Draft202012Validator(ws,format_checker=FormatChecker())
 for frame in read('websocket.examples.json'):

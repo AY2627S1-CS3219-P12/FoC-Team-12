@@ -19,6 +19,8 @@ if ($Live) {
         Assert-LiveTcp "$service-service" "$service-db" 5432 $true
         if ($service -ne 'user') { Assert-LiveTcp "$service-service" user-service 8081 $true }
     }
+    Assert-LiveTcp admin-service order-service 8082 $true
+    Assert-LiveTcp order-service credit-service 8083 $true
     Assert-LiveTcp chat-service chat-db 5432 $true
     Assert-LiveTcp chat-service user-service 8081 $true
     Assert-LiveTcp chat-service kafka 9092 $true
@@ -149,6 +151,9 @@ try {
     Assert-TestTcp admin-service user-service 8081 $true
     Assert-TestTcp admin-service kafka 9092 $true
     Assert-TestTcp admin-service chat-service 8085 $true
+    Assert-TestTcp admin-service order-service 8082 $true
+    Assert-TestTcp order-service credit-service 8083 $true
+    Assert-TestTcp admin-service credit-service 8083 $false
     Assert-TestTcp chat-service chat-db 5432 $true
     Assert-TestTcp chat-service user-service 8081 $true
     Assert-TestTcp chat-service kafka 9092 $true

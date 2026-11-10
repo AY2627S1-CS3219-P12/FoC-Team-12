@@ -55,6 +55,12 @@ S['EvidenceRecord'] = obj({'eventId': UUID, 'source': TEXT, 'stream': TEXT, 'sou
     'orderId': UUID, 'action': TEXT,'actorUserId': nullable(UUID), 'occurredAt': TIME,
     'ingestedAt': TIME,'data': ref('EvidenceData')})
 S['EvidenceData']['oneOf'][2]['properties'].update(ownerEventId=UUID,ownerService=enum('user-service','credit-service'))
+S['EvidenceData']['oneOf'].append(obj({'kind':{'const':'CHAT'},'caseId':UUID,'conversationId':UUID,'conversationType':enum('ERRAND','CASE'),'participantUserId':nullable(UUID),'messageId':UUID,'messageType':enum('TEXT','QUICK_REPLY','IMAGE'),'text':nullable({'type':'string','minLength':1,'maxLength':4000}),'attachment':nullable(obj({'id':UUID,'contentType':enum('image/png','image/jpeg','image/webp'),'filename':TEXT,'size':{'type':'integer','minimum':1,'maximum':5242880}}))}))
+S['EvidenceData']['oneOf'][-1]['allOf']=[
+    {'if':{'properties':{'messageType':{'const':'IMAGE'}}},'then':{'properties':{'text':{'type':'null'},'attachment':{'type':'object'}}},'else':{'properties':{'attachment':{'type':'null'},'text':{'type':'string'}}}},
+    {'if':{'properties':{'conversationType':{'const':'CASE'}}},'then':{'properties':{'participantUserId':UUID}},'else':{'properties':{'participantUserId':{'type':'null'}}}}
+]
+S['OrderSnapshot']['properties'].update(reviewCaseId=nullable(UUID),reviewResolved={'type':'boolean'})
 S['Eligibility'] = obj({'orderId': UUID,'userId': UUID,'eligible': {'type':'boolean'},
     'evidenceRevision': TEXT,'coverage': ref('Coverage')})
 S['Timeline'] = obj({'caseId': UUID, 'orderId': UUID, 'evidenceRevision': TEXT,
@@ -180,12 +186,12 @@ S['ClosurePreparation'] = obj({'operationId':UUID,'resolution':TEXT,'revision':I
     'explanations':array(obj({'operationId':UUID,'explanation':TEXT}))})
 S['CaseDetail']['properties']['closure'] = nullable(ref('ClosurePreparation'))
 S['ConversationReferences'] = array(ref('Conversation'))
-S['ParticipantReport'] = obj({'case':ref('CaseSummary'),'ownStatement':ref('Statement')})
+S['ParticipantReport'] = obj({'case':ref('CaseSummary'),'ownStatement':nullable(ref('Statement'))})
 S['CasePage'] = obj({'content':array(ref('CaseSummary')),'page':INT,'size':INT,'totalElements':INT,'totalPages':INT})
 endpoint('/api/admin/reports','post','admin','ParticipantReport',obj({'orderId':UUID,'description':TEXT}),code=201,idem=True)
 endpoint('/api/admin/reports/{caseId}','get','admin','ParticipantReport')
 S['ReportContext'] = {'oneOf':[
-    obj({'orderId':UUID,'status':{'const':'OWN_REPORT'},'caseId':UUID,'state':enum('OPEN','UNDER_REVIEW','RESOLVED')}),
+    obj({'orderId':UUID,'status':enum('OWN_REPORT','CASE_PARTICIPANT'),'caseId':UUID,'state':enum('OPEN','UNDER_REVIEW','RESOLVED')}),
     obj({'orderId':UUID,'status':enum('ELIGIBLE','INELIGIBLE'),'caseId':{'type':'null'},'state':{'type':'null'}})]}
 endpoint('/api/admin/orders/{orderId}/report-context','get','admin','ReportContext')
 endpoint('/api/admin/cases','get','admin','CasePage',params=[param('status',schema=enum('OPEN','UNDER_REVIEW','RESOLVED')),
@@ -202,6 +208,23 @@ endpoint('/api/admin/cases/{caseId}/actions','post','admin','Action',{'oneOf':[
 endpoint('/api/admin/cases/{caseId}/actions/{operationId}','get','admin','Action')
 endpoint('/api/admin/cases/{caseId}/resolve','post','admin','CaseDetail',obj({'resolution':TEXT,'expectedRevision':INT,
     'rejectedActionExplanations':{'type':'array','maxItems':1000,'items':obj({'operationId':UUID,'explanation':TEXT})}}, ['resolution','expectedRevision']),idem=True)
+
+# Dispute contracts approved in the report-view continuation; existing lifecycle states are retained.
+DISPOSITION=enum('RETURN_TO_REQUESTER','PAY_COURIER','KEEP_EXISTING')
+S['ClosurePreparation']['properties']['creditDisposition']=DISPOSITION
+api['paths']['/api/admin/cases/{caseId}/resolve']['post']['requestBody']['content']['application/json']['schema']['properties']['creditDisposition']=DISPOSITION
+S['OrderReview']=obj({'orderId':UUID,'caseId':UUID,'requesterId':UUID,'courierId':nullable(UUID),'state':S['OrderSnapshot']['properties']['status'],'creditStatus':nullable(enum('RESERVED','RELEASED','SETTLED','COMPENSATED')),'resolved':{'type':'boolean'},'participants':array(UUID)})
+S['DisputeCreditReceipt']=obj({'operationId':UUID,'caseId':UUID,'orderId':UUID,'disposition':DISPOSITION,'reservationStatus':enum('ABSENT','RELEASED','SETTLED','COMPENSATED'),'complete':{'const':True}})
+S['ErrandReviewAcknowledgement']=obj({'orderId':UUID,'caseId':UUID,'readOnly':{'const':True}})
+endpoint('/internal/orders/{orderId}/review','post','orders','OrderReview',obj({'caseId':UUID}),internal=True,actor=True)
+endpoint('/internal/orders/{orderId}/review','get','orders','OrderReview',params=[param('caseId',schema=UUID,required=True)],internal=True,actor=True)
+endpoint('/internal/orders/{orderId}/dispute-resolution','post','orders','OrderReview',obj({'caseId':UUID,'operationId':UUID,'disposition':DISPOSITION}),internal=True,actor=True)
+endpoint('/internal/credits/orders/{orderId}/dispute-resolution','post','credits','DisputeCreditReceipt',obj({'caseId':UUID,'operationId':UUID,'requesterId':UUID,'courierId':nullable(UUID),'disposition':DISPOSITION}),internal=True,actor=True)
+endpoint('/internal/chat/orders/{orderId}/review','post','chat','ErrandReviewAcknowledgement',obj({'caseId':UUID}),internal=True,actor=True)
+S['ImageBytes']={'type':'string','format':'binary'}
+for path,owner,internal in [('/internal/chat/cases/{caseId}/messages/{messageId}/attachment','chat',True),('/api/admin/cases/{caseId}/messages/{messageId}/attachment','admin',False)]:
+    endpoint(path,'get',owner,'ImageBytes',internal=internal,actor=internal)
+    api['paths'][path]['get']['responses']['200']['content']={kind:{'schema':ref('ImageBytes')} for kind in ['image/png','image/jpeg','image/webp']}
 
 # Standalone JSON Schema 2020-12 for NEW Kafka messages only.
 baseids={'operationId':UUID,'caseId':UUID,'orderId':UUID,'targetUserId':UUID,'requestedBy':UUID}
@@ -228,12 +251,13 @@ event('AdminCreditCorrectionRejected','credit-service','AdminAction','credit.adm
 event('AdminUserBanApplied','user-service','AdminAction','user.admin.events',obj({**outcome,
     'result':enum('APPLIED','NO_CHANGE'),'previousStatus':enum('ACTIVE','BANNED'),'status':{'const':'BANNED'}}))
 event('AdminUserBanRejected','user-service','AdminAction','user.admin.events',obj({**outcome,'result':{'const':'REJECTED'},'reasonCode':reject}))
-ORDER_ACTIONS=['SUBMIT','OPEN','FAIL_RESERVATION','CANCEL','EXPIRE','ACCEPT','WITHDRAW','PICK_UP','DELIVER','COMPLETE','EDIT','REWARD_CHANGE_APPLIED','REWARD_CHANGE_REJECTED']
+ORDER_ACTIONS=['SUBMIT','OPEN','FAIL_RESERVATION','CANCEL','EXPIRE','ACCEPT','WITHDRAW','PICK_UP','DELIVER','COMPLETE','EDIT','REWARD_CHANGE_APPLIED','REWARD_CHANGE_REJECTED','REVIEW_STARTED','DISPUTE_RESOLVED']
 life={'orderId':UUID,'requesterId':UUID,'previousCourierId':nullable(UUID),'courierId':nullable(UUID),
       'fromState':nullable(S['OrderSnapshot']['properties']['status']),'toState':S['OrderSnapshot']['properties']['status'],'action':enum(*ORDER_ACTIONS),'sourceSequence':{'type':'integer','minimum':1},
       'reasonCode':nullable(TEXT),'snapshot':copy.deepcopy(S['OrderSnapshot'])}
 event('OrderTransitioned','order-service','Order','order.lifecycle.events',obj(life),False)
 commoncase={'caseId':UUID,'orderId':UUID,'sourceSequence':{'type':'integer','minimum':1}}
+event('DisputeCreditsFinalized','credit-service','Order','credit.events',obj({'operationId':UUID,'orderId':UUID,'caseId':UUID,'disposition':DISPOSITION,'reservationStatus':enum('ABSENT','RELEASED','SETTLED','COMPENSATED')}))
 event('CaseOpened','admin-service','AdminCase','admin.events',obj({**commoncase,'reporterId':UUID}),False)
 event('CaseClaimed','admin-service','AdminCase','admin.events',obj({**commoncase,'reviewerId':UUID}))
 event('CaseActionCompleted','admin-service','AdminCase','admin.events',obj({**commoncase,'operationId':UUID,
@@ -283,7 +307,9 @@ http=[]
 for path, methods in api['paths'].items():
     for method, op in methods.items():
         success=next(k for k in op['responses'] if k.startswith('2'))
-        example=sample(op['responses'][success]['content']['application/json']['schema'])
+        content=op['responses'][success]['content']
+        if 'application/json' not in content: continue  # Binary routes are verified by authenticated HTTP/image tests.
+        example=sample(content['application/json']['schema'])
         if path == '/internal/users/admin-operations/{operationId}':
             example=sample(next(v for v in variants if v['title']=='AdminUserBanApplied'))
         item={'operationId':op['operationId'],'status':int(success),'body':example}

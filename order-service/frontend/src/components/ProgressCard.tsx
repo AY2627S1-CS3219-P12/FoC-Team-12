@@ -23,19 +23,35 @@ export function ProgressCard({
   return (
     <aside aria-labelledby="progress-heading" className="card">
       <h2 id="progress-heading">Progress</h2>
-      <ol className="progress">
-        {STEPS.map((step, index) => {
-          const status = index < reached ? 'done' : index === reached ? 'current' : 'todo'
-          return (
-            <li aria-current={status === 'current' ? 'step' : undefined} className={status} key={step.state}>
-              <span className="step">{index + 1}</span>
-              {step.label}
-            </li>
-          )
-        })}
-      </ol>
+      {order.reviewResolved ? (
+        <p>Finished after dispute review.</p>
+      ) : (
+        <>
+          {order.reviewCaseId && <p>Progress is paused during review.</p>}
+          <ol className="progress">
+            {STEPS.map((step, index) => {
+              const status =
+                index < reached
+                  ? 'done'
+                  : index === reached
+                    ? 'current'
+                    : 'todo'
+              return (
+                <li
+                  aria-current={status === 'current' ? 'step' : undefined}
+                  className={status}
+                  key={step.state}
+                >
+                  <span className="step">{index + 1}</span>
+                  {step.label}
+                </li>
+              )
+            })}
+          </ol>
+        </>
+      )}
       <dl className="facts">
-        <dt>{rewardLabel}</dt>
+        <dt>{order.reviewCaseId ? 'Recorded reward' : rewardLabel}</dt>
         <dd>{credits(order.creditReward)}</dd>
       </dl>
       {children && <div className="progress-note">{children}</div>}

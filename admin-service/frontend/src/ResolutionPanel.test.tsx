@@ -74,6 +74,7 @@ it('recovers a prepared resolution from the server after browser retry storage i
   expect(fetcher.mock.calls[0]![1].headers['Idempotency-Key']).toBe(operationId)
   expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toEqual({
     resolution: 'Prepared decision',
+    creditDisposition: 'KEEP_EXISTING',
     expectedRevision: 3,
     rejectedActionExplanations: [],
   })
@@ -108,6 +109,7 @@ it('requires confirmation and closes a no-action case with the original revision
   expect(await screen.findByRole('status')).toHaveTextContent('Case closed')
   expect(JSON.parse(fetcher.mock.calls[0]![1].body)).toEqual({
     resolution: 'All available evidence reviewed',
+    creditDisposition: 'KEEP_EXISTING',
     expectedRevision: 3,
     rejectedActionExplanations: [],
   })

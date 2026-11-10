@@ -85,6 +85,10 @@ public class ReviewerIndependenceService {
                   AND admin_reviewer_evidence.order_sequence<=EXCLUDED.order_sequence
                 """, caseId, orderId, evidence.path("evidenceRevision").asText(), sequence,
                 json.writeValueAsString(involved), until.atOffset(ZoneOffset.UTC));
+            // Approved dispute membership: a complete producer snapshot grants access independently
+            // of statement submission. Historical membership is monotonic and never browser-supplied.
+            for (String participant : involved)
+                db.update("INSERT INTO admin_case_participants(case_id,user_id) VALUES (?,?) ON CONFLICT DO NOTHING", caseId, UUID.fromString(participant));
         } catch (RuntimeException ex) {
             invalidate(caseId);
             throw unavailable();

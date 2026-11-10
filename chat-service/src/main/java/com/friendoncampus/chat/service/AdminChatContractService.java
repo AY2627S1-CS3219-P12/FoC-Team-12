@@ -19,6 +19,9 @@ public class AdminChatContractService {
     private final JdbcClient db; private final Clock clock; private final JwtDecoder users;
     private final com.friendoncampus.chat.authorization.CurrentAuthorization current;
     private final InternalServiceClient internal; private final JsonMapper json=JsonMapper.builder().build();
+    private com.friendoncampus.chat.storage.AttachmentStorageRouter attachmentStorage;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void attachmentStorage(com.friendoncampus.chat.storage.AttachmentStorageRouter storage){this.attachmentStorage=storage;}
     public AdminChatContractService(JdbcClient db,Clock clock,JwtDecoder userJwtDecoder,InternalServiceClient internal,com.friendoncampus.chat.authorization.CurrentAuthorization current){
         this.db=db;this.clock=clock;this.users=userJwtDecoder;this.internal=internal;this.current=current;
     }
@@ -56,6 +59,7 @@ public class AdminChatContractService {
         }
         List<Record> all=allEvidence(orderId);List<Record> orderRecords=all.stream().filter(r->"ORDER".equals(r.data().path("kind").asText())).sorted(Comparator.comparingLong(Record::sequence)).toList();
         all=new ArrayList<>(all);all.addAll(operationRecords(caseId,orderId));
+        var messages=messageRecords(caseId,orderId);all.addAll(messages);
         all.sort(Comparator.comparing(Record::occurredAt).thenComparing(Record::source).thenComparingLong(Record::sequence).thenComparing(r->r.eventId().toString()));
         List<Map<String,Object>> records=all.stream().map(Record::wire).toList();
         JsonNode snapshot=orderRecords.isEmpty()?json.createObjectNode():orderRecords.get(orderRecords.size()-1).data().path("snapshot");
@@ -64,6 +68,9 @@ public class AdminChatContractService {
         Map<String,Object> result=new LinkedHashMap<>();result.put("caseId",caseId);result.put("orderId",orderId);result.put("evidenceRevision",revision);
         result.put("order",json.convertValue(snapshot,Map.class));result.put("participants",participants(orderRecords));result.put("records",records);
         var coverage=new LinkedHashMap<>(coverage(orderId,caseId,all));
+        @SuppressWarnings("unchecked") var checkpoints=new ArrayList<>((List<Map<String,Object>>)coverage.get("checkpoints"));
+        checkpoints.add(Map.of("source","chat-service","stream","chat.messages","aggregateId",caseId,"committedSequence",messages.size(),"projectedSequence",messages.size(),"checkedAt",OffsetDateTime.now(clock).toString()));
+        coverage.put("checkpoints",checkpoints);
         var failures=db.sql("SELECT DISTINCT topic FROM chat_evidence_failures WHERE order_id=:orderId OR order_id IS NULL").param("orderId",orderId).query(String.class).list();
         if(!failures.isEmpty()){
             @SuppressWarnings("unchecked") var gaps=new ArrayList<>((List<Map<String,Object>>)coverage.get("blockingGaps"));
@@ -146,6 +153,55 @@ public class AdminChatContractService {
     }
     private void lockCase(UUID caseId){db.sql("SELECT pg_advisory_xact_lock(hashtextextended(:id,0))").param("id","chat-case:"+caseId).query((rs,n)->true).single();}
     private boolean closureExists(UUID caseId){return db.sql("SELECT count(*) FROM chat_case_closures WHERE case_id=:id").param("id",caseId).query(Integer.class).single()>0;}
+
+    @Transactional
+    public Map<String,Object> prepareErrandReview(UUID orderId,UUID caseId,Jwt actor){
+        var pages=internal.orderEvidence(orderId);
+        var rows=new ArrayList<JsonNode>();for(var page:pages)for(var row:page.path("records"))rows.add(row);
+        var latest=rows.stream().max(Comparator.comparingLong(r->r.path("sourceSequence").asLong())).orElseThrow(AdminChatContractService::hidden);
+        if(!caseId.toString().equals(latest.path("data").path("snapshot").path("reviewCaseId").asText()))throw new ChatConflictException("Order review is not confirmed");
+        UUID actorId=UUID.fromString(actor.getSubject());
+        if(!"ADMIN".equals(actor.getClaimAsString("role")) && rows.stream().noneMatch(r->{var d=r.path("data");return actorId.toString().equals(d.path("requesterId").asText())||actorId.toString().equals(d.path("courierId").asText())||actorId.toString().equals(d.path("previousCourierId").asText());}))throw hidden();
+        db.sql("INSERT INTO chat_errand_reviews(order_id,case_id) VALUES(:orderId,:caseId) ON CONFLICT(order_id) DO NOTHING").param("orderId",orderId).param("caseId",caseId).update();
+        UUID original=db.sql("SELECT case_id FROM chat_errand_reviews WHERE order_id=:orderId").param("orderId",orderId).query(UUID.class).single();if(!caseId.equals(original))throw new ChatConflictException("Another case owns this review");
+        db.sql("UPDATE chat_conversations SET status='READ_ONLY',locked_at=COALESCE(locked_at,:at),updated_at=:at WHERE order_id=:orderId AND conversation_type='ERRAND'").param("orderId",orderId).param("at",OffsetDateTime.now(clock)).update();
+        return Map.of("orderId",orderId,"caseId",caseId,"readOnly",true);
+    }
+    private List<Record> messageRecords(UUID caseId,UUID orderId){
+        return db.sql("""
+            SELECT m.*,c.conversation_type,c.case_participant_id,a.content_type,a.original_filename,a.size_bytes
+            FROM chat_messages m JOIN chat_conversations c ON c.id=m.conversation_id
+            LEFT JOIN chat_attachments a ON a.id=m.attachment_id
+            WHERE c.order_id=:orderId AND (c.conversation_type='ERRAND' OR c.case_id=:caseId)
+              AND m.message_type IN ('TEXT','QUICK_REPLY','IMAGE')
+            ORDER BY m.created_at,m.conversation_id,m.sequence,m.id
+            """).param("orderId",orderId).param("caseId",caseId).query((rs,n)->{
+                Map<String,Object> data=new LinkedHashMap<>();data.put("kind","CHAT");data.put("caseId",caseId);
+                data.put("conversationId",rs.getObject("conversation_id",UUID.class));data.put("conversationType",rs.getString("conversation_type"));
+                data.put("participantUserId",rs.getObject("case_participant_id",UUID.class));data.put("messageId",rs.getObject("id",UUID.class));
+                data.put("messageType",rs.getString("message_type"));data.put("text",rs.getString("text_content"));
+                UUID attachment=rs.getObject("attachment_id",UUID.class);
+                data.put("attachment",attachment==null?null:Map.of("id",attachment,"contentType",rs.getString("content_type"),"filename",rs.getString("original_filename"),"size",rs.getLong("size_bytes")));
+                OffsetDateTime at=rs.getObject("created_at",OffsetDateTime.class);
+                return new Record(rs.getObject("id",UUID.class),"chat-service","chat.messages",rs.getLong("sequence"),orderId,"IMAGE".equals(rs.getString("message_type"))?"ImageShared":"MessageSent",rs.getObject("sender_user_id",UUID.class),at,at,json.valueToTree(data));
+            }).list();
+    }
+    public ChatConversationService.StoredAttachment evidenceAttachment(UUID caseId,UUID messageId,Jwt actor){
+        requireAdmin(actor);UUID actorId=UUID.fromString(actor.getSubject());
+        JsonNode access=internal.caseAccess(caseId,actorId,null);
+        if(!access.path("canReadEvidence").asBoolean())throw hidden();
+        UUID order=UUID.fromString(access.path("orderId").asText());
+        var image=db.sql("""
+            SELECT a.* FROM chat_attachments a JOIN chat_messages m ON m.attachment_id=a.id
+            JOIN chat_conversations c ON c.id=m.conversation_id
+            WHERE m.id=:messageId AND m.message_type='IMAGE' AND c.order_id=:orderId
+              AND (c.conversation_type='ERRAND' OR c.case_id=:caseId)
+            """).param("messageId",messageId).param("orderId",order).param("caseId",caseId)
+            .query((rs,n)->new ChatConversationService.StoredAttachment(rs.getString("content_type"),rs.getString("original_filename"),attachmentStorage.get(rs.getString("storage_provider"),rs.getString("object_key"),rs.getBytes("content")))).optional().orElseThrow(AdminChatContractService::hidden);
+        current.require(actor); // Recheck revocation after external object storage returned.
+        return image;
+    }
+
     private record Operations(Map<UUID,JsonNode> results,Set<String> missing){}
     private Operations operationEvidence(UUID caseId,UUID orderId,List<JsonNode> pages){
         Map<UUID,JsonNode> results=new LinkedHashMap<>();Set<String> missing=new LinkedHashSet<>();

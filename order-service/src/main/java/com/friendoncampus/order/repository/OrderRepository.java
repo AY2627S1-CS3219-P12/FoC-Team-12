@@ -59,7 +59,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID>, JpaSpecific
             @Param("now") OffsetDateTime now, Pageable page);
 
     /** IDs of orders in the given state whose deadline is at or before {@code now}, oldest first. */
-    @Query("select o.id from Order o where o.state = :state and o.pickupDeadline <= :now"
+    @Query("select o.id from Order o where o.state = :state and o.reviewCaseId is null and o.pickupDeadline <= :now"
             + " order by o.pickupDeadline asc, o.id asc")
     List<UUID> findIdsDueBy(@Param("state") OrderState state, @Param("now") OffsetDateTime now, Pageable page);
 }

@@ -437,7 +437,23 @@ function ReportEntryContext({
         </a>
       </section>
     )
-  if (context.data.status !== 'ELIGIBLE')
+  if (
+    context.data.status === 'CASE_PARTICIPANT' &&
+    context.data.state === 'RESOLVED'
+  )
+    return (
+      <section className="case-panel">
+        <h2>This review is resolved</h2>
+        <p>Reporting is closed. You can view the case and its outcome.</p>
+        <a className="button" href={'/admin/reports/' + context.data.caseId}>
+          View case
+        </a>
+      </section>
+    )
+  if (
+    context.data.status !== 'ELIGIBLE' &&
+    context.data.status !== 'CASE_PARTICIPANT'
+  )
     return (
       <section className="case-panel">
         <h2>Reporting is not available</h2>
@@ -576,15 +592,38 @@ function ReportStatusData({ id }: { id: string }) {
         </p>
       )}
       <SummaryCard value={state.data.case} participant />
-      <h3>Your statement</h3>
-      <p className="statement-text">{state.data.ownStatement.description}</p>
-      <p className="muted">
-        Submitted {formatSingaporeTime(state.data.ownStatement.submittedAt)}
-      </p>
+      {state.data.ownStatement ? (
+        <>
+          <h3>Your statement</h3>
+          <p className="statement-text">
+            {state.data.ownStatement.description}
+          </p>
+          <p className="muted">
+            Submitted {formatSingaporeTime(state.data.ownStatement.submittedAt)}
+          </p>
+        </>
+      ) : (
+        <div role="status">
+          <p>
+            This errand is under review following a reported issue. You can add
+            your statement and contact the assigned admin.
+          </p>
+          {state.data.case.state !== 'RESOLVED' && (
+            <a
+              className="button"
+              href={'/admin/reports/new?orderId=' + state.data.case.orderId}
+            >
+              Add your statement
+            </a>
+          )}
+        </div>
+      )}
       <button onClick={state.retry}>Refresh status</button>
       <ParticipantConversationStatus
         summary={state.data.case}
-        actorId={state.data.ownStatement.reporterId}
+        actorId={
+          state.data.ownStatement?.reporterId || readSession()?.userId || ''
+        }
       />
     </section>
   )

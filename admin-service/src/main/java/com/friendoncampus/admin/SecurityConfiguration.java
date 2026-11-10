@@ -56,7 +56,7 @@ public class SecurityConfiguration {
         return http.addFilterAfter(new com.friendoncampus.admin.authorization.CurrentAuthorizationFilter(current), org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class)
                 .authorizeHttpRequests(a -> a
                 .requestMatchers("/admin", "/admin/**", "/admin-assets/**", "/actuator/health", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/admin/session", "/api/admin/cases", "/api/admin/cases/*", "/api/admin/cases/*/timeline", "/api/admin/cases/*/actions/*", "/api/admin/cases/*/conversations").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.GET, "/api/admin/session", "/api/admin/cases", "/api/admin/cases/*", "/api/admin/cases/*/messages/*/attachment", "/api/admin/cases/*/timeline", "/api/admin/cases/*/actions/*", "/api/admin/cases/*/conversations").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.POST, "/api/admin/cases/*/claim", "/api/admin/cases/*/conversations", "/api/admin/cases/*/actions", "/api/admin/cases/*/resolve").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.GET,"/api/admin/orders/*/report-context", "/api/admin/reports/*/conversations").hasAnyRole("REQUESTER", "COURIER")
                 .requestMatchers("/api/admin/reports", "/api/admin/reports/*").hasAnyRole("REQUESTER", "COURIER")
@@ -75,7 +75,7 @@ public class SecurityConfiguration {
         http.csrf(AbstractHttpConfigurer::disable).sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(e -> e.authenticationEntryPoint((q,r,x) -> problem(r,q,mapper,401))
                         .accessDeniedHandler((q,r,x) -> problem(r,q,mapper,403)));
-        http.headers(h -> h.contentSecurityPolicy(c -> c.policyDirectives("default-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; frame-ancestors 'none'")));
+        http.headers(h -> h.contentSecurityPolicy(c -> c.policyDirectives("default-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'none'")));
     }
     static void problem(HttpServletResponse response, HttpServletRequest request, ObjectMapper mapper, int status) throws java.io.IOException {
         ProblemDetail p = ProblemDetail.forStatusAndDetail(HttpStatusCode.valueOf(status), status == 503

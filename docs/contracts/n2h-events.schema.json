@@ -1038,7 +1038,9 @@
                 "COMPLETE",
                 "EDIT",
                 "REWARD_CHANGE_APPLIED",
-                "REWARD_CHANGE_REJECTED"
+                "REWARD_CHANGE_REJECTED",
+                "REVIEW_STARTED",
+                "DISPUTE_RESOLVED"
               ]
             },
             "sourceSequence": {
@@ -1142,6 +1144,20 @@
                       "type": "null"
                     }
                   ]
+                },
+                "reviewCaseId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "reviewResolved": {
+                  "type": "boolean"
                 }
               },
               "required": [
@@ -1193,6 +1209,137 @@
       "additionalProperties": false,
       "title": "OrderTransitioned",
       "x-topic": "order.lifecycle.events"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "eventType": {
+          "const": "DisputeCreditsFinalized"
+        },
+        "eventVersion": {
+          "const": 1
+        },
+        "aggregateType": {
+          "const": "Order"
+        },
+        "aggregateId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aggregateVersion": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "producer": {
+          "const": "credit-service"
+        },
+        "correlationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "causationId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actor": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "USER"
+            },
+            "userId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "ADMIN"
+              ]
+            }
+          },
+          "required": [
+            "type",
+            "userId",
+            "role"
+          ],
+          "additionalProperties": false
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "orderId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "caseId": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "disposition": {
+              "type": "string",
+              "enum": [
+                "RETURN_TO_REQUESTER",
+                "PAY_COURIER",
+                "KEEP_EXISTING"
+              ]
+            },
+            "reservationStatus": {
+              "type": "string",
+              "enum": [
+                "ABSENT",
+                "RELEASED",
+                "SETTLED",
+                "COMPENSATED"
+              ]
+            }
+          },
+          "required": [
+            "operationId",
+            "orderId",
+            "caseId",
+            "disposition",
+            "reservationStatus"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "eventId",
+        "eventType",
+        "eventVersion",
+        "aggregateType",
+        "aggregateId",
+        "aggregateVersion",
+        "occurredAt",
+        "producer",
+        "correlationId",
+        "causationId",
+        "actor",
+        "data"
+      ],
+      "additionalProperties": false,
+      "title": "DisputeCreditsFinalized",
+      "x-topic": "credit.events"
     },
     {
       "type": "object",
