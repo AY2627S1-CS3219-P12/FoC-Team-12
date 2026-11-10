@@ -18,6 +18,12 @@ const pollIntervalMs = 2_000
 const visibleForMs = 5_000
 const cursorPrefix = 'foc.notification-push-cursor.'
 
+function isCurrentChat(item: PushItem) {
+  if (item.type !== 'CHAT_MESSAGE_RECEIVED' || !item.orderId) return false
+  const path = window.location.pathname.replace(/\/+$/, '')
+  return path === `/errands/${item.orderId}/chat`
+}
+
 export function NotificationPush({ role }: { role?: string }) {
   const [items, setItems] = useState<PushItem[]>([])
   const timers = useRef(new Map<string, number>())
@@ -42,11 +48,12 @@ export function NotificationPush({ role }: { role?: string }) {
     }
 
     const show = (incoming: PushItem[]) => {
+      const relevant = incoming.filter((item) => !isCurrentChat(item))
       setItems((current) => {
         const known = new Set(current.map((item) => item.id))
-        return [...current, ...incoming.filter((item) => !known.has(item.id))].slice(-3)
+        return [...current, ...relevant.filter((item) => !known.has(item.id))].slice(-3)
       })
-      for (const item of incoming) {
+      for (const item of relevant) {
         if (activeTimers.has(item.id)) continue
         activeTimers.set(item.id, window.setTimeout(() => dismiss(item.id), visibleForMs))
       }
@@ -115,7 +122,6 @@ export function NotificationPush({ role }: { role?: string }) {
               className="push-notification-content"
               href={destination ?? undefined}
             >
-              <span className="push-notification-brand">Friend on Campus</span>
               <strong>{chat ? 'New chat message' : 'Errand update'}</strong>
               <span>{item.message}</span>
               {destination && <small>Click to view</small>}

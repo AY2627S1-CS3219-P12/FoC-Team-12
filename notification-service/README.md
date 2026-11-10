@@ -304,9 +304,9 @@ name the `notification-service` group.
 Notification consumes `ChatMessageSent` from `chat.events` in the same independent
 `notification-service` group. Chat supplies the recipient from its current private conversation
 membership; Notification never reads Chat's database or guesses participants. The stored type is
-`CHAT_MESSAGE_RECEIVED`, deep-linked to the errand, with the generic text “You have a new message
-about your errand.” Neither the Kafka event nor Notification's database contains the private
-message body or image metadata.
+`CHAT_MESSAGE_RECEIVED`, deep-linked to the errand, with Chat's notification preview (at most 160
+characters). Image messages use “Image sent in chat”. Notification stores only this bounded preview;
+the complete private message body and all image content and metadata remain in Chat.
 
 The inbox deduplicates by event ID and the notification business key is the Chat message ID, so a
 Kafka redelivery or controlled republish cannot notify twice. Invalid events retry only according

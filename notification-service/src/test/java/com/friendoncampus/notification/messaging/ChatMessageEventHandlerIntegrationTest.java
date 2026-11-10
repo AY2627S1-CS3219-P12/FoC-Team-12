@@ -38,7 +38,7 @@ class ChatMessageEventHandlerIntegrationTest {
     private final JsonMapper json = JsonMapper.builder().build();
 
     @Test
-    void notifiesOnlyTheDeclaredRecipientWithoutStoringMessageContent() {
+    void notifiesOnlyTheDeclaredRecipientWithTheBoundedPreview() {
         var event = event();
         assertThat(handler.handle(event.conversationId().toString(), event.json()))
                 .isEqualTo(CreditEventHandler.Outcome.NOTIFIED);
@@ -47,8 +47,25 @@ class ChatMessageEventHandlerIntegrationTest {
                 .filter(n -> n.getSourceEventId().equals(event.eventId())).findFirst().orElseThrow();
         assertThat(stored.getRecipientId()).isEqualTo(event.recipientId());
         assertThat(stored.getBusinessKey()).isEqualTo(event.messageId().toString());
-        assertThat(NotificationMessages.messageFor(stored)).isEqualTo("You have a new message about your errand.");
-        assertThat(stored.getParams()).isEqualTo("{}");
+        assertThat(NotificationMessages.messageFor(stored)).isEqualTo("Meet me at COM 2.");
+        assertThat(stored.getParams()).contains("Meet me at COM 2.");
+    }
+
+    @Test
+    void supportsImageCopyAndLegacyEventsWithoutAPreview() {
+        var image = event(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "IMAGE", "Image sent in chat");
+        handler.handle(image.conversationId().toString(), image.json());
+        var imageNotification = notifications.findAll().stream()
+                .filter(n -> n.getSourceEventId().equals(image.eventId())).findFirst().orElseThrow();
+        assertThat(NotificationMessages.messageFor(imageNotification)).isEqualTo("Image sent in chat");
+
+        var legacy = event(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "TEXT", null);
+        handler.handle(legacy.conversationId().toString(), legacy.json());
+        var legacyNotification = notifications.findAll().stream()
+                .filter(n -> n.getSourceEventId().equals(legacy.eventId())).findFirst().orElseThrow();
+        assertThat(NotificationMessages.messageFor(legacyNotification)).isEqualTo("New message in chat");
     }
 
     @Test
@@ -91,16 +108,28 @@ class ChatMessageEventHandlerIntegrationTest {
     }
 
     private Event event(UUID messageId,UUID recipientId,UUID orderId,UUID conversationId) {
+        return event(messageId,recipientId,orderId,conversationId,"TEXT","Meet me at COM 2.");
+    }
+
+    private Event event(UUID messageId,UUID recipientId,UUID orderId,UUID conversationId,
+            String messageType,String preview) {
         UUID eventId=UUID.randomUUID(),senderId=UUID.randomUUID();
         return new Event(eventId,messageId,conversationId,orderId,recipientId,
-                eventJson(eventId,messageId,conversationId,orderId,senderId,recipientId,"TEXT"));
+                eventJson(eventId,messageId,conversationId,orderId,senderId,recipientId,messageType,preview));
     }
 
     private String eventJson(UUID eventId,UUID messageId,UUID conversationId,UUID orderId,
             UUID senderId,UUID recipientId,String messageType) {
+        return eventJson(eventId,messageId,conversationId,orderId,senderId,recipientId,messageType,
+                "Meet me at COM 2.");
+    }
+
+    private String eventJson(UUID eventId,UUID messageId,UUID conversationId,UUID orderId,
+            UUID senderId,UUID recipientId,String messageType,String preview) {
         Map<String,Object> data=new LinkedHashMap<>();
         data.put("messageId",messageId); data.put("conversationId",conversationId); data.put("orderId",orderId);
         data.put("senderUserId",senderId); data.put("recipientUserId",recipientId); data.put("messageType",messageType);
+        if (preview != null) data.put("messagePreview",preview);
         Map<String,Object> envelope=new LinkedHashMap<>();
         envelope.put("eventId",eventId); envelope.put("eventType","ChatMessageSent"); envelope.put("eventVersion",1);
         envelope.put("aggregateType","Conversation"); envelope.put("aggregateId",conversationId);

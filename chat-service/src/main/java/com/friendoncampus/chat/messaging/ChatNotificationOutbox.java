@@ -20,6 +20,7 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class ChatNotificationOutbox {
     public static final String TOPIC = "chat.events";
+    private static final int PREVIEW_LENGTH = 160;
 
     private final JdbcClient db;
     private final Clock clock;
@@ -44,6 +45,7 @@ public class ChatNotificationOutbox {
         data.put("senderUserId", message.senderUserId());
         data.put("recipientUserId", recipient.userId());
         data.put("messageType", message.messageType());
+        data.put("messagePreview", preview(message));
 
         Map<String, Object> envelope = new LinkedHashMap<>();
         envelope.put("eventId", eventId);
@@ -133,6 +135,21 @@ public class ChatNotificationOutbox {
             throw new IllegalStateException("An errand chat message resolved to multiple notification recipients");
         }
         return recipients.isEmpty() ? null : recipients.get(0);
+    }
+
+    private static String preview(Message message) {
+        if ("IMAGE".equals(message.messageType())) {
+            return "Image sent in chat";
+        }
+        String text = message.text();
+        if (text == null || text.isBlank()) {
+            return "New message in chat";
+        }
+        if (text.codePointCount(0, text.length()) <= PREVIEW_LENGTH) {
+            return text;
+        }
+        int end = text.offsetByCodePoints(0, PREVIEW_LENGTH - 1);
+        return text.substring(0, end) + "…";
     }
 
     public record Delivery(UUID eventId, UUID conversationId, String payload, UUID leaseId) {}

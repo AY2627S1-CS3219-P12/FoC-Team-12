@@ -1303,6 +1303,11 @@
                 "QUICK_REPLY",
                 "IMAGE"
               ]
+            },
+            "messagePreview": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
             }
           },
           "required": [

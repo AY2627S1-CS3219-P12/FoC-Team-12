@@ -258,7 +258,9 @@ life={'orderId':UUID,'requesterId':UUID,'previousCourierId':nullable(UUID),'cour
 event('OrderTransitioned','order-service','Order','order.lifecycle.events',obj(life),False)
 event('ChatMessageSent','chat-service','Conversation','chat.events',obj({
     'messageId':UUID,'conversationId':UUID,'orderId':UUID,'senderUserId':UUID,
-    'recipientUserId':UUID,'messageType':enum('TEXT','QUICK_REPLY','IMAGE')}))
+    'recipientUserId':UUID,'messageType':enum('TEXT','QUICK_REPLY','IMAGE'),
+    'messagePreview':{'type':'string','minLength':1,'maxLength':160}},
+    ['messageId','conversationId','orderId','senderUserId','recipientUserId','messageType']))
 variants[-1]['properties']['aggregateVersion']={'type':'integer','minimum':1}
 variants[-1]['properties']['causationId']=UUID
 variants[-1]['properties']['actor']=obj({'type':{'const':'USER'},'userId':UUID,
@@ -314,6 +316,7 @@ for index,v in enumerate(variants):
         payload['correlationId']=payload['data']['orderId']
         payload['causationId']=payload['data']['messageId']
         payload['data']['senderUserId']=payload['actor']['userId']
+        payload['data']['messagePreview']='I am on my way.'
     fixtures.append({'topic':v['x-topic'],'key':U,'event':payload})
 write('events.examples.json',fixtures)
 http=[]

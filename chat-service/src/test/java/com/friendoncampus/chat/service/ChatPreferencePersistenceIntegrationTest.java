@@ -148,7 +148,7 @@ class ChatPreferencePersistenceIntegrationTest {
     }
 
     @Test
-    void userMessagesCreateOnePrivacyMinimalNotificationEventButLifecycleMessagesDoNot() {
+    void userMessagesCreateOneBoundedNotificationPreviewButLifecycleMessagesDoNot() {
         UUID order=UUID.randomUUID(),requester=UUID.randomUUID(),courier=UUID.randomUUID();
         new OrderLifecycleConsumer(jdbcClient,clock,chats).process(
                 event(order,requester,courier,"ACCEPT","ACCEPTED",1));
@@ -165,7 +165,8 @@ class ChatPreferencePersistenceIntegrationTest {
         String payload=jdbc.queryForObject("SELECT payload::text FROM chat_notification_outbox WHERE message_id=?",
                 String.class,message.id());
         assertThat(payload).contains("ChatMessageSent",message.id().toString(),order.toString(),courier.toString())
-                .doesNotContain("private words");
+                .contains("private words")
+                .doesNotContain("attachmentId","filename","contentType");
 
         chats.sendText(conversation.id(),courier,UUID.randomUUID(),"QUICK_REPLY",null,"ARRIVED");
         assertThat(jdbc.queryForObject("SELECT count(*) FROM chat_notification_outbox",Integer.class)).isEqualTo(2);

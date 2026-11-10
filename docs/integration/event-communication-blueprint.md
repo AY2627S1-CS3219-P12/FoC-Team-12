@@ -190,7 +190,8 @@ defined below.
 - Producer settings: `acks=all` and idempotent production enabled.
 - Consumer groups: `credit-service` for Credit consumers, `order-service` for Order consumers and
   `notification-service` for Notification consumers. Notification reads Credit outcomes, Order
-  lifecycle facts and privacy-minimal Chat message facts; it never changes Credit or Order state.
+  lifecycle facts and privacy-minimal Chat message facts, including only a bounded notification
+  preview rather than the complete message or image metadata; it never changes Credit or Order state.
 - Delivery is **at least once**. Every consumer must be idempotent.
 - A consumer acknowledges a record only after its database transaction commits.
 - Retry a transient failure three times with backoff, then publish the original record to the

@@ -242,7 +242,7 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items[0].type").value("CHAT_MESSAGE_RECEIVED"))
                 .andExpect(jsonPath("$.items[0].message")
-                        .value("You have a new message about your errand."))
+                        .value("New message in chat"))
                 .andExpect(jsonPath("$.cursor").value(cursor.toString()));
 
         verify(queryService).pushFor(CALLER, after);

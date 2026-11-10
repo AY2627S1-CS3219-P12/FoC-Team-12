@@ -50,15 +50,8 @@
 .push-notification-content[aria-disabled="true"] { cursor: default; }
 .push-notification-content:focus-visible,
 .push-notification-close:focus-visible { outline: 3px solid #5068b3; outline-offset: 3px; }
-.push-notification-brand {
-  color: #5068b3;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 .push-notification-content strong { font-family: Manrope, sans-serif; font-size: 0.95rem; }
-.push-notification-content > span:not(.push-notification-brand) { color: #686a70; font-size: 0.85rem; }
+.push-notification-content > span { color: #686a70; font-size: 0.85rem; }
 .push-notification-content small { color: #5068b3; font-size: 0.75rem; font-weight: 700; }
 .push-notification-close {
   display: grid;

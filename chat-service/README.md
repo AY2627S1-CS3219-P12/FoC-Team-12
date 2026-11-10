@@ -154,8 +154,10 @@ truth; WebSocket reconnection fetches missing messages by sequence.
 Each user-authored errand message also writes a `ChatMessageSent` row to Chat's transactional
 outbox in the same database transaction. The relay publishes it to `chat.events`, keyed by
 conversation UUID, for Notification Service. The payload contains message/conversation/order,
-sender/recipient IDs and `TEXT`/`QUICK_REPLY`/`IMAGE` only; message text and attachment details
-never leave Chat. Client-message idempotency therefore creates at most one notification event.
+sender/recipient IDs, the `TEXT`/`QUICK_REPLY`/`IMAGE` type, and a notification-only preview capped
+at 160 characters. Images use the fixed preview “Image sent in chat”; image content and attachment
+metadata never leave Chat. The complete message remains Chat-owned. Client-message idempotency
+therefore creates at most one notification event.
 Lifecycle `SYSTEM` entries do not publish this event because their existing `OrderTransitioned`
 notifications already tell the affected user; emitting both would duplicate alerts.
 Broadcast fan-out works across replicas; RabbitMQ only signals delivery and never replaces durable

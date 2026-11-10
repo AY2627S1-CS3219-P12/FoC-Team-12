@@ -6,7 +6,9 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -66,8 +68,9 @@ public class ChatMessageEventHandler {
                 NotificationType.CHAT_MESSAGE_RECEIVED, businessKey).isPresent()) {
             outcome = CreditEventHandler.Outcome.DUPLICATE_OPERATION;
         } else {
+            String params = json.writeValueAsString(Map.of("messagePreview", event.messagePreview()));
             notifications.save(new Notification(UUID.randomUUID(), event.recipientId(),
-                    NotificationType.CHAT_MESSAGE_RECEIVED, event.orderId(), "{}", eventId,
+                    NotificationType.CHAT_MESSAGE_RECEIVED, event.orderId(), params, eventId,
                     businessKey, event.occurredAt(), OffsetDateTime.now(clock)));
             outcome = CreditEventHandler.Outcome.NOTIFIED;
         }
@@ -98,7 +101,10 @@ public class ChatMessageEventHandler {
         OffsetDateTime occurredAt = requiredTimestamp(envelope, "occurredAt");
         JsonNode data = envelope.get("data");
         if (data == null || !data.isObject()) throw reject("INVALID_EVENT", "data must be an object");
-        if (data.size() != 6) {
+        Set<String> allowedDataFields = Set.of("messageId", "conversationId", "orderId",
+                "senderUserId", "recipientUserId", "messageType", "messagePreview");
+        if ((data.size() != 6 && data.size() != 7)
+                || !data.propertyNames().stream().allMatch(allowedDataFields::contains)) {
             throw reject("INVALID_EVENT", "Unexpected Chat event data fields");
         }
         UUID dataConversation = requiredUuid(data, "conversationId");
@@ -117,6 +123,14 @@ public class ChatMessageEventHandler {
         if (!java.util.Set.of("TEXT", "QUICK_REPLY", "IMAGE").contains(messageType)) {
             throw reject("INVALID_EVENT", "Unsupported messageType");
         }
+        String messagePreview = text(data, "messagePreview");
+        if (messagePreview == null) {
+            messagePreview = "IMAGE".equals(messageType)
+                    ? "Image sent in chat" : "New message in chat";
+        } else if (messagePreview.isBlank()
+                || messagePreview.codePointCount(0, messagePreview.length()) > 160) {
+            throw reject("INVALID_EVENT", "messagePreview must contain 1 to 160 characters");
+        }
         JsonNode actor = envelope.get("actor");
         if (actor == null || !"USER".equals(text(actor, "type"))
                 || !sender.equals(requiredUuid(actor, "userId"))) {
@@ -127,7 +141,7 @@ public class ChatMessageEventHandler {
                 || (role != null && !java.util.Set.of("REQUESTER", "COURIER").contains(role))) {
             throw reject("INVALID_EVENT", "Unexpected Chat actor fields");
         }
-        return new Event(conversationId, orderId, messageId, recipient, occurredAt);
+        return new Event(conversationId, orderId, messageId, recipient, messagePreview, occurredAt);
     }
 
     private JsonNode parse(String raw) {
@@ -183,5 +197,5 @@ public class ChatMessageEventHandler {
     }
 
     private record Event(UUID conversationId, UUID orderId, UUID messageId,
-            UUID recipientId, OffsetDateTime occurredAt) {}
+            UUID recipientId, String messagePreview, OffsetDateTime occurredAt) {}
 }
