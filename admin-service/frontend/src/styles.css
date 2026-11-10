@@ -1852,24 +1852,41 @@ button:hover:not(:disabled),
   border-radius: 1.25rem;
   background: #fff;
 }
-.admin-metrics article::after {
-  position: absolute;
-  top: 1.4rem;
-  right: 1.4rem;
-  width: 0.55rem;
-  height: 0.55rem;
-  border-radius: 50%;
-  background: var(--blue);
-  content: '';
+.admin-metric-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
-.admin-metrics article:nth-child(2)::after {
-  background: var(--coral);
+.admin-metric-art {
+  display: grid;
+  place-items: center;
+  flex: 0 0 2.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid rgb(80 104 179 / 12%);
+  border-radius: 0.875rem;
+  color: var(--action);
+  background: var(--action-soft);
+  box-shadow: 0 2px 3px rgb(23 38 65 / 4%);
+  transform: rotate(-6deg);
 }
-.admin-metrics article:nth-child(3)::after {
-  background: var(--gold);
+.admin-metric-art svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  transform: rotate(6deg);
 }
-.admin-metrics article:nth-child(4)::after {
-  background: var(--mauve);
+.admin-metrics article:nth-child(2) .admin-metric-art {
+  border-color: rgb(223 155 147 / 25%);
+  background: #fbefed;
+}
+.admin-metrics article:nth-child(3) .admin-metric-art {
+  border-color: rgb(241 198 117 / 30%);
+  background: var(--warning-soft);
+}
+.admin-metrics article:nth-child(4) .admin-metric-art {
+  border-color: rgb(163 111 118 / 18%);
+  background: #f5edef;
 }
 .admin-metrics span,
 .admin-metrics strong,
@@ -1882,7 +1899,7 @@ button:hover:not(:disabled),
   font-weight: 600;
 }
 .admin-metrics strong {
-  margin: 1.5rem 0 0.75rem;
+  margin: 1rem 0 0.75rem;
   font-family: 'Manrope', 'DM Sans', sans-serif;
   font-size: clamp(2.25rem, 4vw, 3rem);
   line-height: 1;

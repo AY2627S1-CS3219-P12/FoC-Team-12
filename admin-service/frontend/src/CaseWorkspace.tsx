@@ -3,6 +3,10 @@ import {
   ArrowLeft,
   ArrowRight,
   ClipboardList,
+  FileCheck,
+  FileExclamationPoint,
+  FileSearch,
+  FolderOpen,
   RefreshCw,
   Search,
   ShieldCheck,
@@ -706,21 +710,25 @@ export function AdminDashboardOverview({ actor }: { actor: string }) {
       label: 'Open cases',
       value: open.data?.totalElements,
       detail: 'Needs attention',
+      icon: FileExclamationPoint,
     },
     {
       label: 'Under review',
       value: underReview.data?.totalElements,
       detail: 'In active review',
+      icon: FileSearch,
     },
     {
       label: 'Resolved cases',
       value: resolved.data?.totalElements,
       detail: 'Review completed',
+      icon: FileCheck,
     },
     {
       label: 'Total cases',
       value: all.data?.totalElements,
       detail: 'All reported issues',
+      icon: FolderOpen,
     },
   ]
   const retry = () => {
@@ -735,7 +743,12 @@ export function AdminDashboardOverview({ actor }: { actor: string }) {
       <section className="admin-metrics" aria-label="Case overview">
         {metrics.map((metric) => (
           <article key={metric.label} aria-busy={metric.value === undefined}>
-            <span>{metric.label}</span>
+            <div className="admin-metric-heading">
+              <span>{metric.label}</span>
+              <div className="admin-metric-art" aria-hidden="true">
+                <metric.icon focusable="false" strokeWidth={1.7} />
+              </div>
+            </div>
             <strong>{metric.value ?? '—'}</strong>
             <small>{metric.detail}</small>
           </article>
