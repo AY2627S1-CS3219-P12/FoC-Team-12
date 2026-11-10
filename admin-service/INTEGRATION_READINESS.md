@@ -18,6 +18,9 @@ not an accepted report. An actor's pending preparation takes precedence over gen
 participant navigation, avoiding a second form while their statement is still being prepared.
 Both consumer validators reject malformed case/status combinations. Consumer regressions read
 the generated producer schema, rather than relying solely on copied status fixtures.
+The schema fixtures are read through Node's filesystem API only when tests execute. They are
+not static TypeScript imports: Admin and Order Docker builds copy only the owning service's
+frontend, so repository-level contract files are intentionally absent from those build contexts.
 
 Audit scope: report-context callers and response validation, report preparation/status polling,
 assignment preparation, closure-pending UI and removed synchronous dispute-write callers in

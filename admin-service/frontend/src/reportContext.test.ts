@@ -1,10 +1,24 @@
 import { expect, it } from 'vitest'
-import api from '../../../docs/contracts/n2h.openapi.json'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { isReportContext } from './cases'
 
 const orderId = '10000000-0000-4000-8000-000000000001'
 const caseId = '20000000-0000-4000-8000-000000000001'
-const published = api.components.schemas.ReportContext.oneOf.flatMap((branch) =>
+// Read only when the tests run; the service-only Docker context does not contain root docs.
+const contextBranches: {
+  properties: {
+    status: { enum: string[] }
+    caseId: { type: string }
+    state: { type: string }
+  }
+}[] = JSON.parse(
+  readFileSync(
+    resolve(process.cwd(), '../../docs/contracts/n2h.openapi.json'),
+    'utf8',
+  ),
+).components.schemas.ReportContext.oneOf
+const published = contextBranches.flatMap((branch) =>
   branch.properties.status.enum.map((status) => ({
     orderId,
     status,

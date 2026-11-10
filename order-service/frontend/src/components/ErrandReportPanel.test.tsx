@@ -1,4 +1,5 @@
-import reportApi from '../../../../docs/contracts/n2h.openapi.json'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
@@ -175,15 +176,27 @@ it('explains a report to a verified nonreporter and offers their statement and a
 })
 
 // Exercise the actual producer schema, rather than repeating a stale status list in mocks.
-const publishedContexts =
-  reportApi.components.schemas.ReportContext.oneOf.flatMap((branch) =>
-    branch.properties.status.enum.map((status) => ({
-      orderId: id,
-      status,
-      caseId: branch.properties.caseId.type === 'null' ? null : caseId,
-      state: branch.properties.state.type === 'null' ? null : 'OPEN',
-    })),
-  )
+// Read only when the tests run; the service-only Docker context does not contain root docs.
+const contextBranches: {
+  properties: {
+    status: { enum: string[] }
+    caseId: { type: string }
+    state: { type: string }
+  }
+}[] = JSON.parse(
+  readFileSync(
+    resolve(process.cwd(), '../../docs/contracts/n2h.openapi.json'),
+    'utf8',
+  ),
+).components.schemas.ReportContext.oneOf
+const publishedContexts = contextBranches.flatMap((branch) =>
+  branch.properties.status.enum.map((status) => ({
+    orderId: id,
+    status,
+    caseId: branch.properties.caseId.type === 'null' ? null : caseId,
+    state: branch.properties.state.type === 'null' ? null : 'OPEN',
+  })),
+)
 it.each(publishedContexts)(
   'supports published Admin report-context $status',
   async (body) => {
