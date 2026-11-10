@@ -141,7 +141,7 @@ describe('EditErrandPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Not enough credits to change the reward to 5. The reward stays at 3.',
+      "You don't have enough credits for a reward of 5, so it stays at 3.",
     )
     expect(screen.queryByRole('heading', { name: 'Errand page' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
@@ -158,7 +158,7 @@ describe('EditErrandPage', () => {
     await user.type(reward, '5')
 
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
-    expect(screen.getByRole('status')).toHaveTextContent('needs 2 more credits, but you have 1 available')
+    expect(screen.getByRole('status')).toHaveTextContent("You don't have enough credits for 5. Choose 4 or less.")
   })
 
   it('explains an errand accepted while editing, and offers a reload', async () => {
@@ -185,7 +185,7 @@ describe('EditErrandPage', () => {
     await screen.findByLabelText('Errand title')
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('changed since you opened it')
+    expect(await screen.findByRole('alert')).toHaveTextContent('was just updated')
   })
 
   it('hands over after 30 seconds while the reward change is still pending', async () => {

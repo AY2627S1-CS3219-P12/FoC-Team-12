@@ -582,11 +582,10 @@ jobs:
           docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0 \
             -strict -ignore-missing-schemas -summary < /tmp/foc-aws.yaml
 
-  publish-images:
-    name: Publish ${{ matrix.service }}
+  ci-gate:
+    name: CI gate
     needs:
       - workflow-checks
-      - image-plan
       - kafka-infrastructure
       - gateway
       - user-backend
@@ -606,6 +605,15 @@ jobs:
       - notification-frontend
       - admin-container
       - cloud-infrastructure-validation
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo 'All required CI checks passed.'
+
+  publish-images:
+    name: Publish ${{ matrix.service }}
+    needs:
+      - ci-gate
+      - image-plan
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.image-plan.outputs.has-images == 'true'
     runs-on: ubuntu-24.04
     permissions:

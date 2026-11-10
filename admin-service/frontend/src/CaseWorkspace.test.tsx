@@ -95,7 +95,7 @@ it('submits in participant mode and retries the same key and body after an uncer
   })
   fireEvent.click(screen.getByRole('button', { name: 'Submit report' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'couldn’t confirm the request’s outcome',
+    'not sure your report went through',
   )
   expect(screen.getByLabelText('What happened?')).toBeDisabled()
   fireEvent.click(screen.getByRole('button', { name: 'Retry submission' }))
@@ -320,7 +320,7 @@ it('does not offer reporting when context is unavailable', async () => {
   )
   render(<App />)
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'couldn’t load this information',
+    'couldn’t load this',
   )
   expect(
     screen.queryByRole('button', { name: 'Submit report' }),
@@ -385,7 +385,7 @@ it('claims using the displayed revision and explains conflicts without claiming 
   fireEvent.click(await screen.findByRole('button', { name: 'Assign to me' }))
   expect(
     await screen.findByText(
-      'This case has changed. Refresh before assigning it to yourself.',
+      'This case just changed. Refresh, then assign it to yourself.',
     ),
   ).toBeVisible()
   const call = fetcher.mock.calls.find((call) => call[1]?.method === 'POST')!
@@ -480,7 +480,7 @@ it.each([
           .closest('section')!,
       ).findByText(
         status === 503
-          ? 'We couldn’t verify whether you were involved in this errand. Refresh the evidence and try again. Review actions remain unavailable.'
+          ? 'We couldn’t confirm you weren’t part of this errand. Refresh the evidence and try again.'
           : detail,
       ),
     ).toBeVisible()

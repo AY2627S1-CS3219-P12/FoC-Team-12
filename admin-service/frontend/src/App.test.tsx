@@ -172,7 +172,7 @@ it('keeps access denied when User cannot change the workspace', async () => {
   fireEvent.click(screen.getByLabelText('Open account menu for Darryl'))
   fireEvent.click(screen.getByRole('button', { name: 'Switch to Admin' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Unable to change workspace',
+    "We couldn't switch your role",
   )
   expect(screen.queryByText('Administration tools')).not.toBeInTheDocument()
   expect(

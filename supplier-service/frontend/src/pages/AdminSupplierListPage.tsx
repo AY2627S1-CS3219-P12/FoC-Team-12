@@ -142,10 +142,10 @@ export function AdminSupplierListPage() {
       setPendingAction(undefined)
       setActionError(
         error instanceof SupplierMutationError && error.status === 409
-          ? 'This supplier changed after the page loaded. Reload the latest record before trying again.'
+          ? 'Someone else just changed this location. Reload to see the latest.'
           : error instanceof Error
             ? error.message
-            : 'The action could not be completed.',
+            : 'That didn’t work. Please try again.',
       )
     }
   }
@@ -161,7 +161,7 @@ export function AdminSupplierListPage() {
         <div>
           <p className={styles.eyebrow}>Supplier administration</p>
           <h1 id="admin-heading">Campus locations</h1>
-          <p>Manage active and inactive supplier records across campus.</p>
+          <p>Add, update or hide campus locations.</p>
         </div>
         <Link className={styles.addLink} to="/admin/suppliers/new">
           Add supplier
@@ -175,13 +175,13 @@ export function AdminSupplierListPage() {
       )}
       {actionError && (
         <StatePanel
-          actionLabel="Reload latest records"
+          actionLabel="Reload"
           message={actionError}
           onAction={() => {
             setActionError('')
             void suppliers.refetch()
           }}
-          title="The action was not completed"
+          title="That didn’t work"
           tone="error"
         />
       )}
@@ -254,7 +254,7 @@ export function AdminSupplierListPage() {
       <div className={styles.resultsHeading}>
         <p aria-live="polite">
           {suppliers.isPending
-            ? 'Loading supplier records…'
+            ? 'Loading locations…'
             : `${totalItems} ${totalItems === 1 ? 'supplier' : 'suppliers'}`}
         </p>
         {suppliers.isFetching && !suppliers.isPending && (
@@ -266,18 +266,18 @@ export function AdminSupplierListPage() {
       {suppliers.isError && (
         <StatePanel
           actionLabel="Try again"
-          message="The filters are preserved. Check the connection and retry."
+          message="Your filters are kept. Please try again."
           onAction={() => void suppliers.refetch()}
-          title="Supplier records could not be loaded"
+          title="We couldn’t load locations"
           tone="error"
         />
       )}
       {suppliers.isSuccess && items.length === 0 && (
         <StatePanel
           actionLabel={hasFilters ? 'Clear filters' : undefined}
-          message="No supplier records match the current filters."
+          message="No locations match these filters."
           onAction={hasFilters ? clearFilters : undefined}
-          title="No suppliers found"
+          title="No locations found"
         />
       )}
 
@@ -373,8 +373,8 @@ export function AdminSupplierListPage() {
         >
           <p>
             {pendingAction.nextStatus === 'ACTIVE'
-              ? 'This supplier will appear in the public directory again.'
-              : 'This supplier will be hidden from public listings. Its historical detail record remains available.'}
+              ? 'Students will see this location again.'
+              : 'Students won’t see this location any more.'}
           </p>
         </ConfirmationDialog>
       )}

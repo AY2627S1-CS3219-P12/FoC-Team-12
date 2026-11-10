@@ -132,7 +132,7 @@ it('blocks empty/fractional/zero amounts and only offers verified participants',
 it('lets other administrators review history without offering a correction form', () => {
   setup([action('REJECTED')], orderId)
   expect(screen.getByText('Rejected')).toBeVisible()
-  expect(screen.getByText(/insufficient available credits/)).toBeVisible()
+  expect(screen.getByText(/doesn’t have enough credits/)).toBeVisible()
   expect(screen.queryByLabelText('Number of credits')).not.toBeInTheDocument()
 })
 it('shows UNKNOWN as uncertain and reconciles a late success without another command', async () => {
@@ -140,7 +140,7 @@ it('shows UNKNOWN as uncertain and reconciles a late success without another com
   vi.stubGlobal('fetch', fetcher)
   setup([action('UNKNOWN')])
   expect(screen.getByText('Outcome unconfirmed')).toBeVisible()
-  expect(screen.getByText(/may already be applied/)).toBeVisible()
+  expect(screen.getByText(/may already be done/)).toBeVisible()
   fireEvent.click(
     screen.getByRole('button', { name: 'Refresh correction status' }),
   )
@@ -184,7 +184,7 @@ it('keeps last known status on outage and hides history after access denial', as
 it('does not silently replace invalid action history with an empty history', () => {
   setup([{ ...action(), caseId: orderId }])
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'history could not be verified',
+    'couldn’t load this case’s actions',
   )
   expect(
     screen.queryByText('No credit corrections recorded for this case.'),

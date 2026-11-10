@@ -165,7 +165,7 @@ export function App() {
       })
       .catch(() => {
         if (!cancelled) {
-          setProfileMessage('Unable to load your profile. Please sign out and sign in again.')
+          setProfileMessage('We couldn’t load your profile. Please sign out and sign in again.')
         }
       })
 
@@ -405,7 +405,7 @@ export function App() {
       setRegistrationState('error')
       setRegistrationMessage(error instanceof ApiError && error.status === 400
         ? error.message
-        : 'Registration could not be completed. Please try again.')
+        : 'We couldn’t create your account. Please try again.')
     }
   }
 
@@ -436,7 +436,7 @@ export function App() {
       setVerificationState('error')
       setVerificationMessage(error instanceof ApiError
         ? error.message
-        : 'Unable to verify your email right now. Please try again.')
+        : 'We couldn’t verify your email. Please try again.')
       if (error instanceof ApiError) {
         setVerificationDigits(Array(6).fill(''))
         setVerificationFocusVersion(version => version + 1)
@@ -468,7 +468,7 @@ export function App() {
         setResendMessage(`Please wait ${error.retryAfterSeconds} seconds before requesting another code.`)
         startResendCooldown(verificationEmail, error.retryAfterSeconds)
       } else {
-        setResendMessage(error instanceof ApiError ? error.message : 'Unable to resend a verification code right now. Please try again.')
+        setResendMessage(error instanceof ApiError ? error.message : 'We couldn’t send a new code. Please try again.')
       }
     }
   }
@@ -490,7 +490,7 @@ export function App() {
       show('reset-verification')
     } catch {
       setResetRequestState('error')
-      setResetRequestMessage('Unable to request a password reset right now. Please try again.')
+      setResetRequestMessage('We couldn’t send a reset code. Please try again.')
     }
   }
 
@@ -504,12 +504,12 @@ export function App() {
       const retryAfterSeconds = await api.requestPasswordReset({ email: resetEmail })
       rememberPendingPasswordReset(resetEmail)
       setResetResendState('success')
-      setResetResendMessage('If an eligible active account matches your email, a reset code has been sent or remains available.')
+      setResetResendMessage('If this email has an account, we’ve sent you a reset code.')
       setResetDigits(Array(6).fill(''))
       startResetResendCooldown(resetEmail, retryAfterSeconds)
     } catch {
       setResetResendState('error')
-      setResetResendMessage('Unable to request another reset code right now. Please try again.')
+      setResetResendMessage('We couldn’t send another code. Please try again.')
     }
   }
 
@@ -537,7 +537,7 @@ export function App() {
       show('reset-confirmation')
     } catch (error) {
       setResetVerificationState('error')
-      setResetVerificationMessage(error instanceof ApiError ? error.message : 'Unable to verify the reset code right now. Please try again.')
+      setResetVerificationMessage(error instanceof ApiError ? error.message : 'We couldn’t check that code. Please try again.')
       if (error instanceof ApiError) {
         setResetDigits(Array(6).fill(''))
         setResetFocusVersion(version => version + 1)
@@ -617,7 +617,7 @@ export function App() {
       setProfileUsernameState('error')
       setProfileUsernameMessage(error instanceof ApiError && error.status === 409
         ? 'Username is already taken.'
-        : 'Unable to update your username. Please try again.')
+        : 'We couldn’t update your username. Please try again.')
     }
   }
 
@@ -664,7 +664,7 @@ export function App() {
       setPasswordChangeState('error')
       setPasswordChangeMessage(error instanceof ApiError && error.status === 400
         ? error.message
-        : 'Unable to change your password right now. Please try again.')
+        : 'We couldn’t change your password. Please try again.')
     }
   }
 
@@ -687,7 +687,7 @@ export function App() {
       setWorkspaceState('error')
       setWorkspaceMessage(error instanceof ApiError
         ? error.message
-        : 'Unable to change your workspace right now. Please try again.')
+        : "We couldn't switch your role. Please try again.")
       return false
     }
   }
@@ -720,9 +720,9 @@ export function App() {
           </a>
           <nav className="profile-service-nav" aria-label="Main navigation">
             <a aria-current={adminUsersPage ? undefined : 'page'} href="/"><House aria-hidden="true" />Home</a>
-            <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>
+            {!adminMode && <a href="/errands/browse"><ClipboardList aria-hidden="true" />Errands</a>}
             <a href={suppliersPath}><Store aria-hidden="true" />Suppliers</a>
-            <a href="/credits"><Coins aria-hidden="true" />Credits</a>
+            {!adminMode && <a href="/credits"><Coins aria-hidden="true" />Credits</a>}
             {adminMode && <a href="/admin"><ShieldCheck aria-hidden="true" />Admin</a>}
           </nav>
           <nav className="profile-app-actions" aria-label="Account and workspace">
@@ -954,7 +954,7 @@ export function App() {
 
     {view === 'email-verification' && <form onSubmit={event => { event.preventDefault(); void verifyEmail() }} noValidate aria-busy={busy} aria-label="Verify email form">
       <h1 id="account-title">Verify your email</h1>
-      <p className="intro">Enter the six-digit code sent to your NUS email. You must verify your email before you can sign in.</p>
+      <p className="intro">Enter the six-digit code we sent to your NUS email.</p>
       <p className="verification-email">Verification code sent to <strong>{verificationEmail}</strong>.</p>
       <label>Verification code<OtpInput value={verificationDigits} onChange={setVerificationDigits} onComplete={code => { void verifyEmail(code) }} focusFirst={verificationFocusVersion} disabled={busy} invalid={verificationState === 'error'} /></label>
       {verificationMessage && <p role={verificationState === 'error' ? 'alert' : 'status'} className={verificationState}>{verificationMessage}</p>}
@@ -968,7 +968,7 @@ export function App() {
 
     {view === 'reset-request' && <form onSubmit={requestPasswordReset} noValidate aria-busy={busy} aria-label="Request password reset form">
       <h1 id="account-title">Reset your password</h1>
-      <p className="intro">Enter your email and we’ll send a reset code if an eligible active account matches it.</p>
+      <p className="intro">Enter your email and we’ll send you a reset code.</p>
       <label>Email<input type="email" autoFocus autoComplete="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} disabled={busy} aria-invalid={resetRequestState === 'error'} /></label>
       <button disabled={busy}>{resetRequestState === 'loading' ? 'Sending…' : 'Send reset code'}</button>
       {resetRequestMessage && <p role={resetRequestState === 'error' ? 'alert' : 'status'} className={resetRequestState}>{resetRequestMessage}</p>}
@@ -988,7 +988,7 @@ export function App() {
 
     {view === 'reset-confirmation' && <form onSubmit={confirmPasswordReset} noValidate aria-busy={busy} aria-label="Confirm password reset form">
       <h1 id="account-title">Choose a new password</h1>
-      <p className="intro">Your reset code is verified. Choose a new password for <strong>{resetEmail}</strong>.</p>
+      <p className="intro">Choose a new password for <strong>{resetEmail}</strong>.</p>
       <label>New password<PasswordInput value={newPassword} onChange={setNewPassword} inputRef={newPasswordRef} onKeyDown={event => focusOnEnter(event, confirmPasswordRef)} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
       <label>Confirm new password<PasswordInput value={confirmPassword} onChange={setConfirmPassword} inputRef={confirmPasswordRef} disabled={busy} invalid={resetConfirmationState === 'error'} autoComplete="new-password" /></label>
       <button disabled={busy}>{resetConfirmationState === 'loading' ? 'Updating…' : 'Update password'}</button>
@@ -1000,7 +1000,7 @@ export function App() {
       <p role="status" className="success">Your password has been updated. You can now sign in.</p>
       <button type="button" onClick={() => show('login')}>Sign in</button>
     </div>}
-    <p className="auth-trust"><ShieldCheck aria-hidden="true" />Only eligible NUS student email addresses can join.</p>
+    <p className="auth-trust"><ShieldCheck aria-hidden="true" />Only NUS student emails can join.</p>
     </section>
     </div>
 
@@ -1008,8 +1008,8 @@ export function App() {
       <div className="how-heading"><p className="eyebrow">A clearer way to ask for help</p><h2 id="how-title">From request to handoff, without the guesswork.</h2></div>
       <ol>
         <li><span>01</span><div><HandHeart aria-hidden="true" /><h3>Post what you need</h3><p>Add the supplier, destination, deadline and credit reward.</p></div></li>
-        <li><span>02</span><div><PackageCheck aria-hidden="true" /><h3>A student accepts</h3><p>A courier nearby takes the errand and follows the shared details.</p></div></li>
-        <li><span>03</span><div><CheckCircle2 aria-hidden="true" /><h3>Confirm the handoff</h3><p>Track the status, confirm delivery and transfer credits automatically.</p></div></li>
+        <li><span>02</span><div><PackageCheck aria-hidden="true" /><h3>A student accepts</h3><p>A student nearby picks up your errand.</p></div></li>
+        <li><span>03</span><div><CheckCircle2 aria-hidden="true" /><h3>Confirm the handoff</h3><p>Confirm you got it, and your courier gets paid.</p></div></li>
       </ol>
     </section>
   </main>

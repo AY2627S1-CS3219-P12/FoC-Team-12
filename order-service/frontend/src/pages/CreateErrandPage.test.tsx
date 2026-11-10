@@ -72,19 +72,29 @@ function renderPage(path = '/errands/new') {
   )
 }
 
+const PICKUP_LABEL = 'Printers@PCCommons · PC Commons, level 1'
+const DROPOFF_LABEL = 'PGP Foyer · PGP'
+
+/** Picks a location in the searchable picker by typing part of its name. */
+async function pickLocation(
+  user: ReturnType<typeof userEvent.setup>,
+  field: 'Pickup location' | 'Drop-off location',
+  search: string,
+) {
+  const input = await screen.findByRole('combobox', { name: field })
+  await waitFor(() => expect(input).toBeEnabled())
+  await user.click(input)
+  await user.type(input, search)
+  await user.click(screen.getByRole('option', { name: new RegExp(search, 'i') }))
+}
+
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(
     screen.getByLabelText('Errand title'),
     'Collect my printed notes',
   )
-  await user.selectOptions(
-    await screen.findByLabelText('Pickup location'),
-    PICKUP.id,
-  )
-  await user.selectOptions(
-    screen.getByLabelText('Drop-off location'),
-    DROPOFF.id,
-  )
+  await pickLocation(user, 'Pickup location', 'Printers')
+  await pickLocation(user, 'Drop-off location', 'PGP Foyer')
   await user.type(screen.getByLabelText('Pick up by'), inAnHour())
   await user.type(screen.getByLabelText('Reward (credits)'), '3')
   await user.type(
@@ -226,10 +236,7 @@ describe('CreateErrandPage', () => {
     renderPage()
 
     await fillValidForm(user)
-    await user.selectOptions(
-      screen.getByLabelText('Drop-off location'),
-      PICKUP.id,
-    )
+    await pickLocation(user, 'Drop-off location', 'Printers')
     await user.click(screen.getByRole('button', { name: 'Post errand' }))
 
     expect(
@@ -287,7 +294,7 @@ describe('CreateErrandPage', () => {
 
     expect(screen.getByRole('button', { name: 'Post errand' })).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent(
-      'You have 2 credits available. Lower the reward to 2 or less.',
+      'You have 2 credits. Lower the reward to 2 or less.',
     )
     expect(
       screen.getByText('Available after posting').nextElementSibling,
@@ -320,7 +327,7 @@ describe('CreateErrandPage', () => {
     renderPage()
 
     await waitFor(() =>
-      expect(screen.getByRole('status')).toHaveTextContent('posting is paused'),
+      expect(screen.getByRole('status')).toHaveTextContent("can't check your credits"),
     )
     await fillValidForm(user)
 
@@ -417,7 +424,7 @@ describe('CreateErrandPage', () => {
     await user.click(screen.getByRole('button', { name: 'Post errand' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Not enough credits to reserve 3 credits. Lower the reward and post again.',
+      "You don't have enough credits for a reward of 3. Lower it and post again.",
     )
     expect(
       screen.queryByRole('heading', { name: 'Errand page' }),
@@ -452,7 +459,7 @@ describe('CreateErrandPage', () => {
     await user.click(screen.getByRole('button', { name: 'Post errand' }))
 
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent("Your credit account isn't set up yet")
+    expect(alert).toHaveTextContent("Your credits aren't set up yet")
     expect(
       screen.getByRole('link', { name: 'Set up your credits' }),
     ).toHaveAttribute('href', '/credits')
@@ -477,7 +484,7 @@ describe('CreateErrandPage', () => {
       await act(() => vi.advanceTimersByTimeAsync(30_000))
 
       expect(
-        await screen.findByText(/Credit is taking longer than usual/),
+        await screen.findByText(/taking a little longer than usual/),
       ).toBeInTheDocument()
       expect(screen.getByRole('link', { name: 'View errand' })).toHaveAttribute(
         'href',
@@ -500,8 +507,8 @@ describe('CreateErrandPage', () => {
 
       expect(await screen.findByText(/Copied from “Collect my printed notes”/)).toBeInTheDocument()
       expect(screen.getByLabelText('Errand title')).toHaveValue('Collect my printed notes')
-      expect(screen.getByLabelText('Pickup location')).toHaveValue(PICKUP.id)
-      expect(screen.getByLabelText('Drop-off location')).toHaveValue(DROPOFF.id)
+      expect(screen.getByLabelText('Pickup location')).toHaveValue(PICKUP_LABEL)
+      expect(screen.getByLabelText('Drop-off location')).toHaveValue(DROPOFF_LABEL)
       expect(screen.getByLabelText('Reward (credits)')).toHaveValue(4)
       expect(screen.getByLabelText('Description')).toHaveValue('A bound set of CS3219 lecture notes.')
       expect(screen.getByLabelText('Pick up by')).toHaveValue('')
@@ -539,7 +546,7 @@ describe('CreateErrandPage', () => {
 
       expect(await screen.findByText('Old Kiosk is no longer available. Choose another location.')).toBeInTheDocument()
       expect(screen.getByLabelText('Pickup location')).toHaveValue('')
-      expect(screen.getByLabelText('Drop-off location')).toHaveValue(DROPOFF.id)
+      expect(screen.getByLabelText('Drop-off location')).toHaveValue(DROPOFF_LABEL)
     })
 
     it('still checks the copied reward against the available credits', async () => {

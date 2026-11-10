@@ -70,67 +70,67 @@ export class CaseError extends Error {
 export function caseErrorMessage(error: CaseError): string {
   const messages: Record<string, string> = {
     'An errand UUID and an issue of 1–2000 characters are required.':
-      'Choose an errand and describe the issue using 1–2,000 characters.',
+      'Pick the errand and tell us what happened (up to 2,000 characters).',
     'Reporting eligibility evidence is incomplete. Please try again later.':
-      'We couldn’t check reporting access. Try again shortly.',
+      'We couldn’t check your report right now. Please try again.',
     'Reporting eligibility could not be verified. This is not confirmation that no report exists. Please retry.':
-      'We couldn’t check reporting access. If you already submitted a report, check its status before trying again.',
+      'We couldn’t check your report right now. If you already sent one, check its status first.',
     'You have already submitted a statement for this errand.':
-      'You already reported this errand. Open your report to check its status.',
+      'You already reported this errand. Open it to see its status.',
     'Resolution preparation is pending; this case no longer accepts reports.':
-      'This case is being closed and no longer accepts reports.',
+      'This case is being closed, so it can’t take new reports.',
     'This case has changed. Refresh it before claiming.':
-      'This case has changed. Refresh before assigning it to yourself.',
+      'This case just changed. Refresh, then assign it to yourself.',
     'This case has already been claimed or resolved.':
-      'This case is already assigned or closed. Refresh to check its status.',
+      'Someone already took or closed this case. Refresh to see it.',
     'Reviewer independence could not be verified. Refresh the evidence and try again. The case remains open.':
-      'We couldn’t verify whether you were involved in this errand. Refresh the evidence and try again. Review actions remain unavailable.',
+      'We couldn’t confirm you weren’t part of this errand. Refresh the evidence and try again.',
     'Conversation initiation is unconfirmed. Retry with the same request key.':
-      'We couldn’t confirm whether the conversation was started. Retry the same request to check.',
+      'We’re not sure the conversation started. Retry to check.',
     'Conversation confirmation could not be saved. Retry with the same request key.':
-      'We couldn’t confirm the conversation’s status. Retry the original request.',
+      'We’re not sure the conversation started. Retry to check.',
     'Chat returned a conflicting conversation reference. Retry with the same request key.':
-      'We couldn’t confirm the conversation’s status. Retry the original request.',
+      'We’re not sure the conversation started. Retry to check.',
     'The case could not be saved. Retry using the same request key.':
-      'We couldn’t confirm whether your changes were saved. Retry the same request.',
+      'We’re not sure your changes were saved. Retry to check.',
     'This request key was already used for a different request.':
-      'This retry does not match the original request. Refresh and check the case status.',
+      'This retry doesn’t match what you sent before. Refresh and check the case.',
     'This request key belongs to a different request.':
-      'This retry does not match the original request. Refresh and check the case status.',
+      'This retry doesn’t match what you sent before. Refresh and check the case.',
     'This request key belongs to a different operation.':
-      'This retry does not match the original request. Refresh and check existing actions.',
+      'This retry doesn’t match what you sent before. Refresh and check the actions.',
     'Provide a resolution of 1–2000 characters, a revision and a request key.':
-      'Check your resolution reason (1–2,000 characters). If the problem continues, refresh the case.',
+      'Add a closing reason (up to 2,000 characters).',
     'Provide one nonblank explanation per rejected action, without duplicates.':
       'Add one explanation for each rejected action.',
     'Explain every rejected action and only rejected actions before resolving.':
-      'Add one explanation for each rejected action before closing the case.',
+      'Explain each rejected action before closing the case.',
     'This case has pending or unknown actions. Wait for owner confirmation before resolving.':
-      'Wait for every action’s outcome to be confirmed before closing the case.',
+      'Wait until every action is confirmed, then close the case.',
     'Resume the original prepared resolution with its original request key and body.':
-      'Resume the original case closure request. Do not submit a replacement.',
+      'Resume your earlier closing request instead of starting a new one.',
     'Resolution preparation is pending. Retry the same operation.':
-      'Case closure is in progress. Resume the original request to check its outcome.',
+      'This case is still closing. Resume to check.',
     'Resolution preparation is pending. Retry the original resolution to confirm the conversation barrier.':
-      'Case closure is waiting for conversations to become read-only. Resume the original request.',
+      'This case is still closing its conversations. Resume to check.',
     'Fresh complete Chat evidence is required. Evidence is unavailable, stale, has blocking gaps, or does not cover the current case. The case remains open.':
-      'Current, complete evidence could not be verified. Refresh the evidence and resume the original closure request.',
+      'Some evidence is missing or out of date. Refresh it, then resume closing.',
     'Check the request fields, UUID identifiers and Idempotency-Key header.':
-      'We couldn’t process the request. Check your entries. If the problem continues, refresh the page.',
+      'Something went wrong. Check your entries and try again.',
     'Current account authorization denied or unavailable':
       error.status === 403
-        ? 'Your account cannot access this resource.'
+        ? 'You don’t have access to this.'
         : error.status === 401
-          ? 'Your session has expired. Sign in again.'
-          : 'We couldn’t check your permissions. Try again shortly.',
-    'A valid token is required': 'Sign in again to continue.',
+          ? 'You’ve been signed out. Please sign in again.'
+          : 'We couldn’t check your access. Please try again.',
+    'A valid token is required': 'Please sign in again.',
     'Current active administrator access is required.':
-      'You need an active admin account to continue.',
+      'You need an admin account for this.',
     'Current administrator access is required.':
-      'You need an active admin account to continue.',
+      'You need an admin account for this.',
     'Select Admin mode.': 'Choose “Switch to Admin” in your account menu.',
     'Case storage is temporarily unavailable. Retry with the same request key if a submission is pending.':
-      'We couldn’t load or save the case. If a submission is unconfirmed, retry the same request.',
+      'We couldn’t load or save this case. Please try again.',
   }
   return Object.hasOwn(messages, error.message)
     ? messages[error.message]!
@@ -164,7 +164,7 @@ export async function request<T>(
     }
     throw new CaseError(
       response.status,
-      problem.detail || 'The request could not be completed.',
+      problem.detail || 'Something went wrong. Please try again.',
     )
   }
   return (await response.json()) as T

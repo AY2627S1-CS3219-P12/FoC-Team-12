@@ -1,10 +1,10 @@
 import type { CampusLocation } from '../api/sharedApi'
+import { LocationCombobox } from './LocationCombobox'
 import {
   DESCRIPTION_MAX,
   type Errors,
   type FieldName,
   type Fields,
-  locationLabel,
   TITLE_MAX,
 } from '../utils/errandForm'
 
@@ -151,31 +151,18 @@ function LocationField({
   loadError: boolean
   error?: string
 }) {
+  const message =
+    error ?? (loadError ? "We can't load campus locations right now." : undefined)
   return (
-    <Field
-      error={
-        error ??
-        (loadError ? 'Campus locations are unavailable right now.' : undefined)
-      }
-      id={id}
-      label={label}
-    >
-      <select
-        aria-invalid={Boolean(error)}
-        disabled={!locations}
+    <Field error={message} id={id} label={label}>
+      <LocationCombobox
+        describedBy={message ? `${id}-error` : undefined}
         id={id}
-        onChange={(event) => onChange(event.target.value)}
+        invalid={Boolean(error)}
+        locations={locations}
+        onChange={onChange}
         value={value}
-      >
-        <option value="">
-          {locations ? 'Choose a campus location' : 'Loading locations…'}
-        </option>
-        {locations?.map((location) => (
-          <option key={location.id} value={location.id}>
-            {locationLabel(location)}
-          </option>
-        ))}
-      </select>
+      />
     </Field>
   )
 }

@@ -80,7 +80,7 @@ export function creditCheck(
       return {
         canPost: false,
         message:
-          "We can't check your credits right now, so posting is paused. Try again shortly.",
+          "We can't check your credits right now. Try again in a moment.",
       }
     case 'no-account':
       return {
@@ -91,7 +91,7 @@ export function creditCheck(
       if (reward !== null && reward > balance.available) {
         return {
           canPost: false,
-          message: `You have ${balance.available} ${balance.available === 1 ? 'credit' : 'credits'} available. Lower the reward to ${balance.available} or less.`,
+          message: `You have ${balance.available} ${balance.available === 1 ? 'credit' : 'credits'}. Lower the reward to ${balance.available} or less.`,
         }
       }
       return { canPost: true, message: null }
@@ -118,18 +118,18 @@ export function reservationOutcome(
     if (terminalReason === 'INSUFFICIENT_CREDITS')
       return {
         kind: 'failed',
-        message: `Not enough credits to reserve ${reward} ${reward === 1 ? 'credit' : 'credits'}. Lower the reward and post again.`,
+        message: `You don't have enough credits for a reward of ${reward}. Lower it and post again.`,
         setUpCredits: false,
       }
     if (terminalReason === 'CREDIT_ACCOUNT_NOT_FOUND')
       return {
         kind: 'failed',
-        message: "Your credit account isn't set up yet, so the errand wasn't posted.",
+        message: "Your credits aren't set up yet, so the errand wasn't posted.",
         setUpCredits: true,
       }
     return {
       kind: 'failed',
-      message: "We couldn't reserve your credits, so the errand wasn't posted. Please try again.",
+      message: "We couldn't post your errand. Please try again.",
       setUpCredits: false,
     }
   }
@@ -137,14 +137,14 @@ export function reservationOutcome(
     return {
       kind: 'failed',
       message:
-        "Credit didn't confirm your reservation in time, so the errand wasn't posted. Any credits held are being returned. Please post again.",
+        "We couldn't post your errand this time. Your credits are safe. Please try again.",
       setUpCredits: false,
     }
   if (state === 'EXPIRED')
     return {
       kind: 'failed',
       message:
-        'The pickup time passed before your credits were reserved. Choose a later time and post again.',
+        'The pickup time has already passed. Choose a later time and post again.',
       setUpCredits: false,
     }
   return { kind: 'reserved' }
@@ -230,7 +230,7 @@ export function rewardChangeCheck(
     case 'unavailable':
       return {
         canSave: false,
-        message: "We can't check your credits right now, so raising the reward is paused. Try again shortly.",
+        message: "We can't check your credits right now. Try again in a moment.",
       }
     case 'no-account':
       return { canSave: false, message: "Your credit account isn't set up yet." }
@@ -238,7 +238,7 @@ export function rewardChangeCheck(
       if (extra > balance.available)
         return {
           canSave: false,
-          message: `Raising the reward to ${next} needs ${extra} more ${extra === 1 ? 'credit' : 'credits'}, but you have ${balance.available} available. Choose ${current + balance.available} or less.`,
+          message: `You don't have enough credits for ${next}. Choose ${current + balance.available} or less.`,
         }
       return { canSave: true, message: null }
   }
@@ -265,7 +265,7 @@ export function rewardChangeOutcome(
   if (answer?.action === 'REWARD_CHANGE_REJECTED' || order.creditReward !== requested)
     return {
       kind: 'rejected',
-      message: `Not enough credits to change the reward to ${requested}. The reward stays at ${order.creditReward}.`,
+      message: `You don't have enough credits for a reward of ${requested}, so it stays at ${order.creditReward}.`,
     }
   return { kind: 'applied' }
 }

@@ -9,6 +9,7 @@ import subprocess
 
 SERVICES = ("gateway-service", "user-service", "supplier-service", "credit-service", "order-service", "admin-service",
             "notification-service", "chat-service")
+NO_IMAGE_SENTINEL = "no-image"
 
 
 def is_image_input(path, service):
@@ -24,6 +25,11 @@ def select_services(paths):
     if any(path.startswith((".github/workflows/", ".github/scripts/", "deploy/aws/")) for path in paths):
         return list(SERVICES)
     return [service for service in SERVICES if any(is_image_input(path, service) for path in paths)]
+
+
+def service_matrix(services):
+    """Keep GitHub's matrix non-empty even when the guarded publisher will be skipped."""
+    return {"service": services or [NO_IMAGE_SENTINEL]}
 
 
 def release_tag(sha, run_id, attempt):
@@ -47,6 +53,20 @@ def changed_paths(before, sha):
     return result.stdout.decode("utf-8").rstrip("\0").split("\0") if result.stdout else []
 
 
+def changed_paths_from_parents(ref="HEAD"):
+    """Return the union of paths changed against every parent of a deployment commit."""
+    parent_result = subprocess.run(["git", "show", "-s", "--format=%P", ref],
+                                   check=True, capture_output=True)
+    parents = parent_result.stdout.decode("utf-8").strip().split()
+    paths = set()
+    for parent in parents:
+        result = subprocess.run(["git", "diff", "--no-renames", "--name-only", "-z", parent, ref],
+                                check=True, capture_output=True)
+        if result.stdout:
+            paths.update(result.stdout.decode("utf-8").rstrip("\0").split("\0"))
+    return sorted(paths)
+
+
 def main():
     if os.environ.get("GITHUB_EVENT_NAME") != "push" or os.environ.get("GITHUB_REF") != "refs/heads/main":
         raise ValueError("Image planning is permitted only for pushes to main")
@@ -55,7 +75,7 @@ def main():
     paths = changed_paths(os.environ.get("BEFORE_SHA", ""), sha)
     services = list(SERVICES) if paths is None else select_services(paths)
     outputs = {
-        "matrix": json.dumps({"service": services}, separators=(",", ":")),
+        "matrix": json.dumps(service_matrix(services), separators=(",", ":")),
         "has-images": str(bool(services)).lower(),
     }
     with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:

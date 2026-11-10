@@ -264,11 +264,11 @@ export function chatFailure(error: unknown) {
     )
       return caseErrorMessage(error)
     if (error.status === 401)
-      return 'Your session expired. Sign in again to view the conversation.'
+      return 'You’ve been signed out. Sign in again to see this conversation.'
     if ([403, 404].includes(error.status))
-      return 'This conversation is unavailable or you no longer have access. Refresh the case to check.'
+      return 'This conversation isn’t available to you. Refresh the case to check.'
     if (error.status === 409)
-      return 'We couldn’t complete the request. Refresh the conversation to check whether replies are available.'
+      return 'That didn’t work. Refresh to check if you can reply.'
   }
-  return 'We couldn’t load or update the conversation. Refresh to check its status before retrying a message.'
+  return 'We couldn’t load this conversation. Refresh before sending again.'
 }

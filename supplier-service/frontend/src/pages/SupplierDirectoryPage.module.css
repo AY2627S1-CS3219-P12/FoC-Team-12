@@ -122,3 +122,11 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+.pageIcon { border-color: #dce2f5; border-radius: 1rem; background: #f0f2fb; color: var(--foc-blue); }
+.eyebrow { color: var(--foc-blue); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.pageHeading h1 { font-family: 'Manrope', 'DM Sans', sans-serif; font-size: clamp(2.15rem, 6vw, 3.75rem); font-weight: 700; letter-spacing: -0.05em; line-height: 1.05; }
+.filters { border-radius: 1.1rem; box-shadow: var(--foc-shadow-soft); }
+.cardGrid > :nth-child(4n + 2)::before { background: var(--foc-coral); }
+.cardGrid > :nth-child(4n + 3)::before { background: var(--foc-gold); }
+.cardGrid > :nth-child(4n)::before { background: var(--foc-mauve); }

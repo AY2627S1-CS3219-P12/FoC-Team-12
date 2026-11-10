@@ -37,16 +37,14 @@ export function ParticipantConversationStatus({
         saved.references && (
           <p>
             {summary.state === 'OPEN'
-              ? 'Your case is waiting for an admin. They can contact you here after reviewing your report.'
+              ? 'Your case is waiting for an admin. They’ll message you here.'
               : summary.state === 'RESOLVED'
                 ? 'This case is closed. No messages were exchanged.'
                 : 'An admin is reviewing your case. Check here for messages and updates.'}
           </p>
         )
       )}
-      {!saved.references?.[0] && (
-        <p>Visible only to you and authorized admins.</p>
-      )}
+      {!saved.references?.[0] && <p>Only you and the admins can see this.</p>}
     </section>
   )
 }
@@ -290,7 +288,7 @@ function ReviewerConversation({
       sessionStorage.setItem(storageKey, key)
     } catch {
       setError(
-        'Your browser couldn’t save the request for a safe retry. Allow browser storage, then try again. Nothing was sent.',
+        'Nothing was sent. Allow this site to use browser storage, then try again.',
       )
       return
     }
@@ -364,7 +362,7 @@ function ReviewerConversation({
         <>
           <p>
             {initialReference
-              ? 'Refresh to check whether you can reply. Existing messages will be kept.'
+              ? 'Refresh to check if you can reply. Your messages are kept.'
               : 'Open a private conversation with this reporting participant.'}
           </p>
           {pending && (

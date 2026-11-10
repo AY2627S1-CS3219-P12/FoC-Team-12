@@ -148,7 +148,7 @@ it('distinguishes empty discovery from unavailable and never creates a thread on
   fetcher.mockImplementation(async () => response({}, 503))
   fireEvent.click(screen.getByRole('button', { name: 'Check for messages' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'We couldn’t load or update the conversation',
+    'We couldn’t load this conversation',
   )
   expect(
     screen.queryByText(/An admin is reviewing your case/),
@@ -177,7 +177,7 @@ it.each([
       screen.getByRole('button', { name: 'Check for messages' }),
     ).toBeEnabled()
     expect(
-      screen.getAllByText('Visible only to you and authorized admins.'),
+      screen.getAllByText('Only you and the admins can see this.'),
     ).toHaveLength(1)
     expect(
       fetcher.mock.calls.every(
@@ -239,7 +239,7 @@ it('retains initiation identity after a lost response and reload, isolating part
     screen.getByRole('button', { name: 'Start private conversation' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'We couldn’t load or update the conversation',
+    'We couldn’t load this conversation',
   )
   view.unmount()
   render(
@@ -295,7 +295,7 @@ it('retries uncertain sends with the original clientMessageId and no optimistic 
   })
   fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Refresh to check its status before retrying a message',
+    'Refresh before sending again',
   )
   expect(
     screen.queryByText('Please clarify the pickup', { selector: 'p' }),
@@ -328,7 +328,7 @@ it('does not acknowledge a send response belonging to another client operation',
   })
   fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'Refresh to check its status before retrying a message',
+    'Refresh before sending again',
   )
   expect(screen.queryByText('Message sent.')).not.toBeInTheDocument()
   expect(
@@ -355,7 +355,7 @@ it('denies a different participant before requesting history', () => {
   vi.stubGlobal('fetch', fetcher)
   render(thread({ participantView: true }))
   expect(screen.getByRole('alert')).toHaveTextContent(
-    'cannot view another participant',
+    'can’t see someone else’s conversation',
   )
   expect(fetcher).not.toHaveBeenCalled()
 })
@@ -389,7 +389,7 @@ it('uses sequence pages, retries the same position and clears history after revo
     await screen.findByRole('button', { name: 'Load more messages' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'We couldn’t load or update the conversation',
+    'We couldn’t load this conversation',
   )
   fireEvent.click(
     screen.getByRole('button', { name: 'Try loading more messages again' }),
@@ -398,7 +398,7 @@ it('uses sequence pages, retries the same position and clears history after revo
   expect(urls.filter((u) => u.includes('after=20'))).toHaveLength(2)
   fireEvent.click(screen.getByRole('button', { name: 'Load more messages' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'unavailable or you no longer have access',
+    'isn’t available to you',
   )
   expect(screen.queryByText('Page 1')).not.toBeInTheDocument()
 })
@@ -473,7 +473,7 @@ it('rechecks Admin closure before sending even when Chat metadata is stale', asy
   })
   fireEvent.click(screen.getByRole('button', { name: 'Send message' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'whether replies are available',
+    'check if you can reply',
   )
   expect(
     fetcher.mock.calls.every(([, options]) => options.method !== 'POST'),
@@ -500,7 +500,7 @@ it('clears history when Admin eligibility is revoked before another page read', 
     await screen.findByRole('button', { name: 'Load more messages' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'unavailable or you no longer have access',
+    'isn’t available to you',
   )
   expect(screen.queryByText('Private 1')).not.toBeInTheDocument()
 })

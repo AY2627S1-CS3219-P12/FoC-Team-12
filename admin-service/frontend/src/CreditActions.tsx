@@ -54,18 +54,18 @@ const actionFailure = (e: unknown, ban: boolean) =>
     ? caseErrorMessage(e)
     : e instanceof CaseError && [401, 403, 404].includes(e.status)
       ? e.status === 401
-        ? 'Your session has expired. Sign in again.'
-        : 'These actions are unavailable or you no longer have access. Refresh the case to check.'
+        ? 'You’ve been signed out. Please sign in again.'
+        : 'These actions aren’t available to you. Refresh the case to check.'
       : e instanceof CaseError && e.status === 409
-        ? 'The case or request has changed. Refresh and check existing actions before retrying. Do not submit a replacement while the outcome is unconfirmed.'
+        ? 'This case just changed. Refresh and check its actions first — don’t send it again yet.'
         : `We couldn’t confirm the ${ban ? 'ban' : 'correction'} request’s outcome. Check its status or retry the same submission. Do not submit a replacement.`
 const explanations = {
-  PENDING: 'Correction requested. Waiting for confirmation.',
+  PENDING: 'Correction sent. Waiting for confirmation.',
   UNKNOWN:
-    'The outcome is taking longer to confirm. It may already be applied. Refresh its status; do not submit a replacement.',
+    'This is taking longer than usual and may already be done. Refresh its status — don’t send it again.',
   SUCCEEDED: 'Credit correction applied.',
   REJECTED:
-    'Correction rejected. No credits were changed by this request. Check the reason below.',
+    'Correction rejected. No credits were changed. See the reason below.',
 }
 export function CreditActions({
   summary,
@@ -96,12 +96,10 @@ export function CreditActions({
   const storageKey = `foc.${ban ? 'ban' : 'credit'}-action-pending.${actorId}.${summary.caseId}`
   const labels = ban
     ? {
-        PENDING: 'Ban requested. Waiting for confirmation.',
+        PENDING: 'Ban sent. Waiting for confirmation.',
         UNKNOWN: explanations.UNKNOWN,
-        SUCCEEDED:
-          'Ban request completed. The account can be reactivated through Manage users.',
-        REJECTED:
-          'Ban request rejected. Account access was not changed by this request.',
+        SUCCEEDED: 'Account banned. You can reactivate it from Manage users.',
+        REJECTED: 'Ban rejected. The account wasn’t changed.',
       }
     : explanations
   const [pending, setPending] = useState<Pending | null>(() => {
@@ -296,7 +294,7 @@ export function CreditActions({
       sessionStorage.setItem(storageKey, JSON.stringify(operation))
     } catch {
       setError(
-        'Your browser couldn’t save the request for a safe retry. Allow browser storage, then try again. Nothing was submitted.',
+        'Nothing was sent. Allow this site to use browser storage, then try again.',
       )
       return
     }
@@ -402,8 +400,8 @@ export function CreditActions({
       {!selection && (
         <p>
           {ban
-            ? 'Request a ban for a participant who submitted a report. You cannot ban yourself or the last active admin.'
-            : 'Add or remove available credits without changing the errand reward or reserved credits. Wait for confirmation before treating a correction as complete.'}
+            ? 'Ban a participant who reported this errand. You can’t ban yourself or the last admin.'
+            : 'Add or remove a participant’s available credits. It’s only done once it’s confirmed.'}
         </p>
       )}
       {error && (
@@ -419,8 +417,8 @@ export function CreditActions({
       )}
       {historyUnavailable && (
         <p role="alert" className="workspace-error">
-          Action history could not be verified. Refresh the case before
-          requesting a new action.
+          We couldn’t load this case’s actions. Refresh before starting a new
+          one.
         </p>
       )}
       {ban && (
@@ -477,16 +475,16 @@ export function CreditActions({
                           LAST_ADMIN_PROTECTED:
                             'The final active administrator is protected.',
                           ACTOR_NOT_AUTHORIZED:
-                            'The requesting administrator no longer has active Admin access.',
+                            'You no longer have admin access.',
                           INVALID_ACCOUNT_STATE:
                             'This account cannot be banned in its current state.',
                           INSUFFICIENT_AVAILABLE_CREDITS:
-                            'The account has insufficient available credits for this correction.',
+                            'This account doesn’t have enough credits for that.',
                           BALANCE_OVERFLOW:
-                            'This correction would exceed the supported balance limit.',
+                            'That would go over the balance limit.',
                         } as Record<string, string>
                       )[a.reasonCode] ||
-                        'The request was rejected. See operation details for the reason code.'}
+                        'This was rejected. See the details for why.'}
                     </p>
                   )}
                   <p className="evidence-meta">
@@ -622,7 +620,7 @@ export function CreditActions({
                 >
                   <p>
                     {ban
-                      ? `Request a ban for ${participantName(target)}? Blocks sign-in and new protected requests once applied.`
+                      ? `Request a ban for ${participantName(target)}? Once applied, they won’t be able to sign in or do anything new.`
                       : `${direction === 'add' ? 'Add' : 'Subtract'} ${numeric} credits ${direction === 'add' ? 'to' : 'from'} ${participantName(target)}. This changes available credits independently of the errand reward.`}
                   </p>
                   <div className="conversation-picker">
@@ -672,8 +670,8 @@ export function CreditActions({
           ) : (
             <p>
               {ban
-                ? 'Only the assigned reviewer can request bans while this case is under review.'
-                : 'Only the assigned reviewer can request corrections while the case is under review.'}
+                ? 'Only the assigned reviewer can ban participants on this case.'
+                : 'Only the assigned reviewer can adjust credits on this case.'}
             </p>
           )}
         </>

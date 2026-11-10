@@ -7,15 +7,17 @@ import { OrderShell } from './OrderShell'
 
 describe('OrderShell', () => {
   afterEach(() => sessionStorage.clear())
-  it('provides an Admin dashboard tab in Admin mode', () => {
+  it('shows only administrator destinations in Admin mode', () => {
     signIn(REQUESTER_ID, 'REQUESTER')
     const session = JSON.parse(sessionStorage.getItem('foc.user-session')!)
     session.role = 'ADMIN'
     sessionStorage.setItem('foc.user-session', JSON.stringify(session))
     render(<OrderShell>content</OrderShell>)
     const nav = screen.getByRole('navigation', { name: 'Main navigation' })
-    expect(within(nav).getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin')
-    expect(within(nav).getByRole('link', { name: 'Errands' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getAllByRole('link').map((link) => link.textContent))
+      .toEqual(['Home', 'Suppliers', 'Admin'])
+    expect(within(nav).queryByRole('link', { name: 'Errands' })).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
   })
 
   it('uses the same main navigation as the User, Supplier and Credit headers, plus Errands', () => {

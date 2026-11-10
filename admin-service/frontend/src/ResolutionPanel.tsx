@@ -102,7 +102,7 @@ export function ResolutionPanel({
       sessionStorage.setItem(storage, JSON.stringify(operation))
     } catch {
       setError(
-        'Your browser couldn’t save the closure request. Allow browser storage, then try again. Nothing was submitted.',
+        'Nothing was sent. Allow this site to use browser storage, then try again.',
       )
       return
     }
@@ -146,7 +146,7 @@ export function ResolutionPanel({
         setError(
           e instanceof CaseError
             ? caseErrorMessage(e)
-            : 'We couldn’t confirm whether the case was closed. Select “Resume case closure” to check the original request.',
+            : 'We’re not sure the case closed. Tap “Resume case closure” to check.',
         )
     } finally {
       clearTimeout(timeout)
@@ -166,8 +166,8 @@ export function ResolutionPanel({
       )}
       {closure && summary.state !== 'RESOLVED' && (
         <p role="status">
-          Case closure is in progress. New reports, actions, and messages are
-          blocked. Resume the original request below.
+          This case is still closing, so nothing new can be added. Resume your
+          earlier request below.
         </p>
       )}
       {done && (
@@ -186,7 +186,7 @@ export function ResolutionPanel({
       ) : (
         !done &&
         (summary.reviewerId !== actor || summary.state !== 'UNDER_REVIEW' ? (
-          <p>Only the assigned reviewer can resolve a case under review.</p>
+          <p>Only the assigned reviewer can close this case.</p>
         ) : (
           <>
             <p>
@@ -198,7 +198,7 @@ export function ResolutionPanel({
               <p role="status">
                 {!actions
                   ? 'Refresh the case to verify action history.'
-                  : 'Wait for every action’s outcome to be confirmed. Refresh action status to check.'}
+                  : 'Wait until every action is confirmed. Refresh to check.'}
               </p>
             )}
             <form

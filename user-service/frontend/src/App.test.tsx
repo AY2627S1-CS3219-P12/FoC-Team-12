@@ -214,6 +214,10 @@ test('opens the dashboard after the administrator selects Admin mode', async () 
     .getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin')
   expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
     .getByRole('link', { name: 'Suppliers' })).toHaveAttribute('href', '/admin/suppliers')
+  expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
+    .queryByRole('link', { name: 'Errands' })).not.toBeInTheDocument()
+  expect(within(screen.getByRole('navigation', { name: 'Main navigation' }))
+    .queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Manage users' })).toHaveAttribute('href', '/?view=users')
   expect(screen.getByRole('button', { name: 'Switch to User' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Manage suppliers/ })).toHaveAttribute('href', '/admin/suppliers')
@@ -264,7 +268,7 @@ test('shows an accessible error when the live profile cannot be loaded', async (
 
   await user.click(within(screen.getByRole('form', { name: 'Sign in form' })).getByRole('button', { name: 'Sign in' }))
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load your profile. Please sign out and sign in again.')
+  expect(await screen.findByRole('alert')).toHaveTextContent('We couldn’t load your profile. Please sign out and sign in again.')
 })
 
 test('reloads the live profile when restoring a browser session', async () => {
@@ -589,7 +593,7 @@ test('keeps registration failures clear when the API is unavailable', async () =
   await user.type(screen.getByLabelText('Password'), '123456789012345')
   await user.click(within(screen.getByRole('form', { name: 'Create account form' })).getByRole('button', { name: 'Create account' }))
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Registration could not be completed. Please try again.')
+  expect(await screen.findByRole('alert')).toHaveTextContent('We couldn’t create your account. Please try again.')
 })
 
 test('requests a password reset and opens a six-box code validation screen without exposing an OTP', async () => {
@@ -654,7 +658,7 @@ test('shows an accessible generic failure when a reset request cannot be complet
   await user.type(screen.getByLabelText('Email'), 'alice@u.nus.edu')
   await user.click(screen.getByRole('button', { name: 'Send reset code' }))
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to request a password reset right now. Please try again.')
+  expect(await screen.findByRole('alert')).toHaveTextContent('We couldn’t send a reset code. Please try again.')
 })
 
 test('verifies a registered email with the live verification API', async () => {

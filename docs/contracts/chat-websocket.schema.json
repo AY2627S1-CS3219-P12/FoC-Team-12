@@ -1343,6 +1343,9 @@
             "ORDER_PICKED_UP",
             "ORDER_DELIVERED",
             "ORDER_COMPLETED",
+            "ORDER_STILL_OPEN",
+            "PICKUP_DUE_SOON",
+            "PICKUP_OVERDUE",
             "CREDITS_WELCOME",
             "CREDITS_RECEIVED",
             "CREDITS_COMPENSATED"

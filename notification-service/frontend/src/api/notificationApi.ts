@@ -40,7 +40,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new NotificationApiError(401, 'Your session has expired')
   }
   if (!response.ok) {
-    throw new NotificationApiError(response.status, 'The notification service could not be reached')
+    throw new NotificationApiError(response.status, 'We couldn’t load your notifications')
   }
   return (await response.json()) as T
 }

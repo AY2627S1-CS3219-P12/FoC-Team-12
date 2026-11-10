@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
@@ -232,7 +232,7 @@ describe('Credit dashboard', () => {
     await user.click(await screen.findByRole('button', { name: 'Courier' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Unable to change workspace right now. Please try again.',
+      "We couldn't switch your role. Please try again.",
     )
     expect(screen.getByRole('button', { name: 'Requester' })).toHaveAttribute(
       'aria-pressed',
@@ -277,10 +277,9 @@ describe('Credit dashboard', () => {
     expect(
       screen.getByRole('link', { name: 'Suppliers' }),
     ).toHaveAttribute('href', '/admin/suppliers')
-    expect(screen.getByRole('link', { name: 'Errands' })).toHaveAttribute(
-      'href',
-      '/errands/browse',
-    )
+    const mainNav = screen.getByRole('navigation', { name: 'Main navigation' })
+    expect(within(mainNav).queryByRole('link', { name: 'Errands' })).not.toBeInTheDocument()
+    expect(within(mainNav).queryByRole('link', { name: 'Credits' })).not.toBeInTheDocument()
     const accountMenuButton = screen.getByLabelText('Open account menu for admin')
     expect(screen.getByRole('link', { name: 'Admin' })).toHaveAttribute('href', '/admin')
     const accountMenu = accountMenuButton.closest('details')
@@ -308,7 +307,7 @@ describe('Credit dashboard', () => {
 
     expect(
       await screen.findByRole('heading', {
-        name: 'We could not load your credits',
+        name: 'We couldn’t load your credits',
       }),
     ).toBeInTheDocument()
     expect(

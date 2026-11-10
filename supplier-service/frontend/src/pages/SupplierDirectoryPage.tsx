@@ -173,16 +173,16 @@ export function SupplierDirectoryPage() {
       {suppliers.isError && (
         <StatePanel
           actionLabel="Try again"
-          message="Your filters are still here. Check the connection and retry the directory request."
+          message="Your filters are kept. Please try again."
           onAction={() => void suppliers.refetch()}
-          title="Locations could not be loaded"
+          title="We couldn’t load locations"
           tone="error"
         />
       )}
       {suppliers.isSuccess && items.length === 0 && (
         <StatePanel
           actionLabel="Clear filters"
-          message="No active campus locations match the current search and filters."
+          message="No locations match your search."
           onAction={clearFilters}
           title="No locations found"
         />

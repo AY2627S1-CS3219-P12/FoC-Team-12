@@ -37,6 +37,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.friendoncampus.notification.messaging.CreditEventHandler;
 import com.friendoncampus.notification.messaging.OrderLifecycleEventHandler;
+import com.friendoncampus.notification.reminder.ReminderRepository;
 import com.friendoncampus.notification.service.NotificationNotFoundException;
 import com.friendoncampus.notification.service.NotificationQueryService;
 import com.friendoncampus.notification.service.NotificationReadStateService;
@@ -63,6 +64,7 @@ import com.sun.net.httpserver.HttpServer;
                         + "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration",
                 "app.kafka.enabled=false",
                 "app.retention.enabled=false",
+                "app.reminders.enabled=false",
                 "app.security.jwt.issuer=" + NotificationSecurityIntegrationTest.ISSUER,
                 "app.security.jwt.audience=" + NotificationSecurityIntegrationTest.AUDIENCE
         })
@@ -90,6 +92,9 @@ class NotificationSecurityIntegrationTest {
 
     @MockitoBean
     private OrderLifecycleEventHandler orderLifecycleEventHandler;
+
+    @MockitoBean
+    private ReminderRepository reminderRepository;
 
     private final HttpClient http = HttpClient.newHttpClient();
 

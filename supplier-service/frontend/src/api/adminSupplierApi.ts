@@ -77,7 +77,7 @@ export function useAdminSupplierListQuery(
         throw mutationError(
           response.status,
           error,
-          'The administrative supplier list could not be loaded.',
+          'We couldn’t load the location list.',
         )
       }
       return data
@@ -97,7 +97,7 @@ export function useAdminSupplierMetadataQuery() {
         throw new SupplierMutationError(
           500,
           undefined,
-          'Administrative supplier filters could not be loaded.',
+          'We couldn’t load the filters.',
         )
       }
       return data
@@ -123,7 +123,7 @@ export function useCreateSupplierMutation() {
         throw mutationError(
           response.status,
           error,
-          'The supplier could not be created.',
+          'We couldn’t add this location.',
         )
       }
       return data
@@ -150,7 +150,7 @@ export function useUpdateSupplierMutation() {
         throw mutationError(
           response.status,
           error,
-          'The supplier could not be updated.',
+          'We couldn’t save this location.',
         )
       }
       return data
@@ -180,7 +180,7 @@ export function useChangeSupplierStatusMutation() {
         throw mutationError(
           response.status,
           error,
-          'The supplier status could not be changed.',
+          'We couldn’t change this location’s status.',
         )
       }
       return data
@@ -206,7 +206,7 @@ export function useDeleteSupplierMutation() {
         throw mutationError(
           response.status,
           error,
-          'The supplier could not be permanently deleted.',
+          'We couldn’t delete this location.',
         )
       }
     },

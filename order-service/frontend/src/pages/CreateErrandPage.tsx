@@ -114,7 +114,7 @@ export function CreateErrandPage() {
       setErrors(
         error instanceof OrderApiError
           ? error.status === 403 && !error.code
-            ? { form: 'Switch to Requester in the header to post an errand.' }
+            ? { form: 'Switch to Requester at the top of the page to post an errand.' }
             : serverErrors(error)
           : { form: 'Something went wrong. Please try again.' },
       ),
@@ -259,11 +259,11 @@ export function CreateErrandPage() {
             maxReward={balance.data?.availableBalance}
             deadlineHint={
               copied
-                ? 'Choose a new pickup time. If nobody accepts by then, your request expires.'
+                ? 'Choose a new pickup time.'
                 : undefined
             }
             onChange={update}
-            rewardHint="Reserved from your credits when you post."
+            rewardHint="Set aside from your credits when you post."
           />
           </fieldset>
           {errors.form && (
@@ -286,8 +286,8 @@ export function CreateErrandPage() {
           )}
           {slowId && (
             <p className="notice notice-next" role="status">
-              Credit is taking longer than usual. Your errand will open once your
-              credits are reserved.{' '}
+              This is taking a little longer than usual. We'll post your errand as
+              soon as it's ready.{' '}
               <Link className="text-link" to={`/errands/${slowId}`}>
                 View errand
               </Link>

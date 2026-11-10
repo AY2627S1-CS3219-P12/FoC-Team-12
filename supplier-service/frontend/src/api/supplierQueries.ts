@@ -39,7 +39,7 @@ export function useSupplierListQuery(parameters: SupplierListParameters) {
       if (error || !data) {
         throw new SupplierApiError(
           response.status,
-          'The supplier directory could not be loaded.',
+          'We couldn’t load campus locations.',
         )
       }
 
@@ -56,7 +56,7 @@ export function useSupplierMetadataQuery() {
       const { data, error } = await supplierApi.GET('/api/suppliers/metadata')
 
       if (error || !data) {
-        throw new SupplierApiError(500, 'Supplier filters could not be loaded.')
+        throw new SupplierApiError(500, 'We couldn’t load the filters.')
       }
 
       return data
@@ -82,7 +82,7 @@ export function useSupplierDetailQuery(
           response.status,
           response.status === 404
             ? 'That campus location could not be found.'
-            : 'The campus location could not be loaded.',
+            : 'We couldn’t load this location.',
         )
       }
 

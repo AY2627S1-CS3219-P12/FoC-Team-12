@@ -198,7 +198,7 @@ function Thread({
       sessionStorage.setItem(storageKey, JSON.stringify(operation))
     } catch {
       setError(
-        'Your browser couldn’t save the message for a safe retry. Allow browser storage, then try again. Nothing was sent.',
+        'Nothing was sent. Allow this site to use browser storage, then try again.',
       )
       return
     }
@@ -274,10 +274,10 @@ function Thread({
       <p className="case-scope-note">
         {participantView
           ? 'Visible only to you and authorized admins.'
-          : 'Visible only to this participant and authorized admins.'}
+          : 'Only this participant and the admins can see this.'}
       </p>
       {!permitted ? (
-        <p role="alert">You cannot view another participant’s conversation.</p>
+        <p role="alert">You can’t see someone else’s conversation.</p>
       ) : (
         <>
           {error && (
@@ -354,8 +354,8 @@ function Thread({
               {!canWrite && (
                 <p>
                   {!writable
-                    ? 'You can read this conversation, but replies are not available.'
-                    : 'We couldn’t verify whether you can reply. Refresh the conversation to check.'}
+                    ? 'You can read this conversation, but can’t reply.'
+                    : 'We couldn’t check if you can reply. Refresh to try again.'}
                 </p>
               )}
               {pending && (

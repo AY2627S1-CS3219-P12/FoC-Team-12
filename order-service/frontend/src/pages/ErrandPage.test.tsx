@@ -129,13 +129,13 @@ describe('ErrandPage', () => {
       renderErrand()
 
       expect(await screen.findByRole('heading', { name: "You're the courier" })).toBeInTheDocument()
-      expect(screen.getByText(/Next: collect the item/)).toBeInTheDocument()
+      expect(screen.getByText('Next: pick up the item.')).toBeInTheDocument()
       expect(screen.getByRole('heading', { name: 'Progress' })).toBeInTheDocument()
 
       await user.click(screen.getByRole('button', { name: 'Mark as picked up' }))
       await user.click(await screen.findByRole('button', { name: 'Mark as delivered' }))
 
-      expect(await screen.findByText(/Waiting for the requester to confirm/)).toBeInTheDocument()
+      expect(await screen.findByText("Delivered. You'll get your reward once they confirm.")).toBeInTheDocument()
       expect(calls.filter((call) => call.init?.method === 'POST').map((call) => call.url)).toEqual([
         `${ORDER_URL}/pickup`,
         `${ORDER_URL}/deliver`,
@@ -169,7 +169,7 @@ describe('ErrandPage', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Mark as picked up' }))
 
-      expect(await screen.findByRole('alert')).toHaveTextContent('Switch to the right role')
+      expect(await screen.findByRole('alert')).toHaveTextContent('Switch your role at the top of the page')
     })
   })
 
@@ -184,10 +184,10 @@ describe('ErrandPage', () => {
       renderErrand()
 
       expect(await screen.findByRole('heading', { name: 'Have you received your item?' })).toBeInTheDocument()
-      expect(screen.getByText('Confirm only after you receive the items')).toBeInTheDocument()
+      expect(screen.getByText('Only confirm once you have your item')).toBeInTheDocument()
 
-      await user.click(screen.getByRole('button', { name: 'Confirm receipt · Transfer 18 credits' }))
-      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /Confirm receipt/ }))
+      await user.click(screen.getByRole('button', { name: 'I got it · Pay 18 credits' }))
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Yes, pay 18 credits' }))
 
       expect(await screen.findByRole('heading', { name: 'Errand completed' })).toBeInTheDocument()
       expect(calls.find((call) => call.init?.method === 'POST')?.url).toBe(`${ORDER_URL}/complete`)
@@ -201,7 +201,7 @@ describe('ErrandPage', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Cancel errand' }))
 
-      expect(screen.getByRole('dialog')).toHaveTextContent('receive 20% of the reward as compensation')
+      expect(screen.getByRole('dialog')).toHaveTextContent('Your courier gets 20% of the reward for their time.')
     })
 
     it('offers a full refund when cancelling once the courier is late', async () => {
@@ -217,8 +217,8 @@ describe('ErrandPage', () => {
 
       await user.click(await screen.findByRole('button', { name: 'Cancel errand' }))
 
-      expect(screen.getByRole('dialog')).toHaveTextContent('returned in full')
-      expect(screen.getByRole('dialog')).not.toHaveTextContent('compensation')
+      expect(screen.getByRole('dialog')).toHaveTextContent("Your courier is late, so you'll get all your credits back.")
+      expect(screen.getByRole('dialog')).not.toHaveTextContent('20%')
     })
 
     it('explains a cancellation after the courier was late', async () => {
@@ -230,7 +230,7 @@ describe('ErrandPage', () => {
       renderErrand()
 
       expect(await screen.findByRole('heading', { level: 1, name: 'Errand cancelled' })).toBeInTheDocument()
-      expect(screen.getByText(/didn't pick it up by the deadline/)).toBeInTheDocument()
+      expect(screen.getByText(/Your courier was late/)).toBeInTheDocument()
     })
 
     it('offers Edit errand while the errand is open', async () => {
@@ -300,9 +300,9 @@ describe('ErrandPage', () => {
 
   describe('for the requester of an errand Credit refused to reserve', () => {
     it.each([
-      ['INSUFFICIENT_CREDITS', 'Not enough credits', /didn't have enough available credits/, false],
-      ['CREDIT_ACCOUNT_NOT_FOUND', 'Credit account not set up', /credit account wasn't set up/, true],
-      ['CREDIT_RESERVATION_REJECTED', "Credits couldn't be reserved", /Please post it again/, false],
+      ['INSUFFICIENT_CREDITS', 'Not enough credits', /didn't have enough credits for this reward/, false],
+      ['CREDIT_ACCOUNT_NOT_FOUND', 'Credit account not set up', /Set up your credits, then post it again/, true],
+      ['CREDIT_RESERVATION_REJECTED', 'Errand not posted', /Please post it again/, false],
     ])('explains %s', async (terminalReason, heading, detail, setUp) => {
       signIn(REQUESTER_ID, 'REQUESTER')
       vi.stubGlobal('fetch', serve(order({ state: 'RESERVATION_FAILED', terminalReason })).fetchMock)
@@ -324,7 +324,7 @@ describe('ErrandPage', () => {
       renderErrand()
 
       expect(await screen.findByRole('heading', { level: 1, name: 'Errand not posted' })).toBeInTheDocument()
-      expect(screen.getByText(/didn't confirm your reservation in time/)).toBeInTheDocument()
+      expect(screen.getByText(/Your credits are safe/)).toBeInTheDocument()
       expect(screen.queryByText(/Nobody picked it up/)).not.toBeInTheDocument()
     })
 

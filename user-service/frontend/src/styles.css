@@ -1,23 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+
 :root {
   color-scheme: light;
-  font-family: 'Public Sans', system-ui, sans-serif;
+  font-family: 'DM Sans', 'Public Sans', system-ui, sans-serif;
   font-synthesis: none;
-  color: #20332d;
-  background: #f5f7f5;
-  --foc-canvas: #f3f6f4;
+  color: #12151b;
+  background: #f7f6f3;
+  --foc-canvas: #f7f6f3;
   --foc-surface: #ffffff;
-  --foc-ink: #20332d;
-  --foc-muted: #57655f;
-  --foc-action: #23654e;
-  --foc-action-soft: #e7f1ed;
-  --foc-line: #d4ddd7;
+  --foc-ink: #12151b;
+  --foc-muted: #686a70;
+  --foc-action: #172641;
+  --foc-action-soft: #f0f2fb;
+  --foc-line: #e8e6e1;
   --foc-danger: #a2372b;
   --foc-danger-soft: #f9ece9;
-  --foc-focus: #176bba;
+  --foc-focus: #5068b3;
   --foc-warning: #84530b;
   --foc-warning-soft: #fff3dc;
-  --foc-shadow: 0 16px 40px rgb(25 54 44 / 9%);
-  --foc-shadow-soft: 0 1px 2px rgb(25 54 44 / 6%), 0 8px 24px rgb(25 54 44 / 5%);
+  --foc-blue: #5068b3;
+  --foc-mauve: #a36f76;
+  --foc-coral: #df9b93;
+  --foc-gold: #f1c675;
+  --foc-shadow: 0 18px 50px rgb(23 38 65 / 11%);
+  --foc-shadow-soft: 0 1px 2px rgb(23 38 65 / 6%), 0 8px 24px rgb(23 38 65 / 7%);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -357,6 +363,68 @@ label { display: grid; gap: 0.45rem; color: var(--foc-ink); font-size: 0.9rem; f
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* Sophisticated App Design Upgrade: shared editorial brand language. */
+body, button, input, select, textarea { font-family: 'DM Sans', 'Public Sans', system-ui, sans-serif; }
+h1, h2, h3, .welcome-brand, .profile-brand { font-family: 'Manrope', 'DM Sans', sans-serif; }
+.welcome-page { background: #fff; }
+.welcome-header, .profile-app-header { border-bottom-color: rgb(23 38 65 / 8%); background: rgb(255 255 255 / 90%); backdrop-filter: blur(16px); }
+.welcome-brand > span { width: 3rem; height: 3rem; border: 0; background: transparent; }
+.welcome-brand img, .profile-brand img { width: 3rem; height: 3rem; }
+.welcome-brand strong, .profile-brand { font-weight: 800; }
+.welcome-header nav a { border-radius: 0.65rem; }
+.welcome-header nav a:hover { background: #f0f2fb; color: var(--foc-blue); }
+.welcome-header nav .welcome-sign-in { background: #172641; }
+.welcome-header nav .welcome-sign-in:hover { background: #5068b3; }
+.welcome-main { width: min(100%, 90rem); padding-top: 4.5rem; }
+.welcome-hero { position: relative; }
+.welcome-hero::before { position: absolute; z-index: -1; top: -2.5rem; left: -4rem; width: 13rem; height: 10rem; background-image: radial-gradient(rgb(80 104 179 / 26%) 0.75px, transparent 0.75px); background-size: 11px 11px; mask-image: linear-gradient(to right, #000, transparent); content: ''; }
+.welcome-kicker, .eyebrow { color: var(--foc-blue); }
+.welcome-kicker { border-color: #dce2f5; background: #f0f2fb; }
+.welcome-hero > h1 { font-weight: 700; letter-spacing: -0.06em; }
+.welcome-hero > h1 span, .dashboard-hero h1 span { color: var(--foc-mauve); }
+.welcome-lede { color: var(--foc-muted); }
+.welcome-actions button { border-color: #172641; background: #172641; }
+.welcome-actions button:hover:not(:disabled) { border-color: #5068b3; background: #5068b3; }
+.welcome-actions a { border-color: var(--foc-line); box-shadow: var(--foc-shadow-soft); }
+.welcome-proof svg { color: var(--foc-blue); }
+.errand-preview { border-radius: 1.5rem; border-color: var(--foc-line); box-shadow: 0 18px 50px rgb(23 38 65 / 10%); }
+.errand-preview::before { background: #eef1f9; }
+.preview-card { border-color: var(--foc-line); border-radius: 1rem; }
+.preview-card-featured { border-color: #dce2f5; box-shadow: 0 8px 24px rgb(23 38 65 / 8%); }
+.preview-icon { background: #fbecea; color: #a05f59; }
+.preview-card + .preview-card .preview-icon { background: #f0f2fb; color: var(--foc-blue); }
+.preview-card b { background: #fff5dc; color: #76510f; }
+.preview-live-dot { background: var(--foc-coral); box-shadow: 0 0 0 4px #fbecea; }
+.welcome-page .auth-card { border-color: var(--foc-line); border-radius: 1.5rem; box-shadow: 0 22px 60px rgb(23 38 65 / 13%); }
+.welcome-page .tabs { background: #f2f1ee; }
+.welcome-page .tab.active { color: #172641; box-shadow: 0 2px 7px rgb(23 38 65 / 12%); }
+.how-it-works { background: #172641; }
+.how-heading .eyebrow, .how-it-works li > span, .how-it-works li svg { color: #f1c675; }
+.how-it-works li p { color: #dfe3ef; }
+.profile-app-header-content, .profile-main, .admin-users-main { width: min(100%, 90rem); }
+.profile-service-nav a:hover, .profile-service-nav a:focus-visible, .profile-service-nav a[aria-current='page'] { color: var(--foc-blue); }
+.profile-service-nav a[aria-current='page']::after { background: var(--foc-blue); }
+.profile-account-avatar { background: var(--foc-gold); color: #172641; }
+.dashboard-action-request { background: #172641; }
+.dashboard-action-courier { background: #5068b3; }
+.dashboard-action { box-shadow: 0 16px 38px rgb(23 38 65 / 16%); }
+.dashboard-action:hover { box-shadow: 0 22px 48px rgb(23 38 65 / 22%); }
+.dashboard-action small { color: #f1dca8; }
+.dashboard-action em { color: #eef0f8; }
+.dashboard-explore, .account-panel, .service-card { border-color: var(--foc-line); border-radius: 1.1rem; }
+.dashboard-page .service-card:nth-child(3n + 1) { background: #fbecea; }
+.dashboard-page .service-card:nth-child(3n + 2) { background: #f0f2fb; }
+.dashboard-page .service-card:nth-child(3n) { background: #fff5dc; }
+.dashboard-page .service-card > svg:first-child, .dashboard-page .service-card strong { color: #172641; }
+.workspace-selector-options button[aria-pressed='true'], .workspace-selector-options button[aria-pressed='true']:hover:not(:disabled) { background: #172641; }
+.notification-bell:hover, .notification-bell:focus-visible, .notification-bell[aria-current='page'] { background: #f0f2fb; color: var(--foc-blue); }
+.notification-badge { background: var(--foc-coral); color: #172641; }
+
+@media (max-width: 50rem) {
+  .welcome-main { padding-top: 2.5rem; }
+  .profile-brand img { width: 2.6rem; height: 2.6rem; }
 }
 
 /* Notification bell: shared across every frontend's header; keep in step with notification-service. */

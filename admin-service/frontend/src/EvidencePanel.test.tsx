@@ -314,7 +314,7 @@ it('shows test-only markers from supplied fixtures and never substitutes them on
   ).toBeVisible()
   fireEvent.click(screen.getByRole('button', { name: 'Refresh evidence' }))
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'couldn’t load or verify the evidence',
+    'couldn’t load all the evidence',
   )
   expect(
     screen.queryByText('TEST ONLY — synthetic errand timeline'),
@@ -386,7 +386,7 @@ it('retries an unavailable page with the same cursor, preserving records and ded
     await screen.findByRole('button', { name: 'Load more evidence' }),
   )
   expect(await screen.findByRole('alert')).toHaveTextContent(
-    'do not treat this view as complete',
+    'this view may be incomplete',
   )
   expect(screen.getByText('History completeness unverified')).toBeVisible()
   fireEvent.click(
