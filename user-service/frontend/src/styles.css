@@ -202,8 +202,6 @@ label { display: grid; gap: 0.45rem; color: var(--foc-ink); font-size: 0.9rem; f
 .welcome-header nav .welcome-sign-in:hover { background: var(--foc-action); color: white; }
 .welcome-main { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(24rem, 0.72fr); align-items: start; gap: clamp(2rem, 5vw, 5.5rem); width: min(100%, 82rem); margin: 0 auto; padding: 3.25rem 2rem 5rem; }
 .welcome-hero { min-width: 0; padding-top: 1.25rem; }
-.welcome-kicker { display: inline-flex; align-items: center; gap: 0.45rem; margin: 0 0 1.25rem; padding: 0.45rem 0.7rem; border: 1px solid #cadbd2; border-radius: 999px; background: #edf4f0; color: var(--foc-action); font-size: 0.76rem; font-weight: 750; letter-spacing: 0.04em; text-transform: uppercase; }
-.welcome-kicker svg { width: 1rem; height: 1rem; }
 .welcome-hero > h1 { max-width: 12ch; margin: 0; font-size: clamp(3rem, 6.6vw, 5.75rem); letter-spacing: -0.07em; line-height: 0.93; }
 .welcome-hero > h1 span { color: var(--foc-action); }
 .welcome-lede { max-width: 39rem; margin: 1.75rem 0 0; color: #52615b; font-size: clamp(1.05rem, 1.6vw, 1.22rem); line-height: 1.65; }
@@ -392,8 +390,7 @@ h1, h2, h3, .welcome-brand, .profile-brand { font-family: 'Manrope', 'DM Sans', 
 .welcome-main { width: min(100%, 90rem); padding-top: 4.5rem; }
 .welcome-hero { position: relative; }
 .welcome-hero::before { position: absolute; z-index: -1; top: -2.5rem; left: -4rem; width: 13rem; height: 10rem; background-image: radial-gradient(rgb(80 104 179 / 26%) 0.75px, transparent 0.75px); background-size: 11px 11px; mask-image: linear-gradient(to right, #000, transparent); content: ''; }
-.welcome-kicker, .eyebrow { color: var(--foc-blue); }
-.welcome-kicker { border-color: #dce2f5; background: #f0f2fb; }
+.eyebrow { color: var(--foc-blue); }
 .welcome-hero > h1 { font-weight: 700; letter-spacing: -0.06em; }
 .welcome-hero > h1 span, .dashboard-hero h1 span { color: var(--foc-mauve); }
 .welcome-lede { color: var(--foc-muted); }

@@ -964,7 +964,6 @@ export function App() {
 
     <div className="welcome-main">
       <section className="welcome-hero" aria-labelledby="welcome-title">
-        <p className="welcome-kicker"><Sparkles aria-hidden="true" />Made for NUS students</p>
         <h1 id="welcome-title">One campus.<br /><span>A thousand small favours.</span></h1>
         <p className="welcome-lede">Need lunch picked up before class? Heading past the library anyway? FoC matches everyday campus errands with students who can help.</p>
         <div className="welcome-actions">
