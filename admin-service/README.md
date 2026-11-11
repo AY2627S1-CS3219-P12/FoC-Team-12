@@ -31,6 +31,10 @@ admins and sent to the responsible service, not included in participant case sta
 action history is collapsed; pending or uncertain outcomes remain expanded. Confirmation and
 same-request retry safeguards still apply. Closure presents three radio choices with the existing
 dispositions: keep a confirmed outcome with no active hold, return held credits, or pay the courier.
+Confirming closure immediately makes participant actions and private conversations read-only,
+before the HTTP response arrives. The lock follows the saved request across retries and reloads;
+an uncertain outcome stays locked, while a definitive rejection restores editing. Backend closure
+preparation and revision checks remain authoritative for accepting or rejecting mutations.
 
 Credit evidence labels each balance change and its before/after values at that historical event.
 Timeline filters apply only to loaded events and never change coverage or closure eligibility.

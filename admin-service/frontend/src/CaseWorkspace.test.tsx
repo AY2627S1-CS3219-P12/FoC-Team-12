@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -576,16 +577,14 @@ it('shows a saved preparation from the entry link without offering a duplicate f
   session()
   vi.stubGlobal(
     'fetch',
-    vi
-      .fn()
-      .mockResolvedValue(
-        response({
-          orderId: order,
-          status: 'PREPARING_REVIEW',
-          caseId: id,
-          state: 'OPEN',
-        }),
-      ),
+    vi.fn().mockResolvedValue(
+      response({
+        orderId: order,
+        status: 'PREPARING_REVIEW',
+        caseId: id,
+        state: 'OPEN',
+      }),
+    ),
   )
   render(<App />)
   expect(
@@ -617,4 +616,165 @@ it.each([
   expect(
     screen.queryByRole('link', { name: 'View case' }),
   ).not.toBeInTheDocument()
+})
+
+it.each([400, 503, 202])(
+  'freezes the case during a delayed closure and handles response %s safely',
+  async (status) => {
+    window.history.replaceState({}, '', '/admin/cases/' + id)
+    session('ADMIN')
+    const current = {
+      ...summary,
+      state: 'UNDER_REVIEW',
+      reviewerId: actor,
+      reviewStatus: 'READY',
+    }
+    let finish!: (value: ReturnType<typeof response>) => void
+    const delayed = new Promise<ReturnType<typeof response>>((resolve) => {
+      finish = resolve
+    })
+    const fetcher = vi
+      .fn()
+      .mockImplementation((url: string, init?: RequestInit) => {
+        if (url.endsWith('/session'))
+          return Promise.resolve(response({ userId: actor, role: 'ADMIN' }))
+        if (url.endsWith('/resolve') && init?.method === 'POST') return delayed
+        if (url.includes('/timeline')) return Promise.resolve(response({}, 503))
+        if (url.endsWith('/conversations')) return Promise.resolve(response([]))
+        if (url.includes('/accounts'))
+          return Promise.resolve(response({ content: [] }))
+        return Promise.resolve(
+          response({
+            case: current,
+            statements: [
+              {
+                reporterId: order,
+                description: 'Test statement',
+                submittedAt: summary.createdAt,
+              },
+            ],
+            actions: [],
+          }),
+        )
+      })
+    vi.stubGlobal('fetch', fetcher)
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Adjust credits' }),
+    )
+    expect(screen.getByLabelText('Number of credits')).toBeEnabled()
+    fireEvent.change(screen.getByLabelText('Internal resolution reason'), {
+      target: { value: 'Reviewed evidence' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Review case closure' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Close case permanently' }),
+    )
+    expect(screen.queryByLabelText('Number of credits')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Adjust credits' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Ban account' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Internal resolution reason')).toBeDisabled()
+    expect(screen.getByText(/Case closure is in progress/)).toBeVisible()
+    const sent = fetcher.mock.calls.find((call) => call[1]?.method === 'POST')!
+    const operationKey = (sent[1]!.headers as Record<string, string>)[
+      'Idempotency-Key'
+    ]
+    await act(async () =>
+      finish(
+        status === 202
+          ? response(
+              {
+                case: current,
+                closure: {
+                  operationId: operationKey,
+                  resolution: 'Reviewed evidence',
+                  revision: 1,
+                  explanations: [],
+                },
+              },
+              202,
+            )
+          : response({ detail: 'Test closure unavailable' }, status),
+      ),
+    )
+    if (status === 400) {
+      expect(
+        await screen.findByRole('button', { name: 'Adjust credits' }),
+      ).toBeEnabled()
+      expect(screen.getByLabelText('Number of credits')).toBeEnabled()
+    } else {
+      expect(
+        screen.queryByRole('button', { name: 'Adjust credits' }),
+      ).not.toBeInTheDocument()
+      expect(
+        screen.queryByLabelText('Number of credits'),
+      ).not.toBeInTheDocument()
+      expect(
+        sessionStorage.getItem(`foc.resolve-pending.${actor}.${id}`),
+      ).toContain(operationKey!)
+    }
+    expect(
+      fetcher.mock.calls.filter((call) => call[1]?.method === 'POST'),
+    ).toHaveLength(1)
+  },
+)
+
+it('restores a pending closure as read-only before another action can be started', async () => {
+  window.history.replaceState({}, '', '/admin/cases/' + id)
+  session('ADMIN')
+  sessionStorage.setItem(
+    `foc.resolve-pending.${actor}.${id}`,
+    JSON.stringify({
+      key: order,
+      body: {
+        resolution: 'Saved decision',
+        expectedRevision: 1,
+        rejectedActionExplanations: [],
+      },
+    }),
+  )
+  const current = { ...summary, state: 'UNDER_REVIEW', reviewerId: actor }
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockImplementation((url: string) =>
+        Promise.resolve(
+          url.endsWith('/session')
+            ? response({ userId: actor, role: 'ADMIN' })
+            : url.includes('/timeline')
+              ? response({}, 503)
+              : url.endsWith('/conversations')
+                ? response([])
+                : url.includes('/accounts')
+                  ? response({ content: [] })
+                  : response({
+                      case: current,
+                      statements: [
+                        {
+                          reporterId: order,
+                          description: 'Test',
+                          submittedAt: summary.createdAt,
+                        },
+                      ],
+                      actions: [],
+                    }),
+        ),
+      ),
+  )
+  render(<App />)
+  expect(
+    await screen.findByRole('button', { name: 'Check case closure' }),
+  ).toBeEnabled()
+  expect(
+    screen.queryByRole('button', { name: 'Adjust credits' }),
+  ).not.toBeInTheDocument()
+  expect(
+    screen.queryByRole('button', { name: 'Ban account' }),
+  ).not.toBeInTheDocument()
+  expect(screen.getByText(/Case closure is in progress/)).toBeVisible()
 })
